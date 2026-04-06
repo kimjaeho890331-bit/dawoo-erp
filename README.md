@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DAWOO ERP - 다우건설 AI 기반 ERP 시스템
 
-## Getting Started
+## 개요
+정부 지원사업(수도/소규모) 접수부터 수금까지 전 과정을 AI가 자동화하는 ERP 시스템.
 
-First, run the development server:
+## 기술 스택
+- **Frontend**: Next.js 14+ / React / Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Storage + Auth)
+- **AI**: Claude API (Anthropic)
+- **PDF**: pypdf (폼필드 자동입력)
+- **배포**: Vercel
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 프로젝트 구조
+```
+CLAUDE.md                    # 개발 매뉴얼 (핵심 지도)
+docs/
+├── REGISTER.md              # 접수대장 상세 스펙
+├── SITE.md                  # 현장관리 상세 스펙
+├── ESTIMATE.md              # 견적서 상세 스펙
+├── DOCUMENTS.md             # 서류함 상세 스펙
+├── CALENDAR.md              # 캘린더 상세 스펙
+├── REPORT.md                # 보고서/KPI 상세 스펙
+├── AGENT.md                 # AI 에이전트 상세 스펙
+└── DAWOO_DESIGN_FINAL.md    # 전체 설계문서
+dawoo_db_schema.sql          # DB 스키마
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 개발 순서
+1. Supabase DB + Auth
+2. 레이아웃 + 사이드바 + AI 사이드 패널
+3. 접수대장
+4. 서류함 + PDF 자동화
+5. 견적서 (웹 스프레드시트)
+6. 현장관리 (아코디언 + 캘린더)
+7. 업무 캘린더 + AI 교정
+8. 대시보드 + 보고서 + KPI
+9. 나머지 페이지

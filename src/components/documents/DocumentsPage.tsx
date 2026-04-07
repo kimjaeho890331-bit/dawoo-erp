@@ -64,7 +64,20 @@ const CITIES = [
   '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남',
 ]
 
-const WORK_TEMPLATE_NAMES = ['신청서', '견적서 기본폼', '완료보고서 양식', '사진대장 양식']
+const WORK_TEMPLATE_NAMES = ['공문', '신청서', '사진대장', '완료보고서']
+
+// 수도공사 기본 단가 (원/m²) — 서류함 공문에 저장된 단가가 우선
+const DEFAULT_WATER_PRICES = {
+  전용: 8500,
+  공용: 4500,
+  공용_세대: 150000,
+} as const
+
+export interface WaterPricing {
+  전용: number
+  공용: number
+  공용_세대: number
+}
 
 // 입찰/현장 5개 분류
 interface BidGroup {
@@ -314,34 +327,41 @@ function DropZone({ onFileDrop }: { onFileDrop: (file: File) => void }) {
   )
 }
 
-// --- Supabase Storage 업로드 헬퍼 ---
+// --- Storage 업로드 헬퍼 (서버 API 경유) ---
 async function uploadFileToStorage(
   file: File,
   category: string,
   templateName: string,
 ): Promise<{ url: string; path: string }> {
-  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9가-힣_.-]/g, '_')
+  const sanitize = (s: string) => encodeURIComponent(s).replace(/%/g, '_')
   const storagePath = `${sanitize(category)}/${sanitize(templateName)}/${Date.now()}_${sanitize(file.name)}`
 
-  const { data, error } = await supabase.storage
-    .from('documents')
-    .upload(storagePath, file, { upsert: true })
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('storagePath', storagePath)
 
-  if (error) throw error
+  const res = await fetch('/api/storage/upload', {
+    method: 'POST',
+    body: formData,
+  })
 
-  const { data: urlData } = supabase.storage
-    .from('documents')
-    .getPublicUrl(data.path)
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error || '업로드 실패')
+  }
 
-  return { url: urlData.publicUrl, path: data.path }
+  return res.json()
 }
 
 async function deleteFileFromStorage(storagePath: string): Promise<void> {
-  const { error } = await supabase.storage
-    .from('documents')
-    .remove([storagePath])
-  if (error) {
-    console.error('Storage 파일 삭제 실패:', error)
+  try {
+    await fetch('/api/storage/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storagePath }),
+    })
+  } catch (err) {
+    console.error('Storage 파일 삭제 실패:', err)
   }
 }
 
@@ -761,20 +781,76 @@ function CompanyDocCard({
   )
 }
 
-// --- 템플릿 카드 ---
+// --- 템플릿 카드 (드래그앤드롭 지원) ---
 function TemplateDocCard({
   doc,
   onEdit,
   onReplace,
   onDelete,
   onClick,
+  onDirectUpload,
 }: {
   doc: TemplateDoc
   onEdit: () => void
   onReplace: () => void
   onDelete: () => void
   onClick: () => void
+  onDirectUpload?: (file: File) => void
 }) {
+  const [dragging, setDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragging(true)
+  }
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+  }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file && onDirectUpload) onDirectUpload(file)
+  }
+
+  if (!doc.hasFile && onDirectUpload) {
+    return (
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+        className={`bg-surface rounded-[10px] border-[1.5px] border-dashed p-4 transition cursor-pointer group ${
+          dragging
+            ? 'border-accent bg-accent-light'
+            : 'border-[#d1d5db] hover:border-accent hover:bg-accent-light'
+        }`}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) onDirectUpload(file)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+          }}
+        />
+        <div className="flex items-center gap-3">
+          <EmptyFileIcon className="w-10 h-10" />
+          <div>
+            <h3 className="text-sm font-semibold text-txt-primary">{doc.name}</h3>
+            <p className="text-xs text-orange-500 mt-0.5">파일을 드래그하거나 클릭</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       onClick={onClick}
@@ -800,24 +876,131 @@ function TemplateDocCard({
   )
 }
 
+// --- 공문 단가 설정 패널 ---
+function PricingConfig({
+  templateId,
+  pricing,
+  onSave,
+}: {
+  templateId: string
+  pricing: WaterPricing
+  onSave: (p: WaterPricing) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [p, setP] = useState<WaterPricing>(pricing)
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      // field_mapping에 pricing 추가 저장
+      const { data: existing } = await supabase.from('templates').select('field_mapping').eq('id', templateId).single()
+      const currentMapping = (existing?.field_mapping || {}) as Record<string, unknown>
+      await supabase.from('templates').update({
+        field_mapping: { ...currentMapping, pricing: p },
+        updated_at: new Date().toISOString(),
+      }).eq('id', templateId)
+      onSave(p)
+      setEditing(false)
+    } catch (err) {
+      console.error('단가 저장 실패:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="mt-2 pt-2 border-t border-border-tertiary">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] text-txt-tertiary space-x-3">
+            <span>전용 {p.전용.toLocaleString()}원/m²</span>
+            <span>공용 {p.공용.toLocaleString()}원/m²</span>
+            <span>+{p.공용_세대.toLocaleString()}원/세대</span>
+          </div>
+          <button
+            onClick={() => setEditing(true)}
+            className="text-[10px] text-accent-text hover:text-accent font-medium"
+          >
+            단가수정
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t border-border-tertiary space-y-2">
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="text-[9px] text-txt-tertiary">전용 (원/m²)</label>
+          <input type="number" value={p.전용} onChange={e => setP({ ...p, 전용: Number(e.target.value) || 0 })}
+            className="w-full px-2 h-[28px] border border-border-primary rounded text-[11px] focus:outline-none focus:border-accent" />
+        </div>
+        <div>
+          <label className="text-[9px] text-txt-tertiary">공용 (원/m²)</label>
+          <input type="number" value={p.공용} onChange={e => setP({ ...p, 공용: Number(e.target.value) || 0 })}
+            className="w-full px-2 h-[28px] border border-border-primary rounded text-[11px] focus:outline-none focus:border-accent" />
+        </div>
+        <div>
+          <label className="text-[9px] text-txt-tertiary">공용 세대당</label>
+          <input type="number" value={p.공용_세대} onChange={e => setP({ ...p, 공용_세대: Number(e.target.value) || 0 })}
+            className="w-full px-2 h-[28px] border border-border-primary rounded text-[11px] focus:outline-none focus:border-accent" />
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={() => { setP(pricing); setEditing(false) }}
+          className="px-2 py-1 text-[10px] text-txt-tertiary border border-border-secondary rounded hover:bg-surface-tertiary">취소</button>
+        <button onClick={handleSave} disabled={saving}
+          className="px-2 py-1 text-[10px] text-white bg-accent rounded hover:bg-accent-hover disabled:opacity-50">
+          {saving ? '저장중...' : '저장'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // --- 시별 아코디언 ---
 function CityAccordion({
   cityName,
   templates,
+  category,
   onEdit,
   onReplace,
   onDelete,
   onPreview,
+  onDirectUpload,
 }: {
   cityName: string
   templates: TemplateDoc[]
+  category: '수도' | '소규모'
   onEdit: (doc: TemplateDoc) => void
   onReplace: (doc: TemplateDoc) => void
   onDelete: (doc: TemplateDoc) => void
   onPreview: (doc: TemplateDoc) => void
+  onDirectUpload: (doc: TemplateDoc, file: File) => void
 }) {
   const [open, setOpen] = useState(false)
   const fileCount = templates.filter(t => t.hasFile).length
+
+  // 공문 단가 state
+  const gongmun = templates.find(t => t.name === '공문')
+  const [pricing, setPricing] = useState<WaterPricing>(() => {
+    // field_mapping에서 pricing 읽기 (TemplateDoc에는 없으므로 기본값)
+    return { ...DEFAULT_WATER_PRICES }
+  })
+
+  // 공문 pricing 로드
+  useEffect(() => {
+    if (!gongmun || !gongmun.hasFile || gongmun.id.startsWith(`${category}-`)) return
+    supabase.from('templates').select('field_mapping').eq('id', gongmun.id).single().then(({ data }) => {
+      const mapping = data?.field_mapping as Record<string, unknown> | null
+      if (mapping?.pricing) {
+        const p = mapping.pricing as WaterPricing
+        setPricing({ 전용: p.전용 || DEFAULT_WATER_PRICES.전용, 공용: p.공용 || DEFAULT_WATER_PRICES.공용, 공용_세대: p.공용_세대 || DEFAULT_WATER_PRICES.공용_세대 })
+      }
+    })
+  }, [gongmun?.id, gongmun?.hasFile, category])
 
   return (
     <div className="border border-border-primary rounded-[10px] overflow-hidden">
@@ -834,20 +1017,37 @@ function CityAccordion({
           </svg>
           <span className="text-sm font-medium text-txt-primary">{cityName}</span>
         </div>
-        <span className="text-xs text-txt-tertiary">{fileCount}/{templates.length}개 등록</span>
+        <div className="flex items-center gap-2">
+          {gongmun?.hasFile && (
+            <span className="text-[10px] text-accent-text">전용 {pricing.전용.toLocaleString()}원/m²</span>
+          )}
+          <span className="text-xs text-txt-tertiary">{fileCount}/{templates.length}개 등록</span>
+        </div>
       </button>
       {open && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
-          {templates.map(doc => (
-            <TemplateDocCard
-              key={doc.id}
-              doc={doc}
-              onEdit={() => onEdit(doc)}
-              onReplace={() => onReplace(doc)}
-              onDelete={() => onDelete(doc)}
-              onClick={() => onPreview(doc)}
-            />
-          ))}
+        <div className="p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {templates.map(doc => (
+              <div key={doc.id}>
+                <TemplateDocCard
+                  doc={doc}
+                  onEdit={() => onEdit(doc)}
+                  onReplace={() => onReplace(doc)}
+                  onDelete={() => onDelete(doc)}
+                  onClick={() => onPreview(doc)}
+                  onDirectUpload={(file) => onDirectUpload(doc, file)}
+                />
+                {/* 공문 단가 설정 */}
+                {doc.name === '공문' && doc.hasFile && !doc.id.startsWith(`${category}-`) && (
+                  <PricingConfig
+                    templateId={doc.id}
+                    pricing={pricing}
+                    onSave={setPricing}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -949,6 +1149,127 @@ function BidGroupAccordion({
               </button>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- 수도공사 견적 금액 산출 ---
+function WaterEstimateCalculator() {
+  const [open, setOpen] = useState(false)
+  const [exclusiveArea, setExclusiveArea] = useState('')
+  const [unitCount, setUnitCount] = useState('')
+
+  const area = parseFloat(exclusiveArea) || 0
+  const units = parseInt(unitCount) || 0
+
+  // 전용 (옥내수도): 전용면적 × 단가
+  const privateCost = Math.round(area * DEFAULT_WATER_PRICES.전용)
+  // 공용 (공용수도): 전용면적 × 단가 + 세대수 × 세대당 추가금
+  const commonCost = Math.round(area * DEFAULT_WATER_PRICES.공용 + units * DEFAULT_WATER_PRICES.공용_세대)
+  const totalCost = privateCost + commonCost
+  const vat = Math.round(totalCost * 0.1)
+  const grandTotal = totalCost + vat
+  const citySupport = Math.round(grandTotal * 0.8)
+  const selfPay = grandTotal - citySupport
+
+  return (
+    <div className="border border-border-primary rounded-[10px] overflow-hidden mb-4">
+      <button
+        onClick={() => setOpen(prev => !prev)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-[#eef2ff] hover:bg-[#e0e7ff] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg
+            className={`w-4 h-4 text-indigo-500 transition-transform ${open ? 'rotate-90' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+          <span className="text-sm font-semibold text-indigo-700">공문 견적 금액 산출</span>
+        </div>
+        <span className="text-xs text-indigo-500">전용면적 / 세대수 기준</span>
+      </button>
+      {open && (
+        <div className="p-4 bg-white">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-xs font-medium text-txt-secondary mb-1">전용면적 (m²)</label>
+              <input
+                type="number"
+                value={exclusiveArea}
+                onChange={e => setExclusiveArea(e.target.value)}
+                placeholder="예: 62.82"
+                className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-txt-secondary mb-1">세대수</label>
+              <input
+                type="number"
+                value={unitCount}
+                onChange={e => setUnitCount(e.target.value)}
+                placeholder="예: 30"
+                className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              />
+            </div>
+          </div>
+
+          {(area > 0 || units > 0) && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#f0fdf4] rounded-lg p-3">
+                  <p className="text-[11px] text-txt-tertiary mb-1">전용 (옥내수도)</p>
+                  <p className="text-sm font-semibold text-[#065f46]">
+                    {privateCost.toLocaleString()}원
+                  </p>
+                  <p className="text-[10px] text-txt-tertiary mt-0.5">
+                    {area}m² × {DEFAULT_WATER_PRICES.전용.toLocaleString()}원
+                  </p>
+                </div>
+                <div className="bg-[#eff6ff] rounded-lg p-3">
+                  <p className="text-[11px] text-txt-tertiary mb-1">공용 (공용수도)</p>
+                  <p className="text-sm font-semibold text-[#1e40af]">
+                    {commonCost.toLocaleString()}원
+                  </p>
+                  <p className="text-[10px] text-txt-tertiary mt-0.5">
+                    {area}m² × {DEFAULT_WATER_PRICES.공용.toLocaleString()}원 + {units}세대 × {DEFAULT_WATER_PRICES.공용_세대.toLocaleString()}원
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-surface-secondary rounded-lg p-3 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-txt-tertiary">공사비 합계</span>
+                  <span className="text-txt-secondary font-medium">{totalCost.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-txt-tertiary">부가세 (10%)</span>
+                  <span className="text-txt-secondary font-medium">{vat.toLocaleString()}원</span>
+                </div>
+                <div className="border-t border-border-primary pt-1.5 flex justify-between text-sm">
+                  <span className="font-semibold text-txt-primary">총 공사비</span>
+                  <span className="font-bold text-txt-primary">{grandTotal.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-txt-tertiary">시지원금 (80%)</span>
+                  <span className="text-accent-text font-medium">{citySupport.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-txt-tertiary">자부담 (20%)</span>
+                  <span className="text-txt-secondary font-medium">{selfPay.toLocaleString()}원</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-txt-tertiary mt-3">
+            단가: 전용 {DEFAULT_WATER_PRICES.전용.toLocaleString()}원/m², 공용 {DEFAULT_WATER_PRICES.공용.toLocaleString()}원/m² + {DEFAULT_WATER_PRICES.공용_세대.toLocaleString()}원/세대
+          </p>
         </div>
       )}
     </div>
@@ -1353,6 +1674,63 @@ export default function DocumentsPage() {
     else handleDeleteBidDoc()
   }
 
+  // 드래그앤드롭 직접 업로드 핸들러
+  const handleDirectUpload = useCallback(async (doc: TemplateDoc, file: File, category: '수도' | '소규모') => {
+    const cityName = doc.cityName
+    if (!cityName) return
+
+    try {
+      const storageCategory = `${category}_${cityName}`
+      const { url, path } = await uploadFileToStorage(file, storageCategory, doc.name)
+
+      // DB에 upsert
+      const isNewRecord = doc.id.startsWith(`${category}-`)
+      if (isNewRecord) {
+        const { data, error } = await supabase.from('templates').insert({
+          name: doc.name,
+          file_path: path,
+          field_mapping: {
+            category,
+            city: cityName,
+            file_url: url,
+            file_name: file.name,
+          },
+        }).select().single()
+
+        const newId = data && !error ? data.id : doc.id
+        const setter = category === '수도' ? setWaterTemplates : setSmallTemplates
+        setter(prev => ({
+          ...prev,
+          [cityName]: (prev[cityName] || []).map(d =>
+            d.id === doc.id ? { ...d, id: newId, hasFile: true, fileUrl: url, storagePath: path, fileName: file.name } : d
+          ),
+        }))
+      } else {
+        await supabase.from('templates').update({
+          file_path: path,
+          field_mapping: {
+            category,
+            city: cityName,
+            file_url: url,
+            file_name: file.name,
+          },
+          updated_at: new Date().toISOString(),
+        }).eq('id', doc.id)
+
+        const setter = category === '수도' ? setWaterTemplates : setSmallTemplates
+        setter(prev => ({
+          ...prev,
+          [cityName]: (prev[cityName] || []).map(d =>
+            d.id === doc.id ? { ...d, hasFile: true, fileUrl: url, storagePath: path, fileName: file.name } : d
+          ),
+        }))
+      }
+    } catch (err) {
+      console.error('직접 업로드 실패:', err)
+      alert('파일 업로드에 실패했습니다.')
+    }
+  }, [])
+
   // 탭 카운트
   const companyCount = companyDocs.filter(d => d.hasFile).length
   const expiringSoonCount = companyDocs.filter(d => {
@@ -1474,11 +1852,14 @@ export default function DocumentsPage() {
       {/* 수도 탭 */}
       {activeTab === '수도' && (
         <div className="space-y-3">
-          <p className="text-sm text-txt-tertiary mb-2">시별 수도공사 서류 템플릿</p>
+          {/* 견적 금액 산출 */}
+          <WaterEstimateCalculator />
+          <p className="text-sm text-txt-tertiary mb-2">시별 수도공사 서류 템플릿 — 파일을 카드에 드래그하여 바로 등록</p>
           {CITIES.map(city => (
             <CityAccordion
               key={city}
               cityName={city}
+              category="수도"
               templates={waterTemplates[city] || []}
               onEdit={(doc) => setShowEditModal({ id: doc.id, name: doc.name })}
               onReplace={(doc) => {
@@ -1487,6 +1868,7 @@ export default function DocumentsPage() {
               }}
               onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid', storagePath: doc.storagePath })}
               onPreview={(doc) => { if (doc.hasFile) setPreviewDoc({ fileUrl: doc.fileUrl, fileName: doc.fileName }) }}
+              onDirectUpload={(doc, file) => handleDirectUpload(doc, file, '수도')}
             />
           ))}
         </div>
@@ -1495,11 +1877,12 @@ export default function DocumentsPage() {
       {/* 소규모 탭 */}
       {activeTab === '소규모' && (
         <div className="space-y-3">
-          <p className="text-sm text-txt-tertiary mb-2">시별 소규모 주택수선 서류 템플릿</p>
+          <p className="text-sm text-txt-tertiary mb-2">시별 소규모 주택수선 서류 템플릿 — 파일을 카드에 드래그하여 바로 등록</p>
           {CITIES.map(city => (
             <CityAccordion
               key={city}
               cityName={city}
+              category="소규모"
               templates={smallTemplates[city] || []}
               onEdit={(doc) => setShowEditModal({ id: doc.id, name: doc.name })}
               onReplace={(doc) => {
@@ -1508,6 +1891,7 @@ export default function DocumentsPage() {
               }}
               onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid', storagePath: doc.storagePath })}
               onPreview={(doc) => { if (doc.hasFile) setPreviewDoc({ fileUrl: doc.fileUrl, fileName: doc.fileName }) }}
+              onDirectUpload={(doc, file) => handleDirectUpload(doc, file, '소규모')}
             />
           ))}
         </div>

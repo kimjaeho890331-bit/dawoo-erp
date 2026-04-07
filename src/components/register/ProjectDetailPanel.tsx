@@ -323,6 +323,39 @@ interface TabProps {
 
 // --- 탭 1: 기본정보 ---
 function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) {
+  const [bankImage, setBankImage] = useState<string | null>(null)
+  const [ocrLoading, setOcrLoading] = useState(false)
+
+  const handleBankImageUpload = async (file: File) => {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string
+      setBankImage(dataUrl)
+
+      // Extract base64 data
+      const base64 = dataUrl.split(',')[1]
+      const mimeType = file.type || 'image/jpeg'
+
+      setOcrLoading(true)
+      try {
+        const res = await fetch('/api/ocr/bank', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, mimeType }),
+        })
+        const data = await res.json()
+        if (data.bank_name) onChange('bank_name', data.bank_name)
+        if (data.account_number) onChange('account_number', data.account_number)
+        if (data.account_holder) onChange('account_holder', data.account_holder)
+      } catch (err) {
+        console.error('OCR failed:', err)
+      } finally {
+        setOcrLoading(false)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
   return (
     <div className="space-y-5">
       <section>
@@ -337,26 +370,53 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">주소</h3>
         <div className="space-y-3">
-          <FormInput label="도로명주소" value={getVal('road_address') as string} onChange={v => onChange('road_address', v || null)} />
-          <FormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} />
+          <LockedFormInput label="도로명주소" value={getVal('road_address') as string} onChange={v => onChange('road_address', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
         </div>
-      </section>
-
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">건물 정보</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <LockedFormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} locked={apiFieldsLocked} />
-          <FormInput label="면적 (m2)" type="number" value={getVal('area') as number} onChange={v => onChange('area', Number(v) || null)} />
+        <div className="grid grid-cols-3 gap-3 mt-3">
           <LockedFormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
           <LockedFormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />
           <LockedFormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} locked={apiFieldsLocked} />
+        </div>
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <LockedFormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} locked={apiFieldsLocked} />
         </div>
       </section>
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">통장 정보</h3>
+
+        {/* 통장사본 OCR 업로드 */}
+        <div className="mb-3">
+          <label
+            className="flex flex-col items-center justify-center border-2 border-dashed border-border-secondary rounded-lg p-4 cursor-pointer hover:border-accent hover:bg-accent/5 transition-colors"
+            onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) handleBankImageUpload(f) }}
+          >
+            {ocrLoading ? (
+              <p className="text-[13px] text-accent">OCR 처리 중...</p>
+            ) : bankImage ? (
+              <div className="flex items-center gap-3">
+                <img src={bankImage} alt="통장사본" className="h-16 rounded border border-border-primary" />
+                <p className="text-[11px] text-txt-secondary">통장사본 업로드 완료</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[13px] text-txt-tertiary">통장사본 이미지를 드래그하거나 클릭</p>
+                <p className="text-[10px] text-txt-quaternary mt-1">은행명, 계좌번호, 예금주 자동 추출</p>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleBankImageUpload(f) }}
+            />
+          </label>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="은행" placeholder="예: 국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
           <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
@@ -378,10 +438,89 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
   )
 }
 
+// 수도공사 기본 단가
+const DEFAULT_WATER_PRICES = {
+  전용: 8500,
+  공용: 4500,
+  공용_세대: 150000,
+}
+
+interface WaterPricing {
+  전용: number
+  공용: number
+  공용_세대: number
+}
+
 // --- 탭 2: 1단계 (실측~신청서) ---
 function TabStep1({ project, category, getVal, onChange }: TabProps & { category: '소규모' | '수도' }) {
   const router = useRouter()
   const urlCategory = category === '소규모' ? 'small' : 'water'
+  const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
+  const [pricingLoaded, setPricingLoaded] = useState(false)
+  const [autoApplied, setAutoApplied] = useState(false)
+
+  const area = (getVal('exclusive_area') as number) || 0
+  const units = (getVal('unit_count') as number) || 0
+  const cityName = project.cities?.name || ''
+  const workTypeName = project.work_types?.name || ''
+  const currentTotal = (getVal('total_cost') as number) || 0
+
+  // 서류함 공문에서 단가 자동 로드
+  useEffect(() => {
+    if (!cityName) return
+    fetch(`/api/pricing?city=${encodeURIComponent(cityName)}&category=${encodeURIComponent(category === '소규모' ? '소규모' : '수도')}`)
+      .then(res => res.json())
+      .then(data => {
+        setPricing(data)
+        setPricingLoaded(true)
+      })
+      .catch(() => setPricingLoaded(true))
+  }, [cityName, category])
+
+  // 전유면적 있고, 총공사비 없으면 자동 기입
+  useEffect(() => {
+    if (!pricingLoaded || autoApplied || !area || currentTotal > 0) return
+
+    const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
+    const cost = isPublic
+      ? Math.round(area * pricing.공용 + units * pricing.공용_세대)
+      : Math.round(area * pricing.전용)
+    const vat = Math.round(cost * 0.1)
+    const grandTotal = cost + vat
+    const citySupport = Math.round(grandTotal * 0.8)
+    const selfPay = grandTotal - citySupport
+
+    onChange('total_cost', grandTotal)
+    onChange('city_support', citySupport)
+    onChange('self_pay', selfPay)
+    setAutoApplied(true)
+  }, [pricingLoaded, autoApplied, area, units, currentTotal, pricing, workTypeName, onChange])
+
+  // 수동 재산출
+  const handleRecalculate = () => {
+    if (!area) {
+      alert('전유면적 정보가 필요합니다.')
+      return
+    }
+    const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
+    const cost = isPublic
+      ? Math.round(area * pricing.공용 + units * pricing.공용_세대)
+      : Math.round(area * pricing.전용)
+    const vat = Math.round(cost * 0.1)
+    const grandTotal = cost + vat
+    onChange('total_cost', grandTotal)
+    onChange('city_support', Math.round(grandTotal * 0.8))
+    onChange('self_pay', grandTotal - Math.round(grandTotal * 0.8))
+  }
+
+  // 미리보기 계산
+  const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
+  const pricingType = isPublic ? '공용' : '전용'
+  const previewCost = area > 0
+    ? (isPublic ? Math.round(area * pricing.공용 + units * pricing.공용_세대) : Math.round(area * pricing.전용))
+    : 0
+  const previewVat = Math.round(previewCost * 0.1)
+  const previewTotal = previewCost + previewVat
 
   return (
     <div className="space-y-5">
@@ -395,10 +534,57 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">견적</h3>
+        {/* 공문 기준 견적 산출 정보 */}
+        {area > 0 && (
+          <div className="mb-3 p-3 bg-[#eef2ff] rounded-lg border border-[#c7d2fe]">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-semibold text-indigo-700">
+                공문 단가 기준 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
+              </p>
+              <button
+                onClick={handleRecalculate}
+                className="px-3 py-1 text-[11px] font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                재산출
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <span className="text-txt-tertiary">전유면적:</span>
+                <span className="ml-1 font-medium text-txt-primary">{area}m²</span>
+              </div>
+              <div>
+                <span className="text-txt-tertiary">세대수:</span>
+                <span className="ml-1 font-medium text-txt-primary">{units}세대</span>
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-indigo-200 grid grid-cols-3 gap-2 text-[11px]">
+              <div>
+                <span className="text-txt-tertiary">총공사비</span>
+                <p className="font-semibold text-txt-primary">{previewTotal.toLocaleString()}원</p>
+              </div>
+              <div>
+                <span className="text-txt-tertiary">시지원 80%</span>
+                <p className="font-semibold text-accent-text">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
+              </div>
+              <div>
+                <span className="text-txt-tertiary">자부담 20%</span>
+                <p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[9px] text-indigo-400">
+              적용 단가: {isPublic
+                ? `공용 ${pricing.공용.toLocaleString()}원/m² + ${pricing.공용_세대.toLocaleString()}원/세대`
+                : `전용 ${pricing.전용.toLocaleString()}원/m²`
+              }
+              {pricingLoaded && ' (서류함 공문 기준)'}
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-3">
-          <FormInput label="자부담금" type="number" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', Number(v) || 0)} />
-          <FormInput label="시지원금" type="number" value={getVal('city_support') as number} onChange={v => onChange('city_support', Number(v) || 0)} />
           <FormInput label="총공사비" type="number" value={getVal('total_cost') as number} onChange={v => onChange('total_cost', Number(v) || 0)} />
+          <FormInput label="시지원금" type="number" value={getVal('city_support') as number} onChange={v => onChange('city_support', Number(v) || 0)} />
+          <FormInput label="자부담금" type="number" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', Number(v) || 0)} />
         </div>
         <button
           onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
@@ -421,6 +607,12 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <FormInput label="신청서 제출일" type="date" value={getVal('application_date') as string} onChange={v => onChange('application_date', v || null)} />
           <FormInput label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} />
         </div>
+        <button
+          onClick={() => window.open(`/register/application?projectId=${project.id}`, '_blank')}
+          className="mt-3 px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
+        >
+          신청서 미리보기
+        </button>
       </section>
     </div>
   )

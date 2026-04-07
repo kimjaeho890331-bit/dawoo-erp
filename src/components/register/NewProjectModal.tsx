@@ -207,7 +207,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     if (matchedCity) {
       const matchedCityData = cities.find(c => c.name === matchedCity)
       if (matchedCityData) {
-        setForm(prev => ({ ...prev, city_id: prev.city_id || matchedCityData.id }))
+        setForm(prev => ({ ...prev, city_id: matchedCityData.id }))
       }
     }
 
@@ -577,18 +577,6 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
               >
                 {staff.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">시 *</label>
-              <select
-                value={form.city_id}
-                onChange={e => update('city_id', e.target.value)}
-                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-              >
-                {cities.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>

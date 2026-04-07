@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { Mail, AlertTriangle, Route, Pin, X } from 'lucide-react'
+import { Mail, AlertTriangle, Route, Pin, X, ClipboardList, Loader, CheckCircle2, Banknote } from 'lucide-react'
 
 // --- 타입 ---
 interface Schedule {
@@ -50,6 +50,31 @@ interface Memo {
   pinned: boolean
 }
 
+interface ProjectRow {
+  id: string
+  staff_id: string | null
+  status: string
+  outstanding: number
+  updated_at: string
+}
+
+const MEMO_STORAGE_KEY = 'dawoo_dashboard_memos'
+
+function loadMemosFromStorage(): Memo[] | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(MEMO_STORAGE_KEY)
+    if (raw) return JSON.parse(raw) as Memo[]
+  } catch { /* ignore corrupt data */ }
+  return null
+}
+
+function saveMemosToStorage(memos: Memo[]) {
+  try {
+    localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memos))
+  } catch { /* storage full etc */ }
+}
+
 const TYPE_COLORS: Record<string, string> = {
   project: '#3B82F6', personal: '#8B5CF6', promo: '#F59E0B', ai: '#06B6D4',
 }
@@ -81,6 +106,7 @@ export default function DashboardPage() {
   const [weekSchedules, setWeekSchedules] = useState<Schedule[]>([])
   const [sites, setSites] = useState<Site[]>([])
   const [staffList, setStaffList] = useState<Staff[]>([])
+  const [projects, setProjects] = useState<ProjectRow[]>([])
   const [loading, setLoading] = useState(true)
 
   // 업무 (추후 DB)
@@ -94,17 +120,25 @@ export default function DashboardPage() {
     { id: '5', content: '수원시 홍보 전단지 배포', assigned_to: 'staff2', assigned_by: null, deadline: addDays(today, 1), done: false },
   ])
 
-  // 메모장
-  const [memos, setMemos] = useState<Memo[]>([
-    { id: '1', content: '이번 주 금요일 회의 - 상반기 실적 리뷰', pinned: true },
-    { id: '2', content: '광명시 담당자 연락처 확인', pinned: false },
-  ])
+  // 메모장 (localStorage 연동)
+  const [memos, setMemos] = useState<Memo[]>(() => {
+    const stored = loadMemosFromStorage()
+    return stored ?? [
+      { id: '1', content: '이번 주 금요일 회의 - 상반기 실적 리뷰', pinned: true },
+      { id: '2', content: '광명시 담당자 연락처 확인', pinned: false },
+    ]
+  })
   const [newMemo, setNewMemo] = useState('')
+
+  // 메모 변경 시 localStorage 동기화
+  useEffect(() => {
+    saveMemosToStorage(memos)
+  }, [memos])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [todayRes, weekRes, sitesRes, staffRes] = await Promise.all([
+      const [todayRes, weekRes, sitesRes, staffRes, projectsRes] = await Promise.all([
         supabase.from('schedules').select('*')
           .neq('schedule_type', 'site')
           .lte('start_date', today).gte('end_date', today)
@@ -118,11 +152,13 @@ export default function DashboardPage() {
           .order('created_at', { ascending: false })
           .limit(5),
         supabase.from('staff').select('*').order('name'),
+        supabase.from('projects').select('id, staff_id, status, outstanding, updated_at'),
       ])
       if (!todayRes.error) setTodaySchedules((todayRes.data as Schedule[]) || [])
       if (!weekRes.error) setWeekSchedules((weekRes.data as Schedule[]) || [])
       if (!sitesRes.error) setSites((sitesRes.data as Site[]) || [])
       if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
+      if (!projectsRes.error) setProjects((projectsRes.data as ProjectRow[]) || [])
     } catch { /* */ }
     setLoading(false)
   }, [today, weekEnd])
@@ -140,6 +176,18 @@ export default function DashboardPage() {
   const todayLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${dayNames[now.getDay()]})`
   const sortedMemos = [...memos].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
 
+  // 나의 현황 통계 계산
+  const COMPLETED_STATUSES = ['입금']
+  const ACTIVE_STATUSES = ['실사', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출']
+  const thisMonthStart = `${today.slice(0, 7)}-01`
+
+  const totalProjects = projects.length
+  const activeProjects = projects.filter(p => ACTIVE_STATUSES.includes(p.status)).length
+  const completedThisMonth = projects.filter(
+    p => COMPLETED_STATUSES.includes(p.status) && p.updated_at >= thisMonthStart
+  ).length
+  const totalOutstanding = projects.reduce((sum, p) => sum + (p.outstanding || 0), 0)
+
   if (loading) return <div className="p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary text-[13px]">불러오는 중...</div></div>
 
   return (
@@ -151,6 +199,26 @@ export default function DashboardPage() {
         <p className="text-[13px] text-txt-secondary mt-0.5">
           오늘 일정 {todaySchedules.length}건 · 진행 현장 {sites.length}개 · 미완료 업무 {receivedTasks.filter(t => !t.done).length}건
         </p>
+      </div>
+
+      {/* 나의 현황 */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { icon: <ClipboardList size={18} className="text-txt-tertiary" />, label: '담당 건수', value: `${totalProjects}건`, color: 'text-txt-primary' },
+          { icon: <Loader size={18} className="text-txt-tertiary" />, label: '진행 중', value: `${activeProjects}건`, color: 'text-[#2563eb]' },
+          { icon: <CheckCircle2 size={18} className="text-txt-tertiary" />, label: '이번 달 완료', value: `${completedThisMonth}건`, color: 'text-[#065f46]' },
+          { icon: <Banknote size={18} className="text-txt-tertiary" />, label: '미수금', value: totalOutstanding > 0 ? `${totalOutstanding.toLocaleString()}원` : '0원', color: totalOutstanding > 0 ? 'text-[#dc2626]' : 'text-txt-primary' },
+        ].map((card) => (
+          <div key={card.label} className="bg-surface rounded-[10px] border border-border-primary px-5 py-4 flex items-center gap-3.5">
+            <div className="w-9 h-9 rounded-lg bg-surface-tertiary flex items-center justify-center shrink-0">
+              {card.icon}
+            </div>
+            <div>
+              <div className="text-[11px] font-medium text-txt-tertiary tracking-[0.3px]">{card.label}</div>
+              <div className={`text-[18px] font-semibold tracking-[-0.3px] ${card.color}`}>{card.value}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* 1행: 받은업무 | 지시한업무 | AI 제안 */}

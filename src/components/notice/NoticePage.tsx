@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Pin, Bell, FileText, ChevronDown, ChevronUp, Plus, X, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { Pin, ChevronDown, ChevronUp, Plus, X } from 'lucide-react'
 
 // --- 타입 ---
 interface Notice {
@@ -10,8 +11,8 @@ interface Notice {
   content: string
   category: '공지' | '규율' | '규정' | '안내'
   pinned: boolean
-  createdAt: string
-  updatedAt: string
+  created_at: string
+  updated_at: string
 }
 
 const CAT_STYLE: Record<string, { bg: string; text: string }> = {
@@ -21,42 +22,34 @@ const CAT_STYLE: Record<string, { bg: string; text: string }> = {
   '안내': { bg: 'bg-[#d1fae5]', text: 'text-[#065f46]' },
 }
 
-// 초기 데이터 (추후 DB 연동)
-const INITIAL_NOTICES: Notice[] = [
-  {
-    id: '1', title: '근무 시간 안내', category: '규정', pinned: true,
-    content: '근무시간: 08:30 ~ 17:30 (점심 12:00~13:00)\n지각/조퇴 시 사전 보고 필수.\n현장 출퇴근 시 업무 캘린더에 기록.',
-    createdAt: '2026-01-02', updatedAt: '2026-01-02',
-  },
-  {
-    id: '2', title: '안전장비 착용 규정', category: '규율', pinned: true,
-    content: '현장 출입 시 안전모, 안전화, 조끼 필수 착용.\n미착용 시 현장 출입 불가.\n안전장비 파손 시 즉시 교체 요청.',
-    createdAt: '2026-01-05', updatedAt: '2026-03-10',
-  },
-  {
-    id: '3', title: '지출결의서 작성 기준', category: '규정', pinned: false,
-    content: '5만원 이상 지출 시 반드시 사전 결재.\n영수증 미제출 시 정산 불가.\n법인카드 사적 사용 금지.',
-    createdAt: '2026-02-01', updatedAt: '2026-02-01',
-  },
-  {
-    id: '4', title: '4월 현장 안전점검 안내', category: '안내', pinned: false,
-    content: '4월 셋째주 전 현장 안전점검 실시 예정.\n현장 소장은 점검표 사전 작성 바랍니다.',
-    createdAt: '2026-04-01', updatedAt: '2026-04-01',
-  },
-]
-
 export default function NoticePage() {
-  const [notices, setNotices] = useState<Notice[]>(INITIAL_NOTICES)
+  const [notices, setNotices] = useState<Notice[]>([])
+  const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [catFilter, setCatFilter] = useState<string>('전체')
+  const [saving, setSaving] = useState(false)
 
   // 폼 상태
   const [formTitle, setFormTitle] = useState('')
   const [formContent, setFormContent] = useState('')
   const [formCategory, setFormCategory] = useState<Notice['category']>('공지')
   const [formPinned, setFormPinned] = useState(false)
+
+  // --- 데이터 로드 ---
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('notices')
+      .select('*')
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (!error && data) setNotices(data as Notice[])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { loadData() }, [loadData])
 
   const openNew = () => {
     setEditId(null)
@@ -76,41 +69,51 @@ export default function NoticePage() {
     setShowForm(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formTitle.trim() || !formContent.trim()) return
-    const today = new Date().toISOString().slice(0, 10)
+    setSaving(true)
+
+    const payload = {
+      title: formTitle.trim(),
+      content: formContent.trim(),
+      category: formCategory,
+      pinned: formPinned,
+    }
 
     if (editId) {
-      setNotices(prev => prev.map(n => n.id === editId ? {
-        ...n, title: formTitle.trim(), content: formContent.trim(),
-        category: formCategory, pinned: formPinned, updatedAt: today,
-      } : n))
+      await supabase.from('notices').update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+      }).eq('id', editId)
     } else {
-      setNotices(prev => [{
-        id: Date.now().toString(), title: formTitle.trim(), content: formContent.trim(),
-        category: formCategory, pinned: formPinned, createdAt: today, updatedAt: today,
-      }, ...prev])
+      await supabase.from('notices').insert(payload)
     }
+
+    setSaving(false)
     setShowForm(false)
+    loadData()
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return
-    setNotices(prev => prev.filter(n => n.id !== id))
+    await supabase.from('notices').delete().eq('id', id)
     if (expandedId === id) setExpandedId(null)
+    loadData()
   }
 
-  const togglePin = (id: string) => {
-    setNotices(prev => prev.map(n => n.id === id ? { ...n, pinned: !n.pinned } : n))
+  const togglePin = async (id: string) => {
+    const notice = notices.find(n => n.id === id)
+    if (!notice) return
+    await supabase.from('notices').update({ pinned: !notice.pinned }).eq('id', id)
+    loadData()
   }
 
-  // 필터 + 정렬 (고정 먼저, 최신순)
+  // 날짜 포맷 (ISO → YYYY-MM-DD)
+  const fmtDate = (d: string) => d ? d.slice(0, 10) : ''
+
+  // 필터 (정렬은 DB에서 처리)
   const filtered = notices
     .filter(n => catFilter === '전체' || n.category === catFilter)
-    .sort((a, b) => {
-      if (a.pinned !== b.pinned) return b.pinned ? 1 : -1
-      return b.createdAt.localeCompare(a.createdAt)
-    })
 
   const categories = ['전체', '공지', '규율', '규정', '안내']
 
@@ -138,7 +141,11 @@ export default function NoticePage() {
 
       {/* 목록 */}
       <div className="space-y-2">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="bg-surface rounded-[10px] border border-border-primary text-center py-16 text-txt-quaternary text-[13px]">
+            불러오는 중...
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="bg-surface rounded-[10px] border border-border-primary text-center py-16 text-txt-quaternary text-[13px]">
             등록된 공지사항이 없습니다
           </div>
@@ -158,7 +165,7 @@ export default function NoticePage() {
                   {notice.pinned && <Pin size={14} className="text-[#d97706] shrink-0" />}
                   <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${cs.bg} ${cs.text}`}>{notice.category}</span>
                   <span className="text-[14px] font-semibold text-txt-primary flex-1 tracking-[-0.1px]">{notice.title}</span>
-                  <span className="text-[11px] text-txt-tertiary tabular-nums">{notice.createdAt}</span>
+                  <span className="text-[11px] text-txt-tertiary tabular-nums">{fmtDate(notice.created_at)}</span>
                   {isOpen ? <ChevronUp size={16} className="text-txt-tertiary" /> : <ChevronDown size={16} className="text-txt-tertiary" />}
                 </div>
 
@@ -167,8 +174,8 @@ export default function NoticePage() {
                   <div className="border-t border-border-tertiary">
                     <div className="px-5 py-4">
                       <pre className="text-[13px] text-txt-secondary leading-relaxed whitespace-pre-wrap font-[inherit]">{notice.content}</pre>
-                      {notice.updatedAt !== notice.createdAt && (
-                        <p className="text-[11px] text-txt-tertiary mt-3">수정일: {notice.updatedAt}</p>
+                      {fmtDate(notice.updated_at) !== fmtDate(notice.created_at) && (
+                        <p className="text-[11px] text-txt-tertiary mt-3">수정일: {fmtDate(notice.updated_at)}</p>
                       )}
                     </div>
                     <div className="px-5 py-2.5 border-t border-border-tertiary flex items-center gap-2 justify-end">
@@ -246,9 +253,9 @@ export default function NoticePage() {
                 className="h-[36px] px-4 border border-border-primary rounded-lg text-[13px] text-txt-secondary hover:bg-surface-tertiary transition">
                 취소
               </button>
-              <button onClick={handleSave}
-                className="h-[36px] px-5 bg-accent hover:bg-accent-hover text-white rounded-lg text-[13px] font-medium transition">
-                {editId ? '수정' : '등록'}
+              <button onClick={handleSave} disabled={saving}
+                className="h-[36px] px-5 bg-accent hover:bg-accent-hover text-white rounded-lg text-[13px] font-medium transition disabled:opacity-50">
+                {saving ? '저장 중...' : editId ? '수정' : '등록'}
               </button>
             </div>
           </div>

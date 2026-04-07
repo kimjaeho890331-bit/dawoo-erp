@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Building2, Users, Bell, Shield, Database, Save, Check } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Building2, Users, Bell, Shield, Database, Save, Check, Loader2 } from 'lucide-react'
 
 // --- 타입 ---
 interface CompanyInfo {
@@ -22,51 +22,111 @@ interface NotificationSetting {
   enabled: boolean
 }
 
+interface SystemSettings {
+  defaultYear: number
+  itemsPerPage: number
+  autoSaveInterval: number
+  reportTime: string
+}
+
+interface AllSettings {
+  company: CompanyInfo
+  notifications: NotificationSetting[]
+  system: SystemSettings
+}
+
+const STORAGE_KEY = 'dawoo_erp_settings'
+
+const DEFAULT_COMPANY: CompanyInfo = {
+  name: '다우건설',
+  ceo: '김재호',
+  bizNumber: '',
+  address: '경기도 수원시',
+  phone: '',
+  fax: '',
+  email: '',
+  constructionTypes: '실내건축공사업, 수도시설공사업',
+}
+
+const DEFAULT_NOTIFICATIONS: NotificationSetting[] = [
+  { key: 'deadline', label: '마감 알림', description: '서류 제출 D-3일 전 알림', enabled: true },
+  { key: 'payment', label: '미수금 알림', description: '완료 후 30일 경과 미수금 알림', enabled: true },
+  { key: 'stale', label: '정체 알림', description: '30일 이상 진행 없는 건 알림', enabled: true },
+  { key: 'schedule', label: '일정 알림', description: '캘린더 일정 당일 알림', enabled: true },
+  { key: 'report', label: '보고서 생성', description: '일일/주간/월간 보고서 자동 생성', enabled: true },
+  { key: 'tax', label: '세무 알림', description: '회계달력 세무 일정 D-3일 전 알림', enabled: true },
+  { key: 'as', label: 'A/S 알림', description: 'A/S 미완료 3건 이상 누적 시 알림', enabled: false },
+  { key: 'expense', label: '이상지출 알림', description: '기준 초과 지출 감지 시 알림', enabled: true },
+]
+
+const DEFAULT_SYSTEM: SystemSettings = {
+  defaultYear: new Date().getFullYear(),
+  itemsPerPage: 50,
+  autoSaveInterval: 30,
+  reportTime: '08:00',
+}
+
+function loadSettingsFromStorage(): AllSettings {
+  if (typeof window === 'undefined') {
+    return { company: DEFAULT_COMPANY, notifications: DEFAULT_NOTIFICATIONS, system: DEFAULT_SYSTEM }
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) {
+      return { company: DEFAULT_COMPANY, notifications: DEFAULT_NOTIFICATIONS, system: DEFAULT_SYSTEM }
+    }
+    const parsed = JSON.parse(raw) as Partial<AllSettings>
+    // 기존 알림 키 기준으로 머지 (새 알림 항목이 추가되면 기본값 사용)
+    const mergedNotifications = DEFAULT_NOTIFICATIONS.map(def => {
+      const saved = parsed.notifications?.find(n => n.key === def.key)
+      return saved ? { ...def, enabled: saved.enabled } : def
+    })
+    return {
+      company: { ...DEFAULT_COMPANY, ...parsed.company },
+      notifications: mergedNotifications,
+      system: { ...DEFAULT_SYSTEM, ...parsed.system },
+    }
+  } catch {
+    return { company: DEFAULT_COMPANY, notifications: DEFAULT_NOTIFICATIONS, system: DEFAULT_SYSTEM }
+  }
+}
+
 export default function SettingsPage() {
   const [tab, setTab] = useState<'company' | 'notification' | 'system'>('company')
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  // 회사 정보 (추후 DB)
-  const [company, setCompany] = useState<CompanyInfo>({
-    name: '다우건설',
-    ceo: '김재호',
-    bizNumber: '',
-    address: '경기도 수원시',
-    phone: '',
-    fax: '',
-    email: '',
-    constructionTypes: '실내건축공사업, 수도시설공사업',
-  })
+  const [company, setCompany] = useState<CompanyInfo>(DEFAULT_COMPANY)
+  const [notifications, setNotifications] = useState<NotificationSetting[]>(DEFAULT_NOTIFICATIONS)
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM)
 
-  // 알림 설정
-  const [notifications, setNotifications] = useState<NotificationSetting[]>([
-    { key: 'deadline', label: '마감 알림', description: '서류 제출 D-3일 전 알림', enabled: true },
-    { key: 'payment', label: '미수금 알림', description: '완료 후 30일 경과 미수금 알림', enabled: true },
-    { key: 'stale', label: '정체 알림', description: '30일 이상 진행 없는 건 알림', enabled: true },
-    { key: 'schedule', label: '일정 알림', description: '캘린더 일정 당일 알림', enabled: true },
-    { key: 'report', label: '보고서 생성', description: '일일/주간/월간 보고서 자동 생성', enabled: true },
-    { key: 'tax', label: '세무 알림', description: '회계달력 세무 일정 D-3일 전 알림', enabled: true },
-    { key: 'as', label: 'A/S 알림', description: 'A/S 미완료 3건 이상 누적 시 알림', enabled: false },
-    { key: 'expense', label: '이상지출 알림', description: '기준 초과 지출 감지 시 알림', enabled: true },
-  ])
-
-  // 시스템 설정
-  const [systemSettings, setSystemSettings] = useState({
-    defaultYear: new Date().getFullYear(),
-    itemsPerPage: 50,
-    autoSaveInterval: 30,
-    reportTime: '08:00',
-  })
+  // 마운트 시 localStorage에서 설정 로드
+  useEffect(() => {
+    const loaded = loadSettingsFromStorage()
+    setCompany(loaded.company)
+    setNotifications(loaded.notifications)
+    setSystemSettings(loaded.system)
+  }, [])
 
   const toggleNotif = (key: string) => {
     setNotifications(prev => prev.map(n => n.key === key ? { ...n, enabled: !n.enabled } : n))
   }
 
-  const handleSave = () => {
-    // 추후 Supabase 저장
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    // localStorage 저장 (약간의 지연으로 로딩 피드백)
+    await new Promise(resolve => setTimeout(resolve, 300))
+    try {
+      const data: AllSettings = { company, notifications, system: systemSettings }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+      setSaving(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setSaving(false)
+      alert('설정 저장에 실패했습니다.')
+    }
+  }, [company, notifications, systemSettings])
 
   const updateCompany = (field: keyof CompanyInfo, value: string) => {
     setCompany(prev => ({ ...prev, [field]: value }))
@@ -83,9 +143,9 @@ export default function SettingsPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">설정</h1>
-        <button onClick={handleSave}
-          className="h-[36px] px-5 bg-accent hover:bg-accent-hover text-white rounded-lg text-[13px] font-medium transition flex items-center gap-1.5">
-          {saved ? <><Check size={14} /> 저장됨</> : <><Save size={14} /> 저장</>}
+        <button onClick={handleSave} disabled={saving}
+          className="h-[36px] px-5 bg-accent hover:bg-accent-hover disabled:opacity-60 text-white rounded-lg text-[13px] font-medium transition flex items-center gap-1.5">
+          {saving ? <><Loader2 size={14} className="animate-spin" /> 저장 중...</> : saved ? <><Check size={14} /> 저장됨</> : <><Save size={14} /> 저장</>}
         </button>
       </div>
 

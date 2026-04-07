@@ -133,6 +133,8 @@ export interface Project {
   building_area: number | null;
   total_floor_area: number | null;
   building_use: string | null;
+  building_purpose: string | null;
+  household_count: number | null;
 
   // 통장 정보
   bank_name: string | null;

@@ -42,6 +42,8 @@ export interface DBProject {
   completion_submitter: string | null
   dong: string | null
   ho: string | null
+  exclusive_area: number | null
+  building_use: string | null
   bank_name: string | null
   account_number: string | null
   account_holder: string | null

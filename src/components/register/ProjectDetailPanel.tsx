@@ -306,11 +306,13 @@ function TabBasicInfo({ project, getVal, onChange }: TabProps) {
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">건물 정보</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} />
-          <FormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} />
-          <FormInput label="면적 (m2)" type="number" value={getVal('area') as number} onChange={v => onChange('area', Number(v) || null)} />
+          <FormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} />
           <FormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} />
           <FormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} />
+          <FormInput label="면적 (m2)" type="number" value={getVal('area') as number} onChange={v => onChange('area', Number(v) || null)} />
+          <FormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} />
+          <FormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} />
+          <FormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} />
           <FormInput label="진행연도" placeholder="예: 2026" value={getVal('year') as number} onChange={v => onChange('year', Number(v) || null)} />
         </div>
       </section>

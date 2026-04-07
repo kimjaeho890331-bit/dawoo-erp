@@ -1,8 +1,43 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { DBProject } from '@/components/register/RegisterPage'
+
+// --- 주소 검색 결과 타입 ---
+interface AddressResult {
+  roadAddr: string
+  jibunAddr: string
+  bdNm: string
+  admCd: string
+  lnbrMnnm: string
+  lnbrSlno: string
+  sigunguCd: string
+  bjdongCd: string
+}
+
+// --- 건축물대장 결과 타입 ---
+interface BuildingInfo {
+  bldNm: string
+  mainPurpsCdNm: string
+  etcPurps: string
+  hhldCnt: number
+  useAprDay: string
+  strctCdNm: string
+  grndFlrCnt: number
+  ugrndFlrCnt: number
+  totArea: number
+}
+
+// --- 전유부 결과 타입 ---
+interface UnitInfo {
+  dongNm: string
+  hoNm: string
+  flrNo: number
+  area: number
+  exposPubuseGbCdNm: string
+}
 
 interface Props {
   category: '소규모' | '수도'
@@ -18,6 +53,18 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
   const [workTypes, setWorkTypes] = useState<{ id: string; name: string }[]>([])
   const [saving, setSaving] = useState(false)
 
+  // 주소 검색 상태
+  const [addressKeyword, setAddressKeyword] = useState('')
+  const [addressResults, setAddressResults] = useState<AddressResult[]>([])
+  const [addressSearching, setAddressSearching] = useState(false)
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false)
+  const addressDropdownRef = useRef<HTMLDivElement>(null)
+
+  // 건축물 정보 상태
+  const [buildingInfo, setBuildingInfo] = useState<BuildingInfo | null>(null)
+  const [units, setUnits] = useState<UnitInfo[]>([])
+  const [loadingBuilding, setLoadingBuilding] = useState(false)
+
   const [form, setForm] = useState({
     building_name: '',
     road_address: '',
@@ -29,6 +76,13 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     work_type_id: '',
     staff_id: '',
     city_id: '',
+    // 건축물대장 자동 데이터
+    building_use: '',
+    unit_count: '',
+    approval_date: '',
+    dong: '',
+    ho: '',
+    exclusive_area: '',
   })
 
   const [errors, setErrors] = useState<Record<string, boolean>>({})
@@ -66,6 +120,12 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           work_type_id: editProject.work_type_id || typesData[0]?.id || '',
           staff_id: editProject.staff_id || staffData[0]?.id || '',
           city_id: editProject.city_id || citiesData[0]?.id || '',
+          building_use: editProject.building_use || '',
+          unit_count: editProject.unit_count?.toString() || '',
+          approval_date: editProject.approval_date || '',
+          dong: editProject.dong || '',
+          ho: editProject.ho || '',
+          exclusive_area: editProject.exclusive_area?.toString() || '',
         })
       } else {
         // 신규등록 기본값
@@ -80,12 +140,127 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     load()
   }, [category, editProject])
 
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (addressDropdownRef.current && !addressDropdownRef.current.contains(e.target as Node)) {
+        setShowAddressDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const update = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: false }))
     }
   }
+
+  // 주소 검색
+  const handleAddressSearch = async () => {
+    if (!addressKeyword.trim()) return
+    setAddressSearching(true)
+    setShowAddressDropdown(true)
+    try {
+      const res = await fetch(`/api/address/search?keyword=${encodeURIComponent(addressKeyword)}`)
+      const data = await res.json()
+      setAddressResults(Array.isArray(data) ? data : [])
+    } catch {
+      setAddressResults([])
+    } finally {
+      setAddressSearching(false)
+    }
+  }
+
+  // 주소 선택 시 건축물대장 + 전유부 조회
+  const handleAddressSelect = async (addr: AddressResult) => {
+    setShowAddressDropdown(false)
+    setAddressKeyword('')
+
+    // 주소, 건물명 자동 입력
+    setForm(prev => ({
+      ...prev,
+      road_address: addr.roadAddr,
+      jibun_address: addr.jibunAddr,
+      building_name: addr.bdNm || prev.building_name,
+    }))
+    if (errors.road_address) {
+      setErrors(prev => ({ ...prev, road_address: false }))
+    }
+
+    // 건축물대장 + 전유부 동시 호출
+    setLoadingBuilding(true)
+    const params = new URLSearchParams({
+      sigunguCd: addr.sigunguCd,
+      bjdongCd: addr.bjdongCd,
+      bun: addr.lnbrMnnm,
+      ji: addr.lnbrSlno || '0',
+    })
+
+    try {
+      const [bldRes, unitRes] = await Promise.all([
+        fetch(`/api/address/building?${params.toString()}`),
+        fetch(`/api/address/units?${params.toString()}`),
+      ])
+
+      const bldData: BuildingInfo | null = await bldRes.json()
+      const unitData: UnitInfo[] = await unitRes.json()
+
+      setBuildingInfo(bldData)
+      setUnits(Array.isArray(unitData) ? unitData : [])
+
+      if (bldData) {
+        // 사용승인일 포맷: YYYYMMDD -> YYYY-MM-DD
+        let formattedDate = ''
+        if (bldData.useAprDay && bldData.useAprDay.length === 8) {
+          formattedDate = `${bldData.useAprDay.substring(0, 4)}-${bldData.useAprDay.substring(4, 6)}-${bldData.useAprDay.substring(6, 8)}`
+        }
+
+        setForm(prev => ({
+          ...prev,
+          building_use: bldData.mainPurpsCdNm || bldData.etcPurps || '',
+          unit_count: bldData.hhldCnt?.toString() || '',
+          approval_date: formattedDate,
+          building_name: prev.building_name || bldData.bldNm || '',
+        }))
+      }
+    } catch (err) {
+      console.error('건축물 정보 조회 실패:', err)
+    } finally {
+      setLoadingBuilding(false)
+    }
+  }
+
+  // 동호수 선택 시 전유면적 자동 입력
+  const handleUnitSelect = (dongHo: string) => {
+    // dongHo format: "dongNm|hoNm" or just "hoNm" if no dong
+    const parts = dongHo.split('|')
+    const dongVal = parts.length > 1 ? parts[0] : ''
+    const hoVal = parts.length > 1 ? parts[1] : parts[0]
+
+    const matched = units.find(u => {
+      const uDong = u.dongNm || ''
+      const uHo = u.hoNm || ''
+      if (parts.length > 1) return uDong === dongVal && uHo === hoVal
+      return uHo === hoVal
+    })
+
+    setForm(prev => ({
+      ...prev,
+      dong: dongVal,
+      ho: hoVal,
+      exclusive_area: matched ? matched.area.toString() : '',
+    }))
+  }
+
+  // 동호수 옵션 생성
+  const unitOptions = units.map(u => {
+    const label = u.dongNm ? `${u.dongNm} ${u.hoNm}` : u.hoNm
+    const value = u.dongNm ? `${u.dongNm}|${u.hoNm}` : u.hoNm
+    return { label, value, area: u.area }
+  })
 
   const handleSubmit = async () => {
     const required = ['building_name', 'road_address', 'owner_name', 'owner_phone', 'note']
@@ -115,6 +290,12 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         work_type_id: form.work_type_id || null,
         staff_id: form.staff_id || null,
         city_id: form.city_id || null,
+        building_use: form.building_use || null,
+        unit_count: form.unit_count ? Number(form.unit_count) : null,
+        approval_date: form.approval_date || null,
+        dong: form.dong || null,
+        ho: form.ho || null,
+        exclusive_area: form.exclusive_area ? Number(form.exclusive_area) : null,
       }
 
       if (isEdit) {
@@ -163,6 +344,74 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         <div className="space-y-4">
           <p className="text-[11px] text-txt-tertiary">* 필수 입력</p>
 
+          {/* 주소 검색 */}
+          <div ref={addressDropdownRef} className="relative">
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">
+              주소 검색
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={addressKeyword}
+                onChange={e => setAddressKeyword(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddressSearch() } }}
+                placeholder="도로명 또는 건물명으로 검색"
+                className="flex-1 h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              />
+              <button
+                onClick={handleAddressSearch}
+                disabled={addressSearching}
+                className="px-4 h-[36px] text-[13px] font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Search size={14} className="text-white" />
+                검색
+              </button>
+            </div>
+
+            {/* 검색 결과 드롭다운 */}
+            {showAddressDropdown && (
+              <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
+                {addressSearching ? (
+                  <div className="px-4 py-3 text-[13px] text-txt-tertiary text-center">검색 중...</div>
+                ) : addressResults.length === 0 ? (
+                  <div className="px-4 py-3 text-[13px] text-txt-tertiary text-center">검색 결과가 없습니다</div>
+                ) : (
+                  addressResults.map((addr, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleAddressSelect(addr)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-surface-secondary transition-colors border-b border-border-tertiary last:border-b-0"
+                    >
+                      <p className="text-[13px] text-txt-primary">{addr.roadAddr}</p>
+                      <p className="text-[11px] text-txt-tertiary mt-0.5">{addr.jibunAddr}</p>
+                      {addr.bdNm && <p className="text-[11px] text-txt-secondary mt-0.5">{addr.bdNm}</p>}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 도로명주소 (자동입력, 읽기전용) */}
+          <ModalField
+            label="도로명주소 *"
+            value={form.road_address}
+            onChange={v => update('road_address', v)}
+            placeholder="주소 검색으로 자동 입력됩니다"
+            error={errors.road_address}
+            readOnly
+          />
+
+          {/* 지번주소 (자동입력, 읽기전용) */}
+          <ModalField
+            label="지번주소"
+            value={form.jibun_address}
+            onChange={v => update('jibun_address', v)}
+            placeholder="주소 검색으로 자동 입력됩니다"
+            readOnly
+          />
+
+          {/* 빌라명 (자동입력, 수정가능) */}
           <ModalField
             label="빌라명 *"
             value={form.building_name}
@@ -171,20 +420,83 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             error={errors.building_name}
           />
 
-          <ModalField
-            label="도로명주소 *"
-            value={form.road_address}
-            onChange={v => update('road_address', v)}
-            placeholder="예: 경기도 수원시 팔달구 인계로 123번길 45"
-            error={errors.road_address}
-          />
+          {/* 건축물대장 자동 데이터 */}
+          {(buildingInfo || form.building_use || form.unit_count || form.approval_date) && (
+            <div className="bg-surface-secondary rounded-lg p-3">
+              <p className="text-[11px] font-medium text-txt-tertiary mb-2">건축물대장 정보</p>
+              {loadingBuilding ? (
+                <p className="text-[12px] text-txt-tertiary">조회 중...</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-[10px] text-txt-tertiary">용도</p>
+                    <p className="text-[13px] text-txt-primary">{form.building_use || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-txt-tertiary">세대수</p>
+                    <p className="text-[13px] text-txt-primary">{form.unit_count || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-txt-tertiary">사용승인일</p>
+                    <p className="text-[13px] text-txt-primary">{form.approval_date || '-'}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
-          <ModalField
-            label="지번주소"
-            value={form.jibun_address}
-            onChange={v => update('jibun_address', v)}
-            placeholder="예: 경기도 수원시 팔달구 인계동 123-45"
-          />
+          {/* 동호수 선택 + 전유면적 */}
+          {units.length > 0 && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">동호수</label>
+                <select
+                  value={form.dong ? `${form.dong}|${form.ho}` : form.ho}
+                  onChange={e => handleUnitSelect(e.target.value)}
+                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+                >
+                  <option value="">선택하세요</option>
+                  {unitOptions.map((opt, idx) => (
+                    <option key={idx} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">전유면적 (m2)</label>
+                <input
+                  type="text"
+                  value={form.exclusive_area ? `${Number(form.exclusive_area).toFixed(2)} m2` : '-'}
+                  readOnly
+                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] bg-surface-secondary text-txt-secondary cursor-default"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 동호수가 API에서 안 나올 때 수동 입력 */}
+          {units.length === 0 && (
+            <div className="grid grid-cols-3 gap-4">
+              <ModalField
+                label="동"
+                value={form.dong}
+                onChange={v => update('dong', v)}
+                placeholder="예: 101동"
+              />
+              <ModalField
+                label="호"
+                value={form.ho}
+                onChange={v => update('ho', v)}
+                placeholder="예: 301호"
+              />
+              <ModalField
+                label="전유면적 (m2)"
+                value={form.exclusive_area}
+                onChange={v => update('exclusive_area', v)}
+                placeholder="예: 59.94"
+                type="number"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <ModalField
@@ -288,10 +600,10 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
 }
 
 function ModalField({
-  label, value, onChange, placeholder, type = 'text', error,
+  label, value, onChange, placeholder, type = 'text', error, readOnly,
 }: {
   label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; type?: string; error?: boolean
+  placeholder?: string; type?: string; error?: boolean; readOnly?: boolean
 }) {
   return (
     <div>
@@ -301,9 +613,10 @@ function ModalField({
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
+        readOnly={readOnly}
         className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light ${
           error ? 'border-[#fecaca] bg-red-50' : 'border-border-primary'
-        }`}
+        } ${readOnly ? 'bg-surface-secondary text-txt-secondary cursor-default' : ''}`}
       />
       {error && <p className="text-[11px] text-[#dc2626] mt-1">필수 입력입니다</p>}
     </div>

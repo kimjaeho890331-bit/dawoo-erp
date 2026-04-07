@@ -16,6 +16,7 @@ interface AsRecord {
   resolved_date: string | null
   assigned_vendor_id: string | null
   cost: number | null
+  resolution: string | null
   memo: string | null
   photos: string[]
   created_at: string
@@ -57,6 +58,7 @@ const EMPTY_FORM: Omit<AsRecord, 'id' | 'created_at'> = {
   resolved_date: null,
   assigned_vendor_id: null,
   cost: null,
+  resolution: null,
   memo: null,
   photos: [],
 }
@@ -115,6 +117,7 @@ export default function AsPage() {
       resolved_date: record.resolved_date,
       assigned_vendor_id: record.assigned_vendor_id,
       cost: record.cost,
+      resolution: record.resolution,
       memo: record.memo,
       photos: record.photos || [],
     })
@@ -224,6 +227,7 @@ export default function AsPage() {
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장/주소</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">하자유형</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">해결내용</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">담당업체</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">상태</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">처리일</th>
@@ -245,6 +249,9 @@ export default function AsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-txt-secondary max-w-[200px] truncate">{record.description}</td>
+                    <td className="px-4 py-3 text-txt-secondary max-w-[200px] truncate" title={record.resolution || ''}>
+                      {record.resolution || '-'}
+                    </td>
                     <td className="px-4 py-3 text-txt-secondary">{record.assigned_vendor_id || '-'}</td>
                     <td className="px-4 py-3">
                       <select
@@ -389,6 +396,20 @@ export default function AsPage() {
                   placeholder="하자 내용을 입력하세요"
                 />
               </div>
+
+              {/* 해결내용 (진행중/완료일 때만 표시) */}
+              {(form.status === '진행중' || form.status === '완료') && (
+                <div>
+                  <label className="block text-sm font-medium text-txt-secondary mb-1">해결내용</label>
+                  <textarea
+                    value={form.resolution || ''}
+                    onChange={e => setForm(f => ({ ...f, resolution: e.target.value || null }))}
+                    rows={3}
+                    className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none resize-none"
+                    placeholder="해결 내용을 입력하세요"
+                  />
+                </div>
+              )}
 
               {/* 담당업체 */}
               <div>

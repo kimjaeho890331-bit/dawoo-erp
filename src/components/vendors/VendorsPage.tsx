@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, DragEvent } from 'react'
-import { Check, Paperclip, FileText, Landmark, CreditCard, HardHat, Building2, User, Phone } from 'lucide-react'
+import { Check, Paperclip, FileText, Landmark, CreditCard, HardHat, Building2, User, Phone, Hash } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // --- 타입 ---
@@ -14,6 +14,7 @@ interface Vendor {
   phone: string
   email: string
   address: string
+  business_number: string
   bank_info: string
   rating: number
   note: string
@@ -28,7 +29,7 @@ type VendorType = '협력업체' | '일용직'
 
 const EMPTY_VENDOR = {
   name: '', vendor_type: '협력업체' as VendorType, category: '', contact_person: '', phone: '', email: '',
-  address: '', bank_info: '', rating: 0, note: '',
+  address: '', business_number: '', bank_info: '', rating: 0, note: '',
   biz_license_url: null as string | null, bankbook_url: null as string | null,
   id_card_url: null as string | null, safety_cert_url: null as string | null,
 }
@@ -160,7 +161,7 @@ export default function VendorsPage() {
     setForm({
       name: vendor.name, vendor_type: vendor.vendor_type, category: vendor.category || '',
       contact_person: vendor.contact_person || '', phone: vendor.phone || '', email: vendor.email || '',
-      address: vendor.address || '', bank_info: vendor.bank_info || '', rating: vendor.rating || 0,
+      address: vendor.address || '', business_number: vendor.business_number || '', bank_info: vendor.bank_info || '', rating: vendor.rating || 0,
       note: vendor.note || '', biz_license_url: vendor.biz_license_url, bankbook_url: vendor.bankbook_url,
       id_card_url: vendor.id_card_url, safety_cert_url: vendor.safety_cert_url,
     })
@@ -185,8 +186,8 @@ export default function VendorsPage() {
     setSaving(true)
     try {
       const payload = { ...form }
-      // 일용직은 email 빈값 처리
-      if (form.vendor_type === '일용직') payload.email = ''
+      // 일용직은 email, business_number 빈값 처리
+      if (form.vendor_type === '일용직') { payload.email = ''; payload.business_number = '' }
       if (editingVendor) {
         const { error } = await supabase.from('vendors').update(payload).eq('id', editingVendor.id)
         if (error) throw error
@@ -205,6 +206,13 @@ export default function VendorsPage() {
       if (error) throw error
       setDeleteConfirm(null); setModalOpen(false); fetchVendors()
     } catch (err) { console.error('삭제 실패:', err); alert('삭제에 실패했습니다.') }
+  }
+
+  const formatBusinessNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 10)
+    if (digits.length <= 3) return digits
+    if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+    return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`
   }
 
   const updateForm = (field: string, value: string | number) => setForm(prev => ({ ...prev, [field]: value }))
@@ -312,6 +320,12 @@ export default function VendorsPage() {
                       className="text-accent-text hover:underline truncate">{vendor.phone}</a>
                   </div>
                 )}
+                {vendor.vendor_type === '협력업체' && vendor.business_number && (
+                  <div className="flex items-center gap-2 text-txt-secondary">
+                    <Hash size={14} className="text-txt-tertiary" />
+                    <span className="truncate">{vendor.business_number}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -391,6 +405,11 @@ export default function VendorsPage() {
                     <label className="block text-sm font-medium text-txt-secondary mb-1">주소</label>
                     <input type="text" value={form.address} onChange={e => updateForm('address', e.target.value)}
                       placeholder="사업장 주소" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-txt-secondary mb-1">사업자번호</label>
+                    <input type="text" value={form.business_number} onChange={e => updateForm('business_number', formatBusinessNumber(e.target.value))}
+                      placeholder="000-00-00000" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
                   </div>
                 </>
               )}

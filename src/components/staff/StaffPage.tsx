@@ -22,6 +22,7 @@ interface Staff {
   join_date: string | null
   resign_date: string | null
   memo: string | null
+  color: string | null
   created_at: string
 }
 
@@ -135,7 +136,8 @@ export default function StaffPage() {
                         onClick={() => setDetailItem(s)}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-surface-tertiary flex items-center justify-center text-sm font-semibold text-txt-secondary">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold text-white"
+                              style={{ backgroundColor: s.color || '#94a3b8' }}>
                               {s.name.charAt(0)}
                             </div>
                             <span className="font-medium text-txt-primary">{s.name}</span>
@@ -310,7 +312,8 @@ function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => 
     <div className="bg-surface rounded-[10px] border border-border-primary p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-surface-tertiary flex items-center justify-center text-lg font-semibold text-txt-secondary">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-semibold text-white"
+            style={{ backgroundColor: staff.color || '#94a3b8' }}>
             {staff.name.charAt(0)}
           </div>
           <div>
@@ -339,6 +342,10 @@ function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => 
           <Row label="생년월일" value={staff.birth_date} />
           <Row label="주소" value={staff.address} />
           <Row label="Telegram" value={staff.telegram_id} />
+          <div className="flex py-2 border-b border-surface-secondary">
+            <span className="w-24 shrink-0 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">캘린더 색깔</span>
+            <div className="w-5 h-5 rounded-full" style={{ backgroundColor: staff.color || '#94a3b8' }} />
+          </div>
         </div>
         <div>
           <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">근무/급여 정보</p>
@@ -378,7 +385,10 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
   const [resignDate, setResignDate] = useState(item?.resign_date || '')
   const [telegramId, setTelegramId] = useState(item?.telegram_id || '')
   const [memo, setMemo] = useState(item?.memo || '')
+  const [color, setColor] = useState(item?.color || '#5e6ad2')
   const [saving, setSaving] = useState(false)
+
+  const PRESET_COLORS = ['#5e6ad2', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899']
 
   const formatPhone = (v: string) => {
     const num = v.replace(/[^0-9]/g, '')
@@ -412,6 +422,7 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
       resign_date: resignDate || null,
       telegram_id: telegramId || null,
       memo: memo || null,
+      color: color || null,
     }
     if (isEdit && item) {
       await supabase.from('staff').update(payload).eq('id', item.id)
@@ -469,6 +480,16 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
             <div className="mt-3">
               <label className={labelCls}>주소</label>
               <input value={address} onChange={e => setAddress(e.target.value)} placeholder="주소" className={inputCls} />
+            </div>
+            <div className="mt-3">
+              <label className={labelCls}>캘린더 색깔</label>
+              <div className="flex items-center gap-2 mt-1">
+                {PRESET_COLORS.map(c => (
+                  <button key={c} type="button" onClick={() => setColor(c)}
+                    className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-accent scale-110' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
             </div>
           </div>
 

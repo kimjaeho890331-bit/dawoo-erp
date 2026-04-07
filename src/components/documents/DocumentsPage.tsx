@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 
 // --- 타입 ---
 interface CompanyDoc {
@@ -9,6 +10,8 @@ interface CompanyDoc {
   expiryDate: string | null
   hasFile: boolean
   fileName?: string
+  fileUrl?: string
+  storagePath?: string
 }
 
 interface TemplateDoc {
@@ -18,6 +21,19 @@ interface TemplateDoc {
   cityName?: string
   hasFile: boolean
   fileName?: string
+  fileUrl?: string
+  storagePath?: string
+}
+
+// Supabase templates 테이블 row 타입
+interface TemplateRow {
+  id: string
+  name: string
+  file_path: string | null
+  field_mapping: Record<string, unknown>
+  updated_at: string
+  city_id: string | null
+  work_type_id: string | null
 }
 
 type TabKey = '회사' | '수도' | '소규모' | '입찰'
@@ -298,32 +314,115 @@ function DropZone({ onFileDrop }: { onFileDrop: (file: File) => void }) {
   )
 }
 
+// --- Supabase Storage 업로드 헬퍼 ---
+async function uploadFileToStorage(
+  file: File,
+  category: string,
+  templateName: string,
+): Promise<{ url: string; path: string }> {
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9가-힣_.-]/g, '_')
+  const storagePath = `${sanitize(category)}/${sanitize(templateName)}/${Date.now()}_${sanitize(file.name)}`
+
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .upload(storagePath, file, { upsert: true })
+
+  if (error) throw error
+
+  const { data: urlData } = supabase.storage
+    .from('documents')
+    .getPublicUrl(data.path)
+
+  return { url: urlData.publicUrl, path: data.path }
+}
+
+async function deleteFileFromStorage(storagePath: string): Promise<void> {
+  const { error } = await supabase.storage
+    .from('documents')
+    .remove([storagePath])
+  if (error) {
+    console.error('Storage 파일 삭제 실패:', error)
+  }
+}
+
 // --- 서류 업로드 모달 ---
 function UploadModal({
   onClose,
   activeTab,
+  onUploaded,
 }: {
   onClose: () => void
   activeTab: TabKey
+  onUploaded: (info: { tab: TabKey; docName: string; city?: string; expiryDate?: string; fileUrl: string; storagePath: string; fileName: string }) => void
 }) {
   const [tab, setTab] = useState<TabKey>(activeTab)
   const [docName, setDocName] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
   const [selectedCity, setSelectedCity] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const handleFileDrop = (file: File) => {
     setSelectedFile(file)
+    setUploadError(null)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!docName.trim()) {
-      alert('서류명을 입력해주세요.')
+      setUploadError('서류명을 입력해주세요.')
       return
     }
-    // placeholder - 실제 업로드 구현 시 Supabase Storage 연동
-    alert(`서류 업로드 (placeholder)\n분류: ${tab}\n서류명: ${docName}\n${selectedFile ? `파일: ${selectedFile.name}` : '파일 미선택'}`)
-    onClose()
+    if (!selectedFile) {
+      setUploadError('파일을 선택해주세요.')
+      return
+    }
+    if ((tab === '수도' || tab === '소규모') && !selectedCity) {
+      setUploadError('시를 선택해주세요.')
+      return
+    }
+
+    setUploading(true)
+    setUploadError(null)
+
+    try {
+      const category = selectedCity ? `${tab}_${selectedCity}` : tab
+      const { url, path } = await uploadFileToStorage(selectedFile, category, docName)
+
+      // templates 테이블에 레코드 저장
+      const { error: dbError } = await supabase.from('templates').insert({
+        name: docName.trim(),
+        file_path: path,
+        field_mapping: {
+          category: tab,
+          city: selectedCity || null,
+          expiry_date: expiryDate || null,
+          file_url: url,
+          file_name: selectedFile.name,
+        },
+      })
+
+      if (dbError) {
+        console.error('DB 저장 실패:', dbError)
+        // Storage에는 올라갔으니 콜백은 호출
+      }
+
+      onUploaded({
+        tab,
+        docName: docName.trim(),
+        city: selectedCity || undefined,
+        expiryDate: expiryDate || undefined,
+        fileUrl: url,
+        storagePath: path,
+        fileName: selectedFile.name,
+      })
+      onClose()
+    } catch (err) {
+      console.error('업로드 실패:', err)
+      setUploadError('파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
@@ -417,7 +516,8 @@ function UploadModal({
                 </div>
                 <button
                   onClick={() => setSelectedFile(null)}
-                  className="text-txt-tertiary hover:text-red-500 transition-colors"
+                  disabled={uploading}
+                  className="text-txt-tertiary hover:text-red-500 transition-colors disabled:opacity-50"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -428,21 +528,36 @@ function UploadModal({
               <DropZone onFileDrop={handleFileDrop} />
             )}
           </div>
+
+          {/* 에러 메시지 */}
+          {uploadError && (
+            <div className="px-3 py-2 bg-[#fee2e2] text-[#991b1b] text-sm rounded-lg">
+              {uploadError}
+            </div>
+          )}
         </div>
 
         {/* 하단 버튼 */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-border-primary">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-txt-secondary border border-border-secondary rounded-lg hover:bg-surface-tertiary transition-colors"
+            disabled={uploading}
+            className="px-4 py-2 text-sm text-txt-secondary border border-border-secondary rounded-lg hover:bg-surface-tertiary transition-colors disabled:opacity-50"
           >
             취소
           </button>
           <button
             onClick={handleSubmit}
-            className="px-4 py-2 text-sm text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors font-medium"
+            disabled={uploading}
+            className="px-4 py-2 text-sm text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
           >
-            업로드
+            {uploading && (
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-25" />
+                <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+              </svg>
+            )}
+            {uploading ? '업로드 중...' : '업로드'}
           </button>
         </div>
       </div>
@@ -523,11 +638,15 @@ function EditDocModal({
   )
 }
 
-// --- 이미지 뷰어 ---
+// --- 이미지/파일 뷰어 ---
 function ImageViewer({
   onClose,
+  fileUrl,
+  fileName,
 }: {
   onClose: () => void
+  fileUrl?: string
+  fileName?: string
 }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -537,9 +656,12 @@ function ImageViewer({
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
+  const isPdf = fileName?.toLowerCase().endsWith('.pdf')
+  const isImage = fileName?.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={onClose}>
-      <div className="relative max-w-4xl max-h-[90vh] mx-4" onClick={e => e.stopPropagation()}>
+      <div className="relative max-w-4xl max-h-[90vh] mx-4 w-full" onClick={e => e.stopPropagation()}>
         <button
           onClick={onClose}
           className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
@@ -548,11 +670,34 @@ function ImageViewer({
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <div className="bg-surface rounded-lg p-8 text-center">
-          <FileIcon className="w-24 h-24 mx-auto mb-4" />
-          <p className="text-txt-tertiary">미리보기를 사용할 수 없습니다</p>
-          <p className="text-xs text-txt-tertiary mt-1">Supabase Storage 연동 후 지원 예정</p>
-        </div>
+        {fileUrl && isPdf ? (
+          <iframe
+            src={fileUrl}
+            className="w-full h-[80vh] rounded-lg bg-white"
+            title={fileName || '미리보기'}
+          />
+        ) : fileUrl && isImage ? (
+          <img
+            src={fileUrl}
+            alt={fileName || '미리보기'}
+            className="max-w-full max-h-[80vh] mx-auto rounded-lg object-contain"
+          />
+        ) : (
+          <div className="bg-surface rounded-lg p-8 text-center">
+            <FileIcon className="w-24 h-24 mx-auto mb-4" />
+            <p className="text-txt-tertiary">{fileName || '미리보기를 사용할 수 없습니다'}</p>
+            {fileUrl && (
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-3 px-4 py-2 text-sm text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors"
+              >
+                파일 열기
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -817,10 +962,18 @@ export default function DocumentsPage() {
   const [bidGroups, setBidGroups] = useState<BidGroup[]>(INITIAL_BID_GROUPS)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState<{ id: string; name: string; expiryDate?: string | null } | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; type: 'company' | 'bid' } | null>(null)
-  const [showPreview, setShowPreview] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; type: 'company' | 'bid'; storagePath?: string } | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<{ fileUrl?: string; fileName?: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [replacing, setReplacing] = useState(false)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+  const [replaceTarget, setReplaceTarget] = useState<{ id: string; type: 'company' | 'template'; category?: TabKey; cityName?: string } | null>(null)
 
-  // 수도/소규모 템플릿 생성 (시 x 양식)
+  // 수도/소규모 템플릿 상태
+  const [waterTemplates, setWaterTemplates] = useState<Record<string, TemplateDoc[]>>({})
+  const [smallTemplates, setSmallTemplates] = useState<Record<string, TemplateDoc[]>>({})
+
+  // 수도/소규모 템플릿 생성 (시 x 양식) — 초기 기본값
   const generateCityTemplates = useCallback((category: '수도' | '소규모'): Record<string, TemplateDoc[]> => {
     const result: Record<string, TemplateDoc[]> = {}
     CITIES.forEach(city => {
@@ -835,25 +988,316 @@ export default function DocumentsPage() {
     return result
   }, [])
 
-  const waterTemplates = generateCityTemplates('수도')
-  const smallTemplates = generateCityTemplates('소규모')
+  // Supabase에서 templates 로드
+  const loadTemplates = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('updated_at', { ascending: false })
+
+      if (error) {
+        console.error('템플릿 로드 실패:', error)
+        // 에러 시 기본값 사용
+        setWaterTemplates(generateCityTemplates('수도'))
+        setSmallTemplates(generateCityTemplates('소규모'))
+        setLoading(false)
+        return
+      }
+
+      const rows = (data || []) as TemplateRow[]
+
+      // 회사 서류 매칭 — DB에 저장된 회사 서류가 있으면 hasFile/fileUrl 갱신
+      const updatedCompanyDocs = INITIAL_COMPANY_DOCS.map(doc => {
+        const match = rows.find(r => {
+          const mapping = r.field_mapping as Record<string, unknown>
+          return mapping?.category === '회사' && r.name === doc.name
+        })
+        if (match) {
+          const mapping = match.field_mapping as Record<string, unknown>
+          const { data: urlData } = supabase.storage.from('documents').getPublicUrl(match.file_path || '')
+          return {
+            ...doc,
+            id: match.id,
+            hasFile: !!match.file_path,
+            fileUrl: urlData.publicUrl,
+            storagePath: match.file_path || undefined,
+            fileName: (mapping?.file_name as string) || undefined,
+            expiryDate: (mapping?.expiry_date as string) || doc.expiryDate,
+          }
+        }
+        return doc
+      })
+      setCompanyDocs(updatedCompanyDocs)
+
+      // 수도/소규모 템플릿 매칭
+      const water = generateCityTemplates('수도')
+      const small = generateCityTemplates('소규모')
+      rows.forEach(r => {
+        const mapping = r.field_mapping as Record<string, unknown>
+        const cat = mapping?.category as string
+        const city = mapping?.city as string
+        if (!cat || !city) return
+        const templates = cat === '수도' ? water : cat === '소규모' ? small : null
+        if (!templates || !templates[city]) return
+        const idx = templates[city].findIndex(t => t.name === r.name)
+        if (idx !== -1) {
+          const { data: urlData } = supabase.storage.from('documents').getPublicUrl(r.file_path || '')
+          templates[city][idx] = {
+            ...templates[city][idx],
+            id: r.id,
+            hasFile: !!r.file_path,
+            fileUrl: urlData.publicUrl,
+            storagePath: r.file_path || undefined,
+            fileName: (mapping?.file_name as string) || undefined,
+          }
+        }
+      })
+      setWaterTemplates(water)
+      setSmallTemplates(small)
+
+      // 입찰 서류 매칭
+      const updatedBidGroups = INITIAL_BID_GROUPS.map(g => ({
+        ...g,
+        items: g.items.map(item => {
+          const match = rows.find(r => {
+            const mapping = r.field_mapping as Record<string, unknown>
+            return mapping?.category === '입찰' && r.name === item.name
+          })
+          if (match) {
+            const mapping = match.field_mapping as Record<string, unknown>
+            const { data: urlData } = supabase.storage.from('documents').getPublicUrl(match.file_path || '')
+            return {
+              ...item,
+              id: match.id,
+              hasFile: !!match.file_path,
+              fileUrl: urlData.publicUrl,
+              storagePath: match.file_path || undefined,
+              fileName: (mapping?.file_name as string) || undefined,
+            }
+          }
+          return item
+        }),
+      }))
+      setBidGroups(updatedBidGroups)
+    } catch (err) {
+      console.error('템플릿 로드 에러:', err)
+      setWaterTemplates(generateCityTemplates('수도'))
+      setSmallTemplates(generateCityTemplates('소규모'))
+    } finally {
+      setLoading(false)
+    }
+  }, [generateCityTemplates])
+
+  useEffect(() => {
+    loadTemplates()
+  }, [loadTemplates])
+
+  // 업로드 완료 콜백
+  const handleUploaded = useCallback((info: {
+    tab: TabKey; docName: string; city?: string; expiryDate?: string;
+    fileUrl: string; storagePath: string; fileName: string
+  }) => {
+    if (info.tab === '회사') {
+      setCompanyDocs(prev => {
+        const existIdx = prev.findIndex(d => d.name === info.docName)
+        if (existIdx !== -1) {
+          return prev.map((d, i) => i === existIdx ? {
+            ...d, hasFile: true, fileUrl: info.fileUrl, storagePath: info.storagePath,
+            fileName: info.fileName, expiryDate: info.expiryDate || d.expiryDate,
+          } : d)
+        }
+        return [...prev, {
+          id: `company-${Date.now()}`,
+          name: info.docName,
+          expiryDate: info.expiryDate || null,
+          hasFile: true,
+          fileUrl: info.fileUrl,
+          storagePath: info.storagePath,
+          fileName: info.fileName,
+        }]
+      })
+    } else if (info.tab === '수도' && info.city) {
+      setWaterTemplates(prev => {
+        const cityDocs = prev[info.city!] || []
+        const idx = cityDocs.findIndex(d => d.name === info.docName)
+        if (idx !== -1) {
+          const updated = [...cityDocs]
+          updated[idx] = { ...updated[idx], hasFile: true, fileUrl: info.fileUrl, storagePath: info.storagePath, fileName: info.fileName }
+          return { ...prev, [info.city!]: updated }
+        }
+        return prev
+      })
+    } else if (info.tab === '소규모' && info.city) {
+      setSmallTemplates(prev => {
+        const cityDocs = prev[info.city!] || []
+        const idx = cityDocs.findIndex(d => d.name === info.docName)
+        if (idx !== -1) {
+          const updated = [...cityDocs]
+          updated[idx] = { ...updated[idx], hasFile: true, fileUrl: info.fileUrl, storagePath: info.storagePath, fileName: info.fileName }
+          return { ...prev, [info.city!]: updated }
+        }
+        return prev
+      })
+    } else if (info.tab === '입찰') {
+      setBidGroups(prev => prev.map(g => ({
+        ...g,
+        items: g.items.map(d => d.name === info.docName ? {
+          ...d, hasFile: true, fileUrl: info.fileUrl, storagePath: info.storagePath, fileName: info.fileName,
+        } : d),
+      })))
+    }
+  }, [])
+
+  // 파일 교체
+  const handleReplaceFile = useCallback(async (file: File) => {
+    if (!replaceTarget) return
+    setReplacing(true)
+    try {
+      let docName = ''
+      let category = ''
+
+      if (replaceTarget.type === 'company') {
+        const doc = companyDocs.find(d => d.id === replaceTarget.id)
+        if (!doc) return
+        docName = doc.name
+        category = '회사'
+        // 이전 파일 삭제
+        if (doc.storagePath) await deleteFileFromStorage(doc.storagePath)
+      } else {
+        // template (수도/소규모/입찰)
+        const cat = replaceTarget.category || '입찰'
+        category = replaceTarget.cityName ? `${cat}_${replaceTarget.cityName}` : cat as string
+        // 해당 템플릿 찾기
+        let doc: TemplateDoc | undefined
+        if (cat === '수도' && replaceTarget.cityName) {
+          doc = waterTemplates[replaceTarget.cityName]?.find(d => d.id === replaceTarget.id)
+        } else if (cat === '소규모' && replaceTarget.cityName) {
+          doc = smallTemplates[replaceTarget.cityName]?.find(d => d.id === replaceTarget.id)
+        } else {
+          for (const g of bidGroups) {
+            doc = g.items.find(d => d.id === replaceTarget.id)
+            if (doc) break
+          }
+        }
+        if (!doc) return
+        docName = doc.name
+        if (doc.storagePath) await deleteFileFromStorage(doc.storagePath)
+      }
+
+      const { url, path } = await uploadFileToStorage(file, category, docName)
+
+      // DB 업데이트
+      await supabase.from('templates').update({
+        file_path: path,
+        field_mapping: {
+          category: replaceTarget.category || '회사',
+          city: replaceTarget.cityName || null,
+          file_url: url,
+          file_name: file.name,
+        },
+        updated_at: new Date().toISOString(),
+      }).eq('id', replaceTarget.id)
+
+      // 로컬 state 업데이트
+      if (replaceTarget.type === 'company') {
+        setCompanyDocs(prev => prev.map(d => d.id === replaceTarget.id ? {
+          ...d, hasFile: true, fileUrl: url, storagePath: path, fileName: file.name,
+        } : d))
+      } else {
+        const cat = replaceTarget.category
+        if (cat === '수도' && replaceTarget.cityName) {
+          setWaterTemplates(prev => ({
+            ...prev,
+            [replaceTarget.cityName!]: (prev[replaceTarget.cityName!] || []).map(d =>
+              d.id === replaceTarget.id ? { ...d, hasFile: true, fileUrl: url, storagePath: path, fileName: file.name } : d
+            ),
+          }))
+        } else if (cat === '소규모' && replaceTarget.cityName) {
+          setSmallTemplates(prev => ({
+            ...prev,
+            [replaceTarget.cityName!]: (prev[replaceTarget.cityName!] || []).map(d =>
+              d.id === replaceTarget.id ? { ...d, hasFile: true, fileUrl: url, storagePath: path, fileName: file.name } : d
+            ),
+          }))
+        } else {
+          setBidGroups(prev => prev.map(g => ({
+            ...g,
+            items: g.items.map(d => d.id === replaceTarget.id ? {
+              ...d, hasFile: true, fileUrl: url, storagePath: path, fileName: file.name,
+            } : d),
+          })))
+        }
+      }
+    } catch (err) {
+      console.error('파일 교체 실패:', err)
+      alert('파일 교체에 실패했습니다. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setReplacing(false)
+      setReplaceTarget(null)
+    }
+  }, [replaceTarget, companyDocs, waterTemplates, smallTemplates, bidGroups])
 
   // 회사 서류 수정
-  const handleEditCompanyDoc = (id: string, name: string, expiryDate: string | null) => {
+  const handleEditCompanyDoc = async (id: string, name: string, expiryDate: string | null) => {
     setCompanyDocs(prev => prev.map(d => d.id === id ? { ...d, name, expiryDate } : d))
     setShowEditModal(null)
+
+    // DB 업데이트 시도
+    try {
+      await supabase.from('templates').update({
+        name,
+        field_mapping: { category: '회사', expiry_date: expiryDate },
+        updated_at: new Date().toISOString(),
+      }).eq('id', id)
+    } catch (err) {
+      console.error('서류 수정 DB 반영 실패:', err)
+    }
   }
 
   // 회사 서류 삭제
-  const handleDeleteCompanyDoc = () => {
+  const handleDeleteCompanyDoc = async () => {
     if (!deleteTarget) return
-    setCompanyDocs(prev => prev.map(d => d.id === deleteTarget.id ? { ...d, hasFile: false } : d))
+    const doc = companyDocs.find(d => d.id === deleteTarget.id)
+
+    // Storage 파일 삭제
+    if (doc?.storagePath) {
+      await deleteFileFromStorage(doc.storagePath)
+    }
+
+    // DB에서 file_path 초기화
+    try {
+      await supabase.from('templates').update({
+        file_path: null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', deleteTarget.id)
+    } catch (err) {
+      console.error('DB 삭제 반영 실패:', err)
+    }
+
+    setCompanyDocs(prev => prev.map(d => d.id === deleteTarget.id
+      ? { ...d, hasFile: false, fileUrl: undefined, storagePath: undefined, fileName: undefined }
+      : d
+    ))
     setDeleteTarget(null)
   }
 
   // 입찰 서류 삭제 (목록에서 완전 제거)
-  const handleDeleteBidDoc = () => {
+  const handleDeleteBidDoc = async () => {
     if (!deleteTarget) return
+
+    // Storage 파일 삭제
+    if (deleteTarget.storagePath) {
+      await deleteFileFromStorage(deleteTarget.storagePath)
+    }
+
+    // DB에서 삭제
+    try {
+      await supabase.from('templates').delete().eq('id', deleteTarget.id)
+    } catch (err) {
+      console.error('DB 삭제 반영 실패:', err)
+    }
+
     setBidGroups(prev => prev.map(g => ({
       ...g,
       items: g.items.filter(d => d.id !== deleteTarget.id),
@@ -862,19 +1306,45 @@ export default function DocumentsPage() {
   }
 
   // 입찰 서류 추가
-  const handleAddBidDoc = (groupKey: string, docName: string) => {
-    setBidGroups(prev => prev.map(g => {
-      if (g.key !== groupKey) return g
-      return {
-        ...g,
-        items: [...g.items, {
-          id: `bid-${groupKey}-${Date.now()}`,
-          name: docName,
-          category: '입찰' as TabKey,
-          hasFile: false,
-        }],
-      }
-    }))
+  const handleAddBidDoc = async (groupKey: string, docName: string) => {
+    // DB에 먼저 삽입
+    try {
+      const { data, error } = await supabase.from('templates').insert({
+        name: docName,
+        file_path: null,
+        field_mapping: { category: '입찰', group: groupKey },
+      }).select().single()
+
+      const newId = data && !error ? data.id : `bid-${groupKey}-${Date.now()}`
+
+      setBidGroups(prev => prev.map(g => {
+        if (g.key !== groupKey) return g
+        return {
+          ...g,
+          items: [...g.items, {
+            id: newId,
+            name: docName,
+            category: '입찰' as TabKey,
+            hasFile: false,
+          }],
+        }
+      }))
+    } catch (err) {
+      console.error('입찰 서류 추가 실패:', err)
+      // 로컬에라도 추가
+      setBidGroups(prev => prev.map(g => {
+        if (g.key !== groupKey) return g
+        return {
+          ...g,
+          items: [...g.items, {
+            id: `bid-${groupKey}-${Date.now()}`,
+            name: docName,
+            category: '입찰' as TabKey,
+            hasFile: false,
+          }],
+        }
+      }))
+    }
   }
 
   const handleDelete = () => {
@@ -890,8 +1360,46 @@ export default function DocumentsPage() {
     return dd !== null && dd <= 30
   }).length
 
+  // 파일 교체 input handler
+  const handleReplaceInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleReplaceFile(file)
+    // input value 초기화
+    if (replaceInputRef.current) replaceInputRef.current.value = ''
+  }, [handleReplaceFile])
+
+  if (loading) {
+    return (
+      <div className="max-w-full flex items-center justify-center py-20">
+        <div className="text-center">
+          <svg className="w-8 h-8 animate-spin mx-auto mb-3 text-accent" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-25" />
+            <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+          </svg>
+          <p className="text-sm text-txt-tertiary">서류함 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-full">
+      {/* 숨겨진 파일 교체 input */}
+      <input ref={replaceInputRef} type="file" className="hidden" onChange={handleReplaceInputChange} />
+
+      {/* 파일 교체 중 로딩 오버레이 */}
+      {replacing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-surface rounded-xl p-6 shadow-lg text-center">
+            <svg className="w-8 h-8 animate-spin mx-auto mb-3 text-accent" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-25" />
+              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+            </svg>
+            <p className="text-sm text-txt-secondary">파일 교체 중...</p>
+          </div>
+        </div>
+      )}
+
       {/* 상단 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -951,12 +1459,12 @@ export default function DocumentsPage() {
               doc={doc}
               onEdit={() => setShowEditModal({ id: doc.id, name: doc.name, expiryDate: doc.expiryDate })}
               onReplace={() => {
-                // placeholder: 파일 교체
-                alert('파일 교체 기능은 Supabase Storage 연동 후 지원 예정입니다.')
+                setReplaceTarget({ id: doc.id, type: 'company' })
+                replaceInputRef.current?.click()
               }}
-              onDelete={() => setDeleteTarget({ id: doc.id, name: doc.name, type: 'company' })}
+              onDelete={() => setDeleteTarget({ id: doc.id, name: doc.name, type: 'company', storagePath: doc.storagePath })}
               onClick={() => {
-                if (doc.hasFile) setShowPreview(true)
+                if (doc.hasFile) setPreviewDoc({ fileUrl: doc.fileUrl, fileName: doc.fileName })
               }}
             />
           ))}
@@ -971,11 +1479,14 @@ export default function DocumentsPage() {
             <CityAccordion
               key={city}
               cityName={city}
-              templates={waterTemplates[city]}
+              templates={waterTemplates[city] || []}
               onEdit={(doc) => setShowEditModal({ id: doc.id, name: doc.name })}
-              onReplace={() => alert('파일 교체 기능은 Supabase Storage 연동 후 지원 예정입니다.')}
-              onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid' })}
-              onPreview={(doc) => { if (doc.hasFile) setShowPreview(true) }}
+              onReplace={(doc) => {
+                setReplaceTarget({ id: doc.id, type: 'template', category: '수도', cityName: city })
+                replaceInputRef.current?.click()
+              }}
+              onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid', storagePath: doc.storagePath })}
+              onPreview={(doc) => { if (doc.hasFile) setPreviewDoc({ fileUrl: doc.fileUrl, fileName: doc.fileName }) }}
             />
           ))}
         </div>
@@ -989,11 +1500,14 @@ export default function DocumentsPage() {
             <CityAccordion
               key={city}
               cityName={city}
-              templates={smallTemplates[city]}
+              templates={smallTemplates[city] || []}
               onEdit={(doc) => setShowEditModal({ id: doc.id, name: doc.name })}
-              onReplace={() => alert('파일 교체 기능은 Supabase Storage 연동 후 지원 예정입니다.')}
-              onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid' })}
-              onPreview={(doc) => { if (doc.hasFile) setShowPreview(true) }}
+              onReplace={(doc) => {
+                setReplaceTarget({ id: doc.id, type: 'template', category: '소규모', cityName: city })
+                replaceInputRef.current?.click()
+              }}
+              onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid', storagePath: doc.storagePath })}
+              onPreview={(doc) => { if (doc.hasFile) setPreviewDoc({ fileUrl: doc.fileUrl, fileName: doc.fileName }) }}
             />
           ))}
         </div>
@@ -1010,9 +1524,12 @@ export default function DocumentsPage() {
               key={group.key}
               group={group}
               onEdit={(doc) => setShowEditModal({ id: doc.id, name: doc.name })}
-              onReplace={() => alert('파일 교체 기능은 Supabase Storage 연동 후 지원 예정입니다.')}
-              onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid' })}
-              onPreview={(doc) => { if (doc.hasFile) setShowPreview(true) }}
+              onReplace={(doc) => {
+                setReplaceTarget({ id: doc.id, type: 'template', category: '입찰' })
+                replaceInputRef.current?.click()
+              }}
+              onDelete={(doc) => setDeleteTarget({ id: doc.id, name: doc.name, type: 'bid', storagePath: doc.storagePath })}
+              onPreview={(doc) => { if (doc.hasFile) setPreviewDoc({ fileUrl: doc.fileUrl, fileName: doc.fileName }) }}
               onAddDoc={(docName) => handleAddBidDoc(group.key, docName)}
             />
           ))}
@@ -1024,6 +1541,7 @@ export default function DocumentsPage() {
         <UploadModal
           onClose={() => setShowUploadModal(false)}
           activeTab={activeTab}
+          onUploaded={handleUploaded}
         />
       )}
 
@@ -1046,8 +1564,12 @@ export default function DocumentsPage() {
       )}
 
       {/* 미리보기 */}
-      {showPreview && (
-        <ImageViewer onClose={() => setShowPreview(false)} />
+      {previewDoc && (
+        <ImageViewer
+          onClose={() => setPreviewDoc(null)}
+          fileUrl={previewDoc.fileUrl}
+          fileName={previewDoc.fileName}
+        />
       )}
     </div>
   )

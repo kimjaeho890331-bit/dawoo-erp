@@ -230,6 +230,9 @@ export default function EstimatePage({ category, projectId }: Props) {
     return init as Record<WorkType, DetailRow[]>
   })
   const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [estimateId, setEstimateId] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   // 접수대장에서 고객정보 가져오기
   useEffect(() => {
@@ -253,6 +256,36 @@ export default function EstimatePage({ category, projectId }: Props) {
       }
     })()
   }, [projectId])
+
+  // 기존 견적서 불러오기
+  useEffect(() => {
+    if (!projectId || loaded) return
+    ;(async () => {
+      const { data } = await supabase
+        .from('estimates')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (data) {
+        setEstimateId(data.id)
+        const d = data.data as {
+          customerInfo?: CustomerInfo
+          checkedWorks?: WorkType[]
+          measurements?: Measurements
+          unitPrices?: Record<WorkType, number>
+          detailRows?: Record<WorkType, DetailRow[]>
+        }
+        if (d.customerInfo) setCustomerInfo(d.customerInfo)
+        if (d.checkedWorks) setCheckedWorks(new Set(d.checkedWorks))
+        if (d.measurements) setMeasurements(d.measurements)
+        if (d.unitPrices) setUnitPrices(d.unitPrices)
+        if (d.detailRows) setDetailRows(d.detailRows as Record<WorkType, DetailRow[]>)
+      }
+      setLoaded(true)
+    })()
+  }, [projectId, loaded])
 
   // 면적 자동 계산
   const areas = useMemo(() => {
@@ -319,13 +352,13 @@ export default function EstimatePage({ category, projectId }: Props) {
     }))
   }, [])
 
-  // 저장 (DB 없으므로 콘솔 + 알림)
+  // 저장 (Supabase estimates 테이블)
   const handleSave = useCallback(async () => {
+    if (!projectId) return
     setSaving(true)
+    setSaveMessage(null)
     try {
       const payload = {
-        projectId,
-        category,
         customerInfo,
         checkedWorks: Array.from(checkedWorks),
         measurements,
@@ -334,15 +367,44 @@ export default function EstimatePage({ category, projectId }: Props) {
         areas,
         subtotal,
         vat,
-        total,
       }
-      console.log('견적서 저장 데이터:', payload)
-      // TODO: estimates 테이블 생성 후 Supabase에 저장
-      alert('견적서가 저장되었습니다. (estimates 테이블 연동 예정)')
+
+      if (estimateId) {
+        // 기존 견적서 업데이트
+        const { error } = await supabase
+          .from('estimates')
+          .update({
+            data: payload,
+            total_cost: total,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', estimateId)
+        if (error) throw error
+      } else {
+        // 새 견적서 생성
+        const { data, error } = await supabase
+          .from('estimates')
+          .insert({
+            project_id: projectId,
+            data: payload,
+            total_cost: total,
+          })
+          .select('id')
+          .single()
+        if (error) throw error
+        if (data) setEstimateId(data.id)
+      }
+
+      setSaveMessage('저장됨')
+      setTimeout(() => setSaveMessage(null), 2000)
+    } catch (err) {
+      console.error('견적서 저장 실패:', err)
+      setSaveMessage('저장 실패')
+      setTimeout(() => setSaveMessage(null), 3000)
     } finally {
       setSaving(false)
     }
-  }, [projectId, category, customerInfo, checkedWorks, measurements, unitPrices, detailRows, areas, subtotal, vat, total])
+  }, [projectId, customerInfo, checkedWorks, measurements, unitPrices, detailRows, areas, subtotal, vat, total, estimateId])
 
   // 측정값 업데이트 헬퍼
   const setMeasure = useCallback((key: keyof Measurements, val: string) => {
@@ -353,8 +415,12 @@ export default function EstimatePage({ category, projectId }: Props) {
     setCustomerInfo(prev => ({ ...prev, [key]: val }))
   }, [])
 
+  // 시 지원금 계산
+  const citySupport = Math.round(total * 0.8)
+  const selfPayment = Math.round(total * 0.2)
+
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="p-6 pb-24 max-w-[1400px] mx-auto">
       {/* 상단 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -368,13 +434,20 @@ export default function EstimatePage({ category, projectId }: Props) {
             견적서 {customerInfo.buildingName && `- ${customerInfo.buildingName}`}
           </h1>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-2 bg-accent text-white text-[13px] font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50 transition-colors"
-        >
-          {saving ? '저장 중...' : '저장'}
-        </button>
+        <div className="flex items-center gap-3">
+          {saveMessage && (
+            <span className={`text-[13px] font-medium ${saveMessage === '저장됨' ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>
+              {saveMessage}
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-accent text-white text-[13px] font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50 transition-colors"
+          >
+            {saving ? '저장 중...' : '저장'}
+          </button>
+        </div>
       </div>
 
       {/* 공사종류 체크 */}
@@ -453,6 +526,37 @@ export default function EstimatePage({ category, projectId }: Props) {
             />
           ) : null
         )}
+      </div>
+
+      {/* 하단 요약 바 */}
+      <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border-primary shadow-lg z-50">
+        <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] text-txt-tertiary">총 공사비</span>
+              <span className="text-[15px] font-semibold text-txt-primary tabular-nums">
+                {total.toLocaleString()}원
+              </span>
+            </div>
+            <div className="w-px h-5 bg-border-primary" />
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] text-txt-tertiary">시 지원 80%</span>
+              <span className="text-[15px] font-semibold text-link tabular-nums">
+                {citySupport.toLocaleString()}원
+              </span>
+            </div>
+            <div className="w-px h-5 bg-border-primary" />
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] text-txt-tertiary">자부담 20%</span>
+              <span className="text-[15px] font-semibold text-[#e57e25] tabular-nums">
+                {selfPayment.toLocaleString()}원
+              </span>
+            </div>
+          </div>
+          <div className="text-[11px] text-txt-quaternary">
+            소계 {Math.round(subtotal).toLocaleString()} + 부가세 {vat.toLocaleString()}
+          </div>
+        </div>
       </div>
     </div>
   )

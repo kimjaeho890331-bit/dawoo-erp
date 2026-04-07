@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 'react'
-import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle } from 'lucide-react'
+import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle, Upload, Table } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // --- 타입 ---
@@ -405,12 +405,126 @@ export default function ExpensesPage() {
   )
 }
 
+// ===== CSV 파서 =====
+interface CsvParsedRow {
+  transaction_date: string
+  card_name: string
+  merchant: string
+  amount: number
+  category: string
+}
+
+function parseCsvField(field: string): string {
+  let f = field.trim()
+  if ((f.startsWith('"') && f.endsWith('"')) || (f.startsWith("'") && f.endsWith("'"))) {
+    f = f.slice(1, -1)
+  }
+  return f.replace(/""/g, '"').trim()
+}
+
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+        current += '"'; i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current); current = ''
+    } else {
+      current += ch
+    }
+  }
+  fields.push(current)
+  return fields.map(parseCsvField)
+}
+
+function guessCategory(merchant: string): string {
+  const m = merchant.toLowerCase()
+  if (['주유', 'gs칼텍스', 'sk에너지', 's-oil', '현대오일뱅크'].some(k => m.includes(k))) return '주유'
+  if (['편의점', 'cu ', 'gs25', '세븐일레븐', '이마트24', 'ministop'].some(k => m.includes(k))) return '편의점'
+  if (['식당', '음식', '밥', '치킨', '피자', '맥도날드', '버거킹', '김밥', '국밥', '카페', '커피', '스타벅스', '배달'].some(k => m.includes(k))) return '식대'
+  if (['택시', '버스', '지하철', '철도', 'ktx', '교통', '톨게이트', '하이패스'].some(k => m.includes(k))) return '교통'
+  if (['철물', '자재', '건자재', '레미콘', '시멘트', '목재'].some(k => m.includes(k))) return '자재'
+  if (['문구', '사무', '다이소', '오피스'].some(k => m.includes(k))) return '사무용품'
+  return '기타'
+}
+
+function parseCsv(text: string): CsvParsedRow[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return []
+
+  const header = parseCsvLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, ''))
+  // Map common Korean card CSV column names
+  const colMap: Record<string, number> = {}
+  const dateAliases = ['거래일시', '거래일', '이용일시', '이용일', '승인일시', '승인일', '일시', '날짜', 'date']
+  const cardAliases = ['카드번호', '카드명', '카드', 'card']
+  const merchantAliases = ['가맹점명', '가맹점', '이용가맹점', '이용처', '사용처', '상호', 'merchant']
+  const amountAliases = ['금액', '이용금액', '결제금액', '승인금액', '사용금액', 'amount']
+  const categoryAliases = ['카테고리', '업종', '분류', 'category']
+
+  header.forEach((h, i) => {
+    if (dateAliases.some(a => h.includes(a))) colMap['date'] = i
+    if (cardAliases.some(a => h.includes(a))) colMap['card'] = i
+    if (merchantAliases.some(a => h.includes(a))) colMap['merchant'] = i
+    if (amountAliases.some(a => h.includes(a))) colMap['amount'] = i
+    if (categoryAliases.some(a => h.includes(a))) colMap['category'] = i
+  })
+
+  // Must have at least date, merchant, amount
+  if (colMap['date'] === undefined || colMap['merchant'] === undefined || colMap['amount'] === undefined) {
+    return []
+  }
+
+  const rows: CsvParsedRow[] = []
+  for (let i = 1; i < lines.length; i++) {
+    const fields = parseCsvLine(lines[i])
+    if (fields.length < 3) continue
+
+    const rawDate = fields[colMap['date']] || ''
+    const rawAmount = fields[colMap['amount']] || '0'
+    const merchant = fields[colMap['merchant']] || ''
+    const cardName = colMap['card'] !== undefined ? (fields[colMap['card']] || '') : ''
+    const category = colMap['category'] !== undefined ? (fields[colMap['category']] || '') : ''
+
+    if (!merchant.trim() || !rawDate.trim()) continue
+
+    // Parse date: handle "2024-01-15", "2024.01.15", "2024/01/15", "20240115"
+    let dateStr = rawDate.replace(/[./]/g, '-').replace(/\s.*$/, '') // strip time portion
+    if (/^\d{8}$/.test(dateStr)) dateStr = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`
+    if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) continue
+    dateStr = dateStr.slice(0, 10)
+
+    // Parse amount: remove commas, 원, spaces; handle negative
+    const amt = Math.abs(parseInt(rawAmount.replace(/[,\s원]/g, ''), 10))
+    if (isNaN(amt) || amt === 0) continue
+
+    rows.push({
+      transaction_date: dateStr,
+      card_name: cardName || '카드',
+      merchant: merchant.trim(),
+      amount: amt,
+      category: category.trim() || guessCategory(merchant),
+    })
+  }
+  return rows
+}
+
 // ===== 카드분석 탭 =====
 function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filteredCards, filterCat, setFilterCat, staffName, getCardStaff, openEdit, handleDelete, showMapping, setShowMapping, onReload }: any) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const csvFileRef = useRef<HTMLInputElement>(null)
+  const [csvPreview, setCsvPreview] = useState<CsvParsedRow[] | null>(null)
+  const [csvSaving, setCsvSaving] = useState(false)
+  const [csvError, setCsvError] = useState<string | null>(null)
 
   // 카드 매핑 관리
   const [newCardName, setNewCardName] = useState('')
@@ -436,7 +550,8 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
   const handleDrop = (e: DragEvent) => {
     e.preventDefault(); setDragging(false)
     const file = e.dataTransfer.files?.[0]
-    if (file) handlePdfUpload(file)
+    if (file && file.name.toLowerCase().endsWith('.pdf')) handlePdfUpload(file)
+    else if (file && file.name.toLowerCase().endsWith('.csv')) handleCsvUpload(file)
   }
 
   const addMapping = async () => {
@@ -451,6 +566,68 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
   const deleteMapping = async (id: string) => {
     await supabase.from('card_mappings').delete().eq('id', id)
     onReload()
+  }
+
+  const handleCsvUpload = (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setCsvError('CSV 파일만 업로드 가능합니다'); return
+    }
+    setCsvError(null); setCsvPreview(null)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result as string
+      if (!text) { setCsvError('파일을 읽을 수 없습니다'); return }
+      const rows = parseCsv(text)
+      if (rows.length === 0) {
+        setCsvError('파싱된 데이터가 없습니다. CSV 헤더에 거래일시, 가맹점명, 금액 컬럼이 있는지 확인하세요.')
+        return
+      }
+      setCsvPreview(rows)
+    }
+    reader.onerror = () => setCsvError('파일 읽기 실패')
+    reader.readAsText(file, 'UTF-8')
+  }
+
+  const handleCsvConfirm = async () => {
+    if (!csvPreview || csvPreview.length === 0) return
+    setCsvSaving(true)
+    try {
+      const inserts = csvPreview.map(row => ({
+        card_name: row.card_name,
+        merchant: row.merchant,
+        amount: row.amount,
+        category: row.category,
+        transaction_date: row.transaction_date,
+        memo: null,
+        flagged: false,
+        flag_reason: null,
+        staff_id: null,
+      }))
+      // Insert in batches of 50
+      for (let i = 0; i < inserts.length; i += 50) {
+        const batch = inserts.slice(i, i + 50)
+        const { error } = await supabase.from('card_transactions').insert(batch)
+        if (error) throw error
+      }
+      setUploadResult(`CSV ${csvPreview.length}건 등록 완료`)
+      setCsvPreview(null)
+      onReload()
+    } catch {
+      setCsvError('저장 중 오류가 발생했습니다. 다시 시도해주세요.')
+    }
+    setCsvSaving(false)
+  }
+
+  const handleCsvDrop = (e: DragEvent) => {
+    e.preventDefault(); setDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.name.toLowerCase().endsWith('.csv')) {
+      handleCsvUpload(file)
+    } else if (file && file.name.toLowerCase().endsWith('.pdf')) {
+      handlePdfUpload(file)
+    } else if (file) {
+      setCsvError('PDF 또는 CSV 파일만 업로드 가능합니다')
+    }
   }
 
   // 월별 카드별 요약
@@ -468,28 +645,104 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
 
   return (
     <div className="space-y-4">
-      {/* PDF 업로드 영역 */}
-      <div
-        onDragOver={e => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => fileRef.current?.click()}
-        className={`rounded-[10px] border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
-          dragging ? 'border-accent bg-blue-50' : 'border-border-primary hover:border-border-secondary hover:bg-surface-secondary'
-        }`}>
-        {uploading ? (
-          <div className="text-sm text-txt-secondary">업로드 중...</div>
-        ) : (
-          <>
-            <div className="flex justify-center mb-2"><FileText size={28} className="text-txt-tertiary" /></div>
-            <div className="text-sm font-medium text-txt-secondary">카드 사용내역 PDF를 드래그하거나 클릭하여 업로드</div>
-            <div className="text-xs text-txt-tertiary mt-1">카드사 앱/웹에서 다운받은 월별 이용내역 PDF</div>
-          </>
-        )}
-        <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfUpload(f) }} />
+      {/* 파일 업로드 영역 (PDF + CSV) */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* PDF 업로드 */}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+          className={`rounded-[10px] border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
+            dragging ? 'border-accent bg-blue-50' : 'border-border-primary hover:border-border-secondary hover:bg-surface-secondary'
+          }`}>
+          {uploading ? (
+            <div className="text-sm text-txt-secondary">업로드 중...</div>
+          ) : (
+            <>
+              <div className="flex justify-center mb-2"><FileText size={24} className="text-txt-tertiary" /></div>
+              <div className="text-sm font-medium text-txt-secondary">PDF 업로드</div>
+              <div className="text-xs text-txt-tertiary mt-1">카드사 월별 이용내역 PDF</div>
+            </>
+          )}
+          <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfUpload(f) }} />
+        </div>
+
+        {/* CSV 업로드 */}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleCsvDrop}
+          onClick={() => csvFileRef.current?.click()}
+          className={`rounded-[10px] border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
+            dragging ? 'border-accent bg-blue-50' : 'border-border-primary hover:border-border-secondary hover:bg-surface-secondary'
+          }`}>
+          <div className="flex justify-center mb-2"><Table size={24} className="text-txt-tertiary" /></div>
+          <div className="text-sm font-medium text-txt-secondary">CSV 업로드</div>
+          <div className="text-xs text-txt-tertiary mt-1">거래일시, 가맹점명, 금액 컬럼 포함 CSV</div>
+          <input ref={csvFileRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvUpload(f) }} />
+        </div>
       </div>
+
       {uploadResult && (
-        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700">{uploadResult}</div>
+        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700 flex items-center justify-between">
+          <span>{uploadResult}</span>
+          <button onClick={() => setUploadResult(null)} className="text-green-500 hover:text-green-700"><X size={14} /></button>
+        </div>
+      )}
+      {csvError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex items-center justify-between">
+          <span>{csvError}</span>
+          <button onClick={() => setCsvError(null)} className="text-red-500 hover:text-red-700"><X size={14} /></button>
+        </div>
+      )}
+
+      {/* CSV 미리보기 */}
+      {csvPreview && (
+        <div className="bg-surface rounded-[10px] border border-accent overflow-hidden">
+          <div className="px-4 py-3 border-b border-border-tertiary flex items-center justify-between bg-blue-50">
+            <h3 className="text-[14px] font-semibold text-txt-primary flex items-center gap-1.5">
+              <Upload size={16} className="text-txt-tertiary" /> CSV 미리보기 ({csvPreview.length}건)
+            </h3>
+            <div className="flex gap-2">
+              <button onClick={() => setCsvPreview(null)}
+                className="px-3 py-1.5 text-xs text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
+              <button onClick={handleCsvConfirm} disabled={csvSaving}
+                className="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium">
+                {csvSaving ? '저장 중...' : `${csvPreview.length}건 등록`}
+              </button>
+            </div>
+          </div>
+          <div className="max-h-[300px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="bg-surface-secondary border-b border-border-primary">
+                <th className="px-4 py-2 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>
+                <th className="px-4 py-2 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">카드</th>
+                <th className="px-4 py-2 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">가맹점</th>
+                <th className="px-4 py-2 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">분류</th>
+                <th className="px-4 py-2 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
+              </tr></thead>
+              <tbody className="divide-y divide-surface-secondary">
+                {csvPreview.slice(0, 100).map((row, i) => (
+                  <tr key={i} className="hover:bg-surface-tertiary">
+                    <td className="px-4 py-2 text-txt-secondary text-[13px]">{row.transaction_date}</td>
+                    <td className="px-4 py-2 text-txt-secondary text-[13px]">{row.card_name}</td>
+                    <td className="px-4 py-2 text-txt-primary text-[13px]">{row.merchant}</td>
+                    <td className="px-4 py-2"><span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[row.category] || CAT_COLOR['기타']}`}>{row.category}</span></td>
+                    <td className="px-4 py-2 text-right font-medium text-txt-primary text-[13px] tabular-nums">{row.amount.toLocaleString()}원</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {csvPreview.length > 100 && (
+              <div className="text-center py-2 text-xs text-txt-tertiary">외 {csvPreview.length - 100}건 더 있음</div>
+            )}
+          </div>
+          <div className="px-4 py-2 bg-surface-secondary border-t border-border-tertiary flex justify-between text-sm">
+            <span className="text-txt-secondary">합계</span>
+            <span className="font-semibold text-txt-primary tabular-nums">{csvPreview.reduce((s, r) => s + r.amount, 0).toLocaleString()}원</span>
+          </div>
+        </div>
       )}
 
       {/* 카드 매핑 + 이상탐지 */}

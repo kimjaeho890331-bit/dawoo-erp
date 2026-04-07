@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Calendar, AlertTriangle, Clock, FileText, Building2, CreditCard, Landmark, Receipt, CircleDot } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Calendar, AlertTriangle, Clock, FileText, Building2, CreditCard, Landmark, Receipt, CircleDot, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 // ========================================
 // 법정 세무 일정 데이터 (매년 반복)
@@ -97,6 +97,51 @@ const SPECIAL_EVENTS: TaxEvent[] = [
 const ALL_RECURRING = [...MONTHLY_EVENTS, ...QUARTERLY_EVENTS, ...SPECIAL_EVENTS]
 
 // ========================================
+// 커스텀 일정 (localStorage)
+// ========================================
+
+const STORAGE_KEY = 'dawoo_accounting_events'
+
+type CustomCategory = 'tax' | 'insurance' | 'labor' | 'construction' | 'salary' | 'etc'
+
+const CUSTOM_CAT_OPTIONS: { value: CustomCategory; label: string }[] = [
+  { value: 'tax', label: '세금' },
+  { value: 'insurance', label: '보험' },
+  { value: 'labor', label: '노무' },
+  { value: 'construction', label: '건설' },
+  { value: 'salary', label: '급여' },
+  { value: 'etc', label: '기타' },
+]
+
+// salary / etc 카테고리 스타일 추가
+const CUSTOM_CAT_STYLE: Record<string, { bg: string; text: string; label: string; icon: typeof Calendar }> = {
+  ...CAT_STYLE,
+  salary: { bg: 'bg-[#fce7f3]', text: 'text-[#9d174d]', label: '급여', icon: CreditCard },
+  etc:    { bg: 'bg-[#f3f4f6]', text: 'text-[#374151]', label: '기타', icon: FileText },
+}
+
+interface CustomEvent {
+  id: string
+  title: string
+  date: string        // YYYY-MM-DD
+  category: CustomCategory
+  memo: string
+  recurring: boolean  // true = 매월 반복 (day 기준), false = 1회성
+}
+
+function loadCustomEvents(): CustomEvent[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function saveCustomEvents(events: CustomEvent[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(events))
+}
+
+// ========================================
 // 유틸
 // ========================================
 
@@ -156,11 +201,13 @@ interface CalEvent {
   adjustedDay: number
   title: string
   description: string
-  category: TaxCategory
+  category: TaxCategory | CustomCategory
   isAdjusted: boolean
+  isCustom?: boolean
+  customId?: string
 }
 
-function generateEventsForMonth(year: number, month: number): CalEvent[] {
+function generateEventsForMonth(year: number, month: number, customEvents: CustomEvent[] = []): CalEvent[] {
   const lastDay = getLastDay(year, month)
   const events: CalEvent[] = []
 
@@ -182,6 +229,41 @@ function generateEventsForMonth(year: number, month: number): CalEvent[] {
     })
   })
 
+  // 커스텀 일정 병합
+  customEvents.forEach(ce => {
+    const d = new Date(ce.date)
+    const ceYear = d.getFullYear()
+    const ceMonth = d.getMonth() + 1
+    const ceDay = d.getDate()
+
+    if (ce.recurring) {
+      // 매월 반복: day만 매칭
+      const day = Math.min(ceDay, lastDay)
+      events.push({
+        day, adjustedDay: day,
+        title: ce.title,
+        description: ce.memo || '',
+        category: ce.category,
+        isAdjusted: false,
+        isCustom: true,
+        customId: ce.id,
+      })
+    } else {
+      // 1회성: 해당 년/월만
+      if (ceYear === year && ceMonth === month) {
+        events.push({
+          day: ceDay, adjustedDay: ceDay,
+          title: ce.title,
+          description: ce.memo || '',
+          category: ce.category,
+          isAdjusted: false,
+          isCustom: true,
+          customId: ce.id,
+        })
+      }
+    }
+  })
+
   // 날짜순 정렬
   events.sort((a, b) => a.adjustedDay - b.adjustedDay)
   return events
@@ -191,6 +273,163 @@ function generateEventsForMonth(year: number, month: number): CalEvent[] {
 // 컴포넌트
 // ========================================
 
+// ========================================
+// 커스텀 일정 모달
+// ========================================
+
+interface EventModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSave: (event: CustomEvent) => void
+  onDelete?: () => void
+  initial?: CustomEvent | null
+  defaultDate?: string
+}
+
+function EventModal({ isOpen, onClose, onSave, onDelete, initial, defaultDate }: EventModalProps) {
+  const [title, setTitle] = useState(initial?.title || '')
+  const [date, setDate] = useState(initial?.date || defaultDate || new Date().toISOString().slice(0, 10))
+  const [category, setCategory] = useState<CustomCategory>(initial?.category || 'etc')
+  const [memo, setMemo] = useState(initial?.memo || '')
+  const [recurring, setRecurring] = useState(initial?.recurring ?? false)
+
+  useEffect(() => {
+    setTitle(initial?.title || '')
+    setDate(initial?.date || defaultDate || new Date().toISOString().slice(0, 10))
+    setCategory(initial?.category || 'etc')
+    setMemo(initial?.memo || '')
+    setRecurring(initial?.recurring ?? false)
+  }, [initial, defaultDate])
+
+  if (!isOpen) return null
+
+  const handleSave = () => {
+    if (!title.trim()) return
+    onSave({
+      id: initial?.id || crypto.randomUUID(),
+      title: title.trim(),
+      date,
+      category,
+      memo: memo.trim(),
+      recurring,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-surface rounded-[12px] border border-border-primary shadow-xl w-[420px] max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-tertiary">
+          <h3 className="text-[15px] font-semibold text-txt-primary">
+            {initial ? '일정 수정' : '일정 추가'}
+          </h3>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-tertiary transition">
+            <X size={16} className="text-txt-tertiary" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* 제목 */}
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1.5">제목</label>
+            <input
+              type="text" value={title} onChange={e => setTitle(e.target.value)}
+              placeholder="일정 제목을 입력하세요"
+              className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-txt-primary bg-surface focus:border-accent focus:ring-2 focus:ring-accent-light outline-none placeholder:text-txt-quaternary"
+              autoFocus
+            />
+          </div>
+
+          {/* 날짜 */}
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1.5">날짜</label>
+            <input
+              type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-txt-primary bg-surface focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
+            />
+          </div>
+
+          {/* 카테고리 */}
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1.5">카테고리</label>
+            <select
+              value={category} onChange={e => setCategory(e.target.value as CustomCategory)}
+              className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-txt-primary bg-surface focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
+            >
+              {CUSTOM_CAT_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 메모 */}
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1.5">메모 (선택)</label>
+            <textarea
+              value={memo} onChange={e => setMemo(e.target.value)}
+              placeholder="메모를 입력하세요"
+              rows={3}
+              className="w-full border border-border-primary rounded-lg px-3 py-2 text-[13px] text-txt-primary bg-surface focus:border-accent focus:ring-2 focus:ring-accent-light outline-none resize-none placeholder:text-txt-quaternary"
+            />
+          </div>
+
+          {/* 반복 여부 */}
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1.5">반복 여부</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRecurring(false)}
+                className={`flex-1 h-[36px] rounded-lg text-[13px] font-medium border transition ${
+                  !recurring ? 'border-accent bg-accent-light text-accent' : 'border-border-primary text-txt-secondary hover:bg-surface-tertiary'
+                }`}
+              >
+                1회성
+              </button>
+              <button
+                onClick={() => setRecurring(true)}
+                className={`flex-1 h-[36px] rounded-lg text-[13px] font-medium border transition ${
+                  recurring ? 'border-accent bg-accent-light text-accent' : 'border-border-primary text-txt-secondary hover:bg-surface-tertiary'
+                }`}
+              >
+                매월 반복
+              </button>
+            </div>
+            {recurring && (
+              <p className="text-[10px] text-txt-tertiary mt-1">매월 {new Date(date).getDate()}일에 반복됩니다</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between px-5 py-4 border-t border-border-tertiary">
+          <div>
+            {initial && onDelete && (
+              <button onClick={onDelete}
+                className="flex items-center gap-1.5 text-[13px] text-[#dc2626] hover:text-[#991b1b] transition font-medium">
+                <Trash2 size={14} />
+                삭제
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onClose}
+              className="h-[36px] px-4 border border-border-primary rounded-lg text-[13px] text-txt-secondary hover:bg-surface-tertiary transition">
+              취소
+            </button>
+            <button onClick={handleSave} disabled={!title.trim()}
+              className="h-[36px] px-5 bg-accent text-white rounded-lg text-[13px] font-medium hover:bg-accent-hover transition disabled:opacity-40 disabled:cursor-not-allowed">
+              {initial ? '수정' : '추가'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ========================================
+// 메인 컴포넌트
+// ========================================
+
 export default function AccountingCalendarPage() {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
@@ -198,8 +437,53 @@ export default function AccountingCalendarPage() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
 
+  // 커스텀 일정 상태
+  const [customEvents, setCustomEvents] = useState<CustomEvent[]>([])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<CustomEvent | null>(null)
+
+  // localStorage에서 로드
+  useEffect(() => {
+    setCustomEvents(loadCustomEvents())
+  }, [])
+
+  const handleSaveCustom = useCallback((ev: CustomEvent) => {
+    setCustomEvents(prev => {
+      const exists = prev.findIndex(e => e.id === ev.id)
+      const next = exists >= 0 ? prev.map(e => e.id === ev.id ? ev : e) : [...prev, ev]
+      saveCustomEvents(next)
+      return next
+    })
+    setModalOpen(false)
+    setEditingEvent(null)
+  }, [])
+
+  const handleDeleteCustom = useCallback(() => {
+    if (!editingEvent) return
+    setCustomEvents(prev => {
+      const next = prev.filter(e => e.id !== editingEvent.id)
+      saveCustomEvents(next)
+      return next
+    })
+    setModalOpen(false)
+    setEditingEvent(null)
+  }, [editingEvent])
+
+  const openAddModal = () => {
+    setEditingEvent(null)
+    setModalOpen(true)
+  }
+
+  const openEditModal = (customId: string) => {
+    const ev = customEvents.find(e => e.id === customId)
+    if (ev) {
+      setEditingEvent(ev)
+      setModalOpen(true)
+    }
+  }
+
   const holidays = useMemo(() => getHolidays(year), [year])
-  const events = useMemo(() => generateEventsForMonth(year, month), [year, month])
+  const events = useMemo(() => generateEventsForMonth(year, month, customEvents), [year, month, customEvents])
 
   // 캘린더 그리드
   const calendarGrid = useMemo(() => {
@@ -278,6 +562,10 @@ export default function AccountingCalendarPage() {
           <button onClick={goToday} className="h-[36px] px-4 border border-border-primary rounded-lg text-[13px] text-txt-secondary hover:bg-surface-tertiary transition">
             오늘
           </button>
+          <button onClick={openAddModal} className="h-[36px] px-4 bg-accent text-white rounded-lg text-[13px] font-medium hover:bg-accent-hover transition flex items-center gap-1.5">
+            <Plus size={14} />
+            일정 추가
+          </button>
         </div>
       </div>
 
@@ -338,9 +626,13 @@ export default function AccountingCalendarPage() {
                     </div>
                     <div className="space-y-0.5 overflow-hidden">
                       {dayEvents.slice(0, 3).map((ev, i) => {
-                        const style = CAT_STYLE[ev.category]
+                        const style = CUSTOM_CAT_STYLE[ev.category] || CAT_STYLE[ev.category as TaxCategory]
                         return (
-                          <div key={i} className={`text-[9px] leading-tight px-1 py-0.5 rounded truncate ${style.bg} ${style.text}`}>
+                          <div key={i}
+                            onClick={ev.isCustom && ev.customId ? (e) => { e.stopPropagation(); openEditModal(ev.customId!) } : undefined}
+                            className={`text-[9px] leading-tight px-1 py-0.5 rounded truncate ${style.bg} ${style.text} ${
+                              ev.isCustom ? 'border border-dashed border-current' : ''
+                            }`}>
                             {ev.title}
                           </div>
                         )
@@ -374,27 +666,38 @@ export default function AccountingCalendarPage() {
                   ) : (
                     <div className="space-y-3">
                       {selectedEvents.map((ev, i) => {
-                        const style = CAT_STYLE[ev.category]
+                        const style = CUSTOM_CAT_STYLE[ev.category] || CAT_STYLE[ev.category as TaxCategory]
                         const Icon = style.icon
                         const dday = getDday(ev.adjustedDay)
                         return (
-                          <div key={i} className={`rounded-lg px-4 py-3 ${style.bg}`}>
+                          <div key={i} className={`rounded-lg px-4 py-3 ${style.bg} ${ev.isCustom ? 'border border-dashed border-current' : ''}`}>
                             <div className="flex items-start gap-2.5">
                               <Icon size={16} className={`${style.text} mt-0.5 shrink-0`} />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className={`text-[13px] font-semibold ${style.text}`}>{ev.title}</span>
-                                  <span className={`text-[11px] font-medium shrink-0 ${
-                                    dday === 'D-DAY' ? 'text-[#dc2626]' :
-                                    dday.startsWith('D-') && parseInt(dday.slice(2)) <= 3 ? 'text-[#d97706]' :
-                                    'text-txt-tertiary'
-                                  }`}>{dday}</span>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {ev.isCustom && ev.customId && (
+                                      <button onClick={() => openEditModal(ev.customId!)}
+                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-black/10 transition">
+                                        <Pencil size={11} className={style.text} />
+                                      </button>
+                                    )}
+                                    <span className={`text-[11px] font-medium ${
+                                      dday === 'D-DAY' ? 'text-[#dc2626]' :
+                                      dday.startsWith('D-') && parseInt(dday.slice(2)) <= 3 ? 'text-[#d97706]' :
+                                      'text-txt-tertiary'
+                                    }`}>{dday}</span>
+                                  </div>
                                 </div>
                                 <p className="text-[11px] text-txt-secondary mt-1 leading-relaxed">{ev.description}</p>
                                 {ev.isAdjusted && (
                                   <p className="text-[10px] text-txt-tertiary mt-1 flex items-center gap-1">
                                     <Clock size={10} /> 주말 보정: {ev.day}일 → {ev.adjustedDay}일
                                   </p>
+                                )}
+                                {ev.isCustom && (
+                                  <p className="text-[10px] text-txt-tertiary mt-1">사용자 등록 일정</p>
                                 )}
                               </div>
                             </div>
@@ -425,7 +728,7 @@ export default function AccountingCalendarPage() {
                   <p className="text-[13px] text-txt-quaternary py-3 text-center">이번 달 남은 일정 없음</p>
                 ) : (
                   upcoming.map((ev, i) => {
-                    const style = CAT_STYLE[ev.category]
+                    const style = CUSTOM_CAT_STYLE[ev.category] || CAT_STYLE[ev.category as TaxCategory]
                     const dday = getDday(ev.adjustedDay)
                     return (
                       <div key={i} className="flex items-center gap-3 py-2.5 border-b border-border-tertiary last:border-0"
@@ -452,12 +755,16 @@ export default function AccountingCalendarPage() {
             <div className="bg-surface rounded-[10px] border border-border-primary px-5 py-3.5">
               <h3 className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">카테고리</h3>
               <div className="grid grid-cols-2 gap-1.5">
-                {Object.entries(CAT_STYLE).map(([key, style]) => (
+                {Object.entries(CUSTOM_CAT_STYLE).map(([key, style]) => (
                   <div key={key} className="flex items-center gap-2">
                     <div className={`w-2.5 h-2.5 rounded-sm ${style.bg}`} />
                     <span className="text-[11px] text-txt-secondary">{style.label}</span>
                   </div>
                 ))}
+              </div>
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border-tertiary">
+                <div className="w-2.5 h-2.5 rounded-sm border border-dashed border-txt-tertiary" />
+                <span className="text-[10px] text-txt-tertiary">점선 = 사용자 등록 일정</span>
               </div>
             </div>
           </div>
@@ -493,19 +800,26 @@ export default function AccountingCalendarPage() {
               </thead>
               <tbody>
                 {events.map((ev, i) => {
-                  const style = CAT_STYLE[ev.category]
+                  const style = CUSTOM_CAT_STYLE[ev.category] || CAT_STYLE[ev.category as TaxCategory]
                   const dday = getDday(ev.adjustedDay)
                   const isPast = dday.startsWith('D+')
                   return (
-                    <tr key={i} className={`border-b border-border-tertiary h-[44px] hover:bg-surface-tertiary transition ${isPast ? 'opacity-40' : ''}`}>
+                    <tr key={i}
+                      onClick={ev.isCustom && ev.customId ? () => openEditModal(ev.customId!) : undefined}
+                      className={`border-b border-border-tertiary h-[44px] hover:bg-surface-tertiary transition ${isPast ? 'opacity-40' : ''} ${ev.isCustom ? 'cursor-pointer' : ''}`}>
                       <td className="px-5 py-2.5 tabular-nums text-txt-primary font-medium">
                         {month}/{ev.adjustedDay}
                         {ev.isAdjusted && <span className="text-[9px] text-txt-tertiary ml-0.5">*</span>}
                       </td>
                       <td className="px-4 py-2.5">
-                        <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${style.bg} ${style.text}`}>{style.label}</span>
+                        <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${style.bg} ${style.text} ${ev.isCustom ? 'border border-dashed border-current' : ''}`}>{style.label}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-txt-primary font-medium">{ev.title}</td>
+                      <td className="px-4 py-2.5 text-txt-primary font-medium">
+                        {ev.title}
+                        {ev.isCustom && (
+                          <Pencil size={11} className="inline ml-1.5 text-txt-tertiary" />
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-txt-secondary text-[12px] max-w-[400px]">
                         <span className="line-clamp-1">{ev.description}</span>
                       </td>
@@ -531,6 +845,16 @@ export default function AccountingCalendarPage() {
           )}
         </div>
       )}
+
+      {/* 커스텀 일정 모달 */}
+      <EventModal
+        isOpen={modalOpen}
+        onClose={() => { setModalOpen(false); setEditingEvent(null) }}
+        onSave={handleSaveCustom}
+        onDelete={editingEvent ? handleDeleteCustom : undefined}
+        initial={editingEvent}
+        defaultDate={selectedDay ? `${year}-${String(month).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}` : undefined}
+      />
     </div>
   )
 }

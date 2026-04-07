@@ -28,11 +28,24 @@ interface Staff {
   role: string
 }
 
-interface PromoRecord {
-  city: string
+interface PromoRecordRow {
+  id: string
+  city_id: string
   dong: string
-  last_visit: string | null
-  visit_count: number
+  visit_date: string
+  staff_id: string | null
+  category: string // '소규모' | '수도'
+  memo: string | null
+  cities: { name: string } | null
+}
+
+interface CityPromoSummary {
+  city: string
+  cityId: string
+  totalVisits: number
+  uniqueDongs: number
+  dongs: { dong: string; visitCount: number; lastVisit: string }[]
+  daysSinceLastVisit: number
 }
 
 // 직원별 색상
@@ -321,15 +334,63 @@ function AiCard({ icon, title, desc, btn }: { icon: ReactNode; title: string; de
 // ============================================================
 function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
   const [promoType, setPromoType] = useState<'small' | 'water'>('small')
+  const [promoRecords, setPromoRecords] = useState<PromoRecordRow[]>([])
+  const [promoLoading, setPromoLoading] = useState(true)
   const cities = promoType === 'small' ? CITIES_SMALL : CITIES_WATER
 
-  // 임시 데이터 (실제로는 promo_records 테이블에서 로드)
-  const cityData = useMemo(() => cities.map(city => {
-    const totalDongs = Math.floor(Math.random() * 30) + 10
-    const visitedDongs = Math.floor(Math.random() * totalDongs)
-    const daysSinceVisit = Math.floor(Math.random() * 150)
-    return { city, totalDongs, visitedDongs, unvisited: totalDongs - visitedDongs, daysSinceVisit }
-  }), [cities])
+  // promo_records 로드
+  useEffect(() => {
+    const load = async () => {
+      setPromoLoading(true)
+      const category = promoType === 'small' ? '소규모' : '수도'
+      const { data, error } = await supabase
+        .from('promo_records')
+        .select('id, city_id, dong, visit_date, staff_id, category, memo, cities(name)')
+        .eq('category', category)
+        .order('visit_date', { ascending: false })
+      if (!error && data) setPromoRecords(data as unknown as PromoRecordRow[])
+      else setPromoRecords([])
+      setPromoLoading(false)
+    }
+    load()
+  }, [promoType])
+
+  // 시별 집계
+  const cityData = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+
+    return cities.map(cityName => {
+      const cityRecords = promoRecords.filter(r => r.cities?.name === cityName)
+
+      // 동별 그룹핑
+      const dongMap = new Map<string, { visitCount: number; lastVisit: string }>()
+      for (const r of cityRecords) {
+        const existing = dongMap.get(r.dong)
+        if (!existing) {
+          dongMap.set(r.dong, { visitCount: 1, lastVisit: r.visit_date })
+        } else {
+          existing.visitCount++
+          if (r.visit_date > existing.lastVisit) existing.lastVisit = r.visit_date
+        }
+      }
+
+      const uniqueDongs = dongMap.size
+      const totalVisits = cityRecords.length
+
+      // 시 전체 마지막 방문일 기준 미방문 기간
+      let daysSinceLastVisit = -1
+      if (cityRecords.length > 0) {
+        const lastVisitDate = cityRecords[0].visit_date // already sorted desc
+        daysSinceLastVisit = Math.round((new Date(today).getTime() - new Date(lastVisitDate).getTime()) / 86400000)
+      }
+
+      return { city: cityName, uniqueDongs, totalVisits, daysSinceLastVisit }
+    })
+  }, [cities, promoRecords])
+
+  const totalDongs = cityData.reduce((a, c) => a + c.uniqueDongs, 0)
+  const totalVisits = cityData.reduce((a, c) => a + c.totalVisits, 0)
+  const hasData = promoRecords.length > 0
 
   return (
     <div className="space-y-4">
@@ -342,71 +403,92 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
             className={`px-4 py-1.5 text-sm rounded-md transition ${promoType === 'water' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>수도 (7개시)</button>
         </div>
         <div className="text-xs text-txt-secondary">
-          총 <span className="font-semibold text-txt-primary tabular-nums">{cityData.reduce((a, c) => a + c.totalDongs, 0)}</span>개 동 ·
-          방문 <span className="font-semibold text-green-600 tabular-nums">{cityData.reduce((a, c) => a + c.visitedDongs, 0)}</span> ·
-          미방문 <span className="font-semibold text-red-500 tabular-nums">{cityData.reduce((a, c) => a + c.unvisited, 0)}</span>
+          방문 동 <span className="font-semibold text-green-600 tabular-nums">{totalDongs}</span>개 ·
+          총 방문 <span className="font-semibold text-txt-primary tabular-nums">{totalVisits}</span>회
         </div>
       </div>
 
-      {/* 시별 현황 */}
-      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-surface-secondary border-b border-border-primary">
-              <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">시</th>
-              <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">방문 현황</th>
-              <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">방문</th>
-              <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">미방문</th>
-              <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-28">미방문 기간</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cityData.map(c => {
-              const pct = c.totalDongs > 0 ? Math.round((c.visitedDongs / c.totalDongs) * 100) : 0
-              const danger = c.daysSinceVisit > 90
-              return (
-                <tr key={c.city} className="border-b border-surface-secondary hover:bg-surface-tertiary/50">
-                  <td className="px-4 py-3 font-medium text-txt-primary">{c.city}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-surface-secondary rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="text-xs text-txt-secondary w-10 text-right tabular-nums">{pct}%</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center text-green-600 font-medium tabular-nums">{c.visitedDongs}</td>
-                  <td className="px-4 py-3 text-center text-red-500 font-medium tabular-nums">{c.unvisited}</td>
-                  <td className={`px-4 py-3 text-center font-medium tabular-nums ${danger ? 'text-red-600' : 'text-txt-secondary'}`}>
-                    {danger && <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full mr-1" />}
-                    {c.daysSinceVisit}일
-                  </td>
+      {promoLoading ? (
+        <div className="bg-surface rounded-[10px] border border-border-primary text-center py-20 text-txt-tertiary">불러오는 중...</div>
+      ) : !hasData ? (
+        <div className="bg-surface rounded-[10px] border border-border-primary text-center py-20">
+          <p className="text-txt-tertiary text-sm">홍보 기록이 없습니다</p>
+          <p className="text-txt-tertiary text-xs mt-1">홍보 방문 후 기록을 등록하면 여기에 표시됩니다</p>
+        </div>
+      ) : (
+        <>
+          {/* 시별 현황 */}
+          <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-surface-secondary border-b border-border-primary">
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">시</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">방문 현황</th>
+                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">방문 동</th>
+                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">방문 횟수</th>
+                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-28">미방문 기간</th>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {cityData.map(c => {
+                  // 방문 동 수 기준 프로그레스 (최대 기준: 해당 카테고리 전체 동 중 최다 방문 시 기준)
+                  const maxDongs = Math.max(...cityData.map(d => d.uniqueDongs), 1)
+                  const pct = Math.round((c.uniqueDongs / maxDongs) * 100)
+                  const danger = c.daysSinceLastVisit > 90
+                  const noVisit = c.daysSinceLastVisit < 0
+                  return (
+                    <tr key={c.city} className="border-b border-surface-secondary hover:bg-surface-tertiary/50">
+                      <td className="px-4 py-3 font-medium text-txt-primary">{c.city}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-2 bg-surface-secondary rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs text-txt-secondary w-10 text-right tabular-nums">{c.uniqueDongs}동</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center text-green-600 font-medium tabular-nums">{c.uniqueDongs}</td>
+                      <td className="px-4 py-3 text-center text-txt-primary font-medium tabular-nums">{c.totalVisits}</td>
+                      <td className={`px-4 py-3 text-center font-medium tabular-nums ${noVisit ? 'text-txt-tertiary' : danger ? 'text-red-600' : 'text-txt-secondary'}`}>
+                        {noVisit ? (
+                          <span>-</span>
+                        ) : (
+                          <>
+                            {danger && <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full mr-1" />}
+                            {c.daysSinceLastVisit}일
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      {/* AI 홍보 제안 */}
-      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-[10px] border border-yellow-200/50 p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Bot size={16} className="text-txt-tertiary" />
-          <h3 className="text-sm font-semibold text-txt-secondary">AI 홍보 제안</h3>
-        </div>
-        <div className="space-y-2">
-          {cityData.filter(c => c.daysSinceVisit > 60).slice(0, 3).map(c => (
-            <div key={c.city} className="flex items-center justify-between bg-white/70 rounded-lg p-3 border border-white">
-              <div>
-                <span className="text-sm font-medium text-txt-secondary">{c.city}</span>
-                <span className="text-xs text-red-500 ml-2 tabular-nums">{c.daysSinceVisit}일 미방문</span>
-                <span className="text-xs text-txt-secondary ml-2 tabular-nums">미방문 {c.unvisited}개 동</span>
+          {/* AI 홍보 제안 */}
+          {cityData.filter(c => c.daysSinceLastVisit > 60).length > 0 && (
+            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-[10px] border border-yellow-200/50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Bot size={16} className="text-txt-tertiary" />
+                <h3 className="text-sm font-semibold text-txt-secondary">AI 홍보 제안</h3>
               </div>
-              <button className="px-3 py-1 text-xs font-medium text-yellow-700 border border-yellow-300 rounded hover:bg-yellow-50">[일정 추가]</button>
+              <div className="space-y-2">
+                {cityData.filter(c => c.daysSinceLastVisit > 60).slice(0, 3).map(c => (
+                  <div key={c.city} className="flex items-center justify-between bg-white/70 rounded-lg p-3 border border-white">
+                    <div>
+                      <span className="text-sm font-medium text-txt-secondary">{c.city}</span>
+                      <span className="text-xs text-red-500 ml-2 tabular-nums">{c.daysSinceLastVisit}일 미방문</span>
+                      <span className="text-xs text-txt-secondary ml-2 tabular-nums">방문 {c.uniqueDongs}개 동</span>
+                    </div>
+                    <button className="px-3 py-1 text-xs font-medium text-yellow-700 border border-yellow-300 rounded hover:bg-yellow-50">[일정 추가]</button>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

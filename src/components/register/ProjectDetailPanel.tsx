@@ -38,11 +38,20 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
 
   useEffect(() => {
     if (project) {
       setEditData({})
       setHasChanges(false)
+      setApiFieldsLocked(true)
+      // 현재 단계에 맞는 탭 자동 선택
+      const stepIdx = getStepIndex(project.status)
+      if (stepIdx <= 0) setActiveTab('기본정보')
+      else if (stepIdx <= 4) setActiveTab('1단계')
+      else if (stepIdx <= 7) setActiveTab('2단계')
+      else if (stepIdx <= 9) setActiveTab('3~4단계')
+      else setActiveTab('기본정보')
     }
   }, [project])
 
@@ -116,6 +125,16 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               </button>
             )}
             <button
+              onClick={() => setApiFieldsLocked(prev => !prev)}
+              className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-colors ${
+                apiFieldsLocked
+                  ? 'text-txt-tertiary border border-border-primary hover:bg-surface-tertiary'
+                  : 'text-accent border border-accent/30 bg-accent/5'
+              }`}
+            >
+              {apiFieldsLocked ? '수정' : '수정중'}
+            </button>
+            <button
               onClick={() => setShowDeleteConfirm(true)}
               className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors"
             >
@@ -173,7 +192,6 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[13px]">
             <InfoField label="담당자" value={project.staff?.name || '-'} />
             <InfoField label="빌라명" value={project.building_name || '-'} />
-            <InfoField label="도로명주소" value={project.road_address || '-'} full />
             <InfoField label="공사종류" value={project.work_types?.name || '-'} />
             <InfoField label="현재단계" value={project.status} />
           </div>
@@ -204,7 +222,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} />}
+          {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
           {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
           {activeTab === '2단계' && <TabStep2 project={project} getVal={getVal} onChange={updateField} />}
           {activeTab === '3~4단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
@@ -275,15 +293,36 @@ function FormInput({ label, type = 'text', placeholder, value, onChange }: {
   )
 }
 
+// --- API 필드 잠금 입력 ---
+function LockedFormInput({ label, type = 'text', placeholder, value, onChange, locked }: {
+  label: string; type?: string; placeholder?: string
+  value: string | number | null | undefined
+  onChange: (v: string) => void
+  locked?: boolean
+}) {
+  if (locked) {
+    return (
+      <div>
+        <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+        <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] text-txt-secondary bg-surface-secondary">
+          {value ?? '-'}
+        </p>
+      </div>
+    )
+  }
+  return <FormInput label={label} type={type} placeholder={placeholder} value={value} onChange={onChange} />
+}
+
 // --- 탭별 Props ---
 interface TabProps {
   project: DBProject
   getVal: (field: keyof DBProject) => string | number | null | undefined | { id: string; name: string } | { name: string } | { name: string; work_categories?: { name: string } | null }
   onChange: (field: string, value: string | number | null) => void
+  apiFieldsLocked?: boolean
 }
 
 // --- 탭 1: 기본정보 ---
-function TabBasicInfo({ project, getVal, onChange }: TabProps) {
+function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) {
   return (
     <div className="space-y-5">
       <section>
@@ -306,14 +345,13 @@ function TabBasicInfo({ project, getVal, onChange }: TabProps) {
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">건물 정보</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} />
-          <FormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} />
-          <FormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} />
+          <LockedFormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} locked={apiFieldsLocked} />
           <FormInput label="면적 (m2)" type="number" value={getVal('area') as number} onChange={v => onChange('area', Number(v) || null)} />
-          <FormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} />
-          <FormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} />
-          <FormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} />
-          <FormInput label="진행연도" placeholder="예: 2026" value={getVal('year') as number} onChange={v => onChange('year', Number(v) || null)} />
+          <LockedFormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} locked={apiFieldsLocked} />
         </div>
       </section>
 

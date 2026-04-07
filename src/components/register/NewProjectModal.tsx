@@ -193,12 +193,22 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     // 주소, 건물명 자동 입력
     setForm(prev => ({
       ...prev,
-      road_address: addr.roadAddr,
-      jibun_address: addr.jibunAddr,
-      building_name: addr.bdNm || prev.building_name,
+      road_address: prev.road_address || addr.roadAddr,
+      jibun_address: prev.jibun_address || addr.jibunAddr,
+      building_name: prev.building_name || addr.bdNm || '',
     }))
     if (errors.road_address) {
       setErrors(prev => ({ ...prev, road_address: false }))
+    }
+
+    // 주소에서 시 자동 추출
+    const cityNames = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남']
+    const matchedCity = cityNames.find(c => addr.roadAddr.includes(c) || addr.jibunAddr.includes(c))
+    if (matchedCity) {
+      const matchedCityData = cities.find(c => c.name === matchedCity)
+      if (matchedCityData) {
+        setForm(prev => ({ ...prev, city_id: prev.city_id || matchedCityData.id }))
+      }
     }
 
     // 건축물대장 + 전유부 동시 호출
@@ -231,9 +241,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
 
         setForm(prev => ({
           ...prev,
-          building_use: bldData.mainPurpsCdNm || bldData.etcPurps || '',
-          unit_count: bldData.hhldCnt?.toString() || '',
-          approval_date: formattedDate,
+          building_use: prev.building_use || bldData.mainPurpsCdNm || bldData.etcPurps || '',
+          unit_count: prev.unit_count || bldData.hhldCnt?.toString() || '',
+          approval_date: prev.approval_date || formattedDate,
           building_name: prev.building_name || bldData.bldNm || '',
         }))
       }

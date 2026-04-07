@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { Settings, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
@@ -216,6 +217,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const [showNewModal, setShowNewModal] = useState(false)
   const [editProject, setEditProject] = useState<DBProject | null>(null)
   const [deleteProject, setDeleteProject] = useState<DBProject | null>(null)
+  const [showCityManager, setShowCityManager] = useState(false)
   const [projects, setProjects] = useState<DBProject[]>([])
   const [cities, setCities] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
@@ -426,6 +428,13 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             초기화
           </button>
         )}
+        <button
+          onClick={() => setShowCityManager(true)}
+          className="rounded-full w-[26px] h-[26px] flex items-center justify-center text-[#9ca3af] border border-[#e5e7eb] hover:border-[#6366f1] hover:text-[#6366f1] transition-colors"
+          title="지역 관리"
+        >
+          <Settings size={12} />
+        </button>
       </div>
 
       {/* 테이블 */}
@@ -552,6 +561,88 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
           onCancel={() => setDeleteProject(null)}
         />
       )}
+
+      {showCityManager && (
+        <CityManagerModal
+          cities={cities}
+          onClose={() => setShowCityManager(false)}
+          onRefresh={() => { loadCities(); setShowCityManager(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function CityManagerModal({ cities, onClose, onRefresh }: {
+  cities: { id: string; name: string }[]
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const [newCity, setNewCity] = useState('')
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const handleAdd = async () => {
+    if (!newCity.trim()) return
+    const { error } = await supabase.from('cities').insert({ name: newCity.trim() })
+    if (error) {
+      alert('추가 실패: ' + error.message)
+      return
+    }
+    setNewCity('')
+    onRefresh()
+  }
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id)
+    const { error } = await supabase.from('cities').delete().eq('id', id)
+    if (error) {
+      alert('삭제 실패: ' + error.message)
+    }
+    setDeleting(null)
+    onRefresh()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-[#ffffff] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[16px] font-semibold text-[#111827]">지역 관리</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#f1f3f5] text-[#9ca3af]">&#x2715;</button>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={newCity}
+            onChange={e => setNewCity(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+            placeholder="새 지역명 입력"
+            className="flex-1 h-[36px] px-3 border border-[#e5e7eb] rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#e0e7ff] focus:border-[#6366f1]"
+          />
+          <button
+            onClick={handleAdd}
+            className="px-4 h-[36px] text-[13px] font-medium text-white bg-[#6366f1] rounded-lg hover:bg-[#4f46e5] transition-colors"
+          >
+            추가
+          </button>
+        </div>
+
+        <div className="space-y-1 max-h-[300px] overflow-y-auto">
+          {cities.map(city => (
+            <div key={city.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[#f1f3f5] group">
+              <span className="text-[13px] text-[#111827]">{city.name}</span>
+              <button
+                onClick={() => handleDelete(city.id)}
+                disabled={deleting === city.id}
+                className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-[#fee2e2] text-[#9ca3af] hover:text-[#dc2626] transition-all disabled:opacity-50"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

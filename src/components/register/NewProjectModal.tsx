@@ -65,6 +65,11 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
   const [units, setUnits] = useState<UnitInfo[]>([])
   const [loadingBuilding, setLoadingBuilding] = useState(false)
 
+  // 동호수 자동완성 상태
+  const [hoInput, setHoInput] = useState('')
+  const [showHoSuggestions, setShowHoSuggestions] = useState(false)
+  const hoInputRef = useRef<HTMLDivElement>(null)
+
   const [form, setForm] = useState({
     building_name: '',
     road_address: '',
@@ -109,6 +114,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
 
       // 수정 모드일 때 기존 데이터로 채우기
       if (editProject) {
+        const dong = editProject.dong || ''
+        const ho = editProject.ho || ''
+        setHoInput(dong ? `${dong} ${ho}` : ho)
         setForm({
           building_name: editProject.building_name || '',
           road_address: editProject.road_address || '',
@@ -123,8 +131,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           building_use: editProject.building_use || '',
           unit_count: editProject.unit_count?.toString() || '',
           approval_date: editProject.approval_date || '',
-          dong: editProject.dong || '',
-          ho: editProject.ho || '',
+          dong,
+          ho,
           exclusive_area: editProject.exclusive_area?.toString() || '',
         })
       } else {
@@ -145,6 +153,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     function handleClickOutside(e: MouseEvent) {
       if (addressDropdownRef.current && !addressDropdownRef.current.contains(e.target as Node)) {
         setShowAddressDropdown(false)
+      }
+      if (hoInputRef.current && !hoInputRef.current.contains(e.target as Node)) {
+        setShowHoSuggestions(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -233,33 +244,57 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     }
   }
 
-  // 동호수 선택 시 전유면적 자동 입력
-  const handleUnitSelect = (dongHo: string) => {
-    // dongHo format: "dongNm|hoNm" or just "hoNm" if no dong
-    const parts = dongHo.split('|')
-    const dongVal = parts.length > 1 ? parts[0] : ''
-    const hoVal = parts.length > 1 ? parts[1] : parts[0]
+  // 동호수 자동완성에서 선택 시 전유면적 자동 입력
+  const handleUnitSelect = (unit: UnitInfo) => {
+    const dongVal = unit.dongNm?.trim() || ''
+    const hoVal = unit.hoNm || ''
+    const label = dongVal ? `${dongVal} ${hoVal}` : hoVal
 
-    const matched = units.find(u => {
-      const uDong = u.dongNm || ''
-      const uHo = u.hoNm || ''
-      if (parts.length > 1) return uDong === dongVal && uHo === hoVal
-      return uHo === hoVal
-    })
-
+    setHoInput(label)
+    setShowHoSuggestions(false)
     setForm(prev => ({
       ...prev,
       dong: dongVal,
       ho: hoVal,
-      exclusive_area: matched ? matched.area.toString() : '',
+      exclusive_area: unit.area.toString(),
     }))
   }
 
-  // 동호수 옵션 생성
-  const unitOptions = units.map(u => {
-    const label = u.dongNm ? `${u.dongNm} ${u.hoNm}` : u.hoNm
-    const value = u.dongNm ? `${u.dongNm}|${u.hoNm}` : u.hoNm
-    return { label, value, area: u.area }
+  // 동호수 직접 입력 시
+  const handleHoInputChange = (value: string) => {
+    setHoInput(value)
+    setShowHoSuggestions(true)
+    // 직접 입력한 값도 form에 반영
+    setForm(prev => ({
+      ...prev,
+      ho: value,
+      dong: '',
+      exclusive_area: '', // 직접 입력이면 면적 초기화 (매칭 안 되므로)
+    }))
+    // 정확히 매칭되는 호수가 있으면 면적 자동입력
+    const matched = units.find(u => {
+      const label = u.dongNm?.trim() ? `${u.dongNm.trim()} ${u.hoNm}` : u.hoNm
+      return label === value
+    })
+    if (matched) {
+      setForm(prev => ({
+        ...prev,
+        dong: matched.dongNm?.trim() || '',
+        ho: matched.hoNm,
+        exclusive_area: matched.area.toString(),
+      }))
+    }
+  }
+
+  // 필터링된 동호수 목록 (입력값으로 필터)
+  const filteredUnits = units.filter(u => {
+    if (!hoInput.trim()) return true
+    const label = u.dongNm?.trim() ? `${u.dongNm.trim()} ${u.hoNm}` : u.hoNm
+    return label.includes(hoInput.trim())
+  }).sort((a, b) => {
+    const aNum = parseInt(a.hoNm) || 0
+    const bNum = parseInt(b.hoNm) || 0
+    return aNum - bNum
   })
 
   const handleSubmit = async () => {
@@ -445,58 +480,44 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             </div>
           )}
 
-          {/* 동호수 선택 + 전유면적 */}
-          {units.length > 0 && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">동호수</label>
-                <select
-                  value={form.dong ? `${form.dong}|${form.ho}` : form.ho}
-                  onChange={e => handleUnitSelect(e.target.value)}
-                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-                >
-                  <option value="">선택하세요</option>
-                  {unitOptions.map((opt, idx) => (
-                    <option key={idx} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">전유면적 (m2)</label>
-                <input
-                  type="text"
-                  value={form.exclusive_area ? `${Number(form.exclusive_area).toFixed(2)} m2` : '-'}
-                  readOnly
-                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] bg-surface-secondary text-txt-secondary cursor-default"
-                />
-              </div>
+          {/* 동호수 입력 + 전유면적 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div ref={hoInputRef} className="relative">
+              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">동호수</label>
+              <input
+                type="text"
+                value={hoInput}
+                onChange={e => handleHoInputChange(e.target.value)}
+                onFocus={() => units.length > 0 && setShowHoSuggestions(true)}
+                placeholder="예: 301호, B01, 지하1층"
+                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              />
+              {/* 자동완성 제안 목록 */}
+              {showHoSuggestions && filteredUnits.length > 0 && (
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
+                  {filteredUnits.map((unit, idx) => {
+                    const label = unit.dongNm?.trim() ? `${unit.dongNm.trim()} ${unit.hoNm}` : unit.hoNm
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleUnitSelect(unit)}
+                        className="w-full text-left px-4 py-2 hover:bg-surface-secondary transition-colors border-b border-border-tertiary last:border-b-0 flex justify-between items-center"
+                      >
+                        <span className="text-[13px] text-txt-primary">{label}</span>
+                        <span className="text-[11px] text-txt-tertiary">{unit.area.toFixed(2)}m2</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          )}
-
-          {/* 동호수가 API에서 안 나올 때 수동 입력 */}
-          {units.length === 0 && (
-            <div className="grid grid-cols-3 gap-4">
-              <ModalField
-                label="동"
-                value={form.dong}
-                onChange={v => update('dong', v)}
-                placeholder="예: 101동"
-              />
-              <ModalField
-                label="호"
-                value={form.ho}
-                onChange={v => update('ho', v)}
-                placeholder="예: 301호"
-              />
-              <ModalField
-                label="전유면적 (m2)"
-                value={form.exclusive_area}
-                onChange={v => update('exclusive_area', v)}
-                placeholder="예: 59.94"
-                type="number"
-              />
-            </div>
-          )}
+            <ModalField
+              label="전유면적 (m2)"
+              value={form.exclusive_area}
+              onChange={v => update('exclusive_area', v)}
+              placeholder="예: 59.94"
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <ModalField

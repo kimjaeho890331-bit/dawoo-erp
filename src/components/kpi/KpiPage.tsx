@@ -462,6 +462,14 @@ function DetailCard({ kpi, qualScores, setQualScore, getQualScore }: {
   const [open, setOpen] = useState(false)
   const st = GRADE_STYLE[kpi.grade as GradeLevel]
 
+  // 상황점수 개별 항목 계산
+  const situationItems = {
+    emergency: Math.round(3 * getQualScore(kpi.staff.id, 'emergency') / 100 * 10) / 10,
+    teamwork: Math.round(3 * getQualScore(kpi.staff.id, 'teamwork') / 100 * 10) / 10,
+    growth: Math.round(2 * getQualScore(kpi.staff.id, 'growth') / 100 * 10) / 10,
+    customer: Math.round(2 * getQualScore(kpi.staff.id, 'customer') / 100 * 10) / 10,
+  }
+
   const indicators = [
     { area: '지원사업 /30', items: [
       { n: '전환율', v: `${kpi.conversion}%`, s: kpi.conversionScore, m: 10 },
@@ -485,6 +493,12 @@ function DetailCard({ kpi, qualScores, setQualScore, getQualScore }: {
       { n: '납기준수', v: '-', s: kpi.vendorDeliveryScore, m: 4 },
       { n: '시공품질', v: '-', s: kpi.vendorQualityScore, m: 3 },
       { n: '재고용', v: '-', s: kpi.vendorRehireScore, m: 3 },
+    ]},
+    { area: '상황점수 /10', items: [
+      { n: '긴급대응', v: '정성', s: situationItems.emergency, m: 3 },
+      { n: '팀기여', v: '정성', s: situationItems.teamwork, m: 3 },
+      { n: '자기개발', v: '정성', s: situationItems.growth, m: 2 },
+      { n: '고객관리', v: '정성', s: situationItems.customer, m: 2 },
     ]},
   ]
 
@@ -516,7 +530,7 @@ function DetailCard({ kpi, qualScores, setQualScore, getQualScore }: {
       {open && (
         <div className="border-t border-border-tertiary px-5 py-4 space-y-4">
           {/* 정량 영역별 바 */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             {indicators.map((area, ai) => (
               <div key={ai}>
                 <p className="text-[11px] font-semibold text-txt-secondary mb-2">{area.area}</p>

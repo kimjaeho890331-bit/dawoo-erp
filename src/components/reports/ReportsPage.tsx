@@ -80,6 +80,7 @@ export default function ReportsPage() {
   const [sites, setSites] = useState<Site[]>([])
   const [loading, setLoading] = useState(true)
   const [openReport, setOpenReport] = useState<string | null>(null)
+  const [reportFilter, setReportFilter] = useState<'week' | 'month' | 'all'>('all')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -637,7 +638,26 @@ export default function ReportsPage() {
       {/* ===== 탭 1: 보고서 목록 (서술형) ===== */}
       {tab === 'reports' && (
         <div className="space-y-4">
-          {data.reports.map(report => {
+          {/* 기간 필터 */}
+          <div className="flex items-center gap-1 bg-surface-secondary rounded-lg p-0.5 w-fit">
+            {([
+              { key: 'all' as const, label: '전체' },
+              { key: 'month' as const, label: '이번 달' },
+              { key: 'week' as const, label: '이번 주' },
+            ]).map(f => (
+              <button key={f.key} onClick={() => setReportFilter(f.key)}
+                className={`px-3 py-1.5 text-[13px] rounded-md transition ${reportFilter === f.key ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-tertiary hover:text-txt-secondary'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {data.reports.filter(report => {
+            if (reportFilter === 'all') return true
+            if (reportFilter === 'week') return isThisWeek(report.date)
+            if (reportFilter === 'month') return isYM(report.date, new Date().toISOString().slice(0, 7))
+            return true
+          }).map(report => {
             const ts = TYPE_STYLE[report.type]
             const isOpen = openReport === report.id
             return (
@@ -724,9 +744,14 @@ export default function ReportsPage() {
             )
           })}
 
-          {data.reports.length === 0 && (
+          {data.reports.filter(report => {
+            if (reportFilter === 'all') return true
+            if (reportFilter === 'week') return isThisWeek(report.date)
+            if (reportFilter === 'month') return isYM(report.date, new Date().toISOString().slice(0, 7))
+            return true
+          }).length === 0 && (
             <div className="bg-surface rounded-[10px] border border-border-primary text-center py-20 text-txt-quaternary text-[13px]">
-              데이터가 쌓이면 보고서가 자동 생성됩니다
+              {reportFilter === 'all' ? '데이터가 쌓이면 보고서가 자동 생성됩니다' : '해당 기간에 보고서가 없습니다'}
             </div>
           )}
         </div>
@@ -824,6 +849,26 @@ export default function ReportsPage() {
                         s.conversion >= 70 ? 'text-[#065f46]' : s.conversion >= 50 ? 'text-txt-secondary' : 'text-[#dc2626]'
                       }`}>{s.conversion}%</span>
                     </div>
+                    {/* 활동 분포 바 */}
+                    <div className="mb-3 space-y-1.5">
+                      {[
+                        { label: '담당 건수', value: s.total, max: Math.max(s.total, 1), color: 'bg-[#5e6ad2]' },
+                        { label: '진행 중', value: s.active, max: Math.max(s.total, 1), color: 'bg-[#d97706]' },
+                        { label: '완료', value: s.done, max: Math.max(s.total, 1), color: 'bg-[#065f46]' },
+                        { label: '이번 주 접수', value: s.weekNew, max: Math.max(s.weekNew, 5), color: 'bg-[#7c3aed]' },
+                        { label: '일정', value: s.weekSchedules, max: Math.max(s.weekSchedules, 5), color: 'bg-[#3b82f6]' },
+                      ].map(bar => (
+                        <div key={bar.label} className="flex items-center gap-2">
+                          <span className="w-20 text-[11px] text-txt-tertiary shrink-0">{bar.label}</span>
+                          <div className="flex-1 h-2 bg-surface-secondary rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${bar.color}`}
+                              style={{ width: `${bar.max > 0 ? (bar.value / bar.max) * 100 : 0}%`, minWidth: bar.value > 0 ? '4px' : '0px' }} />
+                          </div>
+                          <span className="w-8 text-right text-[11px] font-medium text-txt-secondary tabular-nums">{bar.value}</span>
+                        </div>
+                      ))}
+                    </div>
+
                     <div className="text-[13px] text-txt-secondary leading-relaxed space-y-1">
                       <p>담당 건수 {s.total}건 중 {s.done}건 완료, {s.active}건 진행 중. 전환율 {s.conversion}%{s.conversion >= 70 ? '로 안정적인 성과를 보이고 있습니다.' : s.conversion >= 50 ? '로 평균 수준입니다.' : '로, 완료율 개선이 필요합니다.'}</p>
                       {s.weekNew > 0 && <p>이번 주 신규 {s.weekNew}건 접수.</p>}

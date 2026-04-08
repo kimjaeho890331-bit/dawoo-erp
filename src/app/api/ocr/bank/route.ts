@@ -74,7 +74,8 @@ export async function POST(request: NextRequest) {
       return Response.json(parsed)
     }
 
-    return Response.json({ error: 'OCR 결과를 파싱할 수 없습니다', raw: text }, { status: 422 })
+    console.error('OCR parse failed, raw text:', text)
+    return Response.json({ error: 'OCR 결과를 파싱할 수 없습니다' }, { status: 422 })
   } catch (error) {
     console.error('OCR API error:', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

@@ -1,7 +1,43 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Rate limiting (in-memory, 서버리스 환경에서는 인스턴스별)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
+
+function checkRateLimit(ip: string, path: string): boolean {
+  const limit = path.startsWith('/api/chat') ? 20 : 60
+  const windowMs = 60 * 1000 // 1분
+  const now = Date.now()
+  const key = `${ip}:${path.startsWith('/api/chat') ? 'chat' : 'api'}`
+
+  const entry = rateLimitMap.get(key)
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(key, { count: 1, resetTime: now + windowMs })
+    return true
+  }
+
+  if (entry.count >= limit) return false
+  entry.count++
+  return true
+}
+
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Rate limit 체크 (API 경로만)
+  if (pathname.startsWith('/api/')) {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || '127.0.0.1'
+
+    if (!checkRateLimit(ip, pathname)) {
+      return NextResponse.json(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 429 }
+      )
+    }
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -32,8 +68,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const { pathname } = request.nextUrl
 
   // /login 경로는 인증 불필요
   if (pathname === '/login') {

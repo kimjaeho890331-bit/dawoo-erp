@@ -231,3 +231,143 @@ AI 비서 (홍보/미팅 제안)       ──→               ──→  대시
 | docs/AGENT_QUERY.md | 조회팀 에이전트 (보고서+KPI+알림) |
 | docs/DAWOO_DESIGN_FINAL.md | 전체 설계 통합 (참고용) |
 | dawoo_db_schema.sql | DB 22개 테이블 스키마 |
+
+---
+
+## 구현 현황 (2026-04 기준)
+
+| 기능 | 상태 | 구현된 것 | 미구현 |
+|------|------|-----------|--------|
+| 접수대장 목록 | ✅ 완료 | 상태필터, 시태그, 검색, CRUD, 신규등록모달 | - |
+| 접수대장 상세 | ✅ 완료 | 6탭 구조, 프로그레스바, 기본/1~4단계탭 | 서류/첨부탭 일부 미완, 단계전환 검증 없음 |
+| AI 비서 | 🔶 부분 | 접수등록/조회, 주소/건축물대장 연동 (5개 도구) | 수정/삭제, 단계변경, 서류팀/조회팀 |
+| 현장관리 | ✅ 완료 | 아코디언, 공정캘린더, 일지/사진/서류 | - |
+| 견적서 | ✅ 완료 | 스프레드시트, 자동산출, 단가, 별도 페이지 | - |
+| 서류함 | ✅ 완료 | 4탭, 파일업로드, 유효기간 | PDF 폼필드 자동생성 미연동 |
+| 캘린더 | ✅ 완료 | 월간뷰, 일정CRUD, 홍보현황 | AI 교정(시간/동선/빈일정) |
+| 지출관리 | ✅ 완료 | 3탭, 카드CSV파싱, 이상탐지 | - |
+| 대시보드 | ✅ 완료 | 오늘일정, 업무, 메모, AI제안 | - |
+| 보고서 | ✅ 완료 | UI 구현 (5탭) | AI 분석 엔진 미연동 |
+| KPI | ✅ 완료 | 3탭 UI (총괄/상세/기준설정) | AI 자동산출 미연동 |
+| 거래처DB | ✅ 완료 | 협력업체+일용직 2탭 | - |
+| A/S관리 | ✅ 완료 | 등록/조회 | - |
+| 직원관리 | ✅ 완료 | CRUD | - |
+| 연차신청 | ✅ 완료 | 신청/승인 | - |
+| 공지사항 | ✅ 완료 | CRUD | - |
+| 회계달력 | ✅ 완료 | 캘린더뷰 | - |
+| 설정 | ✅ 완료 | 기본설정 | - |
+| OCR | ✅ 완료 | 통장사본 OCR (Claude Vision) | - |
+
+---
+
+## 개발 규칙 (코드 패턴)
+
+### 컴포넌트 구조
+```
+src/components/[기능명]/[기능명]Page.tsx   ← 메인 컴포넌트
+src/app/[기능명]/page.tsx                  ← 라우트 (Page 컴포넌트 import만)
+```
+
+### 타입
+- `src/types/index.ts` — 중앙 타입 정의 (Project, Staff, City, WorkType 등)
+- 10단계 상태: 문의→실사→견적전달→동의서→신청서제출→승인→착공계→공사→완료서류제출→입금
+- 4단계 UI매핑: STATUS_STAGE_MAP으로 10단계→4스테이지 변환
+
+### Supabase 클라이언트
+- 프론트엔드: `src/lib/supabase.ts` (anon key, 브라우저)
+- API Route: `createClient(url, service_role_key)` (서버, RLS 우회)
+
+### 데이터 액세스
+- `src/lib/api/projects.ts` — 프로젝트 조회 (카테고리/상태/시 필터)
+- `src/lib/api/staff.ts` — 직원 목록
+- `src/lib/api/cities.ts` — 시 목록
+
+### API 라우트
+| 경로 | 역할 |
+|------|------|
+| `/api/chat` | AI 비서 (Claude + Tool Use) |
+| `/api/address/search` | 도로명주소 검색 (Juso API) |
+| `/api/address/building` | 건축물대장 표제부 |
+| `/api/address/units` | 건축물대장 전유부 |
+| `/api/ocr/bank` | 통장사본 OCR (Claude Vision) |
+| `/api/pricing` | 견적 단가 산출 |
+| `/api/storage/upload` | Supabase Storage 업로드 |
+| `/api/storage/delete` | Supabase Storage 삭제 |
+
+### CSS / 디자인 토큰
+- Tailwind v4 + CSS 변수 (`globals.css`의 `@theme inline`)
+- 커스텀 클래스: `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.input-field`, `.card`, `.badge`
+- 폰트: Pretendard(한국어), Inter(숫자/영문), Berkeley Mono(코드)
+- 상세 → docs/DESIGN.md
+
+---
+
+## 환경변수 (.env.local)
+
+```
+NEXT_PUBLIC_SUPABASE_URL      # Supabase 프로젝트 URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY # Supabase 공개 키
+SUPABASE_SERVICE_ROLE_KEY     # Supabase 서비스 키 (API Route 전용)
+ANTHROPIC_API_KEY             # Claude API 키
+ADDRESS_API_KEY               # 도로명주소 API 키 (Juso API, 공공데이터포털)
+BUILDING_API_KEY              # 건축물대장 API 키 (공공데이터포털)
+```
+
+---
+
+## AI 에이전트 현재 구현 상태
+
+### 구현 완료 도구 (5개)
+- `search_address` — 도로명/지번 주소 검색
+- `get_building_info` — 건축물대장 표제부 조회
+- `get_unit_info` — 건축물대장 전유부(호별 면적) 조회
+- `register_project` — 접수대장 신규 등록
+- `search_projects` — 접수대장 검색/조회
+
+### 미구현 도구 (계획)
+- `update_project` — 접수 정보 수정
+- `update_status` — 단계 변경
+- `manage_schedule` — 캘린더 일정 관리
+- `get_dashboard_stats` — 대시보드 통계
+- 서류팀/조회팀 도구 전체
+
+---
+
+## 파일 구조
+
+```
+dawoo-erp/
+├── CLAUDE.md                          # 이 파일
+├── dawoo_db_schema.sql                # DB 스키마
+├── docs/                              # 상세 스펙 문서
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx                 # 루트 레이아웃
+│   │   ├── page.tsx                   # / → /dashboard 리다이렉트
+│   │   ├── globals.css                # 디자인 토큰 + 커스텀 클래스
+│   │   ├── api/                       # API 라우트 (8개)
+│   │   │   ├── chat/route.ts          # AI 비서 (Claude Tool Use)
+│   │   │   ├── address/               # 주소/건물 API
+│   │   │   ├── ocr/                   # OCR
+│   │   │   ├── pricing/               # 견적 단가
+│   │   │   └── storage/               # 파일 업로드/삭제
+│   │   ├── register/                  # 접수대장 (small, water)
+│   │   ├── sites/                     # 현장관리
+│   │   ├── calendar/work/             # 업무 캘린더
+│   │   ├── dashboard/                 # 대시보드
+│   │   └── ...                        # 기타 페이지 라우트
+│   ├── components/
+│   │   ├── Sidebar.tsx                # 메인 네비게이션
+│   │   ├── ClientLayout.tsx           # 클라이언트 레이아웃
+│   │   ├── AISidebar.tsx              # AI 비서 사이드패널
+│   │   ├── common/ImageViewer.tsx     # 이미지 뷰어
+│   │   ├── register/                  # 접수대장 컴포넌트
+│   │   ├── estimate/                  # 견적서 컴포넌트
+│   │   ├── sites/                     # 현장관리 컴포넌트
+│   │   └── [기능명]/[기능명]Page.tsx   # 각 기능별 메인 컴포넌트
+│   ├── types/index.ts                 # 중앙 타입 정의
+│   └── lib/
+│       ├── supabase.ts                # Supabase 클라이언트
+│       └── api/                       # 데이터 액세스 함수
+└── .env.local                         # 환경변수 (git 제외)
+```

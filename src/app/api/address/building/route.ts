@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
 
-const SERVICE_KEY =
-  '5113eee651b2d5e27f958ed7d1a926b9f4eadb25492601fbb5cef2657ae6a21f'
+const SERVICE_KEY = process.env.BUILDING_API_KEY!
 
 export async function GET(req: NextRequest) {
+  const user = await getAuthUser()
+  if (!user) {
+    return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
+  }
+
   const sigunguCd = req.nextUrl.searchParams.get('sigunguCd')
   const bjdongCd = req.nextUrl.searchParams.get('bjdongCd')
   const bun = req.nextUrl.searchParams.get('bun')

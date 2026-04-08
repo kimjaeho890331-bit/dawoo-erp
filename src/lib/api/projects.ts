@@ -43,10 +43,11 @@ export async function getProjects(params: {
     query = query.in('city_id', params.cityIds);
   }
 
-  // 검색 (빌라명, 소유주명, 도로명주소)
+  // 검색 (빌라명, 소유주명, 도로명주소) — 특수문자 이스케이프
   if (params.search) {
+    const sanitized = params.search.replace(/[%_\\]/g, '\\$&')
     query = query.or(
-      `building_name.ilike.%${params.search}%,owner_name.ilike.%${params.search}%,road_address.ilike.%${params.search}%`
+      `building_name.ilike.%${sanitized}%,owner_name.ilike.%${sanitized}%,road_address.ilike.%${sanitized}%`
     );
   }
 

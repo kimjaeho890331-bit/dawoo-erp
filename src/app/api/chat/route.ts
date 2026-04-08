@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getAuthUser } from '@/lib/auth'
 
 export const maxDuration = 60
 
@@ -10,8 +11,8 @@ const supabaseAdmin = createClient(
 )
 
 // --- 외부 API 키 ---
-const ADDRESS_API_KEY = 'devU01TX0FVVEgyMDI2MDQwMzE0NDY0NDExNzg0Nzc='
-const BUILDING_API_KEY = '5113eee651b2d5e27f958ed7d1a926b9f4eadb25492601fbb5cef2657ae6a21f'
+const ADDRESS_API_KEY = process.env.ADDRESS_API_KEY!
+const BUILDING_API_KEY = process.env.BUILDING_API_KEY!
 
 // --- 시스템 프롬프트 (AGENT.md 기반) ---
 const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등록, 현황 조회, 업무 안내를 수행합니다.
@@ -332,7 +333,8 @@ async function searchProjects(input: Record<string, unknown>): Promise<string> {
 
     if (status) query = query.eq('status', status)
     if (keyword) {
-      query = query.or(`building_name.ilike.%${keyword}%,owner_name.ilike.%${keyword}%,road_address.ilike.%${keyword}%`)
+      const sanitized = (keyword as string).replace(/[%_\\]/g, '\\$&')
+      query = query.or(`building_name.ilike.%${sanitized}%,owner_name.ilike.%${sanitized}%,road_address.ilike.%${sanitized}%`)
     }
 
     const { data, error } = await query.order('created_at', { ascending: false }).limit(10)
@@ -382,6 +384,11 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
 // --- API 핸들러 ---
 export async function POST(request: NextRequest) {
+  const user = await getAuthUser()
+  if (!user) {
+    return Response.json({ error: '인증이 필요합니다' }, { status: 401 })
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     return new Response(

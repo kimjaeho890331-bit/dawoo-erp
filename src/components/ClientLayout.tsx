@@ -1,8 +1,19 @@
 'use client'
 import Sidebar from "@/components/Sidebar"
 import AISidebar from "@/components/AISidebar"
+import { AuthProvider, useAuth } from "@/components/AuthProvider"
 
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
+function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+  const { loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-page">
+        <div className="text-txt-secondary">로딩 중...</div>
+      </div>
+    )
+  }
+
   return (
     <>
       <Sidebar />
@@ -11,5 +22,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       </main>
       <AISidebar />
     </>
+  )
+}
+
+export default function ClientLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <AuthenticatedLayout>{children}</AuthenticatedLayout>
+    </AuthProvider>
   )
 }

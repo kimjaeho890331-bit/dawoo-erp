@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
 
-const CONFM_KEY = 'devU01TX0FVVEgyMDI2MDQwMzE0NDY0NDExNzg0Nzc='
+const CONFM_KEY = process.env.ADDRESS_API_KEY!
 
 export async function GET(req: NextRequest) {
+  const user = await getAuthUser()
+  if (!user) {
+    return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
+  }
+
   const keyword = req.nextUrl.searchParams.get('keyword')
   if (!keyword) {
     return NextResponse.json({ error: '검색어를 입력하세요' }, { status: 400 })

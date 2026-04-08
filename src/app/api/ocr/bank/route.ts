@@ -1,8 +1,14 @@
 import { NextRequest } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
 
 export const maxDuration = 30
 
 export async function POST(request: NextRequest) {
+  const user = await getAuthUser()
+  if (!user) {
+    return Response.json({ error: '인증이 필요합니다' }, { status: 401 })
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     return Response.json({ error: 'API key not configured' }, { status: 500 })

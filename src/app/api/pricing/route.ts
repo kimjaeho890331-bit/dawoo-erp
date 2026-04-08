@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getAuthUser } from '@/lib/auth'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,6 +16,11 @@ const DEFAULT_PRICES = {
 
 // GET /api/pricing?city=수원&category=수도
 export async function GET(request: NextRequest) {
+  const user = await getAuthUser()
+  if (!user) {
+    return Response.json({ error: '인증이 필요합니다' }, { status: 401 })
+  }
+
   const city = request.nextUrl.searchParams.get('city')
   const category = request.nextUrl.searchParams.get('category') || '수도'
 

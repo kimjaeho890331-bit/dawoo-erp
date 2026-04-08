@@ -20,7 +20,8 @@
 | Frontend | Next.js 16+ (App Router), React, TypeScript, Tailwind CSS |
 | Backend | Supabase (PostgreSQL, Edge Functions, Storage, Auth) |
 | AI | Claude API (claude-sonnet-4-20250514) |
-| PDF | pypdf (폼필드 자동입력), pdfplumber (좌표추출) |
+| 서류 자동화 | Cowork (Claude) → 구글드라이브 직접 입력 |
+| 서류 저장소 | 구글드라이브 (서류 원본) + Supabase (메타데이터) |
 | 외부 API | 법정동코드 API, 건축물대장 API (표제부+전유부) — 공공데이터포털 |
 | 배포 | Vercel |
 | 소스 | GitHub (`kimjaeho890331-bit/dawoo-erp`) |
@@ -38,6 +39,9 @@
 6. **데이터 하나, 뷰 여러 개** — schedules DB 1개 → 캘린더 4곳에서 표시.
 7. **활동 로그 자동** — 시스템 사용 = 업무 기록. 별도 보고서 작성 없음.
 8. **접수대장과 현장관리는 완전 별개** — 접수대장 = 지원사업 고객관리 / 현장관리 = 입찰/수의 건설 현장 프로젝트. 연동 없음.
+9. **서류는 Cowork가 구글드라이브에 직접 입력** — pypdf 폼필드 매핑 대신 Cowork 방식. 서류 1000개의 폼필드를 유지보수하는 건 비현실적.
+10. **AI는 폭발적 생산량** — 고퀄리티가 아닌 폭발적 생산량이 AI의 가치. 체계 없던 회사에 AI로 체계를 심는다.
+
 
 ## 공통 UI 규칙 (전체 페이지 적용)
 
@@ -85,11 +89,11 @@ AI 비서 (홍보/미팅 제안)       ──→               ──→  대시
                               ↓ 전부
                         [AI 분석 엔진]
                               ↓
-[4종 보고서]
-매일: 직원 활동 요약 + 긴급 알림
-주간: 지원사업 + 현장 공정 + 직원 성과 + 미수금 + 통합 요약
+[3종 보고서 + 긴급알림]
+주간: 지원사업 + 현장 공정 + 직원 성과 + 미수금 + "다음주 제안"
 월간: 카드/고정 지출(새는돈) + KPI + 지원사업 통계 + 통합 요약
-현장마감: 최종 보고서 + 수익률(마감기준) + 협력업체 평가
+현장마감: AI 현장대리인 인터뷰 → 최종 보고서 + 수익률 + 협력업체 평가
+긴급: 규격외 특수 상황만 즉시 (일일 보고 없음)
                               ↓
                      [총괄 AI] 긴급→주의→정상 정렬
                               ↓
@@ -103,10 +107,19 @@ AI 비서 (홍보/미팅 제안)       ──→               ──→  대시
 ```
 사용자 입력 (웹 사이드패널)
     ↓
-  라우터 (의도 파악)
-    ├── 접수팀: DB 등록/수정, 표제부/전유부 API, 단계관리 → docs/AGENT_REGISTER.md
-    ├── 서류팀: 서류함 템플릿 → 폼필드 → PDF 생성, OCR → docs/AGENT_DOCS.md
-    └── 조회팀: 현황 검색, 보고서/KPI, 알림/제안 → docs/AGENT_QUERY.md
+ 사용자 입력 (웹 사이드패널)
+    ↓
+  단일 에이전트 + tool 15~20개 (3팀 multi-agent는 오버엔지니어링)
+    ├── 접수 tools: register_project, update_stage, search_projects, get_building_info
+    ├── 서류 tools: trigger_cowork, list_templates, check_doc_status
+    ├── 조회 tools: get_stats, get_kpi, search_schedules, get_report
+    ├── 공통 tools: search_address, get_calendar, create_schedule
+    └── 기억 tools: save_memory, update_preference, read_knowledge
+    ### AI 3가지 역할 → docs/AI_RULES.md
+문지기: 실수 방지, 단계 검증, 누락 알림
+비서: 업무 도움, 코칭, 선제 제안, Cowork 서류 생성
+분석가: 주간/월간 보고, KPI, 판단 근거
+
 ```
 
 핵심 규칙:
@@ -176,8 +189,13 @@ AI 비서 (홍보/미팅 제안)       ──→               ──→  대시
 | vendors | 거래처 DB (협력업체+일용직) |
 | promo_records | 홍보 기록 (소규모15/수도7/학교7, 동 단위) |
 | as_records | A/S 관리 |
+| ai_knowledge | AI 기준선/통계/패턴 (자동 갱신) |
+| ai_memory | AI 기억 (대화로 수정 가능한 선호/규칙) |
+| chat_history | 대화 기록 |
+| cowork_tasks | Cowork 서류 자동입력 작업 큐 |
 
-상세 → dawoo_db_schema.sql
+
+상세 → dawoo_db_schema.sql, sql/ai_tables.sql
 
 ---
 
@@ -203,15 +221,48 @@ AI 비서 (홍보/미팅 제안)       ──→               ──→  대시
 | 접수대장 | 소규모/수도 탭, 진행중 기본뷰, 담당직원 맨앞, 시 태그필터, 상시표시+6탭, 복수입금 | docs/REGISTER.md |
 | 현장관리 | **접수대장과 별개**, +현장등록 버튼, 아코디언, 공정캘린더(드래그앤드롭), 일지사진2칸, 서류카드 | docs/SITE.md |
 | 견적서 | 웹 스프레드시트, 새 페이지(/estimate/[id]), 폼1개(15시공통), 단가내장 | docs/ESTIMATE.md |
-| 서류함 | 빈양식 보관, 4탭(회사/수도/소규모/입찰), 유효기간관리, 폼필드자동매칭 | docs/DOCUMENTS.md |
+| 서류함 | 구글드라이브 템플릿 연결, 4탭(회사/수도/소규모/입찰), Cowork 서류입력 트리거 |
 | 업무캘린더 | 직원별색깔, 2탭(캘린더+홍보현황), AI교정(시간/동선/빈일정/마감) | docs/CALENDAR.md |
 | 지출관리 | 3탭 통합 (지출결의서+카드지출+고정지출) | docs/PAGES_SPEC.md |
 | 보고서 | 12소스→4종보고서→총괄AI→관리자분석5탭 | docs/REPORT_KPI.md |
 | KPI | 4대영역 100점, 정량75+정성25, S~D등급 | docs/REPORT_KPI.md |
-| AI에이전트 | 라우터+3팀(접수/서류/조회), 되묻기, 표제부/전유부연동 | docs/AGENT.md |
+| AI에이전트 | 단일에이전트+tool15~20개, 되묻기, 기억(ai_memory) |
+| AI행동규칙 | 문지기+비서+분석가, 기준선자동, 대화수정 가능 | docs/AI_RULES.md |
 | 대시보드 | 직원용(오늘일정+받은업무+지시업무+AI제안+메모장) | docs/PAGES_SPEC.md |
 
 ---
+
+## 개발 로드맵 (Phase)
+
+Phase 1: ERP 기본 안정화
+  - 접수대장/현장관리/캘린더/서류함 버그 없이 동작
+  - 미니멀 Auth (로그인 + 직원/관리자 구분)
+  - 대시보드 "오늘 할 일" 표시
+  - 노션 데이터 → Supabase 마이그레이션
+  - 현장일지 매일 필수 + 사진 모바일 업로드
+
+Phase 2: 서류 자동화 (Cowork)
+  - 구글드라이브 세팅 (레이드드라이브에서 이전)
+  - 서류함 → 구글드라이브 템플릿 연결
+  - Cowork 연동: ERP 데이터 → Cowork → 구글드라이브 서류 입력
+  - 작업 큐 (cowork_tasks) + 완료 알림
+
+Phase 3: AI 업무 기능
+  - 활동 로그 자동 기록
+  - KPI 엔진 (정량 자동 + 정성 대표)
+  - 보고서 생성 (주간/월간/현장마감)
+  - AI 스케줄링 (빈일정 → 홍보/업무 제안)
+  - 세무/노무 자료 자동 정리 (송승란 과장 업무 보조)
+  - 업무캘린더 날씨 표시 + 우천 현장 알림
+
+Phase 4: 고도화
+  - AI 현장대리인 인터뷰 → 대표용 보고서
+  - AI 연봉협상 (KPI 데이터 기반)
+  - 세무 AI (지출 분석, 불필요 지출 탐지)
+  - 노무 AI (근태/연차 기반)
+  - 계절 패턴 학습 (1년 이상 데이터 후)
+  - 재방문 고객 자동 추적
+  - 협력업체 자동 등급
 
 ## docs/ 참조표
 

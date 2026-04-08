@@ -52,6 +52,12 @@
   --color-normal-bg: #d1fae5;
   --color-normal-text: #16a34a;
 
+  /* Danger / Destructive */
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-bg: #fee2e2;
+  --color-danger-border: #fecaca;
+
   /* Financial */
   --color-money-positive: #059669;
   --color-money-negative: #dc2626;
@@ -210,6 +216,19 @@ table tbody tr:hover {
 .btn-secondary:hover {
   border-color: #d1d5db;
   background: #f1f3f5;
+}
+.btn-danger {
+  background: #dc2626;
+  color: white;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 36px;
+  transition: background 0.15s;
+}
+.btn-danger:hover {
+  background: #b91c1c;
 }
 
 /* Badge */

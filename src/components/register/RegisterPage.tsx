@@ -92,19 +92,19 @@ function matchesStatusFilter(step: string, filter: StatusFilter): boolean {
 
 function getStepBadgeColor(step: string): string {
   switch (step) {
-    case '문의': case '실사': return 'bg-[#f1f3f5] text-[#4b5563]'
-    case '견적전달': case '동의서': case '신청서제출': return 'bg-[#e0e7ff] text-[#3730a3]'
-    case '승인': return 'bg-[#d1fae5] text-[#065f46]'
-    case '착공계': case '공사': return 'bg-[#ffedd5] text-[#9a3412]'
-    case '완료서류제출': return 'bg-[#ede9fe] text-[#5b21b6]'
-    case '입금': return 'bg-[#d1fae5] text-[#065f46]'
-    case '취소': return 'bg-[#fee2e2] text-[#991b1b]'
-    default: return 'bg-[#f1f3f5] text-[#4b5563]'
+    case '문의': case '실사': return 'bg-status-initial-bg text-status-initial-text'
+    case '견적전달': case '동의서': case '신청서제출': return 'bg-status-docs-bg text-status-docs-text'
+    case '승인': return 'bg-status-approved-bg text-status-approved-text'
+    case '착공계': case '공사': return 'bg-status-construction-bg text-status-construction-text'
+    case '완료서류제출': return 'bg-status-completion-bg text-status-completion-text'
+    case '입금': return 'bg-status-done-bg text-status-done-text'
+    case '취소': return 'bg-status-cancel-bg text-status-cancel-text'
+    default: return 'bg-status-initial-bg text-status-initial-text'
   }
 }
 
 function getTypeBadgeColor(): string {
-  return 'bg-[#f1f3f5] text-[#4b5563]'
+  return 'bg-status-initial-bg text-status-initial-text'
 }
 
 // --- 케밥 메뉴 ---
@@ -124,7 +124,7 @@ function KebabMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => v
     <div ref={ref} className="relative">
       <button
         onClick={e => { e.stopPropagation(); setOpen(prev => !prev) }}
-        className="w-7 h-7 flex items-center justify-center rounded hover:bg-[#e9ecef] text-[#9ca3af] hover:text-[#4b5563] transition-colors"
+        className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-tertiary text-txt-tertiary hover:text-txt-secondary transition-colors"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
           <circle cx="10" cy="4" r="1.5" />
@@ -133,16 +133,16 @@ function KebabMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => v
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-8 w-28 bg-[#ffffff] rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] border border-[#e5e7eb] py-1 z-20">
+        <div className="absolute right-0 top-8 w-28 bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] border border-border-primary py-1 z-20">
           <button
             onClick={e => { e.stopPropagation(); setOpen(false); onEdit() }}
-            className="w-full text-left px-4 py-2 text-[13px] text-[#4b5563] hover:bg-[#f1f3f5] transition-colors"
+            className="w-full text-left px-4 py-2 text-[13px] text-txt-secondary hover:bg-surface-secondary transition-colors"
           >
             수정
           </button>
           <button
             onClick={e => { e.stopPropagation(); setOpen(false); onDelete() }}
-            className="w-full text-left px-4 py-2 text-[13px] text-[#dc2626] hover:bg-[#fee2e2] transition-colors"
+            className="w-full text-left px-4 py-2 text-[13px] text-danger hover:bg-danger-bg transition-colors"
           >
             삭제
           </button>
@@ -173,31 +173,31 @@ function DeleteConfirmModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-      <div className="relative bg-[#ffffff] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
+      <div className="relative bg-surface rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
         <div className="text-center">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#fee2e2] flex items-center justify-center">
-            <svg className="w-6 h-6 text-[#dc2626]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-danger-bg flex items-center justify-center">
+            <svg className="w-6 h-6 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <h3 className="text-[16px] font-semibold text-[#111827] mb-2">프로젝트 삭제</h3>
-          <p className="text-[13px] text-[#4b5563] mb-1">
+          <h3 className="text-[16px] font-semibold text-txt-primary mb-2">프로젝트 삭제</h3>
+          <p className="text-[13px] text-txt-secondary mb-1">
             <span className="font-semibold">{buildingName}</span>
           </p>
-          <p className="text-[13px] text-[#9ca3af] mb-6">
+          <p className="text-[13px] text-txt-tertiary mb-6">
             정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
           </p>
           <div className="flex gap-3">
             <button
               onClick={onCancel}
-              className="flex-1 px-5 py-2 text-[13px] font-medium text-[#4b5563] border border-[#e5e7eb] rounded-lg hover:bg-[#f1f3f5] transition-colors min-h-[36px]"
+              className="flex-1 btn-secondary"
             >
               취소
             </button>
             <button
               onClick={handleConfirm}
               disabled={deleting}
-              className="flex-1 px-5 py-2 text-[13px] font-medium text-white bg-[#dc2626] rounded-lg hover:bg-[#b91c1c] transition-colors disabled:opacity-50 min-h-[36px]"
+              className="flex-1 btn-danger disabled:opacity-50"
             >
               {deleting ? '삭제 중...' : '삭제'}
             </button>
@@ -362,21 +362,21 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   }
 
   return (
-    <div className="max-w-full bg-[#f8f9fa] min-h-screen">
+    <div className="max-w-full bg-page min-h-screen">
       {/* 상단 헤더 */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-[#111827]">{category} 접수대장</h1>
+        <h1>{category} 접수대장</h1>
         <div className="flex items-center gap-3">
           <input
             type="text"
             placeholder="빌라명, 소유주, 연락처 검색..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-72 px-4 h-[36px] bg-[#ffffff] border border-[#e5e7eb] rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#e0e7ff] focus:border-[#6366f1]"
+            className="w-72 px-4 input-field"
           />
           <button
             onClick={() => setShowNewModal(true)}
-            className="px-5 py-2 bg-[#6366f1] text-white rounded-lg text-[13px] font-medium hover:bg-[#4f46e5] transition-colors min-h-[36px]"
+            className="btn-primary"
           >
             + 신규등록
           </button>
@@ -384,20 +384,20 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       </div>
 
       {/* 상태 필터 탭 */}
-      <div className="flex gap-1 mb-4 border-b border-[#e5e7eb]">
+      <div className="flex gap-1 mb-4 border-b border-border-primary">
         {STATUS_TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setStatusFilter(tab.key)}
             className={`px-4 py-2 text-[13px] font-medium transition-colors ${
               statusFilter === tab.key
-                ? 'border-b-[1.5px] border-[#6366f1] text-[#6366f1]'
-                : 'border-b-[1.5px] border-transparent text-[#9ca3af] hover:text-[#4b5563]'
+                ? 'border-b-[1.5px] border-accent text-accent'
+                : 'border-b-[1.5px] border-transparent text-txt-tertiary hover:text-txt-secondary'
             }`}
           >
             {tab.label}
             <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[11px] ${
-              statusFilter === tab.key ? 'bg-[#e0e7ff] text-[#6366f1]' : 'bg-[#f1f3f5] text-[#9ca3af]'
+              statusFilter === tab.key ? 'bg-accent-light text-accent' : 'bg-surface-secondary text-txt-tertiary'
             }`}>
               {statusCounts[tab.key]}
             </span>
@@ -413,8 +413,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             onClick={() => toggleCity(city.name)}
             className={`rounded-full px-[14px] py-1 text-[11px] font-medium border transition-colors ${
               selectedCities.includes(city.name)
-                ? 'bg-[#e0e7ff] text-[#6366f1] border-[#6366f1]'
-                : 'bg-transparent text-[#4b5563] border-[#e5e7eb] hover:border-[#6366f1] hover:text-[#6366f1]'
+                ? 'bg-accent-light text-accent border-accent'
+                : 'bg-transparent text-txt-secondary border-border-primary hover:border-accent hover:text-accent'
             }`}
           >
             {city.name}
@@ -423,14 +423,14 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         {selectedCities.length > 0 && (
           <button
             onClick={() => setSelectedCities([])}
-            className="rounded-full px-[14px] py-1 text-[11px] font-medium text-[#dc2626] border border-[#fee2e2] hover:bg-[#fee2e2] transition-colors"
+            className="rounded-full px-[14px] py-1 text-[11px] font-medium text-danger border border-danger-border hover:bg-danger-bg transition-colors"
           >
             초기화
           </button>
         )}
         <button
           onClick={() => setShowCityManager(true)}
-          className="rounded-full w-[26px] h-[26px] flex items-center justify-center text-[#9ca3af] border border-[#e5e7eb] hover:border-[#6366f1] hover:text-[#6366f1] transition-colors"
+          className="rounded-full w-[26px] h-[26px] flex items-center justify-center text-txt-tertiary border border-border-primary hover:border-accent hover:text-accent transition-colors"
           title="지역 관리"
         >
           <Settings size={12} />
@@ -438,34 +438,34 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       </div>
 
       {/* 테이블 */}
-      <div className="bg-[#ffffff] rounded-[10px] border border-[#e5e7eb] overflow-hidden">
+      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-[#f1f3f5] border-b border-[#e5e7eb]">
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">담당직원</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">빌라명</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">소유주</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">연락처</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">주소</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">종류</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">단계</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">상담내역</th>
-                <th className="px-4 py-3 text-right text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">총공사비</th>
-                <th className="px-4 py-3 text-right text-[11px] font-medium tracking-[0.3px] text-[#9ca3af]">미수금</th>
+              <tr>
+                <th className="px-4 py-3 text-left">담당직원</th>
+                <th className="px-4 py-3 text-left">빌라명</th>
+                <th className="px-4 py-3 text-left">소유주</th>
+                <th className="px-4 py-3 text-left">연락처</th>
+                <th className="px-4 py-3 text-left">주소</th>
+                <th className="px-4 py-3 text-left">종류</th>
+                <th className="px-4 py-3 text-left">단계</th>
+                <th className="px-4 py-3 text-left">상담내역</th>
+                <th className="px-4 py-3 text-right">총공사비</th>
+                <th className="px-4 py-3 text-right">미수금</th>
                 <th className="w-10 px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-16 text-center text-[#9ca3af]">
+                  <td colSpan={11} className="px-4 py-16 text-center text-txt-tertiary">
                     불러오는 중...
                   </td>
                 </tr>
               ) : filteredProjects.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-16 text-center text-[#9ca3af]">
+                  <td colSpan={11} className="px-4 py-16 text-center text-txt-tertiary">
                     등록된 프로젝트가 없습니다
                   </td>
                 </tr>
@@ -474,38 +474,38 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                   <tr
                     key={project.id}
                     onClick={() => setSelectedProjectId(project.id)}
-                    className={`border-b border-[#e5e7eb] cursor-pointer transition-colors h-[44px] ${
+                    className={`border-b border-border-primary cursor-pointer transition-colors ${
                       selectedProjectId === project.id
-                        ? 'bg-[#e0e7ff]'
-                        : 'hover:bg-[#e9ecef]'
+                        ? 'bg-accent-light'
+                        : ''
                     }`}
                   >
-                    <td className="px-4 py-2.5 font-medium text-[#111827]">{project.staff?.name || '-'}</td>
-                    <td className="px-4 py-2.5 text-[#111827]">{project.building_name || '-'}</td>
-                    <td className="px-4 py-2.5 text-[#4b5563]">{project.owner_name || '-'}</td>
-                    <td className="px-4 py-2.5 text-[#4b5563]">{project.owner_phone || '-'}</td>
-                    <td className="px-4 py-2.5 text-[#4b5563] max-w-[200px] truncate" title={project.road_address || ''}>
+                    <td className="px-4 py-2.5 font-medium text-txt-primary">{project.staff?.name || '-'}</td>
+                    <td className="px-4 py-2.5 text-txt-primary">{project.building_name || '-'}</td>
+                    <td className="px-4 py-2.5 text-txt-secondary">{project.owner_name || '-'}</td>
+                    <td className="px-4 py-2.5 text-txt-secondary">{project.owner_phone || '-'}</td>
+                    <td className="px-4 py-2.5 text-txt-secondary max-w-[200px] truncate" title={project.road_address || ''}>
                       {project.road_address || '-'}
                     </td>
                     <td className="px-4 py-2.5">
                       {project.work_types?.name ? (
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${getTypeBadgeColor()}`}>
+                        <span className={`badge ${getTypeBadgeColor()}`}>
                           {project.work_types.name}
                         </span>
                       ) : '-'}
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${getStepBadgeColor(project.status)}`}>
+                      <span className={`badge ${getStepBadgeColor(project.status)}`}>
                         {project.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-[#9ca3af] max-w-[160px] truncate" title={project.note || ''}>
+                    <td className="px-4 py-2.5 text-txt-tertiary max-w-[160px] truncate" title={project.note || ''}>
                       {project.note || '-'}
                     </td>
-                    <td className="px-4 py-2.5 text-right text-[#111827] whitespace-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <td className="px-4 py-2.5 text-right text-txt-primary whitespace-nowrap tabular-nums">
                       {project.total_cost > 0 ? `${project.total_cost.toLocaleString()}원` : '-'}
                     </td>
-                    <td className={`px-4 py-2.5 text-right whitespace-nowrap ${project.outstanding > 0 ? 'text-[#dc2626] font-medium' : 'text-[#9ca3af]'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <td className={`px-4 py-2.5 text-right whitespace-nowrap tabular-nums ${project.outstanding > 0 ? 'text-money-negative font-medium' : 'text-txt-tertiary'}`}>
                       {project.outstanding > 0 ? `${project.outstanding.toLocaleString()}원` : '-'}
                     </td>
                     <td className="px-2 py-2.5">
@@ -523,12 +523,12 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       </div>
 
       {/* 하단 요약 */}
-      <div className="mt-3 text-[13px] text-[#9ca3af]">
+      <div className="mt-3 text-[13px] text-txt-tertiary">
         총 {filteredProjects.length}건
         {filteredProjects.length > 0 && (
           <>
-            {' / '}총공사비 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{filteredProjects.reduce((s, p) => s + p.total_cost, 0).toLocaleString()}원</span>
-            {' / '}미수금 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{filteredProjects.reduce((s, p) => s + p.outstanding, 0).toLocaleString()}원</span>
+            {' / '}총공사비 <span className="tabular-nums">{filteredProjects.reduce((s, p) => s + p.total_cost, 0).toLocaleString()}원</span>
+            {' / '}미수금 <span className="tabular-nums">{filteredProjects.reduce((s, p) => s + p.outstanding, 0).toLocaleString()}원</span>
           </>
         )}
       </div>
@@ -605,10 +605,10 @@ function CityManagerModal({ cities, onClose, onRefresh }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-[#ffffff] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
+      <div className="relative bg-surface rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[16px] font-semibold text-[#111827]">지역 관리</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#f1f3f5] text-[#9ca3af]">&#x2715;</button>
+          <h3 className="text-[16px] font-semibold text-txt-primary">지역 관리</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-tertiary">&#x2715;</button>
         </div>
 
         <div className="flex gap-2 mb-4">
@@ -618,11 +618,11 @@ function CityManagerModal({ cities, onClose, onRefresh }: {
             onChange={e => setNewCity(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
             placeholder="새 지역명 입력"
-            className="flex-1 h-[36px] px-3 border border-[#e5e7eb] rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#e0e7ff] focus:border-[#6366f1]"
+            className="flex-1 input-field px-3"
           />
           <button
             onClick={handleAdd}
-            className="px-4 h-[36px] text-[13px] font-medium text-white bg-[#6366f1] rounded-lg hover:bg-[#4f46e5] transition-colors"
+            className="btn-primary"
           >
             추가
           </button>
@@ -630,12 +630,12 @@ function CityManagerModal({ cities, onClose, onRefresh }: {
 
         <div className="space-y-1 max-h-[300px] overflow-y-auto">
           {cities.map(city => (
-            <div key={city.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[#f1f3f5] group">
-              <span className="text-[13px] text-[#111827]">{city.name}</span>
+            <div key={city.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-surface-secondary group">
+              <span className="text-[13px] text-txt-primary">{city.name}</span>
               <button
                 onClick={() => handleDelete(city.id)}
                 disabled={deleting === city.id}
-                className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-[#fee2e2] text-[#9ca3af] hover:text-[#dc2626] transition-all disabled:opacity-50"
+                className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-danger-bg text-txt-tertiary hover:text-danger transition-all disabled:opacity-50"
               >
                 <X size={14} />
               </button>

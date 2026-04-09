@@ -273,18 +273,20 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           </div>
         </div>
 
-        {/* 상시 표시 영역 - 핵심 정보만 */}
+        {/* 상시 표시 영역 */}
         <div className="px-6 py-3 border-b border-border-tertiary bg-surface-secondary">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[13px]">
-            <InfoField label="담당자" value={project.staff?.name || '-'} />
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px]">
             <InfoField label="빌라명" value={project.building_name || '-'} />
-            <InfoField label="공사종류" value={project.work_types?.name || '-'} />
-            <InfoField label="현재단계" value={project.status} />
+            <InfoField label="담당자" value={project.staff?.name || '-'} />
+            <InfoField label="주소" value={project.road_address || project.jibun_address || '-'} full />
+            <InfoField label="동호수" value={[project.dong, project.ho].filter(Boolean).join(' ') || '-'} />
+            <InfoField label="대표자" value={project.owner_name || '-'} />
+            <InfoField label="연락처" value={project.owner_phone ? formatPhone(project.owner_phone) : '-'} />
           </div>
           <div className="grid grid-cols-4 gap-3 mt-2 pt-2 border-t border-surface-tertiary">
             <MiniStat label="총공사비" value={project.total_cost} />
-            <MiniStat label="자부담금" value={project.self_pay} />
             <MiniStat label="시지원금" value={project.city_support} />
+            <MiniStat label="자부담금" value={project.self_pay} />
             <MiniStat label="미수금" value={project.outstanding} highlight />
           </div>
         </div>
@@ -739,10 +741,11 @@ function TabStep1({ project, category, getVal, onChange, onRefresh }: TabProps &
             </div>
           </div>
         )}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <MoneyInput label="총공사비" value={getVal('total_cost') as number} onChange={v => onChange('total_cost', v)} />
           <MoneyInput label="시지원금" value={getVal('city_support') as number} onChange={v => onChange('city_support', v)} />
           <MoneyInput label="자부담금" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', v)} />
+          <MoneyInput label="추가공사비" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', v)} />
         </div>
         <FileAttachSection projectId={project.id} fileType="견적서" label="견적서" />
       </section>
@@ -884,23 +887,7 @@ function PaymentSection({ project, onRefresh }: { project: DBProject; onRefresh?
 
   return (
     <section className="mt-5 pt-4 border-t border-border-primary">
-      <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금 / 입금 내역</h3>
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <div className="text-center p-2 bg-surface-secondary rounded-lg">
-          <p className="text-[10px] text-txt-tertiary">총공사비</p>
-          <p className="text-[12px] font-semibold tabular-nums text-txt-primary">{(project.total_cost || 0).toLocaleString()}</p>
-        </div>
-        <div className="text-center p-2 bg-surface-secondary rounded-lg">
-          <p className="text-[10px] text-txt-tertiary">입금합계</p>
-          <p className="text-[12px] font-semibold tabular-nums text-accent-text">{totalPaid.toLocaleString()}</p>
-        </div>
-        <div className="text-center p-2 bg-surface-secondary rounded-lg">
-          <p className="text-[10px] text-txt-tertiary">미수금</p>
-          <p className={`text-[12px] font-semibold tabular-nums ${(project.total_cost || 0) - totalPaid > 0 ? 'text-money-negative' : 'text-txt-secondary'}`}>
-            {Math.max(0, (project.total_cost || 0) - totalPaid).toLocaleString()}
-          </p>
-        </div>
-      </div>
+      <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">입금 내역</h3>
       <div className="border border-border-primary rounded-[10px] overflow-hidden">
         <table className="w-full text-[13px]">
           <thead>

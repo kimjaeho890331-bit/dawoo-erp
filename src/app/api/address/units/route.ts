@@ -19,31 +19,43 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const params = new URLSearchParams({
+    const baseParams = {
       serviceKey: SERVICE_KEY,
       sigunguCd,
       bjdongCd,
       bun: bun.padStart(4, '0'),
       ji: ji.padStart(4, '0'),
-      numOfRows: '100',
-      pageNo: '1',
       _type: 'json',
-    })
-
-    const res = await fetch(
-      `https://apis.data.go.kr/1613000/BldRgstHubService/getBrExposPubuseAreaInfo?${params.toString()}`,
-    )
-    const data = await res.json()
-
-    const items = data?.response?.body?.items?.item
-    if (!items) {
-      return NextResponse.json([])
     }
 
-    const list = Array.isArray(items) ? items : [items]
+    // 1페이지 500건씩 가져오기
+    const fetchPage = async (page: number, rows: number) => {
+      const params = new URLSearchParams({ ...baseParams, numOfRows: String(rows), pageNo: String(page) })
+      const res = await fetch(`https://apis.data.go.kr/1613000/BldRgstHubService/getBrExposPubuseAreaInfo?${params.toString()}`)
+      return res.json()
+    }
+
+    const firstPage = await fetchPage(1, 500)
+    const totalCount = firstPage?.response?.body?.totalCount ?? 0
+    let allItems = firstPage?.response?.body?.items?.item
+    if (!allItems) return NextResponse.json([])
+    allItems = Array.isArray(allItems) ? allItems : [allItems]
+
+    // 500건 초과 시 추가 페이지
+    if (totalCount > 500) {
+      const pages = Math.ceil(totalCount / 500)
+      for (let p = 2; p <= pages; p++) {
+        const more = await fetchPage(p, 500)
+        const moreItems = more?.response?.body?.items?.item
+        if (moreItems) {
+          const arr = Array.isArray(moreItems) ? moreItems : [moreItems]
+          allItems = [...allItems, ...arr]
+        }
+      }
+    }
 
     // exposPubuseGbCd === "1" 은 전유부만 필터
-    const units = list
+    const units = allItems
       .filter(
         (item: { exposPubuseGbCd: string }) => item.exposPubuseGbCd === '1',
       )

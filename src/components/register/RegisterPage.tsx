@@ -412,38 +412,6 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         ))}
       </div>
 
-      {/* 시 태그 필터 */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {cities.map(city => (
-          <button
-            key={city.id}
-            onClick={() => toggleCity(city.name)}
-            className={`rounded-full px-[14px] py-1 text-[11px] font-medium border transition-colors ${
-              selectedCities.includes(city.name)
-                ? 'bg-accent-light text-accent border-accent'
-                : 'bg-transparent text-txt-secondary border-border-primary hover:border-accent hover:text-accent'
-            }`}
-          >
-            {city.name}
-          </button>
-        ))}
-        {selectedCities.length > 0 && (
-          <button
-            onClick={() => setSelectedCities([])}
-            className="rounded-full px-[14px] py-1 text-[11px] font-medium text-danger border border-danger-border hover:bg-danger-bg transition-colors"
-          >
-            초기화
-          </button>
-        )}
-        <button
-          onClick={() => setShowCityManager(true)}
-          className="rounded-full w-[26px] h-[26px] flex items-center justify-center text-txt-tertiary border border-border-primary hover:border-accent hover:text-accent transition-colors"
-          title="지역 관리"
-        >
-          <Settings size={12} />
-        </button>
-      </div>
-
       {/* 테이블 */}
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
         <div className="overflow-x-auto">

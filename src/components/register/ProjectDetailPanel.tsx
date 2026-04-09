@@ -60,6 +60,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showStatusChange, setShowStatusChange] = useState<'취소' | '문의' | null>(null)
+  const [statusReason, setStatusReason] = useState('')
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
   const [statusChanging, setStatusChanging] = useState(false)
   const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
@@ -151,6 +153,25 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     }
   }
 
+  const handleStatusChange = async () => {
+    if (!project || !showStatusChange) return
+    const newStatus = showStatusChange
+    try {
+      await supabase.from('projects').update({
+        status: newStatus, cancel_reason: statusReason || null, updated_at: new Date().toISOString(),
+      }).eq('id', project.id)
+      await supabase.from('status_logs').insert({
+        project_id: project.id, from_status: project.status,
+        to_status: newStatus, note: statusReason || `${newStatus}(으)로 변경`,
+      })
+      setShowStatusChange(null)
+      setStatusReason('')
+      onRefresh?.()
+    } catch (err) {
+      console.error('상태 변경 실패:', err)
+    }
+  }
+
   const handleDeleteConfirm = async () => {
     if (!project) return
     try {
@@ -236,12 +257,18 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             >
               {apiFieldsLocked ? '수정' : '수정중'}
             </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors"
-            >
-              삭제
-            </button>
+            {project.status !== '취소' && (
+              <button onClick={() => setShowStatusChange('취소')}
+                className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors">
+                취소
+              </button>
+            )}
+            {project.status !== '문의' && (
+              <button onClick={() => setShowStatusChange('문의')}
+                className="px-3 py-1.5 text-[11px] font-medium text-txt-tertiary border border-border-primary rounded-lg hover:bg-surface-tertiary transition-colors">
+                예약
+              </button>
+            )}
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-tertiary text-txt-tertiary hover:text-txt-secondary transition-colors"
@@ -362,6 +389,31 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>
+
+      {showStatusChange && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowStatusChange(null)} />
+          <div className="relative bg-surface rounded-xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4">
+            <h3 className="text-[16px] font-semibold text-txt-primary mb-4">
+              {showStatusChange === '취소' ? '취소 처리' : '예약(문의)으로 변경'}
+            </h3>
+            <p className="text-[13px] text-txt-secondary mb-3">
+              <span className="font-medium">{project.building_name}</span>을(를) {showStatusChange === '취소' ? '취소' : '예약(문의)'} 상태로 변경합니다.
+            </p>
+            <textarea value={statusReason} onChange={e => setStatusReason(e.target.value)}
+              rows={3} placeholder={showStatusChange === '취소' ? '취소 사유를 입력하세요' : '변경 사유를 입력하세요'}
+              className="w-full px-3 py-2 border border-border-primary rounded-lg text-[13px] resize-none focus:outline-none focus:border-accent mb-4" />
+            <div className="flex gap-3">
+              <button onClick={() => { setShowStatusChange(null); setStatusReason('') }}
+                className="flex-1 px-4 py-2.5 text-[13px] font-medium text-txt-secondary border border-border-secondary rounded-lg hover:bg-surface-tertiary">취소</button>
+              <button onClick={handleStatusChange}
+                className={`flex-1 px-4 py-2.5 text-[13px] font-medium text-white rounded-lg ${showStatusChange === '취소' ? 'bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-accent hover:bg-accent-hover'}`}>
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeleteConfirm && (
         <DeleteConfirmModal
@@ -589,8 +641,11 @@ function DateTimeInput({ label, value, onChange }: {
   useEffect(() => { setTimeVal(timePart) }, [timePart])
 
   const updateDateTime = (date: string, time: string) => {
-    if (date && time) onChange(`${date}T${time}`)
-    else if (date) onChange(date)
+    // 날짜 변경 시 기존 시간 유지, 시간 변경 시 기존 날짜 유지
+    const finalTime = time || timePart
+    const finalDate = date || datePart
+    if (finalDate && finalTime) onChange(`${finalDate}T${finalTime}`)
+    else if (finalDate) onChange(finalDate)
     else onChange('')
   }
 

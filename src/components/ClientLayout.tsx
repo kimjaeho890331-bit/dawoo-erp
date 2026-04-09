@@ -1,10 +1,17 @@
 'use client'
+import { usePathname } from 'next/navigation'
 import Sidebar from "@/components/Sidebar"
 import AISidebar from "@/components/AISidebar"
 import { AuthProvider, useAuth } from "@/components/AuthProvider"
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth()
+  const pathname = usePathname()
+
+  // 로그인 페이지는 사이드바/인증 로딩 없이 바로 렌더
+  if (pathname === '/login') {
+    return <>{children}</>
+  }
 
   if (loading) {
     return (

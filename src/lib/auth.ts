@@ -2,6 +2,11 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function getAuthUser() {
+  // 개발 환경 인증 우회
+  if (process.env.NODE_ENV === 'development' && process.env.SKIP_AUTH === '1') {
+    return { id: 'dev-user', email: 'dev@dawoo.co.kr' } as any
+  }
+
   const cookieStore = await cookies()
 
   const supabase = createServerClient(

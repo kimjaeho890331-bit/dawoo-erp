@@ -24,6 +24,16 @@ function checkRateLimit(ip: string, path: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // /login, 정적 리소스는 인증 불필요 — 바로 통과
+  if (pathname === '/login' || pathname.startsWith('/auth/')) {
+    return NextResponse.next()
+  }
+
+  // 개발 환경에서는 인증 건너뛰기 (Supabase Auth 유저 생성 전)
+  if (process.env.NODE_ENV === 'development' && process.env.SKIP_AUTH === '1') {
+    return NextResponse.next()
+  }
+
   // Rate limit 체크 (API 경로만)
   if (pathname.startsWith('/api/')) {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -68,11 +78,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  // /login 경로는 인증 불필요
-  if (pathname === '/login') {
-    return supabaseResponse
-  }
 
   // 미인증 사용자 처리
   if (!user) {

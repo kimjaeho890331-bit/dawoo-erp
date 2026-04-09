@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Trash2, Upload, FileText, Image, X, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -575,6 +575,7 @@ function DateTimeInput({ label, value, onChange }: {
   const datePart = strVal.includes('T') ? strVal.split('T')[0] : strVal.split(' ')[0] || ''
   const timePart = strVal.includes('T') ? strVal.split('T')[1]?.substring(0, 5) || '' : strVal.split(' ')[1]?.substring(0, 5) || ''
   const [timeVal, setTimeVal] = useState(timePart)
+  const dateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setTimeVal(timePart) }, [timePart])
 
@@ -584,6 +585,12 @@ function DateTimeInput({ label, value, onChange }: {
     else onChange('')
   }
 
+  const openDatePicker = () => {
+    const el = dateRef.current
+    if (!el) return
+    try { el.showPicker() } catch { el.focus(); el.click() }
+  }
+
   const dateDisplay = datePart
     ? `${Number(datePart.split('-')[1])}월 ${Number(datePart.split('-')[2])}일`
     : ''
@@ -591,19 +598,22 @@ function DateTimeInput({ label, value, onChange }: {
   return (
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <div className="flex items-center gap-2 h-[36px] px-3 bg-surface border border-border-primary rounded-lg hover:border-border-secondary transition-colors">
-        {/* 날짜 영역 — label로 감싸서 전체 클릭 가능 */}
-        <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer">
-          <svg className="w-3.5 h-3.5 text-txt-tertiary shrink-0 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="flex items-center h-[36px] bg-surface border border-border-primary rounded-lg hover:border-border-secondary transition-colors">
+        {/* 숨겨진 date input */}
+        <input ref={dateRef} type="date" value={datePart}
+          onChange={e => updateDateTime(e.target.value, timeVal)}
+          className="sr-only" tabIndex={-1} />
+        {/* 날짜 클릭 영역 */}
+        <button type="button" onClick={openDatePicker}
+          className="flex items-center gap-1.5 flex-1 h-full px-3 cursor-pointer hover:bg-surface-tertiary/50 rounded-l-lg transition-colors">
+          <svg className="w-3.5 h-3.5 text-txt-tertiary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          <span className="text-[13px] text-txt-primary pointer-events-none">{dateDisplay || <span className="text-txt-quaternary">날짜 선택</span>}</span>
-          <input type="date" value={datePart} onChange={e => updateDateTime(e.target.value, timeVal)}
-            className="w-0 h-0 opacity-0 absolute" />
-        </label>
+          <span className="text-[13px]">{dateDisplay ? <span className="text-txt-primary">{dateDisplay}</span> : <span className="text-txt-quaternary">날짜 선택</span>}</span>
+        </button>
         {/* 구분선 */}
-        <div className="w-px h-4 bg-border-primary" />
-        {/* 시간 영역 */}
+        <div className="w-px h-4 bg-border-primary shrink-0" />
+        {/* 시간 입력 */}
         <input type="text" value={timeVal} placeholder="--:--"
           onChange={e => {
             let v = e.target.value.replace(/[^0-9:]/g, '')
@@ -620,7 +630,7 @@ function DateTimeInput({ label, value, onChange }: {
               updateDateTime(datePart, fmt)
             }
           }}
-          className="w-[48px] text-[13px] text-center tabular-nums text-[#3B82F6] font-medium bg-transparent outline-none placeholder:text-txt-quaternary placeholder:font-normal" />
+          className="w-[52px] h-full px-2 text-[13px] text-center tabular-nums text-[#3B82F6] font-medium bg-transparent outline-none rounded-r-lg placeholder:text-txt-quaternary placeholder:font-normal" />
       </div>
     </div>
   )

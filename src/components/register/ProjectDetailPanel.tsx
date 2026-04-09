@@ -567,19 +567,30 @@ function StaffSelect({ label, value, onChange, staffList, currentStaffName }: {
   )
 }
 
-// --- 날짜+시간 입력 ---
+// --- 날짜+시간 입력 (분리형: 날짜 캘린더 + 시간 24h 타이핑) ---
 function DateTimeInput({ label, value, onChange }: {
   label: string; value: string | number | null | undefined; onChange: (v: string) => void
 }) {
+  const strVal = (value as string) ?? ''
+  const datePart = strVal.includes('T') ? strVal.split('T')[0] : strVal.split(' ')[0] || ''
+  const timePart = strVal.includes('T') ? strVal.split('T')[1]?.substring(0, 5) || '' : strVal.split(' ')[1]?.substring(0, 5) || ''
+
+  const updateDateTime = (date: string, time: string) => {
+    if (date && time) onChange(`${date}T${time}`)
+    else if (date) onChange(date)
+    else onChange('')
+  }
+
   return (
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <input
-        type="datetime-local"
-        value={(value as string) ?? ''}
-        onChange={e => onChange(e.target.value)}
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light hover:border-border-secondary transition-colors"
-      />
+      <div className="flex gap-2">
+        <input type="date" value={datePart} onChange={e => updateDateTime(e.target.value, timePart)}
+          className="flex-1 h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent" />
+        <input type="time" value={timePart} onChange={e => updateDateTime(datePart, e.target.value)}
+          placeholder="14:00" step="60"
+          className="w-[90px] h-[36px] px-2 border border-border-primary rounded-lg text-[13px] text-center tabular-nums focus:outline-none focus:border-accent" />
+      </div>
     </div>
   )
 }
@@ -692,11 +703,9 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
             <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleBankImageUpload(f) }} />
           </label>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-[1fr_1fr_2fr] gap-3">
           <FormInput label="은행" placeholder="국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
           <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
-        </div>
-        <div className="mt-3">
           <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
         </div>
       </section>

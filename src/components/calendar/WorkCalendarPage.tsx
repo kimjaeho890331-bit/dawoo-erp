@@ -512,24 +512,18 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
             <div><label className="block text-xs font-medium text-txt-secondary mb-1">종료일 *</label>
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" /></div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-txt-secondary mb-1">담당자</label>
-              <select value={staffId} onChange={e => setStaffId(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
-                <option value="">선택</option>
-                {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select></div>
-            <div><label className="block text-xs font-medium text-txt-secondary mb-1">종류</label>
-              <select value={scheduleType} onChange={e => setScheduleType(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
-                <option value="personal">개인</option>
-                <option value="project">지원사업</option>
-                <option value="promo">홍보</option>
-              </select></div>
+          <div>
+            <label className="block text-xs font-medium text-txt-secondary mb-1">담당자</label>
+            <select value={staffId} onChange={e => setStaffId(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
+              <option value="">선택</option>
+              {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
           </div>
           <div><label className="block text-xs font-medium text-txt-secondary mb-1">메모</label>
             <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} className="w-full bg-surface border border-border-primary rounded-lg px-3 py-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none resize-none" /></div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="w-4 h-4 rounded border-border-secondary text-accent" />
-            <span className="text-sm text-txt-secondary">확정</span>
+            <span className="text-sm text-txt-secondary">완료</span>
           </label>
         </div>
         <div className="px-5 py-3.5 border-t border-border-tertiary flex items-center justify-between bg-surface-secondary/50 rounded-b-[10px]">

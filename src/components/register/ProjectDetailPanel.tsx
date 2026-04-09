@@ -92,44 +92,41 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     setHasChanges(true)
   }, [])
 
-  // 자동저장: 변경 후 1.5초 뒤 자동 저장
+  // 자동저장: 변경 후 2초 뒤 자동 저장 (onRefresh 없이 — 입력 중 데이터 보존)
   useEffect(() => {
     if (!hasChanges || !project) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => { handleSave() }, 1500)
+    saveTimerRef.current = setTimeout(() => { autoSave() }, 2000)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editData, hasChanges])
 
-  const handleSave = async () => {
-    if (!project || !hasChanges) return
-
-    // 데이터 기반 자동 단계 판정 (입력된 데이터 순서대로 체크)
-    const calcAutoStep = (data: Record<string, unknown>): ProjectStep | null => {
-      const v = (f: string) => data[f] ?? project[f as keyof DBProject]
-      // 역순으로 체크 — 가장 높은 단계부터
-      if (v('completion_doc_date') && v('completion_submitter')) return '완료서류제출'
-      if (v('construction_date')) return '공사'
-      if (v('construction_doc_date') || v('contractor')) return '착공계'
-      if (v('receipt_date')) return '승인'
-      if (v('application_date') && v('application_submitter')) return '신청서제출'
-      if (v('consent_date') && v('consent_submitter')) return '동의서'
-      if ((v('total_cost') as number) > 0) return '견적전달'
-      if (v('survey_date') && v('survey_staff')) return '실사'
-      return null
-    }
+  const autoSave = async () => {
+    if (!project || !hasChanges || Object.keys(editData).length === 0) return
     setSaving(true)
     try {
+      const merged: Record<string, unknown> = { ...editData, updated_at: new Date().toISOString() }
+
       // 자동 단계 판정
-      const merged = { ...editData }
+      const calcAutoStep = (data: Record<string, unknown>): ProjectStep | null => {
+        const v = (f: string) => data[f] ?? project[f as keyof DBProject]
+        if (v('completion_doc_date') && v('completion_submitter')) return '완료서류제출'
+        if (v('construction_date')) return '공사'
+        if (v('construction_doc_date') || v('contractor')) return '착공계'
+        if (v('receipt_date')) return '승인'
+        if (v('application_date') && v('application_submitter')) return '신청서제출'
+        if (v('consent_date') && v('consent_submitter')) return '동의서'
+        if ((v('total_cost') as number) > 0) return '견적전달'
+        if (v('survey_date') && v('survey_staff')) return '실사'
+        return null
+      }
+
       const autoStep = calcAutoStep(merged)
       const currentIdx = getStepIndex(project.status)
       if (autoStep) {
         const autoIdx = getStepIndex(autoStep)
-        // 앞으로만 자동 전환 (뒤로는 안 감)
         if (autoIdx > currentIdx) {
           merged.status = autoStep
-          // status_logs 기록
           await supabase.from('status_logs').insert({
             project_id: project.id, from_status: project.status,
             to_status: autoStep, note: '데이터 입력에 의한 자동 전환',
@@ -137,14 +134,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         }
       }
 
-      const { error } = await supabase
-        .from('projects')
-        .update(merged)
-        .eq('id', project.id)
-      if (error) throw error
+      await supabase.from('projects').update(merged).eq('id', project.id)
       setHasChanges(false)
-      setEditData({})
-      onRefresh?.()
+      // editData를 유지 — onRefresh 호출 안 함 (입력 중 데이터 날아가는 것 방지)
     } catch (err) {
       console.error('저장 실패:', err)
       alert('저장에 실패했습니다.')
@@ -355,10 +347,11 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
             <InfoField label="연락처" value={(getVal('owner_phone') as string) ? formatPhone(getVal('owner_phone') as string) : '-'} />
           </div>
-          <div className="grid grid-cols-4 gap-3 mt-2 pt-2 border-t border-surface-tertiary">
+          <div className="grid grid-cols-5 gap-2 mt-2 pt-2 border-t border-surface-tertiary">
             <MiniStat label="총공사비" value={(getVal('total_cost') as number) || 0} />
             <MiniStat label="시지원금" value={(getVal('city_support') as number) || 0} />
             <MiniStat label="자부담금" value={(getVal('self_pay') as number) || 0} />
+            <MiniStat label="추가공사비" value={(getVal('down_payment') as number) || 0} />
             <MiniStat label="미수금" value={(getVal('outstanding') as number) || 0} highlight />
           </div>
         </div>
@@ -967,10 +960,24 @@ function TabStep1({ project, category, getVal, onChange, onRefresh, staffList }:
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <MoneyInput label="총공사비" value={getVal('total_cost') as number} onChange={v => onChange('total_cost', v)} />
-          <MoneyInput label="시지원금" value={getVal('city_support') as number} onChange={v => onChange('city_support', v)} />
-          <MoneyInput label="자부담금" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', v)} />
-          <MoneyInput label="추가공사비" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', v)} />
+          <MoneyInput label="시지원금" value={getVal('city_support') as number} onChange={v => {
+            onChange('city_support', v)
+            onChange('total_cost', v + ((getVal('self_pay') as number) || 0) + ((getVal('down_payment') as number) || 0))
+          }} />
+          <MoneyInput label="자부담금" value={getVal('self_pay') as number} onChange={v => {
+            onChange('self_pay', v)
+            onChange('total_cost', ((getVal('city_support') as number) || 0) + v + ((getVal('down_payment') as number) || 0))
+          }} />
+          <MoneyInput label="추가공사비" value={getVal('down_payment') as number} onChange={v => {
+            onChange('down_payment', v)
+            onChange('total_cost', ((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + v)
+          }} />
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">총공사비</label>
+            <p className="h-[36px] px-3 flex items-center justify-end border border-border-tertiary rounded-lg text-[13px] font-semibold tabular-nums text-txt-primary bg-surface-secondary">
+              {(((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + ((getVal('down_payment') as number) || 0)).toLocaleString()}
+            </p>
+          </div>
         </div>
         <FileAttachSection projectId={project.id} fileType="견적서" label="견적서" />
       </section>

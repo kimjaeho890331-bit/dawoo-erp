@@ -91,17 +91,18 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const handleSave = async () => {
     if (!project || !hasChanges) return
 
-    // 데이터 기반 자동 단계 판정
-    // approval_date = 건축물대장 사용승인일 (자동입력) → 단계 판단에 사용하지 않음
-    // 동의서/승인은 수동 단계전환 버튼으로만 변경
+    // 데이터 기반 자동 단계 판정 (입력된 데이터 순서대로 체크)
     const calcAutoStep = (data: Record<string, unknown>): ProjectStep | null => {
       const v = (f: string) => data[f] ?? project[f as keyof DBProject]
-      if (v('completion_doc_date')) return '완료서류제출'
+      // 역순으로 체크 — 가장 높은 단계부터
+      if (v('completion_doc_date') && v('completion_submitter')) return '완료서류제출'
       if (v('construction_date')) return '공사'
-      if (v('contractor')) return '착공계'
-      if (v('application_date')) return '신청서제출'
+      if (v('construction_doc_date') || v('contractor')) return '착공계'
+      if (v('receipt_date')) return '승인'
+      if (v('application_date') && v('application_submitter')) return '신청서제출'
+      if (v('consent_date') && v('consent_submitter')) return '동의서'
       if ((v('total_cost') as number) > 0) return '견적전달'
-      if (v('survey_date')) return '실사'
+      if (v('survey_date') && v('survey_staff')) return '실사'
       return null
     }
     setSaving(true)

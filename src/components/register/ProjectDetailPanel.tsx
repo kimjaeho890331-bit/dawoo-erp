@@ -85,11 +85,43 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
   const handleSave = async () => {
     if (!project || !hasChanges) return
+
+    // 데이터 기반 자동 단계 판정
+    const calcAutoStep = (data: Record<string, unknown>): ProjectStep | null => {
+      const v = (f: string) => data[f] ?? project[f as keyof DBProject]
+      if (v('outstanding') === 0 && (v('total_cost') as number) > 0) return '입금'
+      if (v('completion_doc_date')) return '완료서류제출'
+      if (v('construction_date')) return '공사'
+      if (v('contractor')) return '착공계'
+      if (v('approval_date') && v('application_date')) return '승인'
+      if (v('application_date')) return '신청서제출'
+      if (v('approval_date')) return '동의서'
+      if ((v('total_cost') as number) > 0) return '견적전달'
+      if (v('survey_date')) return '실사'
+      return null
+    }
     setSaving(true)
     try {
+      // 자동 단계 판정
+      const merged = { ...editData }
+      const autoStep = calcAutoStep(merged)
+      const currentIdx = getStepIndex(project.status)
+      if (autoStep) {
+        const autoIdx = getStepIndex(autoStep)
+        // 앞으로만 자동 전환 (뒤로는 안 감)
+        if (autoIdx > currentIdx) {
+          merged.status = autoStep
+          // status_logs 기록
+          await supabase.from('status_logs').insert({
+            project_id: project.id, from_status: project.status,
+            to_status: autoStep, note: '데이터 입력에 의한 자동 전환',
+          })
+        }
+      }
+
       const { error } = await supabase
         .from('projects')
-        .update(editData)
+        .update(merged)
         .eq('id', project.id)
       if (error) throw error
       setHasChanges(false)
@@ -276,18 +308,18 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         {/* 상시 표시 영역 */}
         <div className="px-6 py-3 border-b border-border-tertiary bg-surface-secondary">
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px]">
-            <InfoField label="빌라명" value={project.building_name || '-'} />
+            <InfoField label="빌라명" value={[(getVal('building_name') as string), (getVal('dong') as string)].filter(Boolean).join(' ') || '-'} />
             <InfoField label="담당자" value={project.staff?.name || '-'} />
-            <InfoField label="주소" value={project.road_address || project.jibun_address || '-'} full />
-            <InfoField label="동호수" value={[project.dong, project.ho].filter(Boolean).join(' ') || '-'} />
-            <InfoField label="대표자" value={project.owner_name || '-'} />
-            <InfoField label="연락처" value={project.owner_phone ? formatPhone(project.owner_phone) : '-'} />
+            <InfoField label="주소" value={(getVal('road_address') as string) || (getVal('jibun_address') as string) || '-'} full />
+            <InfoField label="호수" value={(getVal('ho') as string) || '-'} />
+            <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
+            <InfoField label="연락처" value={(getVal('owner_phone') as string) ? formatPhone(getVal('owner_phone') as string) : '-'} />
           </div>
           <div className="grid grid-cols-4 gap-3 mt-2 pt-2 border-t border-surface-tertiary">
-            <MiniStat label="총공사비" value={project.total_cost} />
-            <MiniStat label="시지원금" value={project.city_support} />
-            <MiniStat label="자부담금" value={project.self_pay} />
-            <MiniStat label="미수금" value={project.outstanding} highlight />
+            <MiniStat label="총공사비" value={(getVal('total_cost') as number) || 0} />
+            <MiniStat label="시지원금" value={(getVal('city_support') as number) || 0} />
+            <MiniStat label="자부담금" value={(getVal('self_pay') as number) || 0} />
+            <MiniStat label="미수금" value={(getVal('outstanding') as number) || 0} highlight />
           </div>
         </div>
 

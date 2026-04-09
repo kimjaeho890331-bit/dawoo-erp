@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Mail, AlertTriangle, Route, Clock, Bot } from 'lucide-react'
+import { Bot } from 'lucide-react'
 
 // --- 타입 ---
 interface Schedule {
@@ -284,20 +284,7 @@ export default function WorkCalendarPage() {
             )}
           </div>
 
-          {/* AI 업무 교정 패널 */}
-          <div className="mt-4 bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-            <div className="px-5 py-3 border-b border-border-tertiary flex items-center gap-2">
-              <Bot size={16} className="text-txt-tertiary" />
-              <h3 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">AI 업무 교정</h3>
-              <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-accent-text rounded-full">Beta</span>
-            </div>
-            <div className="grid grid-cols-4 divide-x divide-border-tertiary">
-              <AiCard icon={<Clock size={16} className="text-txt-tertiary" />} title="시간 교정" desc="2시간 잡았는데 과거 평균 42분. 1시간으로 줄이세요" btn="수정" />
-              <AiCard icon={<Route size={16} className="text-txt-tertiary" />} title="동선 최적화" desc="같은 동네 실측+홍보 묶기" btn="추가" />
-              <AiCard icon={<Mail size={16} className="text-txt-tertiary" />} title="빈 일정 감지" desc="3일 비어있어. 홍보 or 팔로업 추천" btn="제안 보기" />
-              <AiCard icon={<AlertTriangle size={16} className="text-txt-tertiary" />} title="마감 알림" desc="완료서류 D-3. 시지원금 지연 위험" btn="알림 보내기" />
-            </div>
-          </div>
+          {/* AI 업무 교정 — 2차 개발 예정 */}
         </>
       ) : (
         /* 홍보현황 탭 */
@@ -311,20 +298,6 @@ export default function WorkCalendarPage() {
           onSave={() => { setShowModal(false); setEditSchedule(null); setSelectedDate(null); loadData() }}
           onDelete={editSchedule ? () => handleDelete(editSchedule.id) : undefined} />
       )}
-    </div>
-  )
-}
-
-// --- AI 교정 카드 ---
-function AiCard({ icon, title, desc, btn }: { icon: ReactNode; title: string; desc: string; btn: string }) {
-  return (
-    <div className="p-4 space-y-2">
-      <div className="flex items-center gap-1.5">
-        <span className="flex items-center">{icon}</span>
-        <span className="text-xs font-semibold text-txt-secondary">{title}</span>
-      </div>
-      <p className="text-[11px] text-txt-secondary leading-relaxed">{desc}</p>
-      <button className="px-2.5 py-1 text-[11px] font-medium text-accent-text border border-blue-200 rounded hover:bg-blue-50 transition">[{btn}]</button>
     </div>
   )
 }

@@ -2,8 +2,29 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check } from 'lucide-react'
+import { Check, Trash2, Upload, FileText, Image, X, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { updateProjectStatus } from '@/lib/api/projects'
+
+interface Payment {
+  id: string
+  project_id: string
+  payment_date: string | null
+  amount: number
+  payment_type: string
+  payer_name: string | null
+  memo: string | null
+  created_at: string
+}
+
+interface Attachment {
+  id: string
+  project_id: string
+  name: string
+  file_path: string
+  file_type: string | null
+  created_at: string
+}
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
 const PROGRESS_STEPS: ProjectStep[] = [
@@ -39,6 +60,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [hasChanges, setHasChanges] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
+  const [statusChanging, setStatusChanging] = useState(false)
 
   useEffect(() => {
     if (project) {
@@ -97,6 +119,41 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     }
   }
 
+  const handleNextStep = async () => {
+    if (!project) return
+    const idx = getStepIndex(project.status)
+    if (idx >= PROGRESS_STEPS.length - 1) return
+    const nextStatus = PROGRESS_STEPS[idx + 1]
+    setStatusChanging(true)
+    try {
+      await updateProjectStatus(project.id, nextStatus)
+      onRefresh?.()
+    } catch (err) {
+      console.error('단계 전환 실패:', err)
+      alert('단계 전환에 실패했습니다.')
+    } finally {
+      setStatusChanging(false)
+    }
+  }
+
+  const handlePrevStep = async () => {
+    if (!project) return
+    const idx = getStepIndex(project.status)
+    if (idx <= 0) return
+    const prevStatus = PROGRESS_STEPS[idx - 1]
+    if (!confirm(`${project.status} → ${prevStatus}(으)로 되돌리시겠습니까?`)) return
+    setStatusChanging(true)
+    try {
+      await updateProjectStatus(project.id, prevStatus)
+      onRefresh?.()
+    } catch (err) {
+      console.error('단계 복원 실패:', err)
+      alert('단계 복원에 실패했습니다.')
+    } finally {
+      setStatusChanging(false)
+    }
+  }
+
   if (!project) return null
 
   const currentStepIdx = getStepIndex(project.status)
@@ -149,8 +206,36 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           </div>
         </div>
 
-        {/* 프로그레스 바 - 슬림 라인 스타일 */}
+        {/* 프로그레스 바 + 단계 전환 */}
         <div className="px-6 py-3 border-b border-border-tertiary">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrevStep}
+                disabled={statusChanging || currentStepIdx <= 0}
+                className="px-2 py-1 text-[10px] font-medium text-txt-tertiary border border-border-primary rounded hover:bg-surface-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ← 이전
+              </button>
+              <span className="text-[11px] font-medium text-txt-secondary">
+                {project.status} ({currentStepIdx + 1}/{PROGRESS_STEPS.length})
+              </span>
+            </div>
+            {currentStepIdx < PROGRESS_STEPS.length - 1 && (
+              <button
+                onClick={handleNextStep}
+                disabled={statusChanging}
+                className="flex items-center gap-1 px-3 py-1 text-[11px] font-medium text-white bg-accent rounded hover:bg-accent-hover transition-colors disabled:opacity-50"
+              >
+                {statusChanging ? '변경 중...' : (
+                  <>
+                    {PROGRESS_STEPS[currentStepIdx + 1]} 단계로
+                    <ChevronRight size={12} />
+                  </>
+                )}
+              </button>
+            )}
+          </div>
           <div className="relative">
             {/* 배경 라인 */}
             <div className="absolute top-[11px] left-3 right-3 h-[2px] bg-[#f3f4f6]" />
@@ -225,8 +310,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
           {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
           {activeTab === '2단계' && <TabStep2 project={project} getVal={getVal} onChange={updateField} />}
-          {activeTab === '3~4단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
-          {activeTab === '서류/첨부' && <TabDocuments />}
+          {activeTab === '3~4단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
+          {activeTab === '서류/첨부' && <TabDocuments projectId={project.id} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>
@@ -643,7 +728,78 @@ function TabStep2({ project, getVal, onChange }: TabProps) {
 }
 
 // --- 탭 4: 3~4단계 ---
-function TabStep34({ project, getVal, onChange }: TabProps) {
+function TabStep34({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [showAddPayment, setShowAddPayment] = useState(false)
+  const [newPayment, setNewPayment] = useState({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
+  const [paymentSaving, setPaymentSaving] = useState(false)
+
+  useEffect(() => {
+    loadPayments()
+  }, [project.id])
+
+  const loadPayments = async () => {
+    const { data } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('project_id', project.id)
+      .order('payment_date', { ascending: false })
+    setPayments(data || [])
+  }
+
+  const handleAddPayment = async () => {
+    if (!newPayment.amount || Number(newPayment.amount) <= 0) {
+      alert('금액을 입력해주세요.')
+      return
+    }
+    setPaymentSaving(true)
+    try {
+      const { error } = await supabase.from('payments').insert({
+        project_id: project.id,
+        payment_date: newPayment.payment_date || null,
+        amount: Number(newPayment.amount),
+        payment_type: newPayment.payment_type,
+        payer_name: newPayment.payer_name || null,
+        memo: newPayment.memo || null,
+      })
+      if (error) throw error
+
+      // 미수금 재계산: 총공사비 - 전체 입금 합계
+      const totalPaid = [...payments, { amount: Number(newPayment.amount) }].reduce((sum, p) => sum + p.amount, 0)
+      const totalCost = (project.total_cost || 0)
+      const newOutstanding = Math.max(0, totalCost - totalPaid)
+      onChange('outstanding', newOutstanding)
+
+      setNewPayment({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
+      setShowAddPayment(false)
+      await loadPayments()
+      onRefresh?.()
+    } catch (err) {
+      console.error('입금 추가 실패:', err)
+      alert('입금 추가에 실패했습니다.')
+    } finally {
+      setPaymentSaving(false)
+    }
+  }
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm('입금 내역을 삭제하시겠습니까?')) return
+    try {
+      const { error } = await supabase.from('payments').delete().eq('id', paymentId)
+      if (error) throw error
+      const remaining = payments.filter(p => p.id !== paymentId)
+      const totalPaid = remaining.reduce((sum, p) => sum + p.amount, 0)
+      const newOutstanding = Math.max(0, (project.total_cost || 0) - totalPaid)
+      onChange('outstanding', newOutstanding)
+      setPayments(remaining)
+      onRefresh?.()
+    } catch (err) {
+      console.error('입금 삭제 실패:', err)
+    }
+  }
+
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
+
   return (
     <div className="space-y-5">
       <section>
@@ -656,51 +812,275 @@ function TabStep34({ project, getVal, onChange }: TabProps) {
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <FormInput label="미수금" type="number" value={getVal('outstanding') as number} onChange={v => onChange('outstanding', Number(v) || 0)} />
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="text-center p-2 bg-surface-secondary rounded-lg">
+            <p className="text-[10px] text-txt-tertiary">총공사비</p>
+            <p className="text-[12px] font-semibold tabular-nums text-txt-primary">{(project.total_cost || 0).toLocaleString()}</p>
+          </div>
+          <div className="text-center p-2 bg-surface-secondary rounded-lg">
+            <p className="text-[10px] text-txt-tertiary">입금합계</p>
+            <p className="text-[12px] font-semibold tabular-nums text-accent-text">{totalPaid.toLocaleString()}</p>
+          </div>
+          <div className="text-center p-2 bg-surface-secondary rounded-lg">
+            <p className="text-[10px] text-txt-tertiary">미수금</p>
+            <p className={`text-[12px] font-semibold tabular-nums ${(project.total_cost || 0) - totalPaid > 0 ? 'text-money-negative' : 'text-txt-secondary'}`}>
+              {Math.max(0, (project.total_cost || 0) - totalPaid).toLocaleString()}
+            </p>
+          </div>
         </div>
-        <p className="text-[11px] text-txt-tertiary mb-2">복수 입금 기록</p>
+
+        <p className="text-[11px] text-txt-tertiary mb-2">입금 내역</p>
         <div className="border border-border-primary rounded-[10px] overflow-hidden">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-secondary border-b border-border-primary">
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">입금일</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">유형</th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">입금자</th>
                 <th className="px-3 py-2 text-right text-[11px] font-medium text-txt-secondary">금액</th>
+                <th className="px-3 py-2 w-8"></th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td colSpan={3} className="px-3 py-6 text-center text-txt-tertiary text-[11px]">
-                  입금 내역이 없습니다
-                </td>
-              </tr>
+              {payments.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center text-txt-tertiary text-[11px]">
+                    입금 내역이 없습니다
+                  </td>
+                </tr>
+              ) : (
+                payments.map(p => (
+                  <tr key={p.id} className="border-b border-border-tertiary last:border-b-0 hover:bg-surface-secondary/50">
+                    <td className="px-3 py-2 text-[12px] text-txt-primary">{p.payment_date ? new Date(p.payment_date).toLocaleDateString('ko-KR') : '-'}</td>
+                    <td className="px-3 py-2 text-[11px] text-txt-secondary">{p.payment_type}</td>
+                    <td className="px-3 py-2 text-[12px] text-txt-primary">{p.payer_name || '-'}</td>
+                    <td className="px-3 py-2 text-[12px] text-right font-medium tabular-nums text-txt-primary">{p.amount.toLocaleString()}</td>
+                    <td className="px-1 py-2">
+                      <button onClick={() => handleDeletePayment(p.id)} className="p-1 text-txt-quaternary hover:text-money-negative transition-colors">
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-        <button className="mt-2 px-3 py-1.5 text-[11px] text-link border border-accent/30 rounded-lg hover:bg-accent/5 transition-colors">
-          + 입금 추가
-        </button>
+
+        {showAddPayment ? (
+          <div className="mt-3 p-3 border border-accent/20 rounded-lg bg-accent/5 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] text-txt-tertiary mb-0.5">입금일</label>
+                <input type="date" value={newPayment.payment_date} onChange={e => setNewPayment(p => ({ ...p, payment_date: e.target.value }))}
+                  className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-txt-tertiary mb-0.5">유형</label>
+                <select value={newPayment.payment_type} onChange={e => setNewPayment(p => ({ ...p, payment_type: e.target.value }))}
+                  className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent">
+                  <option>자부담착수금</option>
+                  <option>추가공사비</option>
+                  <option>시지원금잔금</option>
+                  <option>기타</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-txt-tertiary mb-0.5">입금자</label>
+                <input type="text" value={newPayment.payer_name} onChange={e => setNewPayment(p => ({ ...p, payer_name: e.target.value }))}
+                  placeholder="입금자명" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-txt-tertiary mb-0.5">금액 *</label>
+                <input type="number" value={newPayment.amount} onChange={e => setNewPayment(p => ({ ...p, amount: e.target.value }))}
+                  placeholder="0" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] text-txt-tertiary mb-0.5">메모</label>
+              <input type="text" value={newPayment.memo} onChange={e => setNewPayment(p => ({ ...p, memo: e.target.value }))}
+                placeholder="메모 (선택)" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={handleAddPayment} disabled={paymentSaving}
+                className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent rounded hover:bg-accent-hover transition-colors disabled:opacity-50">
+                {paymentSaving ? '저장 중...' : '저장'}
+              </button>
+              <button onClick={() => setShowAddPayment(false)}
+                className="px-3 py-1.5 text-[11px] text-txt-tertiary border border-border-primary rounded hover:bg-surface-tertiary transition-colors">
+                취소
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setShowAddPayment(true)} className="mt-2 px-3 py-1.5 text-[11px] text-link border border-accent/30 rounded-lg hover:bg-accent/5 transition-colors">
+            + 입금 추가
+          </button>
+        )}
       </section>
     </div>
   )
 }
 
 // --- 탭 5: 서류/첨부 ---
-function TabDocuments() {
+function TabDocuments({ projectId }: { projectId: string }) {
+  const [documents, setDocuments] = useState<{ id: string; name: string; file_path: string; doc_type: string | null; created_at: string }[]>([])
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  useEffect(() => {
+    loadDocuments()
+    loadAttachments()
+  }, [projectId])
+
+  const loadDocuments = async () => {
+    const { data } = await supabase
+      .from('documents')
+      .select('id, name, file_path, doc_type, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+    setDocuments(data || [])
+  }
+
+  const loadAttachments = async () => {
+    const { data } = await supabase
+      .from('attachments')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+    setAttachments(data || [])
+  }
+
+  const handleFileUpload = async (files: FileList | File[]) => {
+    setUploading(true)
+    try {
+      for (const file of Array.from(files)) {
+        const timestamp = Date.now()
+        const filePath = `attachments/${projectId}/${timestamp}_${file.name}`
+        const { error: uploadError } = await supabase.storage
+          .from('attachments')
+          .upload(filePath, file)
+
+        if (uploadError) {
+          console.error('업로드 실패:', uploadError)
+          continue
+        }
+
+        const fileType = file.type.startsWith('image/') ? '사진' : file.name.endsWith('.pdf') ? 'PDF' : '기타'
+        await supabase.from('attachments').insert({
+          project_id: projectId,
+          name: file.name,
+          file_path: filePath,
+          file_type: fileType,
+        })
+      }
+      await loadAttachments()
+    } catch (err) {
+      console.error('파일 업로드 실패:', err)
+      alert('파일 업로드에 실패했습니다.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleDeleteAttachment = async (att: Attachment) => {
+    if (!confirm(`${att.name} 파일을 삭제하시겠습니까?`)) return
+    try {
+      await supabase.storage.from('attachments').remove([att.file_path])
+      await supabase.from('attachments').delete().eq('id', att.id)
+      setAttachments(prev => prev.filter(a => a.id !== att.id))
+    } catch (err) {
+      console.error('삭제 실패:', err)
+    }
+  }
+
+  const getFileUrl = (filePath: string) => {
+    const { data } = supabase.storage.from('attachments').getPublicUrl(filePath)
+    return data.publicUrl
+  }
+
+  const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(name)
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">서류 목록</h3>
-        <div className="border border-dashed border-border-secondary rounded-[10px] p-8 text-center text-txt-tertiary text-[13px]">
-          서류가 없습니다. 서류함에서 생성하면 여기에 표시됩니다.
-        </div>
+        {documents.length === 0 ? (
+          <div className="border border-dashed border-border-secondary rounded-[10px] p-6 text-center text-txt-tertiary text-[13px]">
+            서류가 없습니다. 서류함에서 생성하면 여기에 표시됩니다.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {documents.map(doc => (
+              <div key={doc.id} className="flex items-center gap-3 p-2 border border-border-primary rounded-lg hover:bg-surface-secondary transition-colors">
+                <FileText size={16} className="text-txt-tertiary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] text-txt-primary truncate">{doc.name}</p>
+                  <p className="text-[10px] text-txt-quaternary">{doc.doc_type} · {new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
       <div>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">첨부파일</h3>
-        <div className="border border-dashed border-border-secondary rounded-[10px] p-8 text-center text-txt-tertiary text-[13px]">
-          첨부파일이 없습니다. 파일을 드래그앤드롭하여 업로드하세요.
-        </div>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">
+          첨부파일 {attachments.length > 0 && <span className="text-accent">({attachments.length})</span>}
+        </h3>
+
+        {/* 드래그앤드롭 업로드 */}
+        <label
+          className={`flex flex-col items-center justify-center border-2 border-dashed rounded-[10px] p-6 cursor-pointer transition-colors ${
+            dragOver ? 'border-accent bg-accent/5' : 'border-border-secondary hover:border-accent hover:bg-accent/5'
+          }`}
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); handleFileUpload(e.dataTransfer.files) }}
+        >
+          {uploading ? (
+            <p className="text-[13px] text-accent">업로드 중...</p>
+          ) : (
+            <>
+              <Upload size={20} className="text-txt-quaternary mb-1" />
+              <p className="text-[12px] text-txt-tertiary">파일을 드래그하거나 클릭하여 업로드</p>
+              <p className="text-[10px] text-txt-quaternary mt-0.5">사진, PDF, 문서 등</p>
+            </>
+          )}
+          <input
+            type="file"
+            multiple
+            className="hidden"
+            onChange={e => { if (e.target.files?.length) handleFileUpload(e.target.files) }}
+          />
+        </label>
+
+        {/* 첨부파일 목록 */}
+        {attachments.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {attachments.map(att => (
+              <div key={att.id} className="flex items-center gap-3 p-2 border border-border-primary rounded-lg hover:bg-surface-secondary transition-colors group">
+                {isImage(att.name) ? (
+                  <Image size={16} className="text-txt-tertiary flex-shrink-0" />
+                ) : (
+                  <FileText size={16} className="text-txt-tertiary flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <a href={getFileUrl(att.file_path)} target="_blank" rel="noopener noreferrer"
+                    className="text-[13px] text-link hover:underline truncate block">
+                    {att.name}
+                  </a>
+                  <p className="text-[10px] text-txt-quaternary">{att.file_type} · {new Date(att.created_at).toLocaleDateString('ko-KR')}</p>
+                </div>
+                <button onClick={() => handleDeleteAttachment(att)}
+                  className="p-1 text-txt-quaternary hover:text-money-negative opacity-0 group-hover:opacity-100 transition-all">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

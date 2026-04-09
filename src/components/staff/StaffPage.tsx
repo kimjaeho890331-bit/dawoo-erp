@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { calcTotalLeave } from '@/lib/utils/leave'
 
 interface Staff {
   id: string
@@ -41,17 +42,7 @@ function calcYearsMonths(joinDate: string | null): string {
   return `${years}년 ${months}개월`
 }
 
-function calcTotalLeave(joinDate: string | null): number {
-  if (!joinDate) return 0
-  const join = new Date(joinDate)
-  const now = new Date()
-  const diffMs = now.getTime() - join.getTime()
-  const diffMonths = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
-  if (diffMs < 0) return 0
-  if (diffMonths < 12) return Math.min(diffMonths, 11)
-  const years = Math.floor(diffMonths / 12)
-  return Math.min(15 + Math.floor((years - 1) / 2), 25)
-}
+// calcTotalLeave → src/lib/utils/leave.ts
 
 export default function StaffPage() {
   const [staffList, setStaffList] = useState<Staff[]>([])

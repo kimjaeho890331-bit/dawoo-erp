@@ -190,12 +190,12 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     setShowAddressDropdown(false)
     setAddressKeyword('')
 
-    // 주소, 건물명 자동 입력
+    // 주소, 건물명 자동 입력 (항상 덮어쓰기 — 새 주소 선택했으니)
     setForm(prev => ({
       ...prev,
-      road_address: prev.road_address || addr.roadAddr,
-      jibun_address: prev.jibun_address || addr.jibunAddr,
-      building_name: prev.building_name || addr.bdNm || '',
+      road_address: addr.roadAddr,
+      jibun_address: addr.jibunAddr,
+      building_name: addr.bdNm || prev.building_name || '',
     }))
     if (errors.road_address) {
       setErrors(prev => ({ ...prev, road_address: false }))
@@ -239,12 +239,13 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           formattedDate = `${bldData.useAprDay.substring(0, 4)}-${bldData.useAprDay.substring(4, 6)}-${bldData.useAprDay.substring(6, 8)}`
         }
 
+        // 표제부 데이터로 자동입력 (항상 덮어쓰기)
         setForm(prev => ({
           ...prev,
-          building_use: prev.building_use || bldData.mainPurpsCdNm || bldData.etcPurps || '',
-          unit_count: prev.unit_count || bldData.hhldCnt?.toString() || '',
-          approval_date: prev.approval_date || formattedDate,
-          building_name: prev.building_name || bldData.bldNm || '',
+          building_use: bldData.mainPurpsCdNm || bldData.etcPurps || prev.building_use || '',
+          unit_count: bldData.hhldCnt?.toString() || prev.unit_count || '',
+          approval_date: formattedDate || prev.approval_date || '',
+          building_name: bldData.bldNm || prev.building_name || '',
         }))
       }
     } catch (err) {

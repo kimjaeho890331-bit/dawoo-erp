@@ -298,11 +298,13 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     }
   }
 
-  // 필터링된 동호수 목록 (입력값으로 필터)
+  // 필터링된 동호수 목록 (입력값으로 필터 - 호수 숫자 부분 매칭)
   const filteredUnits = units.filter(u => {
     if (!hoInput.trim()) return true
+    const input = hoInput.trim()
     const label = u.dongNm?.trim() ? `${u.dongNm.trim()} ${u.hoNm}` : u.hoNm
-    return label.includes(hoInput.trim())
+    // 라벨 전체 매칭 또는 호수 번호 시작 매칭
+    return label.includes(input) || u.hoNm.startsWith(input) || u.hoNm.includes(input)
   }).sort((a, b) => {
     const aNum = parseInt(a.hoNm) || 0
     const bNum = parseInt(b.hoNm) || 0
@@ -505,9 +507,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                 className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
               />
               {/* 자동완성 제안 목록 */}
-              {showHoSuggestions && filteredUnits.length > 0 && (
+              {showHoSuggestions && (
                 <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
-                  {filteredUnits.map((unit, idx) => {
+                  {filteredUnits.length > 0 ? filteredUnits.map((unit, idx) => {
                     const label = unit.dongNm?.trim() ? `${unit.dongNm.trim()} ${unit.hoNm}` : unit.hoNm
                     return (
                       <button
@@ -519,15 +521,25 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                         <span className="text-[11px] text-txt-tertiary">{unit.area.toFixed(2)}m2</span>
                       </button>
                     )
-                  })}
+                  }) : hoInput.trim() && (
+                    <div className="px-4 py-3 text-[12px] text-txt-tertiary">
+                      건축물대장에 미등록 호실입니다. 직접 입력하세요.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
             <div>
               <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">전유면적 (m²)</label>
-              <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] text-txt-secondary bg-surface-secondary">
-                {form.exclusive_area ? `${form.exclusive_area} m²` : '호수 선택 시 자동입력'}
-              </p>
+              {form.exclusive_area ? (
+                <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] text-txt-secondary bg-surface-secondary">
+                  {form.exclusive_area} m²
+                </p>
+              ) : (
+                <input type="number" step="0.01" value={form.exclusive_area} onChange={e => update('exclusive_area', e.target.value)}
+                  placeholder="직접 입력"
+                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+              )}
             </div>
           </div>
 

@@ -28,24 +28,29 @@ export async function GET(req: NextRequest) {
       _type: 'json',
     }
 
-    // 1페이지 500건씩 가져오기
-    const fetchPage = async (page: number, rows: number) => {
-      const params = new URLSearchParams({ ...baseParams, numOfRows: String(rows), pageNo: String(page) })
+    // 공공데이터 API는 numOfRows 최대 100건 제한 → 페이징 필수
+    const PER_PAGE = 100
+    const fetchPage = async (page: number) => {
+      const params = new URLSearchParams({ ...baseParams, numOfRows: String(PER_PAGE), pageNo: String(page) })
       const res = await fetch(`https://apis.data.go.kr/1613000/BldRgstHubService/getBrExposPubuseAreaInfo?${params.toString()}`)
       return res.json()
     }
 
-    const firstPage = await fetchPage(1, 500)
+    const firstPage = await fetchPage(1)
     const totalCount = firstPage?.response?.body?.totalCount ?? 0
     let allItems = firstPage?.response?.body?.items?.item
     if (!allItems) return NextResponse.json([])
     allItems = Array.isArray(allItems) ? allItems : [allItems]
 
-    // 500건 초과 시 추가 페이지
-    if (totalCount > 500) {
-      const pages = Math.ceil(totalCount / 500)
-      for (let p = 2; p <= pages; p++) {
-        const more = await fetchPage(p, 500)
+    // 100건 초과 시 추가 페이지 가져오기
+    if (totalCount > PER_PAGE) {
+      const totalPages = Math.ceil(totalCount / PER_PAGE)
+      const promises = []
+      for (let p = 2; p <= totalPages; p++) {
+        promises.push(fetchPage(p))
+      }
+      const results = await Promise.all(promises)
+      for (const more of results) {
         const moreItems = more?.response?.body?.items?.item
         if (moreItems) {
           const arr = Array.isArray(moreItems) ? moreItems : [moreItems]

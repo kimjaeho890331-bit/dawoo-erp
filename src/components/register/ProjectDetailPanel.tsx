@@ -309,8 +309,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
-          {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
-          {activeTab === '2단계' && <TabStep2 project={project} getVal={getVal} onChange={updateField} />}
+          {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
+          {activeTab === '2단계' && <TabStep2 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
           {activeTab === '3단계' && <TabStep3 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
@@ -638,7 +638,7 @@ interface WaterPricing {
 }
 
 // --- 탭 2: 1단계 (실측~신청서) ---
-function TabStep1({ project, category, getVal, onChange }: TabProps & { category: '소규모' | '수도' }) {
+function TabStep1({ project, category, getVal, onChange, onRefresh }: TabProps & { category: '소규모' | '수도'; onRefresh?: () => void }) {
   const router = useRouter()
   const urlCategory = category === '소규모' ? 'small' : 'water'
   const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
@@ -764,12 +764,13 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
         </div>
         <FileAttachSection projectId={project.id} fileType="신청서" label="신청서" />
       </section>
+      <PaymentSection project={project} onRefresh={onRefresh} />
     </div>
   )
 }
 
 // --- 탭 3: 2단계 (승인 → 시공 분리) ---
-function TabStep2({ project, getVal, onChange }: TabProps) {
+function TabStep2({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
   const [vendorSearch, setVendorSearch] = useState('')
   const [vendorResults, setVendorResults] = useState<{ id: string; name: string; phone: string | null }[]>([])
   const [showVendorDropdown, setShowVendorDropdown] = useState(false)
@@ -828,82 +829,151 @@ function TabStep2({ project, getVal, onChange }: TabProps) {
           <MoneyInput label="착수금" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', v)} />
         </div>
       </section>
+      <PaymentSection project={project} onRefresh={onRefresh} />
     </div>
   )
 }
 
-// --- 탭 4: 3단계 (완료서류 + 수금) ---
-function TabStep3({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
+// --- 입금 내역 공유 컴포넌트 (1~3단계 하단에 공통 표시) ---
+function PaymentSection({ project, onRefresh }: { project: DBProject; onRefresh?: () => void }) {
   const [payments, setPayments] = useState<Payment[]>([])
-  const [showAddPayment, setShowAddPayment] = useState(false)
-  const [newPayment, setNewPayment] = useState({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
-  const [paymentSaving, setPaymentSaving] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    loadPayments()
-  }, [project.id])
+  useEffect(() => { loadPayments() }, [project.id])
 
   const loadPayments = async () => {
-    const { data } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('project_id', project.id)
-      .order('payment_date', { ascending: false })
+    const { data } = await supabase.from('payments').select('*').eq('project_id', project.id).order('payment_date', { ascending: false })
     setPayments(data || [])
   }
 
-  const handleAddPayment = async () => {
-    if (!newPayment.amount || Number(newPayment.amount) <= 0) {
-      alert('금액을 입력해주세요.')
-      return
-    }
-    setPaymentSaving(true)
+  const handleAdd = async () => {
+    if (!form.amount || Number(form.amount) <= 0) { alert('금액을 입력해주세요.'); return }
+    setSaving(true)
     try {
       const { error } = await supabase.from('payments').insert({
-        project_id: project.id,
-        payment_date: newPayment.payment_date || null,
-        amount: Number(newPayment.amount),
-        payment_type: newPayment.payment_type,
-        payer_name: newPayment.payer_name || null,
-        memo: newPayment.memo || null,
+        project_id: project.id, payment_date: form.payment_date || null,
+        amount: Number(form.amount), payment_type: form.payment_type,
+        payer_name: form.payer_name || null, memo: form.memo || null,
       })
       if (error) throw error
-
-      // 미수금 재계산 → DB 직접 저장
-      const totalPaid = [...payments, { amount: Number(newPayment.amount) }].reduce((sum, p) => sum + p.amount, 0)
-      const newOutstanding = Math.max(0, (project.total_cost || 0) - totalPaid)
-      await supabase.from('projects').update({ outstanding: newOutstanding, updated_at: new Date().toISOString() }).eq('id', project.id)
-
-      setNewPayment({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
-      setShowAddPayment(false)
+      const totalPaid = [...payments, { amount: Number(form.amount) }].reduce((s, p) => s + p.amount, 0)
+      await supabase.from('projects').update({ outstanding: Math.max(0, (project.total_cost || 0) - totalPaid), updated_at: new Date().toISOString() }).eq('id', project.id)
+      setForm({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
+      setShowAdd(false)
       await loadPayments()
       onRefresh?.()
-    } catch (err) {
-      console.error('입금 추가 실패:', err)
-      alert('입금 추가에 실패했습니다.')
-    } finally {
-      setPaymentSaving(false)
-    }
+    } catch (err) { console.error('입금 추가 실패:', err); alert('입금 추가에 실패했습니다.') }
+    finally { setSaving(false) }
   }
 
-  const handleDeletePayment = async (paymentId: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('입금 내역을 삭제하시겠습니까?')) return
     try {
-      const { error } = await supabase.from('payments').delete().eq('id', paymentId)
-      if (error) throw error
-      const remaining = payments.filter(p => p.id !== paymentId)
-      const totalPaid = remaining.reduce((sum, p) => sum + p.amount, 0)
-      const newOutstanding = Math.max(0, (project.total_cost || 0) - totalPaid)
-      await supabase.from('projects').update({ outstanding: newOutstanding, updated_at: new Date().toISOString() }).eq('id', project.id)
+      await supabase.from('payments').delete().eq('id', id)
+      const remaining = payments.filter(p => p.id !== id)
+      const totalPaid = remaining.reduce((s, p) => s + p.amount, 0)
+      await supabase.from('projects').update({ outstanding: Math.max(0, (project.total_cost || 0) - totalPaid), updated_at: new Date().toISOString() }).eq('id', project.id)
       setPayments(remaining)
       onRefresh?.()
-    } catch (err) {
-      console.error('입금 삭제 실패:', err)
-    }
+    } catch (err) { console.error('입금 삭제 실패:', err) }
   }
 
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
 
+  return (
+    <section className="mt-5 pt-4 border-t border-border-primary">
+      <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금 / 입금 내역</h3>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="text-center p-2 bg-surface-secondary rounded-lg">
+          <p className="text-[10px] text-txt-tertiary">총공사비</p>
+          <p className="text-[12px] font-semibold tabular-nums text-txt-primary">{(project.total_cost || 0).toLocaleString()}</p>
+        </div>
+        <div className="text-center p-2 bg-surface-secondary rounded-lg">
+          <p className="text-[10px] text-txt-tertiary">입금합계</p>
+          <p className="text-[12px] font-semibold tabular-nums text-accent-text">{totalPaid.toLocaleString()}</p>
+        </div>
+        <div className="text-center p-2 bg-surface-secondary rounded-lg">
+          <p className="text-[10px] text-txt-tertiary">미수금</p>
+          <p className={`text-[12px] font-semibold tabular-nums ${(project.total_cost || 0) - totalPaid > 0 ? 'text-money-negative' : 'text-txt-secondary'}`}>
+            {Math.max(0, (project.total_cost || 0) - totalPaid).toLocaleString()}
+          </p>
+        </div>
+      </div>
+      <div className="border border-border-primary rounded-[10px] overflow-hidden">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="bg-surface-secondary border-b border-border-primary">
+              <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">입금일</th>
+              <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">유형</th>
+              <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">입금자</th>
+              <th className="px-3 py-2 text-right text-[11px] font-medium text-txt-secondary">금액</th>
+              <th className="px-3 py-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {payments.length === 0 ? (
+              <tr><td colSpan={5} className="px-3 py-4 text-center text-txt-tertiary text-[11px]">입금 내역이 없습니다</td></tr>
+            ) : payments.map(p => (
+              <tr key={p.id} className="border-b border-border-tertiary last:border-b-0 hover:bg-surface-secondary/50">
+                <td className="px-3 py-2 text-[12px] text-txt-primary">{p.payment_date ? new Date(p.payment_date).toLocaleDateString('ko-KR') : '-'}</td>
+                <td className="px-3 py-2 text-[11px] text-txt-secondary">{p.payment_type}</td>
+                <td className="px-3 py-2 text-[12px] text-txt-primary">{p.payer_name || '-'}</td>
+                <td className="px-3 py-2 text-[12px] text-right font-medium tabular-nums text-txt-primary">{p.amount.toLocaleString()}</td>
+                <td className="px-1 py-2">
+                  <button onClick={() => handleDelete(p.id)} className="p-1 text-txt-quaternary hover:text-money-negative"><Trash2 size={12} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {showAdd ? (
+        <div className="mt-3 p-3 border border-accent/20 rounded-lg bg-accent/5 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] text-txt-tertiary mb-0.5">입금일</label>
+              <input type="date" value={form.payment_date} onChange={e => setForm(p => ({ ...p, payment_date: e.target.value }))}
+                className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+            </div>
+            <div>
+              <label className="block text-[10px] text-txt-tertiary mb-0.5">유형</label>
+              <select value={form.payment_type} onChange={e => setForm(p => ({ ...p, payment_type: e.target.value }))}
+                className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent">
+                <option>자부담착수금</option><option>추가공사비</option><option>시지원금잔금</option><option>기타</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-txt-tertiary mb-0.5">입금자</label>
+              <input type="text" value={form.payer_name} onChange={e => setForm(p => ({ ...p, payer_name: e.target.value }))}
+                placeholder="입금자명" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+            </div>
+            <div>
+              <label className="block text-[10px] text-txt-tertiary mb-0.5">금액 *</label>
+              <input type="text" inputMode="numeric" value={form.amount ? formatMoney(form.amount) : ''} onChange={e => setForm(p => ({ ...p, amount: String(parseMoney(e.target.value)) }))}
+                placeholder="0" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] text-right tabular-nums focus:outline-none focus:border-accent" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] text-txt-tertiary mb-0.5">메모</label>
+            <input type="text" value={form.memo} onChange={e => setForm(p => ({ ...p, memo: e.target.value }))}
+              placeholder="메모 (선택)" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleAdd} disabled={saving} className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent rounded hover:bg-accent-hover disabled:opacity-50">{saving ? '저장 중...' : '저장'}</button>
+            <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-[11px] text-txt-tertiary border border-border-primary rounded hover:bg-surface-tertiary">취소</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowAdd(true)} className="mt-2 px-3 py-1.5 text-[11px] text-link border border-accent/30 rounded-lg hover:bg-accent/5">+ 입금 추가</button>
+      )}
+    </section>
+  )
+}
+
+// --- 탭 4: 3단계 (완료서류) ---
+function TabStep3({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
   return (
     <div className="space-y-5">
       <section>
@@ -912,116 +982,9 @@ function TabStep3({ project, getVal, onChange, onRefresh }: TabProps & { onRefre
           <FormInput label="완료서류 제출일" type="date" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v || null)} />
           <FormInput label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v || null)} />
         </div>
+        <FileAttachSection projectId={project.id} fileType="완료서류" label="완료서류" />
       </section>
-
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
-        <div className="grid grid-cols-3 gap-3 mb-3">
-          <div className="text-center p-2 bg-surface-secondary rounded-lg">
-            <p className="text-[10px] text-txt-tertiary">총공사비</p>
-            <p className="text-[12px] font-semibold tabular-nums text-txt-primary">{(project.total_cost || 0).toLocaleString()}</p>
-          </div>
-          <div className="text-center p-2 bg-surface-secondary rounded-lg">
-            <p className="text-[10px] text-txt-tertiary">입금합계</p>
-            <p className="text-[12px] font-semibold tabular-nums text-accent-text">{totalPaid.toLocaleString()}</p>
-          </div>
-          <div className="text-center p-2 bg-surface-secondary rounded-lg">
-            <p className="text-[10px] text-txt-tertiary">미수금</p>
-            <p className={`text-[12px] font-semibold tabular-nums ${(project.total_cost || 0) - totalPaid > 0 ? 'text-money-negative' : 'text-txt-secondary'}`}>
-              {Math.max(0, (project.total_cost || 0) - totalPaid).toLocaleString()}
-            </p>
-          </div>
-        </div>
-
-        <p className="text-[11px] text-txt-tertiary mb-2">입금 내역</p>
-        <div className="border border-border-primary rounded-[10px] overflow-hidden">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="bg-surface-secondary border-b border-border-primary">
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">입금일</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">유형</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-secondary">입금자</th>
-                <th className="px-3 py-2 text-right text-[11px] font-medium text-txt-secondary">금액</th>
-                <th className="px-3 py-2 w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-txt-tertiary text-[11px]">
-                    입금 내역이 없습니다
-                  </td>
-                </tr>
-              ) : (
-                payments.map(p => (
-                  <tr key={p.id} className="border-b border-border-tertiary last:border-b-0 hover:bg-surface-secondary/50">
-                    <td className="px-3 py-2 text-[12px] text-txt-primary">{p.payment_date ? new Date(p.payment_date).toLocaleDateString('ko-KR') : '-'}</td>
-                    <td className="px-3 py-2 text-[11px] text-txt-secondary">{p.payment_type}</td>
-                    <td className="px-3 py-2 text-[12px] text-txt-primary">{p.payer_name || '-'}</td>
-                    <td className="px-3 py-2 text-[12px] text-right font-medium tabular-nums text-txt-primary">{p.amount.toLocaleString()}</td>
-                    <td className="px-1 py-2">
-                      <button onClick={() => handleDeletePayment(p.id)} className="p-1 text-txt-quaternary hover:text-money-negative transition-colors">
-                        <Trash2 size={12} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {showAddPayment ? (
-          <div className="mt-3 p-3 border border-accent/20 rounded-lg bg-accent/5 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] text-txt-tertiary mb-0.5">입금일</label>
-                <input type="date" value={newPayment.payment_date} onChange={e => setNewPayment(p => ({ ...p, payment_date: e.target.value }))}
-                  className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
-              </div>
-              <div>
-                <label className="block text-[10px] text-txt-tertiary mb-0.5">유형</label>
-                <select value={newPayment.payment_type} onChange={e => setNewPayment(p => ({ ...p, payment_type: e.target.value }))}
-                  className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent">
-                  <option>자부담착수금</option>
-                  <option>추가공사비</option>
-                  <option>시지원금잔금</option>
-                  <option>기타</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] text-txt-tertiary mb-0.5">입금자</label>
-                <input type="text" value={newPayment.payer_name} onChange={e => setNewPayment(p => ({ ...p, payer_name: e.target.value }))}
-                  placeholder="입금자명" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
-              </div>
-              <div>
-                <label className="block text-[10px] text-txt-tertiary mb-0.5">금액 *</label>
-                <input type="text" inputMode="numeric" value={newPayment.amount ? formatMoney(newPayment.amount) : ''} onChange={e => setNewPayment(p => ({ ...p, amount: String(parseMoney(e.target.value)) }))}
-                  placeholder="0" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] text-right tabular-nums focus:outline-none focus:border-accent" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[10px] text-txt-tertiary mb-0.5">메모</label>
-              <input type="text" value={newPayment.memo} onChange={e => setNewPayment(p => ({ ...p, memo: e.target.value }))}
-                placeholder="메모 (선택)" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={handleAddPayment} disabled={paymentSaving}
-                className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent rounded hover:bg-accent-hover transition-colors disabled:opacity-50">
-                {paymentSaving ? '저장 중...' : '저장'}
-              </button>
-              <button onClick={() => setShowAddPayment(false)}
-                className="px-3 py-1.5 text-[11px] text-txt-tertiary border border-border-primary rounded hover:bg-surface-tertiary transition-colors">
-                취소
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button onClick={() => setShowAddPayment(true)} className="mt-2 px-3 py-1.5 text-[11px] text-link border border-accent/30 rounded-lg hover:bg-accent/5 transition-colors">
-            + 입금 추가
-          </button>
-        )}
-      </section>
+      <PaymentSection project={project} onRefresh={onRefresh} />
     </div>
   )
 }

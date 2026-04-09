@@ -375,7 +375,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
+          {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} category={category} />}
           {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} staffList={staffList} />}
           {activeTab === '2단계' && <TabStep2 project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} staffList={staffList} />}
           {activeTab === '3단계' && <TabStep3 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} staffList={staffList} />}
@@ -750,7 +750,7 @@ interface TabProps {
 }
 
 // --- 탭 1: 기본정보 ---
-function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) {
+function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked, category }: TabProps & { category: '소규모' | '수도' }) {
   const [bankImage, setBankImage] = useState<string | null>(null)
   const [ocrLoading, setOcrLoading] = useState(false)
 
@@ -794,11 +794,20 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
           className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
         >
           <option value="">선택</option>
-          <option value="소규모">소규모</option>
-          <option value="공동주택">공동주택</option>
-          <option value="새빛">새빛</option>
-          <option value="녹색">녹색</option>
-          <option value="개인">개인</option>
+          {category === '수도' ? (
+            <>
+              <option value="옥내">옥내</option>
+              <option value="공용">공용</option>
+            </>
+          ) : (
+            <>
+              <option value="소규모">소규모</option>
+              <option value="공동주택">공동주택</option>
+              <option value="새빛">새빛</option>
+              <option value="녹색">녹색</option>
+              <option value="개인">개인</option>
+            </>
+          )}
         </select>
       </section>
 

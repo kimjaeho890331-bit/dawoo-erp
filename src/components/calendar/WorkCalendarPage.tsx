@@ -244,7 +244,7 @@ export default function WorkCalendarPage() {
                         {week.map((day, di) => {
                           const d = day ? ds(month.year, month.month, day) : ''
                           return (
-                            <div key={di} className={`px-2 py-1 text-xs border-r border-surface-secondary last:border-r-0 cursor-pointer hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''}`}
+                            <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 cursor-pointer hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''}`}
                               onClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}>
                               {day && <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-medium
                                 ${d === today ? 'bg-accent text-white' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{day}</span>}
@@ -252,7 +252,7 @@ export default function WorkCalendarPage() {
                           )
                         })}
                       </div>
-                      <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 2, 28) }}>
+                      <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 2, 56) }}>
                         {week.map((_, di) => <div key={di} className="border-r border-surface-secondary last:border-r-0" />)}
                         {rows.map((row: any[], ri) => row.map((bar: any) => {
                           const s = bar.schedule as Schedule

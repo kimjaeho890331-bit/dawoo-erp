@@ -87,15 +87,14 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     if (!project || !hasChanges) return
 
     // 데이터 기반 자동 단계 판정
+    // approval_date = 건축물대장 사용승인일 (자동입력) → 단계 판단에 사용하지 않음
+    // 동의서/승인은 수동 단계전환 버튼으로만 변경
     const calcAutoStep = (data: Record<string, unknown>): ProjectStep | null => {
       const v = (f: string) => data[f] ?? project[f as keyof DBProject]
-      if (v('outstanding') === 0 && (v('total_cost') as number) > 0) return '입금'
       if (v('completion_doc_date')) return '완료서류제출'
       if (v('construction_date')) return '공사'
       if (v('contractor')) return '착공계'
-      if (v('approval_date') && v('application_date')) return '승인'
       if (v('application_date')) return '신청서제출'
-      if (v('approval_date')) return '동의서'
       if ((v('total_cost') as number) > 0) return '견적전달'
       if (v('survey_date')) return '실사'
       return null

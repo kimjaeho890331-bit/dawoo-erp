@@ -499,6 +499,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                       <span className={`badge ${getStepBadgeColor(project.status)}`}>
                         {project.status}
                       </span>
+                      {project.outstanding > 0 && project.total_cost > 0 && (
+                        <span className="ml-1 text-[10px] font-semibold text-money-negative">미수금</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-txt-tertiary max-w-[160px] truncate" title={project.note || ''}>
                       {project.note || '-'}

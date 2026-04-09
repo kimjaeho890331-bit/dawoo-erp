@@ -92,9 +92,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     dong: '',
     ho: '',
     exclusive_area: '',
-    // 소규모/수도 전용
+    // 수도 전용
     water_work_type: '',
-    support_program: '',
   })
 
   const [errors, setErrors] = useState<Record<string, boolean>>({})
@@ -143,7 +142,6 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           ho,
           exclusive_area: editProject.exclusive_area?.toString() || '',
           water_work_type: editProject.water_work_type || '',
-          support_program: editProject.support_program || '',
         })
       } else {
         // 신규등록 기본값 — 로그인 유저를 담당직원 기본값으로
@@ -354,7 +352,6 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         ho: form.ho || null,
         exclusive_area: form.exclusive_area ? Number(form.exclusive_area) : null,
         water_work_type: form.water_work_type || null,
-        support_program: form.support_program || null,
       }
 
       if (isEdit) {

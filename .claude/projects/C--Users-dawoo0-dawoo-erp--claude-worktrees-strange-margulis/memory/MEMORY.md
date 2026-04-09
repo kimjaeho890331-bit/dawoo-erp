@@ -1,0 +1,6 @@
+- [User profile](user_profile.md) — 다우건설 대표 김재호, ERP 직접 구축 중
+- [Design feedback](feedback_design.md) — 디자인 임의 수정 금지, 사장님이 따로 잡을 예정
+- [Inline edit rule](feedback_inline_edit.md) — input 항상 표시 금지, 읽기 모드 기본 + 클릭 시 편집
+- [Reports feedback](feedback_reports.md) — 숫자 나열 아닌 서술형 보고서, 상사 보고 형식
+- [Accounting calendar](project_accounting_calendar.md) — 코스카 세무달력 기반 법정 세무 일정
+- [Data flow](project_data_flow.md) — 캘린더(schedules 1개→4출력) + 보고서(12소스→AI→4종→총괄)

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
+import { formatPhone, formatMoney } from '@/lib/utils/format'
 
 interface Staff {
   id: string
@@ -381,17 +382,7 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
 
   const PRESET_COLORS = ['#5e6ad2', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899']
 
-  const formatPhone = (v: string) => {
-    const num = v.replace(/[^0-9]/g, '')
-    if (num.length <= 3) return num
-    if (num.length <= 7) return `${num.slice(0, 3)}-${num.slice(3)}`
-    return `${num.slice(0, 3)}-${num.slice(3, 7)}-${num.slice(7, 11)}`
-  }
-
-  const formatSalary = (v: string) => {
-    const num = v.replace(/[^0-9]/g, '')
-    return num ? parseInt(num).toLocaleString() : ''
-  }
+  const formatSalary = (v: string) => formatMoney(v)
 
   const handleSave = async () => {
     if (!name.trim()) return

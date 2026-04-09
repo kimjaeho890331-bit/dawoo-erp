@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Settings, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { formatPhone } from '@/lib/utils/format'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
 
@@ -483,7 +484,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                     <td className="px-4 py-2.5 font-medium text-txt-primary">{project.staff?.name || '-'}</td>
                     <td className="px-4 py-2.5 text-txt-primary">{project.building_name || '-'}</td>
                     <td className="px-4 py-2.5 text-txt-secondary">{project.owner_name || '-'}</td>
-                    <td className="px-4 py-2.5 text-txt-secondary">{project.owner_phone || '-'}</td>
+                    <td className="px-4 py-2.5 text-txt-secondary">{project.owner_phone ? formatPhone(project.owner_phone) : '-'}</td>
                     <td className="px-4 py-2.5 text-txt-secondary max-w-[200px] truncate" title={project.road_address || ''}>
                       {project.road_address || '-'}
                     </td>

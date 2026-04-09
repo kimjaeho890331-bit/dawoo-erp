@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Check, Trash2, Upload, FileText, Image, X, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { updateProjectStatus } from '@/lib/api/projects'
+import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 
 interface Payment {
   id: string
@@ -378,6 +379,28 @@ function FormInput({ label, type = 'text', placeholder, value, onChange }: {
   )
 }
 
+// --- 금액 입력 (콤마 자동 포맷) ---
+function MoneyInput({ label, value, onChange }: {
+  label: string
+  value: string | number | null | undefined
+  onChange: (v: number) => void
+}) {
+  const numVal = typeof value === 'number' ? value : (Number(value) || 0)
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={numVal > 0 ? formatMoney(numVal) : ''}
+        onChange={e => onChange(parseMoney(e.target.value))}
+        placeholder="0"
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-right tabular-nums focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light hover:border-border-secondary transition-colors"
+      />
+    </div>
+  )
+}
+
 // --- API 필드 잠금 입력 ---
 function LockedFormInput({ label, type = 'text', placeholder, value, onChange, locked }: {
   label: string; type?: string; placeholder?: string
@@ -447,8 +470,8 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">소유주/세입자</h3>
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="소유주" value={getVal('owner_name') as string} onChange={v => onChange('owner_name', v || null)} />
-          <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', v || null)} />
-          <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', v || null)} />
+          <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', formatPhone(v))} />
+          <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v))} />
         </div>
       </section>
 
@@ -667,9 +690,9 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           </div>
         )}
         <div className="grid grid-cols-3 gap-3">
-          <FormInput label="총공사비" type="number" value={getVal('total_cost') as number} onChange={v => onChange('total_cost', Number(v) || 0)} />
-          <FormInput label="시지원금" type="number" value={getVal('city_support') as number} onChange={v => onChange('city_support', Number(v) || 0)} />
-          <FormInput label="자부담금" type="number" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', Number(v) || 0)} />
+          <MoneyInput label="총공사비" value={getVal('total_cost') as number} onChange={v => onChange('total_cost', v)} />
+          <MoneyInput label="시지원금" value={getVal('city_support') as number} onChange={v => onChange('city_support', v)} />
+          <MoneyInput label="자부담금" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', v)} />
         </div>
         <button
           onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
@@ -720,7 +743,7 @@ function TabStep2({ project, getVal, onChange }: TabProps) {
           <FormInput label="시공일" type="date" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v || null)} />
           <FormInput label="시공업체" value={getVal('contractor') as string} onChange={v => onChange('contractor', v || null)} />
           <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
-          <FormInput label="착수금" type="number" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', Number(v) || 0)} />
+          <MoneyInput label="착수금" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', v)} />
         </div>
       </section>
     </div>
@@ -892,8 +915,8 @@ function TabStep34({ project, getVal, onChange, onRefresh }: TabProps & { onRefr
               </div>
               <div>
                 <label className="block text-[10px] text-txt-tertiary mb-0.5">금액 *</label>
-                <input type="number" value={newPayment.amount} onChange={e => setNewPayment(p => ({ ...p, amount: e.target.value }))}
-                  placeholder="0" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] focus:outline-none focus:border-accent" />
+                <input type="text" inputMode="numeric" value={newPayment.amount ? formatMoney(newPayment.amount) : ''} onChange={e => setNewPayment(p => ({ ...p, amount: String(parseMoney(e.target.value)) }))}
+                  placeholder="0" className="w-full h-[32px] px-2 border border-border-primary rounded text-[12px] text-right tabular-nums focus:outline-none focus:border-accent" />
               </div>
             </div>
             <div>

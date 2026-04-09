@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { formatPhone } from '@/lib/utils/format'
 import type { DBProject } from '@/components/register/RegisterPage'
 
 // --- 주소 검색 결과 타입 ---
@@ -522,12 +523,12 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                 </div>
               )}
             </div>
-            <ModalField
-              label="전유면적 (m2)"
-              value={form.exclusive_area}
-              onChange={v => update('exclusive_area', v)}
-              placeholder="예: 59.94"
-            />
+            <div>
+              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">전유면적 (m²)</label>
+              <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] text-txt-secondary bg-surface-secondary">
+                {form.exclusive_area ? `${form.exclusive_area} m²` : '호수 선택 시 자동입력'}
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -541,7 +542,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             <ModalField
               label="연락처 *"
               value={form.owner_phone}
-              onChange={v => update('owner_phone', v)}
+              onChange={v => update('owner_phone', formatPhone(v))}
               placeholder="010-0000-0000"
               type="tel"
               error={errors.owner_phone}
@@ -551,7 +552,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           <ModalField
             label="세입자 연락처"
             value={form.tenant_phone}
-            onChange={v => update('tenant_phone', v)}
+            onChange={v => update('tenant_phone', formatPhone(v))}
             placeholder="010-0000-0000"
             type="tel"
           />

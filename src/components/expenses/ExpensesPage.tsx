@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 'react'
 import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle, Upload, Table } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { formatMoney, parseMoney } from '@/lib/utils/format'
 
 // --- 타입 ---
 interface Expense {
@@ -955,8 +956,8 @@ function UnifiedModal({ tab, item, staffList, siteList, onClose, onSaved }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-txt-secondary mb-1">금액 *</label>
-              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0"
-                className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none tabular-nums" />
+              <input type="text" inputMode="numeric" value={amount ? formatMoney(amount) : ''} onChange={e => setAmount(String(parseMoney(e.target.value)))} placeholder="0"
+                className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] text-right focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none tabular-nums" />
             </div>
             {tab === 'fixed' ? (
               <div>

@@ -567,13 +567,16 @@ function StaffSelect({ label, value, onChange, staffList, currentStaffName }: {
   )
 }
 
-// --- 날짜+시간 입력 (날짜: 월/일만 표시, 시간: 24h 타이핑) ---
+// --- 날짜+시간 입력 (날짜: MM/DD 표시, 시간: 24h) ---
 function DateTimeInput({ label, value, onChange }: {
   label: string; value: string | number | null | undefined; onChange: (v: string) => void
 }) {
   const strVal = (value as string) ?? ''
   const datePart = strVal.includes('T') ? strVal.split('T')[0] : strVal.split(' ')[0] || ''
   const timePart = strVal.includes('T') ? strVal.split('T')[1]?.substring(0, 5) || '' : strVal.split(' ')[1]?.substring(0, 5) || ''
+  const [timeVal, setTimeVal] = useState(timePart)
+
+  useEffect(() => { setTimeVal(timePart) }, [timePart])
 
   const updateDateTime = (date: string, time: string) => {
     if (date && time) onChange(`${date}T${time}`)
@@ -581,36 +584,43 @@ function DateTimeInput({ label, value, onChange }: {
     else onChange('')
   }
 
-  // 날짜를 MM/DD로 표시
-  const dateDisplay = datePart ? `${datePart.split('-')[1]}/${datePart.split('-')[2]}` : ''
+  const dateDisplay = datePart
+    ? `${Number(datePart.split('-')[1])}월 ${Number(datePart.split('-')[2])}일`
+    : ''
 
   return (
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <input type="date" value={datePart} onChange={e => updateDateTime(e.target.value, timePart)}
-            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent opacity-0 absolute inset-0 cursor-pointer" />
-          <div className="h-[36px] px-3 flex items-center border border-border-primary rounded-lg text-[13px] text-txt-primary bg-surface pointer-events-none">
-            {dateDisplay || <span className="text-txt-quaternary">MM/DD</span>}
-          </div>
-        </div>
-        <input type="text" value={timePart} placeholder="HH:MM"
+      <div className="flex items-center gap-2 h-[36px] px-3 bg-surface border border-border-primary rounded-lg hover:border-border-secondary transition-colors">
+        {/* 날짜 영역 */}
+        <label className="flex items-center gap-1.5 cursor-pointer flex-1 min-w-0">
+          <svg className="w-3.5 h-3.5 text-txt-tertiary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span className="text-[13px] text-txt-primary">{dateDisplay || <span className="text-txt-quaternary">날짜 선택</span>}</span>
+          <input type="date" value={datePart} onChange={e => updateDateTime(e.target.value, timeVal)}
+            className="absolute opacity-0 w-0 h-0" />
+        </label>
+        {/* 구분선 */}
+        <div className="w-px h-4 bg-border-primary" />
+        {/* 시간 영역 */}
+        <input type="text" value={timeVal} placeholder="--:--"
           onChange={e => {
             let v = e.target.value.replace(/[^0-9:]/g, '')
-            if (v.length === 2 && !v.includes(':') && timePart.length < 2) v += ':'
+            if (v.length === 2 && !v.includes(':') && timeVal.length < v.length) v += ':'
             if (v.length > 5) v = v.substring(0, 5)
+            setTimeVal(v)
             if (/^\d{2}:\d{2}$/.test(v)) updateDateTime(datePart, v)
-            else updateDateTime(datePart, v)
           }}
-          onBlur={e => {
-            const nums = e.target.value.replace(/[^0-9]/g, '')
+          onBlur={() => {
+            const nums = timeVal.replace(/[^0-9]/g, '')
             if (nums.length >= 3) {
-              const formatted = `${nums.substring(0, 2)}:${(nums.substring(2, 4) || '00').padStart(2, '0')}`
-              updateDateTime(datePart, formatted)
+              const fmt = `${nums.substring(0, 2)}:${(nums.substring(2, 4) || '00').padStart(2, '0')}`
+              setTimeVal(fmt)
+              updateDateTime(datePart, fmt)
             }
           }}
-          className="w-[80px] h-[36px] px-2 border border-border-primary rounded-lg text-[13px] text-center tabular-nums text-[#3B82F6] font-medium focus:outline-none focus:border-accent placeholder:text-txt-quaternary placeholder:font-normal" />
+          className="w-[48px] text-[13px] text-center tabular-nums text-[#3B82F6] font-medium bg-transparent outline-none placeholder:text-txt-quaternary placeholder:font-normal" />
       </div>
     </div>
   )

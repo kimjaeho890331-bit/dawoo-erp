@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Trash2, Upload, FileText, Image, X, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -567,7 +567,7 @@ function StaffSelect({ label, value, onChange, staffList, currentStaffName }: {
   )
 }
 
-// --- 날짜+시간 입력 (분리형: 날짜 캘린더 + 시간 24h 타이핑) ---
+// --- 날짜+시간 통합 입력 (MM/DD \ HH:MM) + 캘린더 팝업 ---
 function DateTimeInput({ label, value, onChange }: {
   label: string; value: string | number | null | undefined; onChange: (v: string) => void
 }) {
@@ -575,22 +575,117 @@ function DateTimeInput({ label, value, onChange }: {
   const datePart = strVal.includes('T') ? strVal.split('T')[0] : strVal.split(' ')[0] || ''
   const timePart = strVal.includes('T') ? strVal.split('T')[1]?.substring(0, 5) || '' : strVal.split(' ')[1]?.substring(0, 5) || ''
 
-  const updateDateTime = (date: string, time: string) => {
+  const [showCal, setShowCal] = useState(false)
+  const [calYear, setCalYear] = useState(() => datePart ? Number(datePart.split('-')[0]) : new Date().getFullYear())
+  const [calMonth, setCalMonth] = useState(() => datePart ? Number(datePart.split('-')[1]) - 1 : new Date().getMonth())
+  const [timeInput, setTimeInput] = useState(timePart)
+  const calRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) { if (calRef.current && !calRef.current.contains(e.target as Node)) setShowCal(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => { setTimeInput(timePart) }, [timePart])
+
+  const update = (date: string, time: string) => {
     if (date && time) onChange(`${date}T${time}`)
     else if (date) onChange(date)
     else onChange('')
   }
 
+  const selectDay = (day: number) => {
+    const m = String(calMonth + 1).padStart(2, '0')
+    const d = String(day).padStart(2, '0')
+    const newDate = `${calYear}-${m}-${d}`
+    update(newDate, timeInput)
+    setShowCal(false)
+  }
+
+  const handleTimeChange = (v: string) => {
+    // 숫자와 : 만 허용, 자동 포맷
+    const clean = v.replace(/[^0-9:]/g, '')
+    let formatted = clean
+    if (clean.length === 2 && !clean.includes(':') && !timePart.endsWith(':')) formatted = clean + ':'
+    if (formatted.length > 5) formatted = formatted.substring(0, 5)
+    setTimeInput(formatted)
+    if (/^\d{2}:\d{2}$/.test(formatted)) update(datePart, formatted)
+  }
+
+  const handleTimeBlur = () => {
+    if (timeInput && !/^\d{2}:\d{2}$/.test(timeInput)) {
+      const nums = timeInput.replace(/[^0-9]/g, '')
+      if (nums.length >= 3) {
+        const h = nums.substring(0, 2)
+        const m = nums.substring(2, 4) || '00'
+        const formatted = `${h.padStart(2, '0')}:${m.padStart(2, '0')}`
+        setTimeInput(formatted)
+        update(datePart, formatted)
+      }
+    }
+  }
+
+  // 캘린더 그리드
+  const firstDay = new Date(calYear, calMonth, 1).getDay()
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  const displayDate = datePart ? `${datePart.split('-')[1]}/${datePart.split('-')[2]}` : ''
+  const displayTime = timePart || ''
+
   return (
-    <div>
+    <div className="relative" ref={calRef}>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <div className="flex gap-2">
-        <input type="date" value={datePart} onChange={e => updateDateTime(e.target.value, timePart)}
-          className="flex-1 h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent" />
-        <input type="time" value={timePart} onChange={e => updateDateTime(datePart, e.target.value)}
-          placeholder="14:00" step="60"
-          className="w-[90px] h-[36px] px-2 border border-border-primary rounded-lg text-[13px] text-center tabular-nums focus:outline-none focus:border-accent" />
+      <div className="flex items-center h-[36px] bg-surface-secondary border border-border-primary rounded-md px-4 cursor-pointer"
+        onClick={() => setShowCal(!showCal)}>
+        {displayDate || displayTime ? (
+          <span className="text-[13px] tabular-nums flex items-center gap-0">
+            <span className="text-txt-primary">{displayDate || 'MM/DD'}</span>
+            <span className="text-txt-quaternary mx-1">\</span>
+            <input type="text" value={timeInput} placeholder="HH:MM"
+              onClick={e => e.stopPropagation()}
+              onChange={e => handleTimeChange(e.target.value)}
+              onBlur={handleTimeBlur}
+              className="w-[50px] bg-transparent text-[13px] text-[#3B82F6] font-medium tabular-nums outline-none placeholder:text-txt-quaternary" />
+          </span>
+        ) : (
+          <span className="text-[13px] text-txt-quaternary">MM/DD \ HH:MM</span>
+        )}
       </div>
+
+      {showCal && (
+        <div className="absolute z-20 left-0 top-[calc(100%+4px)] bg-surface border border-border-primary rounded-lg shadow-lg p-3 w-[240px]">
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => { if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11) } else setCalMonth(m => m - 1) }}
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-tertiary text-txt-tertiary">&lt;</button>
+            <span className="text-[12px] font-semibold text-txt-primary">{calYear}년 {calMonth + 1}월</span>
+            <button onClick={() => { if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0) } else setCalMonth(m => m + 1) }}
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-tertiary text-txt-tertiary">&gt;</button>
+          </div>
+          <div className="grid grid-cols-7 gap-0 text-center text-[10px] text-txt-tertiary mb-1">
+            {['일','월','화','수','목','금','토'].map(d => <div key={d} className="py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-0 text-center">
+            {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1
+              const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+              const isSelected = dateStr === datePart
+              const isToday = dateStr === todayStr
+              return (
+                <button key={day} onClick={() => selectDay(day)}
+                  className={`w-7 h-7 rounded-full text-[11px] transition-colors ${
+                    isSelected ? 'bg-accent text-white font-semibold' :
+                    isToday ? 'bg-accent/10 text-accent font-semibold' :
+                    'text-txt-primary hover:bg-surface-tertiary'
+                  }`}>{day}</button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

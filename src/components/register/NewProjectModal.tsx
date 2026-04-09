@@ -198,25 +198,20 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     setShowAddressDropdown(false)
     setAddressKeyword('')
 
-    // 주소, 건물명 자동 입력 (항상 덮어쓰기 — 새 주소 선택했으니)
+    // 주소 + 건물명 + 시 한번에 세팅
+    const cityNames = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남']
+    const matchedCity = cityNames.find(c => addr.roadAddr.includes(c) || addr.jibunAddr.includes(c))
+    const matchedCityData = matchedCity ? cities.find(c => c.name === matchedCity) : null
+
     setForm(prev => ({
       ...prev,
       road_address: addr.roadAddr,
       jibun_address: addr.jibunAddr,
       building_name: addr.bdNm || prev.building_name || '',
+      ...(matchedCityData ? { city_id: matchedCityData.id } : {}),
     }))
     if (errors.road_address) {
       setErrors(prev => ({ ...prev, road_address: false }))
-    }
-
-    // 주소에서 시 자동 추출
-    const cityNames = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남']
-    const matchedCity = cityNames.find(c => addr.roadAddr.includes(c) || addr.jibunAddr.includes(c))
-    if (matchedCity) {
-      const matchedCityData = cities.find(c => c.name === matchedCity)
-      if (matchedCityData) {
-        setForm(prev => ({ ...prev, city_id: matchedCityData.id }))
-      }
     }
 
     // 건축물대장 + 전유부 동시 호출
@@ -247,13 +242,13 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           formattedDate = `${bldData.useAprDay.substring(0, 4)}-${bldData.useAprDay.substring(4, 6)}-${bldData.useAprDay.substring(6, 8)}`
         }
 
-        // 표제부 데이터로 자동입력 (항상 덮어쓰기)
+        // 표제부 데이터로 자동입력 (빌라명은 기존값 우선 유지)
         setForm(prev => ({
           ...prev,
           building_use: bldData.mainPurpsCdNm || bldData.etcPurps || prev.building_use || '',
           unit_count: bldData.hhldCnt?.toString() || prev.unit_count || '',
           approval_date: formattedDate || prev.approval_date || '',
-          building_name: bldData.bldNm || prev.building_name || '',
+          building_name: prev.building_name || bldData.bldNm || '',
         }))
       }
     } catch (err) {

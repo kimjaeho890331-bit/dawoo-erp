@@ -236,7 +236,7 @@ export default function WorkCalendarPage() {
                     }
                     if (!placed) rows.push([bar])
                   }
-                  const bh = 20, bg = 1, ah = rows.length * (bh + bg)
+                  const bh = 36, bg = 2, ah = rows.length * (bh + bg)
 
                   return (
                     <div key={wi} className="border-b border-surface-secondary last:border-b-0">
@@ -262,17 +262,26 @@ export default function WorkCalendarPage() {
                           return (
                             <div key={s.id + '-' + wi}
                               onClick={(e) => { e.stopPropagation(); setEditSchedule(s); setShowModal(true) }}
-                              className="absolute flex items-center rounded-md cursor-pointer hover:brightness-95 overflow-hidden shadow-sm"
+                              className="absolute flex flex-col justify-center rounded-md cursor-pointer hover:brightness-95 overflow-hidden shadow-sm px-1.5 py-0.5"
                               style={{
                                 left: `${bar.left}%`, width: `${bar.width}%`, top: ri * (bh + bg) + 1, height: bh,
                                 backgroundColor: s.confirmed ? barColor : 'white',
                                 border: s.confirmed ? 'none' : `1.5px dashed ${barColor}`,
                                 color: s.confirmed ? 'white' : barColor,
                               }}
-                              title={`${bar.staffName || ''} ${s.title}`}>
-                              <span className="text-[10px] font-medium px-1.5 truncate w-full">
-                                {bar.staffName ? `${bar.staffName.charAt(0)} | ` : ''}{s.title}
-                              </span>
+                              title={`${bar.staffName || ''} ${s.title}\n${s.memo || ''}`}>
+                              <div className="flex items-center gap-1 truncate">
+                                {bar.staffName && (
+                                  <span className="shrink-0 w-[14px] h-[14px] rounded-full flex items-center justify-center text-[8px] font-bold"
+                                    style={{ backgroundColor: s.confirmed ? 'rgba(255,255,255,0.3)' : barColor, color: s.confirmed ? 'white' : 'white' }}>
+                                    {bar.staffName.length >= 2 ? bar.staffName.charAt(1) : bar.staffName.charAt(0)}
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-medium truncate">{s.title}</span>
+                              </div>
+                              {s.memo && (
+                                <div className="text-[9px] truncate opacity-80 mt-px">{s.memo.split('\n')[0]}</div>
+                              )}
                             </div>
                           )
                         }))}

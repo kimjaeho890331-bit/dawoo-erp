@@ -723,7 +723,7 @@ async function syncSchedule(info: ScheduleSyncInfo) {
     if (data) resolvedStaffId = data.id
   }
 
-  const memoLines = [staffName, address, phone].filter(Boolean).join('\n')
+  const memoLines = [address, staffName && phone ? `${staffName} ${phone}` : staffName || phone].filter(Boolean).join('\n')
 
   await supabase.from('schedules').delete()
     .eq('project_id', projectId)

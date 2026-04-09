@@ -728,6 +728,22 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
   return (
     <div className="space-y-5">
       <section>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">지원사업</h3>
+        <select
+          value={(getVal('support_program') as string) ?? ''}
+          onChange={e => onChange('support_program', e.target.value || null)}
+          className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+        >
+          <option value="">선택</option>
+          <option value="소규모">소규모</option>
+          <option value="공동주택">공동주택</option>
+          <option value="새빛">새빛</option>
+          <option value="녹색">녹색</option>
+          <option value="개인">개인</option>
+        </select>
+      </section>
+
+      <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">소유주/세입자</h3>
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="소유주" value={getVal('owner_name') as string} onChange={v => onChange('owner_name', v || null)} />

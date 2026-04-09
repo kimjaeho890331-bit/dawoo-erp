@@ -82,6 +82,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     work_type_id: '',
     staff_id: '',
     city_id: '',
+    support_program: '',
     // 건축물대장 자동 데이터
     building_use: '',
     unit_count: '',
@@ -129,6 +130,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           work_type_id: editProject.work_type_id || typesData[0]?.id || '',
           staff_id: editProject.staff_id || staffData[0]?.id || '',
           city_id: editProject.city_id || citiesData[0]?.id || '',
+          support_program: editProject.support_program || '',
           building_use: editProject.building_use || '',
           unit_count: editProject.unit_count?.toString() || '',
           approval_date: editProject.approval_date || '',
@@ -339,6 +341,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         work_type_id: form.work_type_id || null,
         staff_id: form.staff_id || null,
         city_id: form.city_id || null,
+        support_program: form.support_program || null,
         building_use: form.building_use || null,
         unit_count: form.unit_count ? Number(form.unit_count) : null,
         approval_date: form.approval_date || null,
@@ -568,6 +571,21 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             placeholder="010-0000-0000"
             type="tel"
           />
+
+          {category === '소규모' && (
+            <div>
+              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업</label>
+              <select value={form.support_program || ''} onChange={e => update('support_program', e.target.value)}
+                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light">
+                <option value="">선택</option>
+                <option value="소규모">소규모</option>
+                <option value="공동주택">공동주택</option>
+                <option value="새빛">새빛</option>
+                <option value="녹색">녹색</option>
+                <option value="개인">개인</option>
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-4">
             <div>

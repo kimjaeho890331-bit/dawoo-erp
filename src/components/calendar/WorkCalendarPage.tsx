@@ -252,7 +252,7 @@ export default function WorkCalendarPage() {
                           )
                         })}
                       </div>
-                      <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 2, 56) }}>
+                      <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 116) }}>
                         {week.map((_, di) => <div key={di} className="border-r border-surface-secondary last:border-r-0" />)}
                         {rows.map((row: any[], ri) => row.map((bar: any) => {
                           const s = bar.schedule as Schedule
@@ -487,18 +487,34 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
   const [startDate, setStartDate] = useState(schedule?.start_date || defaultDate)
   const [endDate, setEndDate] = useState(schedule?.end_date || defaultDate)
   const [staffId, setStaffId] = useState(schedule?.staff_id || '')
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>(schedule?.staff_id ? [schedule.staff_id] : [])
   const [scheduleType, setScheduleType] = useState(schedule?.schedule_type || 'personal')
   const [memo, setMemo] = useState(schedule?.memo || '')
-  const [confirmed, setConfirmed] = useState(schedule?.confirmed ?? true)
+  const [confirmed, setConfirmed] = useState(schedule?.confirmed ?? false)
   const [saving, setSaving] = useState(false)
+
+  const toggleStaff = (id: string) => {
+    setSelectedStaffIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
+  }
 
   const handleSubmit = async () => {
     if (!title || !startDate || !endDate) return
     setSaving(true)
-    const color = staffId && staffColorMap[staffId] ? staffColorMap[staffId] : TYPE_COLORS[scheduleType] || '#3B82F6'
-    const payload = { title, start_date: startDate, end_date: endDate, staff_id: staffId || null, schedule_type: scheduleType, memo: memo || null, confirmed, color, all_day: true, site_id: null, project_id: null }
-    if (isEdit) await supabase.from('schedules').update(payload).eq('id', schedule!.id)
-    else await supabase.from('schedules').insert(payload)
+    if (isEdit) {
+      const color = staffId && staffColorMap[staffId] ? staffColorMap[staffId] : TYPE_COLORS[scheduleType] || '#3B82F6'
+      const payload = { title, start_date: startDate, end_date: endDate, staff_id: staffId || null, schedule_type: scheduleType, memo: memo || null, confirmed, color, all_day: true, site_id: null, project_id: null }
+      await supabase.from('schedules').update(payload).eq('id', schedule!.id)
+    } else {
+      // 복수 담당자: 각각 일정 생성
+      const ids = selectedStaffIds.length > 0 ? selectedStaffIds : [null]
+      const inserts = ids.map(sid => ({
+        title, start_date: startDate, end_date: endDate,
+        staff_id: sid, schedule_type: scheduleType, memo: memo || null,
+        confirmed, color: sid && staffColorMap[sid] ? staffColorMap[sid] : TYPE_COLORS[scheduleType] || '#3B82F6',
+        all_day: true, site_id: null, project_id: null,
+      }))
+      await supabase.from('schedules').insert(inserts)
+    }
     setSaving(false); onSave()
   }
 
@@ -522,11 +538,25 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" /></div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-txt-secondary mb-1">담당자</label>
-            <select value={staffId} onChange={e => setStaffId(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
-              <option value="">선택</option>
-              {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <label className="block text-xs font-medium text-txt-secondary mb-1">담당자 {!isEdit && '(복수 선택 가능)'}</label>
+            {isEdit ? (
+              <select value={staffId} onChange={e => setStaffId(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
+                <option value="">선택</option>
+                {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            ) : (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {staffList.map(s => (
+                  <label key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] cursor-pointer transition-colors ${
+                    selectedStaffIds.includes(s.id) ? 'border-accent bg-accent/10 text-accent font-medium' : 'border-border-primary text-txt-secondary hover:border-accent'
+                  }`}>
+                    <input type="checkbox" checked={selectedStaffIds.includes(s.id)} onChange={() => toggleStaff(s.id)} className="sr-only" />
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: staffColorMap[s.id] || '#999' }} />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
           <div><label className="block text-xs font-medium text-txt-secondary mb-1">메모</label>
             <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} className="w-full bg-surface border border-border-primary rounded-lg px-3 py-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none resize-none" /></div>

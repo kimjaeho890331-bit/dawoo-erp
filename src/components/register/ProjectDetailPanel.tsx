@@ -736,7 +736,7 @@ async function syncSchedule(info: ScheduleSyncInfo) {
     title,
     start_date: dateOnly,
     end_date: dateOnly,
-    confirmed: true,
+    confirmed: false,
     memo: memoLines || null,
   })
 }

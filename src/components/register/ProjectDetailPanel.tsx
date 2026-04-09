@@ -38,7 +38,7 @@ const STEP_LABELS_SHORT = [
   '승인', '착공', '공사', '완료', '입금',
 ]
 
-const TABS = ['기본정보', '1단계', '2단계', '3~4단계', '서류/첨부', '이력'] as const
+const TABS = ['기본정보', '1단계', '2단계', '3단계', '이력'] as const
 type TabKey = (typeof TABS)[number]
 
 function getStepIndex(step: string): number {
@@ -73,7 +73,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       if (stepIdx <= 0) setActiveTab('기본정보')
       else if (stepIdx <= 4) setActiveTab('1단계')
       else if (stepIdx <= 7) setActiveTab('2단계')
-      else if (stepIdx <= 9) setActiveTab('3~4단계')
+      else if (stepIdx <= 9) setActiveTab('3단계')
       else setActiveTab('기본정보')
     }
   }, [project])
@@ -311,8 +311,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
           {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
           {activeTab === '2단계' && <TabStep2 project={project} getVal={getVal} onChange={updateField} />}
-          {activeTab === '3~4단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
-          {activeTab === '서류/첨부' && <TabDocuments projectId={project.id} />}
+          {activeTab === '3단계' && <TabStep3 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>
@@ -419,6 +418,85 @@ function LockedFormInput({ label, type = 'text', placeholder, value, onChange, l
     )
   }
   return <FormInput label={label} type={type} placeholder={placeholder} value={value} onChange={onChange} />
+}
+
+// --- 파일 첨부 섹션 (드래그앤드롭, 미리보기, 삭제) ---
+function FileAttachSection({ projectId, fileType, label }: { projectId: string; fileType: string; label: string }) {
+  const [files, setFiles] = useState<Attachment[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [preview, setPreview] = useState<string | null>(null)
+
+  useEffect(() => { loadFiles() }, [projectId, fileType])
+
+  const loadFiles = async () => {
+    const { data } = await supabase.from('attachments').select('*')
+      .eq('project_id', projectId).eq('file_type', fileType)
+      .order('created_at', { ascending: false })
+    setFiles(data || [])
+  }
+
+  const handleUpload = async (fileList: FileList | File[]) => {
+    setUploading(true)
+    try {
+      for (const file of Array.from(fileList)) {
+        const ts = Date.now()
+        const filePath = `attachments/${projectId}/${fileType}/${ts}_${file.name}`
+        const { error } = await supabase.storage.from('attachments').upload(filePath, file)
+        if (error) { console.error('업로드 실패:', error); continue }
+        await supabase.from('attachments').insert({ project_id: projectId, name: file.name, file_path: filePath, file_type: fileType })
+      }
+      await loadFiles()
+    } catch { /* */ } finally { setUploading(false) }
+  }
+
+  const handleDelete = async (att: Attachment) => {
+    if (!confirm(`${att.name} 삭제?`)) return
+    await supabase.storage.from('attachments').remove([att.file_path])
+    await supabase.from('attachments').delete().eq('id', att.id)
+    setFiles(prev => prev.filter(f => f.id !== att.id))
+    if (preview === att.id) setPreview(null)
+  }
+
+  const getUrl = (fp: string) => supabase.storage.from('attachments').getPublicUrl(fp).data.publicUrl
+  const isImg = (n: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(n)
+
+  return (
+    <div className="mt-2">
+      {files.length > 0 && (
+        <div className="space-y-1.5 mb-2">
+          {files.map(f => (
+            <div key={f.id}>
+              <div className="flex items-center gap-2 p-1.5 border border-border-primary rounded-lg hover:bg-surface-secondary group">
+                {isImg(f.name) ? <Image size={14} className="text-txt-tertiary" /> : <FileText size={14} className="text-txt-tertiary" />}
+                <button onClick={() => setPreview(preview === f.id ? null : f.id)} className="text-[12px] text-link hover:underline truncate flex-1 text-left">{f.name}</button>
+                <button onClick={() => handleDelete(f)} className="p-0.5 text-txt-quaternary hover:text-money-negative opacity-0 group-hover:opacity-100"><Trash2 size={12} /></button>
+              </div>
+              {preview === f.id && (
+                <div className="mt-1 border border-border-primary rounded-lg overflow-hidden bg-surface-secondary">
+                  {isImg(f.name)
+                    ? <img src={getUrl(f.file_path)} alt={f.name} className="max-h-[200px] w-full object-contain" />
+                    : <iframe src={getUrl(f.file_path)} className="w-full h-[300px]" />
+                  }
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <label className={`flex items-center justify-center gap-1.5 border border-dashed rounded-lg p-2 cursor-pointer transition-colors text-[11px] ${
+        dragOver ? 'border-accent bg-accent/5 text-accent' : 'border-border-secondary text-txt-tertiary hover:border-accent hover:text-accent'
+      }`}
+        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
+      >
+        <Upload size={12} />
+        {uploading ? '업로드 중...' : `${label} 파일 첨부`}
+        <input type="file" multiple className="hidden" onChange={e => { if (e.target.files?.length) handleUpload(e.target.files) }} />
+      </label>
+    </div>
+  )
 }
 
 // --- 탭별 Props ---
@@ -638,55 +716,27 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <FormInput label="실측일" type="date" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v || null)} />
           <FormInput label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v || null)} />
         </div>
+        <FileAttachSection projectId={project.id} fileType="실측지" label="실측지" />
       </section>
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">견적</h3>
-        {/* 공문 기준 견적 산출 정보 */}
         {area > 0 && (
-          <div className="mb-3 p-3 bg-[#eef2ff] rounded-lg border border-[#c7d2fe]">
+          <div className="mb-3 p-3 bg-accent/5 rounded-lg border border-accent/20">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-indigo-700">
-                공문 단가 기준 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
+              <p className="text-[11px] font-semibold text-accent-text">
+                공문 단가 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
               </p>
-              <button
-                onClick={handleRecalculate}
-                className="px-3 py-1 text-[11px] font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
-              >
+              <button onClick={handleRecalculate}
+                className="px-3 py-1 text-[11px] font-medium text-white bg-accent rounded-md hover:bg-accent-hover transition-colors">
                 재산출
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div>
-                <span className="text-txt-tertiary">전유면적:</span>
-                <span className="ml-1 font-medium text-txt-primary">{area}m²</span>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">세대수:</span>
-                <span className="ml-1 font-medium text-txt-primary">{units}세대</span>
-              </div>
+            <div className="grid grid-cols-3 gap-2 text-[11px] mt-2 pt-2 border-t border-accent/10">
+              <div><span className="text-txt-tertiary">총공사비</span><p className="font-semibold text-txt-primary">{previewTotal.toLocaleString()}원</p></div>
+              <div><span className="text-txt-tertiary">시지원 80%</span><p className="font-semibold text-accent-text">{Math.round(previewTotal * 0.8).toLocaleString()}원</p></div>
+              <div><span className="text-txt-tertiary">자부담 20%</span><p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p></div>
             </div>
-            <div className="mt-2 pt-2 border-t border-indigo-200 grid grid-cols-3 gap-2 text-[11px]">
-              <div>
-                <span className="text-txt-tertiary">총공사비</span>
-                <p className="font-semibold text-txt-primary">{previewTotal.toLocaleString()}원</p>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">시지원 80%</span>
-                <p className="font-semibold text-accent-text">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">자부담 20%</span>
-                <p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p>
-              </div>
-            </div>
-            <p className="mt-2 text-[9px] text-indigo-400">
-              적용 단가: {isPublic
-                ? `공용 ${pricing.공용.toLocaleString()}원/m² + ${pricing.공용_세대.toLocaleString()}원/세대`
-                : `전용 ${pricing.전용.toLocaleString()}원/m²`
-              }
-              {pricingLoaded && ' (서류함 공문 기준)'}
-            </p>
           </div>
         )}
         <div className="grid grid-cols-3 gap-3">
@@ -694,19 +744,16 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <MoneyInput label="시지원금" value={getVal('city_support') as number} onChange={v => onChange('city_support', v)} />
           <MoneyInput label="자부담금" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', v)} />
         </div>
-        <button
-          onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
-          className="mt-3 px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
-        >
-          견적서 열기
-        </button>
+        <FileAttachSection projectId={project.id} fileType="견적서" label="견적서" />
       </section>
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="동의서 수령일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} />
+          <FormInput label="수령자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} />
         </div>
+        <FileAttachSection projectId={project.id} fileType="동의서" label="동의서" />
       </section>
 
       <section>
@@ -715,12 +762,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <FormInput label="신청서 제출일" type="date" value={getVal('application_date') as string} onChange={v => onChange('application_date', v || null)} />
           <FormInput label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} />
         </div>
-        <button
-          onClick={() => window.open(`/register/application?projectId=${project.id}`, '_blank')}
-          className="mt-3 px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
-        >
-          신청서 미리보기
-        </button>
+        <FileAttachSection projectId={project.id} fileType="신청서" label="신청서" />
       </section>
     </div>
   )
@@ -728,6 +770,25 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
 
 // --- 탭 3: 2단계 (승인 → 시공 분리) ---
 function TabStep2({ project, getVal, onChange }: TabProps) {
+  const [vendorSearch, setVendorSearch] = useState('')
+  const [vendorResults, setVendorResults] = useState<{ id: string; name: string; phone: string | null }[]>([])
+  const [showVendorDropdown, setShowVendorDropdown] = useState(false)
+
+  const searchVendors = async (q: string) => {
+    setVendorSearch(q)
+    if (q.trim().length < 1) { setVendorResults([]); setShowVendorDropdown(false); return }
+    const { data } = await supabase.from('vendors').select('id, name, phone')
+      .ilike('name', `%${q}%`).limit(8)
+    setVendorResults(data || [])
+    setShowVendorDropdown(true)
+  }
+
+  const selectVendor = (v: { name: string }) => {
+    onChange('contractor', v.name)
+    setVendorSearch('')
+    setShowVendorDropdown(false)
+  }
+
   return (
     <div className="space-y-5">
       <section>
@@ -741,7 +802,28 @@ function TabStep2({ project, getVal, onChange }: TabProps) {
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="시공일" type="date" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v || null)} />
-          <FormInput label="시공업체" value={getVal('contractor') as string} onChange={v => onChange('contractor', v || null)} />
+          <div className="relative">
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">시공업체</label>
+            <input
+              type="text"
+              value={vendorSearch || (getVal('contractor') as string) || ''}
+              onChange={e => { onChange('contractor', e.target.value); searchVendors(e.target.value) }}
+              onFocus={() => { if (vendorSearch) setShowVendorDropdown(true) }}
+              placeholder="업체명 검색..."
+              className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+            />
+            {showVendorDropdown && vendorResults.length > 0 && (
+              <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[160px] overflow-y-auto">
+                {vendorResults.map(v => (
+                  <button key={v.id} onClick={() => selectVendor(v)}
+                    className="w-full text-left px-3 py-2 hover:bg-surface-secondary text-[12px] border-b border-border-tertiary last:border-b-0 flex justify-between">
+                    <span className="text-txt-primary">{v.name}</span>
+                    {v.phone && <span className="text-txt-quaternary">{formatPhone(v.phone)}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
           <MoneyInput label="착수금" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', v)} />
         </div>
@@ -750,8 +832,8 @@ function TabStep2({ project, getVal, onChange }: TabProps) {
   )
 }
 
-// --- 탭 4: 3~4단계 ---
-function TabStep34({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
+// --- 탭 4: 3단계 (완료서류 + 수금) ---
+function TabStep3({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
   const [payments, setPayments] = useState<Payment[]>([])
   const [showAddPayment, setShowAddPayment] = useState(false)
   const [newPayment, setNewPayment] = useState({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
@@ -787,11 +869,10 @@ function TabStep34({ project, getVal, onChange, onRefresh }: TabProps & { onRefr
       })
       if (error) throw error
 
-      // 미수금 재계산: 총공사비 - 전체 입금 합계
+      // 미수금 재계산 → DB 직접 저장
       const totalPaid = [...payments, { amount: Number(newPayment.amount) }].reduce((sum, p) => sum + p.amount, 0)
-      const totalCost = (project.total_cost || 0)
-      const newOutstanding = Math.max(0, totalCost - totalPaid)
-      onChange('outstanding', newOutstanding)
+      const newOutstanding = Math.max(0, (project.total_cost || 0) - totalPaid)
+      await supabase.from('projects').update({ outstanding: newOutstanding, updated_at: new Date().toISOString() }).eq('id', project.id)
 
       setNewPayment({ payment_date: '', amount: '', payment_type: '자부담착수금', payer_name: '', memo: '' })
       setShowAddPayment(false)
@@ -813,7 +894,7 @@ function TabStep34({ project, getVal, onChange, onRefresh }: TabProps & { onRefr
       const remaining = payments.filter(p => p.id !== paymentId)
       const totalPaid = remaining.reduce((sum, p) => sum + p.amount, 0)
       const newOutstanding = Math.max(0, (project.total_cost || 0) - totalPaid)
-      onChange('outstanding', newOutstanding)
+      await supabase.from('projects').update({ outstanding: newOutstanding, updated_at: new Date().toISOString() }).eq('id', project.id)
       setPayments(remaining)
       onRefresh?.()
     } catch (err) {
@@ -945,171 +1026,7 @@ function TabStep34({ project, getVal, onChange, onRefresh }: TabProps & { onRefr
   )
 }
 
-// --- 탭 5: 서류/첨부 ---
-function TabDocuments({ projectId }: { projectId: string }) {
-  const [documents, setDocuments] = useState<{ id: string; name: string; file_path: string; doc_type: string | null; created_at: string }[]>([])
-  const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [uploading, setUploading] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
-
-  useEffect(() => {
-    loadDocuments()
-    loadAttachments()
-  }, [projectId])
-
-  const loadDocuments = async () => {
-    const { data } = await supabase
-      .from('documents')
-      .select('id, name, file_path, doc_type, created_at')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-    setDocuments(data || [])
-  }
-
-  const loadAttachments = async () => {
-    const { data } = await supabase
-      .from('attachments')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-    setAttachments(data || [])
-  }
-
-  const handleFileUpload = async (files: FileList | File[]) => {
-    setUploading(true)
-    try {
-      for (const file of Array.from(files)) {
-        const timestamp = Date.now()
-        const filePath = `attachments/${projectId}/${timestamp}_${file.name}`
-        const { error: uploadError } = await supabase.storage
-          .from('attachments')
-          .upload(filePath, file)
-
-        if (uploadError) {
-          console.error('업로드 실패:', uploadError)
-          continue
-        }
-
-        const fileType = file.type.startsWith('image/') ? '사진' : file.name.endsWith('.pdf') ? 'PDF' : '기타'
-        await supabase.from('attachments').insert({
-          project_id: projectId,
-          name: file.name,
-          file_path: filePath,
-          file_type: fileType,
-        })
-      }
-      await loadAttachments()
-    } catch (err) {
-      console.error('파일 업로드 실패:', err)
-      alert('파일 업로드에 실패했습니다.')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const handleDeleteAttachment = async (att: Attachment) => {
-    if (!confirm(`${att.name} 파일을 삭제하시겠습니까?`)) return
-    try {
-      await supabase.storage.from('attachments').remove([att.file_path])
-      await supabase.from('attachments').delete().eq('id', att.id)
-      setAttachments(prev => prev.filter(a => a.id !== att.id))
-    } catch (err) {
-      console.error('삭제 실패:', err)
-    }
-  }
-
-  const getFileUrl = (filePath: string) => {
-    const { data } = supabase.storage.from('attachments').getPublicUrl(filePath)
-    return data.publicUrl
-  }
-
-  const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(name)
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">서류 목록</h3>
-        {documents.length === 0 ? (
-          <div className="border border-dashed border-border-secondary rounded-[10px] p-6 text-center text-txt-tertiary text-[13px]">
-            서류가 없습니다. 서류함에서 생성하면 여기에 표시됩니다.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {documents.map(doc => (
-              <div key={doc.id} className="flex items-center gap-3 p-2 border border-border-primary rounded-lg hover:bg-surface-secondary transition-colors">
-                <FileText size={16} className="text-txt-tertiary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] text-txt-primary truncate">{doc.name}</p>
-                  <p className="text-[10px] text-txt-quaternary">{doc.doc_type} · {new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">
-          첨부파일 {attachments.length > 0 && <span className="text-accent">({attachments.length})</span>}
-        </h3>
-
-        {/* 드래그앤드롭 업로드 */}
-        <label
-          className={`flex flex-col items-center justify-center border-2 border-dashed rounded-[10px] p-6 cursor-pointer transition-colors ${
-            dragOver ? 'border-accent bg-accent/5' : 'border-border-secondary hover:border-accent hover:bg-accent/5'
-          }`}
-          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={e => { e.preventDefault(); setDragOver(false); handleFileUpload(e.dataTransfer.files) }}
-        >
-          {uploading ? (
-            <p className="text-[13px] text-accent">업로드 중...</p>
-          ) : (
-            <>
-              <Upload size={20} className="text-txt-quaternary mb-1" />
-              <p className="text-[12px] text-txt-tertiary">파일을 드래그하거나 클릭하여 업로드</p>
-              <p className="text-[10px] text-txt-quaternary mt-0.5">사진, PDF, 문서 등</p>
-            </>
-          )}
-          <input
-            type="file"
-            multiple
-            className="hidden"
-            onChange={e => { if (e.target.files?.length) handleFileUpload(e.target.files) }}
-          />
-        </label>
-
-        {/* 첨부파일 목록 */}
-        {attachments.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {attachments.map(att => (
-              <div key={att.id} className="flex items-center gap-3 p-2 border border-border-primary rounded-lg hover:bg-surface-secondary transition-colors group">
-                {isImage(att.name) ? (
-                  <Image size={16} className="text-txt-tertiary flex-shrink-0" />
-                ) : (
-                  <FileText size={16} className="text-txt-tertiary flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <a href={getFileUrl(att.file_path)} target="_blank" rel="noopener noreferrer"
-                    className="text-[13px] text-link hover:underline truncate block">
-                    {att.name}
-                  </a>
-                  <p className="text-[10px] text-txt-quaternary">{att.file_type} · {new Date(att.created_at).toLocaleDateString('ko-KR')}</p>
-                </div>
-                <button onClick={() => handleDeleteAttachment(att)}
-                  className="p-1 text-txt-quaternary hover:text-money-negative opacity-0 group-hover:opacity-100 transition-all">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// --- 탭 6: 이력 ---
+// --- 탭: 이력 ---
 function TabHistory({ projectId }: { projectId: string }) {
   const [logs, setLogs] = useState<{ from_status: string; to_status: string; note: string | null; created_at: string; staff_name: string | null }[]>([])
 

@@ -927,7 +927,7 @@ function TabStep2({ project, category, getVal, onChange, onRefresh, staffList }:
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">승인</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="승인일" type="date" value={getVal('receipt_date') as string} onChange={v => onChange('receipt_date', v || null)} />
+          <DateTimeInput label="승인일시" value={getVal('receipt_date') as string} onChange={v => onChange('receipt_date', v || null)} />
         </div>
       </section>
 

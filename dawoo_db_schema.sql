@@ -2,10 +2,11 @@
 -- 다우건설 고객관리 시스템 DB 스키마
 -- Supabase (PostgreSQL)
 -- 2026.04.06
+-- IF NOT EXISTS 적용 — 이미 있는 테이블은 건너뜀
 -- ============================================
 
 -- 1. 직원 테이블
-CREATE TABLE staff (
+CREATE TABLE IF NOT EXISTS staff (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   phone TEXT,
@@ -15,7 +16,7 @@ CREATE TABLE staff (
 );
 
 -- 2. 시(지자체) 테이블
-CREATE TABLE cities (
+CREATE TABLE IF NOT EXISTS cities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,  -- 수원, 성남, 안양...
   code TEXT,
@@ -23,14 +24,14 @@ CREATE TABLE cities (
 );
 
 -- 3. 공사종류 테이블 (대분류)
-CREATE TABLE work_categories (
+CREATE TABLE IF NOT EXISTS work_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,  -- 수도, 소규모
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- 4. 공사종류 테이블 (소분류)
-CREATE TABLE work_types (
+CREATE TABLE IF NOT EXISTS work_types (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   category_id UUID REFERENCES work_categories(id),
   name TEXT NOT NULL,  -- 옥내수도, 공용수도, 아파트공용, 옥상방수, 새빛, 녹색, 공동주택...
@@ -38,9 +39,9 @@ CREATE TABLE work_types (
 );
 
 -- 5. 접수대장 (핵심 테이블 - A안: 모든 항목 다 넣기)
-CREATE TABLE projects (
+CREATE TABLE IF NOT EXISTS projects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  
+
   -- === 항상 보이는 항목 ===
   building_name TEXT,              -- 빌라명
   staff_id UUID REFERENCES staff(id),  -- 담당자
@@ -55,7 +56,7 @@ CREATE TABLE projects (
   total_cost INTEGER DEFAULT 0,    -- 총공사비
   self_pay INTEGER DEFAULT 0,      -- 자부담금
   city_support INTEGER DEFAULT 0,  -- 시지원금
-  
+
   -- === 1단계: 접수~신청서 제출 ===
   area NUMERIC,                    -- 면적(㎡)
   unit_count INTEGER,              -- 세대수
@@ -64,36 +65,44 @@ CREATE TABLE projects (
   application_submitter TEXT,      -- 신청서 제출자
   survey_date DATE,                -- 실측일
   survey_staff TEXT,               -- 실측담당자
-  
+
   -- === 2단계: 승인~공사 ===
   construction_date DATE,          -- 시공일
   contractor TEXT,                 -- 시공업체/직영
   equipment TEXT,                  -- 장비/일용직
   down_payment INTEGER DEFAULT 0,  -- 착수금(계약금)
-  
+
   -- === 3단계: 완료서류 제출 ===
   completion_doc_date DATE,        -- 완료서류 제출일
   completion_submitter TEXT,       -- 완료서류 제출자
-  
+
   -- === 4단계: 수금 ===
   outstanding INTEGER DEFAULT 0,   -- 미수금
   balance INTEGER DEFAULT 0,       -- 잔금
-  payment_date DATE,               -- 입금내역 날짜
-  payer_name TEXT,                 -- 입금자명
+  payment_date DATE,               -- 입금내역 날짜 (레거시, payments 테이블로 이전)
+  payer_name TEXT,                 -- 입금자명 (레거시, payments 테이블로 이전)
   collected INTEGER DEFAULT 0,     -- 수금액
-  
+
+  -- === 추가 필드 (고도화) ===
+  additional_cost INTEGER DEFAULT 0, -- 추가공사금
+  consent_date DATE,               -- 동의서 수령일
+  construction_end_date DATE,      -- 공사완료일
+  approval_received_date DATE,     -- 승인일 (2단계, approval_date=사용승인일과 구분)
+  field_memo TEXT,                 -- 현장메모 (실측 시)
+  area_result TEXT,                -- 면적결과 (실측 시)
+
   -- === 수도 전용 ===
   water_work_type TEXT,            -- 공사종류 (옥내/공용/아파트)
   unit_password TEXT,              -- 세대 비밀번호
   direct_worker TEXT,              -- 직영 시공자
-  
+
   -- === 소규모 전용 ===
   support_program TEXT,            -- 지원사업 종류 (새빛/녹색/공동주택)
   external_contractor TEXT,        -- 시공업체
   other_contractor TEXT,           -- 기타 시공업체
   design_amount INTEGER DEFAULT 0, -- 설계금액
   receipt_date DATE,               -- 접수일
-  
+
   -- === 전유부/표제부 자동 데이터 (화면 안보여도 DB에 있음) ===
   dong TEXT,                       -- 동
   ho TEXT,                         -- 호
@@ -103,25 +112,37 @@ CREATE TABLE projects (
   building_area NUMERIC,           -- 건축면적
   total_floor_area NUMERIC,        -- 연면적
   building_use TEXT,               -- 건축물용도
-  
+
   -- === 통장 정보 ===
   bank_name TEXT,                  -- 은행명
   account_number TEXT,             -- 계좌번호
   account_holder TEXT,             -- 예금주
-  
+
   -- === 기타 ===
   status TEXT DEFAULT '문의',      -- 현재 단계
   note TEXT,                       -- 상담내용/메모
   cancel_reason TEXT,              -- 취소사유
   year INTEGER,                    -- 진행연도
   extra_fields JSONB DEFAULT '{}', -- 예비 확장 칸
-  
+
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- 5-1. 복수 입금 (payments)
+CREATE TABLE IF NOT EXISTS payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  payment_type TEXT NOT NULL,        -- 자부담착수금, 추가공사비, 시지원금잔금
+  amount INTEGER NOT NULL DEFAULT 0,
+  payment_date DATE,
+  payer_name TEXT,
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 6. 단계 변경 이력
-CREATE TABLE status_logs (
+CREATE TABLE IF NOT EXISTS status_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   staff_id UUID REFERENCES staff(id),
@@ -132,7 +153,7 @@ CREATE TABLE status_logs (
 );
 
 -- 7. 서류 템플릿 (서류함)
-CREATE TABLE templates (
+CREATE TABLE IF NOT EXISTS templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   city_id UUID REFERENCES cities(id),
   work_type_id UUID REFERENCES work_types(id),
@@ -143,7 +164,7 @@ CREATE TABLE templates (
 );
 
 -- 8. 생성된 서류
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   template_id UUID REFERENCES templates(id),
@@ -154,7 +175,7 @@ CREATE TABLE documents (
 );
 
 -- 9. 첨부파일 (통장사본, 사진 등)
-CREATE TABLE attachments (
+CREATE TABLE IF NOT EXISTS attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   name TEXT,
@@ -163,14 +184,15 @@ CREATE TABLE attachments (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- === 인덱스 ===
-CREATE INDEX idx_projects_status ON projects(status);
-CREATE INDEX idx_projects_city ON projects(city_id);
-CREATE INDEX idx_projects_work_type ON projects(work_type_id);
-CREATE INDEX idx_projects_year ON projects(year);
-CREATE INDEX idx_projects_building ON projects(building_name);
-CREATE INDEX idx_status_logs_project ON status_logs(project_id);
-CREATE INDEX idx_documents_project ON documents(project_id);
+-- === 인덱스 (IF NOT EXISTS) ===
+CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_city ON projects(city_id);
+CREATE INDEX IF NOT EXISTS idx_projects_work_type ON projects(work_type_id);
+CREATE INDEX IF NOT EXISTS idx_projects_year ON projects(year);
+CREATE INDEX IF NOT EXISTS idx_projects_building ON projects(building_name);
+CREATE INDEX IF NOT EXISTS idx_status_logs_project ON status_logs(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_payments_project ON payments(project_id);
 
 -- === 단계 목록 (AI 내부 10단계) ===
 COMMENT ON COLUMN projects.status IS '
@@ -179,17 +201,19 @@ COMMENT ON COLUMN projects.status IS '
     2단계: 승인~공사 (승인,착공계,공사)
     3단계: 완료서류제출
     4단계: 수금 (입금,완료)
-  
+
   AI 내부 10단계:
-    문의 > 실사 > 견적전달 > 동의서 > 신청서제출 
+    문의 > 실사 > 견적전달 > 동의서 > 신청서제출
     > 승인 > 착공계 > 공사 > 완료서류제출 > 입금
 ';
 
--- === 15개 시 초기 데이터 ===
-INSERT INTO cities (name) VALUES 
+-- === 15개 시 초기 데이터 (중복 무시) ===
+INSERT INTO cities (name) VALUES
   ('수원'),('성남'),('안양'),('부천'),('광명'),
   ('시흥'),('안산'),('군포'),('의왕'),('과천'),
-  ('용인'),('화성'),('오산'),('평택'),('하남');
+  ('용인'),('화성'),('오산'),('평택'),('하남')
+ON CONFLICT (name) DO NOTHING;
 
--- === 공사 대분류 초기 데이터 ===
-INSERT INTO work_categories (name) VALUES ('수도'), ('소규모');
+-- === 공사 대분류 초기 데이터 (중복 무시) ===
+INSERT INTO work_categories (name) VALUES ('수도'), ('소규모')
+ON CONFLICT (name) DO NOTHING;

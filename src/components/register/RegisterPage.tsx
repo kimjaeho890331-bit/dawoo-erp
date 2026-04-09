@@ -41,6 +41,24 @@ export interface DBProject {
   down_payment: number
   completion_doc_date: string | null
   completion_submitter: string | null
+  // 추가 필드 (고도화)
+  additional_cost: number
+  consent_date: string | null
+  construction_end_date: string | null
+  approval_received_date: string | null
+  field_memo: string | null
+  area_result: string | null
+  // 수도 전용
+  water_work_type: string | null
+  unit_password: string | null
+  direct_worker: string | null
+  // 소규모 전용
+  support_program: string | null
+  external_contractor: string | null
+  other_contractor: string | null
+  design_amount: number
+  receipt_date: string | null
+  // 전유부/표제부
   dong: string | null
   ho: string | null
   exclusive_area: number | null

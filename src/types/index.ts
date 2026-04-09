@@ -112,6 +112,14 @@ export interface Project {
   payer_name: string | null;
   collected: number;
 
+  // 추가 필드 (고도화)
+  additional_cost: number;
+  consent_date: string | null;
+  construction_end_date: string | null;
+  approval_received_date: string | null;
+  field_memo: string | null;
+  area_result: string | null;
+
   // 수도 전용
   water_work_type: string | null;
   unit_password: string | null;
@@ -155,6 +163,18 @@ export interface Project {
   staff?: Pick<Staff, 'id' | 'name'> | null;
   cities?: Pick<City, 'name'> | null;
   work_types?: Pick<WorkType, 'name' | 'work_categories'> | null;
+}
+
+// --- 복수 입금 ---
+export interface Payment {
+  id: string;
+  project_id: string;
+  payment_type: string; // 자부담착수금, 추가공사비, 시지원금잔금
+  amount: number;
+  payment_date: string | null;
+  payer_name: string | null;
+  note: string | null;
+  created_at: string;
 }
 
 // --- 목록 표시용 경량 타입 ---

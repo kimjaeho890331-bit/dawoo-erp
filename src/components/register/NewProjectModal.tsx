@@ -88,6 +88,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     dong: '',
     ho: '',
     exclusive_area: '',
+    // 소규모/수도 전용
+    water_work_type: '',
+    support_program: '',
   })
 
   const [errors, setErrors] = useState<Record<string, boolean>>({})
@@ -134,6 +137,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           dong,
           ho,
           exclusive_area: editProject.exclusive_area?.toString() || '',
+          water_work_type: editProject.water_work_type || '',
+          support_program: editProject.support_program || '',
         })
       } else {
         // 신규등록 기본값
@@ -341,6 +346,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         dong: form.dong || null,
         ho: form.ho || null,
         exclusive_area: form.exclusive_area ? Number(form.exclusive_area) : null,
+        water_work_type: form.water_work_type || null,
+        support_program: form.support_program || null,
       }
 
       if (isEdit) {
@@ -581,6 +588,40 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
               </select>
             </div>
           </div>
+
+          {/* 수도 전용: 공사세분류 */}
+          {category === '수도' && (
+            <div>
+              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">수도 공사 세분류</label>
+              <select
+                value={form.water_work_type}
+                onChange={e => update('water_work_type', e.target.value)}
+                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              >
+                <option value="">선택 안함</option>
+                <option value="옥내">옥내</option>
+                <option value="공용">공용</option>
+                <option value="아파트">아파트</option>
+              </select>
+            </div>
+          )}
+
+          {/* 소규모 전용: 지원사업 종류 */}
+          {category === '소규모' && (
+            <div>
+              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업 종류</label>
+              <select
+                value={form.support_program}
+                onChange={e => update('support_program', e.target.value)}
+                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              >
+                <option value="">선택 안함</option>
+                <option value="새빛">새빛</option>
+                <option value="녹색">녹색</option>
+                <option value="공동주택">공동주택</option>
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">상담내역/메모 *</label>

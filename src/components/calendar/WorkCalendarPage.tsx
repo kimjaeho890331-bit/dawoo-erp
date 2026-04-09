@@ -314,75 +314,105 @@ export default function WorkCalendarPage() {
 // ============================================================
 //  홍보현황 탭
 // ============================================================
+interface SchoolInfo { name: string; type: string; address: string; city: string; dong: string }
+
 function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
-  const [promoType, setPromoType] = useState<'small' | 'water'>('small')
+  const [promoType, setPromoType] = useState<'small' | 'water' | 'school'>('small')
   const [promoRecords, setPromoRecords] = useState<PromoRecordRow[]>([])
   const [promoLoading, setPromoLoading] = useState(true)
-  const cities = promoType === 'small' ? CITIES_SMALL : CITIES_WATER
+  const [expandedCity, setExpandedCity] = useState<string | null>(null)
+  const [schools, setSchools] = useState<SchoolInfo[]>([])
+  const [schoolsLoaded, setSchoolsLoaded] = useState(false)
+
+  const cities = promoType === 'small' ? CITIES_SMALL : promoType === 'water' ? CITIES_WATER : ['수원', '화성', '안양']
 
   // promo_records 로드
   useEffect(() => {
     const load = async () => {
       setPromoLoading(true)
-      const category = promoType === 'small' ? '소규모' : '수도'
-      const { data, error } = await supabase
+      const category = promoType === 'small' ? '소규모' : promoType === 'water' ? '수도' : '학교'
+      const { data } = await supabase
         .from('promo_records')
         .select('id, city_id, dong, visit_date, staff_id, category, memo, cities(name)')
         .eq('category', category)
         .order('visit_date', { ascending: false })
-      if (!error && data) setPromoRecords(data as unknown as PromoRecordRow[])
-      else setPromoRecords([])
+      setPromoRecords((data as unknown as PromoRecordRow[]) || [])
       setPromoLoading(false)
     }
     load()
   }, [promoType])
 
-  // 시별 집계
+  // 학교 데이터 로드 (한번만)
+  useEffect(() => {
+    if (promoType === 'school' && !schoolsLoaded) {
+      fetch('/api/schools').then(r => r.json()).then(d => {
+        if (Array.isArray(d)) setSchools(d)
+        setSchoolsLoaded(true)
+      }).catch(() => setSchoolsLoaded(true))
+    }
+  }, [promoType, schoolsLoaded])
+
+  // 시별 집계 + 동별 상세
   const cityData = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
-
     return cities.map(cityName => {
       const cityRecords = promoRecords.filter(r => r.cities?.name === cityName)
-
-      // 동별 그룹핑
-      const dongMap = new Map<string, { visitCount: number; lastVisit: string }>()
+      const dongMap = new Map<string, { visitCount: number; lastVisit: string; staffNames: string[] }>()
       for (const r of cityRecords) {
         const existing = dongMap.get(r.dong)
+        const staffName = staffList.find(s => s.id === r.staff_id)?.name || ''
         if (!existing) {
-          dongMap.set(r.dong, { visitCount: 1, lastVisit: r.visit_date })
+          dongMap.set(r.dong, { visitCount: 1, lastVisit: r.visit_date, staffNames: staffName ? [staffName] : [] })
         } else {
           existing.visitCount++
           if (r.visit_date > existing.lastVisit) existing.lastVisit = r.visit_date
+          if (staffName && !existing.staffNames.includes(staffName)) existing.staffNames.push(staffName)
         }
       }
-
-      const uniqueDongs = dongMap.size
-      const totalVisits = cityRecords.length
-
-      // 시 전체 마지막 방문일 기준 미방문 기간
       let daysSinceLastVisit = -1
       if (cityRecords.length > 0) {
-        const lastVisitDate = cityRecords[0].visit_date // already sorted desc
-        daysSinceLastVisit = Math.round((new Date(today).getTime() - new Date(lastVisitDate).getTime()) / 86400000)
+        daysSinceLastVisit = Math.round((new Date(today).getTime() - new Date(cityRecords[0].visit_date).getTime()) / 86400000)
       }
-
-      return { city: cityName, uniqueDongs, totalVisits, daysSinceLastVisit }
+      return {
+        city: cityName,
+        uniqueDongs: dongMap.size,
+        totalVisits: cityRecords.length,
+        daysSinceLastVisit,
+        dongs: Array.from(dongMap.entries()).map(([dong, info]) => ({ dong, ...info })).sort((a, b) => b.visitCount - a.visitCount),
+      }
     })
-  }, [cities, promoRecords])
+  }, [cities, promoRecords, staffList])
+
+  // 학교 시별 그룹
+  const schoolsByCity = useMemo(() => {
+    if (promoType !== 'school') return {}
+    const grouped: Record<string, Record<string, SchoolInfo[]>> = {}
+    for (const s of schools) {
+      if (!grouped[s.city]) grouped[s.city] = {}
+      if (!grouped[s.city][s.dong]) grouped[s.city][s.dong] = []
+      grouped[s.city][s.dong].push(s)
+    }
+    return grouped
+  }, [schools, promoType])
 
   const totalDongs = cityData.reduce((a, c) => a + c.uniqueDongs, 0)
   const totalVisits = cityData.reduce((a, c) => a + c.totalVisits, 0)
-  const hasData = promoRecords.length > 0
+
+  const typeIcon = (t: string) => t === '초등학교' ? '🏫' : t === '중학교' ? '🏛' : '🎓'
 
   return (
     <div className="space-y-4">
-      {/* 소규모/수도 전환 */}
+      {/* 3탭 전환 */}
       <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-3 flex items-center justify-between">
         <div className="flex bg-surface-secondary rounded-lg p-0.5">
-          <button onClick={() => setPromoType('small')}
-            className={`px-4 py-1.5 text-sm rounded-md transition ${promoType === 'small' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>소규모 (15개시)</button>
-          <button onClick={() => setPromoType('water')}
-            className={`px-4 py-1.5 text-sm rounded-md transition ${promoType === 'water' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>수도 (7개시)</button>
+          {[
+            { key: 'small' as const, label: `소규모 (${CITIES_SMALL.length}시)` },
+            { key: 'water' as const, label: `수도 (${CITIES_WATER.length}시)` },
+            { key: 'school' as const, label: '학교 (3시)' },
+          ].map(tab => (
+            <button key={tab.key} onClick={() => { setPromoType(tab.key); setExpandedCity(null) }}
+              className={`px-4 py-1.5 text-sm rounded-md transition ${promoType === tab.key ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>{tab.label}</button>
+          ))}
         </div>
         <div className="text-xs text-txt-secondary">
           방문 동 <span className="font-semibold text-green-600 tabular-nums">{totalDongs}</span>개 ·
@@ -391,85 +421,90 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
       </div>
 
       {promoLoading ? (
-        <div className="bg-surface rounded-[10px] border border-border-primary text-center py-20 text-txt-tertiary">불러오는 중...</div>
-      ) : !hasData ? (
-        <div className="bg-surface rounded-[10px] border border-border-primary text-center py-20">
-          <p className="text-txt-tertiary text-sm">홍보 기록이 없습니다</p>
-          <p className="text-txt-tertiary text-xs mt-1">홍보 방문 후 기록을 등록하면 여기에 표시됩니다</p>
-        </div>
+        <div className="bg-surface rounded-[10px] border border-border-primary text-center py-16 text-txt-tertiary text-sm">불러오는 중...</div>
       ) : (
-        <>
-          {/* 시별 현황 */}
-          <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-surface-secondary border-b border-border-primary">
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">시</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">방문 현황</th>
-                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">방문 동</th>
-                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-20">방문 횟수</th>
-                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary w-28">미방문 기간</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cityData.map(c => {
-                  // 방문 동 수 기준 프로그레스 (최대 기준: 해당 카테고리 전체 동 중 최다 방문 시 기준)
-                  const maxDongs = Math.max(...cityData.map(d => d.uniqueDongs), 1)
-                  const pct = Math.round((c.uniqueDongs / maxDongs) * 100)
-                  const danger = c.daysSinceLastVisit > 90
-                  const noVisit = c.daysSinceLastVisit < 0
-                  return (
-                    <tr key={c.city} className="border-b border-surface-secondary hover:bg-surface-tertiary/50">
-                      <td className="px-4 py-3 font-medium text-txt-primary">{c.city}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 h-2 bg-surface-secondary rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-xs text-txt-secondary w-10 text-right tabular-nums">{c.uniqueDongs}동</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center text-green-600 font-medium tabular-nums">{c.uniqueDongs}</td>
-                      <td className="px-4 py-3 text-center text-txt-primary font-medium tabular-nums">{c.totalVisits}</td>
-                      <td className={`px-4 py-3 text-center font-medium tabular-nums ${noVisit ? 'text-txt-tertiary' : danger ? 'text-red-600' : 'text-txt-secondary'}`}>
-                        {noVisit ? (
-                          <span>-</span>
-                        ) : (
-                          <>
-                            {danger && <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full mr-1" />}
-                            {c.daysSinceLastVisit}일
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+          {/* 시별 아코디언 */}
+          {cityData.map(c => {
+            const isExpanded = expandedCity === c.city
+            const danger = c.daysSinceLastVisit > 90
+            const noVisit = c.daysSinceLastVisit < 0
+            const citySchools = promoType === 'school' ? schoolsByCity[c.city] || {} : {}
+            const schoolDongs = Object.keys(citySchools).sort()
 
-          {/* AI 홍보 제안 */}
-          {cityData.filter(c => c.daysSinceLastVisit > 60).length > 0 && (
-            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-[10px] border border-yellow-200/50 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Bot size={16} className="text-txt-tertiary" />
-                <h3 className="text-sm font-semibold text-txt-secondary">AI 홍보 제안</h3>
-              </div>
-              <div className="space-y-2">
-                {cityData.filter(c => c.daysSinceLastVisit > 60).slice(0, 3).map(c => (
-                  <div key={c.city} className="flex items-center justify-between bg-white/70 rounded-lg p-3 border border-white">
-                    <div>
-                      <span className="text-sm font-medium text-txt-secondary">{c.city}</span>
-                      <span className="text-xs text-red-500 ml-2 tabular-nums">{c.daysSinceLastVisit}일 미방문</span>
-                      <span className="text-xs text-txt-secondary ml-2 tabular-nums">방문 {c.uniqueDongs}개 동</span>
-                    </div>
-                    <button className="px-3 py-1 text-xs font-medium text-yellow-700 border border-yellow-300 rounded hover:bg-yellow-50">[일정 추가]</button>
+            return (
+              <div key={c.city} className="border-b border-border-tertiary last:border-b-0">
+                {/* 시 행 */}
+                <button onClick={() => setExpandedCity(isExpanded ? null : c.city)}
+                  className="w-full flex items-center px-4 py-3 hover:bg-surface-tertiary/50 transition-colors text-left">
+                  <span className={`text-[11px] mr-2 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                  <span className="font-medium text-txt-primary text-sm flex-1">{c.city}</span>
+                  <span className="text-xs text-green-600 font-medium tabular-nums mr-4">{c.uniqueDongs}동 · {c.totalVisits}회</span>
+                  {promoType === 'school' && <span className="text-xs text-txt-tertiary mr-4">{schools.filter(s => s.city === c.city).length}교</span>}
+                  <span className={`text-xs font-medium tabular-nums ${noVisit ? 'text-txt-quaternary' : danger ? 'text-red-600' : 'text-txt-secondary'}`}>
+                    {noVisit ? '미방문' : `${c.daysSinceLastVisit}일 전`}
+                  </span>
+                </button>
+
+                {/* 동 리스트 (펼침) */}
+                {isExpanded && (
+                  <div className="bg-surface-secondary/50 px-4 pb-3">
+                    {promoType !== 'school' ? (
+                      // 소규모/수도: 홍보 기록 동별
+                      c.dongs.length > 0 ? (
+                        <div className="space-y-1">
+                          {c.dongs.map(d => (
+                            <div key={d.dong} className="flex items-center justify-between px-3 py-2 bg-surface rounded-lg text-[12px]">
+                              <span className="font-medium text-txt-primary">{d.dong}</span>
+                              <div className="flex items-center gap-3 text-txt-secondary">
+                                <span className="tabular-nums">{d.visitCount}회</span>
+                                <span>{new Date(d.lastVisit).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}</span>
+                                {d.staffNames.length > 0 && <span className="text-txt-tertiary">{d.staffNames.join(', ')}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[12px] text-txt-quaternary text-center py-4">방문 기록이 없습니다</p>
+                      )
+                    ) : (
+                      // 학교: 동별 학교 리스트
+                      schoolDongs.length > 0 ? (
+                        <div className="space-y-2">
+                          {schoolDongs.map(dong => (
+                            <div key={dong}>
+                              <p className="text-[11px] font-semibold text-txt-tertiary mb-1 px-1">{dong}</p>
+                              <div className="space-y-0.5">
+                                {citySchools[dong].sort((a, b) => {
+                                  const order = ['초등학교', '중학교', '고등학교']
+                                  return order.indexOf(a.type) - order.indexOf(b.type)
+                                }).map(s => (
+                                  <div key={s.name} className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded text-[12px]">
+                                    <span>{typeIcon(s.type)}</span>
+                                    <span className="font-medium text-txt-primary flex-1">{s.name}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                      s.type === '초등학교' ? 'bg-green-100 text-green-700' :
+                                      s.type === '중학교' ? 'bg-blue-100 text-blue-700' :
+                                      'bg-purple-100 text-purple-700'
+                                    }`}>{s.type.replace('학교', '')}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : !schoolsLoaded ? (
+                        <p className="text-[12px] text-txt-quaternary text-center py-4">학교 데이터 로딩 중...</p>
+                      ) : (
+                        <p className="text-[12px] text-txt-quaternary text-center py-4">학교 데이터가 없습니다</p>
+                      )
+                    )}
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          )}
-        </>
+            )
+          })}
+        </div>
       )}
     </div>
   )

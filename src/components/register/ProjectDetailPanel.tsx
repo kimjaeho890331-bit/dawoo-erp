@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Trash2, Upload, FileText, Image, X, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -83,10 +83,21 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     }
   }, [project])
 
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const updateField = useCallback((field: string, value: string | number | null) => {
     setEditData(prev => ({ ...prev, [field]: value }))
     setHasChanges(true)
   }, [])
+
+  // 자동저장: 변경 후 1.5초 뒤 자동 저장
+  useEffect(() => {
+    if (!hasChanges || !project) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => { handleSave() }, 1500)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData, hasChanges])
 
   const handleSave = async () => {
     if (!project || !hasChanges) return
@@ -210,15 +221,11 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-primary">
           <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">{project.building_name || '(이름없음)'}</h2>
           <div className="flex items-center gap-2">
-            {hasChanges && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
-              >
-                {saving ? '저장 중...' : '저장'}
-              </button>
-            )}
+            {saving ? (
+              <span className="px-3 py-1.5 text-[11px] text-accent font-medium">저장 중...</span>
+            ) : hasChanges ? (
+              <span className="px-3 py-1.5 text-[11px] text-txt-quaternary">자동저장 대기</span>
+            ) : null}
             <button
               onClick={() => setApiFieldsLocked(prev => !prev)}
               className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-colors ${
@@ -317,6 +324,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             <InfoField label="담당자" value={project.staff?.name || '-'} />
             <InfoField label="주소" value={(getVal('road_address') as string) || (getVal('jibun_address') as string) || '-'} full />
             <InfoField label="호수" value={(getVal('ho') as string) || '-'} />
+            <InfoField label="지원사업" value={(getVal('support_program') as string) || '-'} />
             <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
             <InfoField label="연락처" value={(getVal('owner_phone') as string) ? formatPhone(getVal('owner_phone') as string) : '-'} />
           </div>
@@ -825,7 +833,6 @@ function TabStep1({ project, category, getVal, onChange, onRefresh, staffList }:
   const urlCategory = category === '소규모' ? 'small' : 'water'
   const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
   const [pricingLoaded, setPricingLoaded] = useState(false)
-  const [autoApplied, setAutoApplied] = useState(false)
 
   const area = (getVal('exclusive_area') as number) || 0
   const units = (getVal('unit_count') as number) || 0
@@ -845,24 +852,7 @@ function TabStep1({ project, category, getVal, onChange, onRefresh, staffList }:
       .catch(() => setPricingLoaded(true))
   }, [cityName, category])
 
-  // 전유면적 있고, 총공사비 없으면 자동 기입
-  useEffect(() => {
-    if (!pricingLoaded || autoApplied || !area || currentTotal > 0) return
-
-    const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
-    const cost = isPublic
-      ? Math.round(area * pricing.공용 + units * pricing.공용_세대)
-      : Math.round(area * pricing.전용)
-    const vat = Math.round(cost * 0.1)
-    const grandTotal = cost + vat
-    const citySupport = Math.round(grandTotal * 0.8)
-    const selfPay = grandTotal - citySupport
-
-    onChange('total_cost', grandTotal)
-    onChange('city_support', citySupport)
-    onChange('self_pay', selfPay)
-    setAutoApplied(true)
-  }, [pricingLoaded, autoApplied, area, units, currentTotal, pricing, workTypeName, onChange])
+  // 견적 자동기입 제거 — 수동 재산출 버튼으로만 계산
 
   // 수동 재산출
   const handleRecalculate = () => {

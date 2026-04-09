@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
+import { useAuth } from '@/components/AuthProvider'
 import type { DBProject } from '@/components/register/RegisterPage'
 
 // --- 주소 검색 결과 타입 ---
@@ -48,6 +49,7 @@ interface Props {
 }
 
 export default function NewProjectModal({ category, onClose, onSubmit, editProject }: Props) {
+  const { staff: currentStaff } = useAuth()
   const isEdit = !!editProject
   const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
   const [cities, setCities] = useState<{ id: string; name: string }[]>([])
@@ -139,10 +141,13 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           exclusive_area: editProject.exclusive_area?.toString() || '',
         })
       } else {
-        // 신규등록 기본값
+        // 신규등록 기본값 — 로그인 유저를 담당직원 기본값으로
+        const defaultStaffId = currentStaff?.id
+          ? staffData.find(s => s.id === currentStaff.id)?.id || staffData[0]?.id || ''
+          : staffData[0]?.id || ''
         setForm(prev => ({
           ...prev,
-          staff_id: staffData[0]?.id || '',
+          staff_id: defaultStaffId,
           city_id: citiesData[0]?.id || '',
           work_type_id: typesData[0]?.id || '',
         }))
@@ -314,7 +319,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
   })
 
   const handleSubmit = async () => {
-    const required = ['building_name', 'road_address', 'owner_name', 'owner_phone', 'note']
+    const required = ['building_name', 'road_address', 'note']
     const newErrors: Record<string, boolean> = {}
     let hasError = false
     required.forEach(field => {
@@ -548,14 +553,14 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
 
           <div className="grid grid-cols-2 gap-4">
             <ModalField
-              label="소유주 *"
+              label="소유주"
               value={form.owner_name}
               onChange={v => update('owner_name', v)}
               placeholder="예: 김영수"
               error={errors.owner_name}
             />
             <ModalField
-              label="연락처 *"
+              label="연락처"
               value={form.owner_phone}
               onChange={v => update('owner_phone', formatPhone(v))}
               placeholder="010-0000-0000"
@@ -587,19 +592,21 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">공사종류 *</label>
-              <select
-                value={form.work_type_id}
-                onChange={e => update('work_type_id', e.target.value)}
-                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-              >
-                {workTypes.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
+          <div className={`grid ${category === '소규모' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+            {category !== '소규모' && (
+              <div>
+                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">공사종류 *</label>
+                <select
+                  value={form.work_type_id}
+                  onChange={e => update('work_type_id', e.target.value)}
+                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+                >
+                  {workTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">담당직원 *</label>
               <select

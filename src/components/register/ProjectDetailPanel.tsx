@@ -592,15 +592,15 @@ function DateTimeInput({ label, value, onChange }: {
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
       <div className="flex items-center gap-2 h-[36px] px-3 bg-surface border border-border-primary rounded-lg hover:border-border-secondary transition-colors">
-        {/* 날짜 영역 */}
-        <div className="relative flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer">
-          <svg className="w-3.5 h-3.5 text-txt-tertiary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        {/* 날짜 영역 — label로 감싸서 전체 클릭 가능 */}
+        <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer">
+          <svg className="w-3.5 h-3.5 text-txt-tertiary shrink-0 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span className="text-[13px] text-txt-primary pointer-events-none">{dateDisplay || <span className="text-txt-quaternary">날짜 선택</span>}</span>
           <input type="date" value={datePart} onChange={e => updateDateTime(e.target.value, timeVal)}
-            className="absolute inset-0 opacity-0 cursor-pointer" />
-        </div>
+            className="w-0 h-0 opacity-0 absolute" />
+        </label>
         {/* 구분선 */}
         <div className="w-px h-4 bg-border-primary" />
         {/* 시간 영역 */}
@@ -627,26 +627,47 @@ function DateTimeInput({ label, value, onChange }: {
 }
 
 // --- 일정 캘린더 자동 등록 ---
-async function syncSchedule(projectId: string, buildingName: string, dateValue: string, staffName: string, docType: string) {
+interface ScheduleSyncInfo {
+  projectId: string
+  buildingName: string
+  dateValue: string
+  staffName: string
+  staffId?: string
+  docType: string
+  address?: string
+  phone?: string
+}
+
+async function syncSchedule(info: ScheduleSyncInfo) {
+  const { projectId, buildingName, dateValue, staffName, staffId, docType, address, phone } = info
   if (!dateValue) return
   const dt = new Date(dateValue)
   const dateOnly = dateValue.includes('T') ? dateValue.split('T')[0] : dateValue
   const timeStr = dateValue.includes('T') ? dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
   const title = timeStr ? `${timeStr} ${buildingName} ${docType}` : `${buildingName} ${docType}`
 
-  // 기존 일정 삭제 후 재등록 (같은 프로젝트+문서유형)
+  // 담당자 ID 조회 (이름으로)
+  let resolvedStaffId = staffId || null
+  if (!resolvedStaffId && staffName) {
+    const { data } = await supabase.from('staff').select('id').eq('name', staffName).single()
+    if (data) resolvedStaffId = data.id
+  }
+
+  const memoLines = [staffName, address, phone].filter(Boolean).join('\n')
+
   await supabase.from('schedules').delete()
     .eq('project_id', projectId)
     .ilike('title', `%${buildingName}%${docType}%`)
 
   await supabase.from('schedules').insert({
     project_id: projectId,
+    staff_id: resolvedStaffId,
     schedule_type: 'project',
     title,
     start_date: dateOnly,
     end_date: dateOnly,
     confirmed: true,
-    memo: `${staffName} - ${docType}`,
+    memo: memoLines || null,
   })
 }
 
@@ -844,7 +865,7 @@ function TabStep1({ project, category, getVal, onChange, onRefresh, staffList }:
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="실측일시" value={getVal('survey_date') as string} onChange={v => { onChange('survey_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('survey_staff') as string) || '', '실측') }} />
+          <DateTimeInput label="실측일시" value={getVal('survey_date') as string} onChange={v => { onChange('survey_date', v || null); if (v) syncSchedule({ projectId: project.id, buildingName: project.building_name || '', dateValue: v, staffName: (getVal('survey_staff') as string) || '', docType: '실측', address: (project.road_address || ''), phone: (project.owner_phone || '') }) }} />
           <StaffSelect label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="실측지" label="실측지" />
@@ -882,7 +903,7 @@ function TabStep1({ project, category, getVal, onChange, onRefresh, staffList }:
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="동의서 회수일시" value={getVal('consent_date') as string} onChange={v => { onChange('consent_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('consent_submitter') as string) || '', '동의서 회수') }} />
+          <DateTimeInput label="동의서 회수일시" value={getVal('consent_date') as string} onChange={v => { onChange('consent_date', v || null); if (v) syncSchedule({ projectId: project.id, buildingName: project.building_name || '', dateValue: v, staffName: (getVal('consent_submitter') as string) || '', docType: '동의서 회수', address: (project.road_address || ''), phone: (project.owner_phone || '') }) }} />
           <StaffSelect label="회수자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="동의서" label="동의서" />
@@ -891,7 +912,7 @@ function TabStep1({ project, category, getVal, onChange, onRefresh, staffList }:
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">신청서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="신청서 제출일시" value={getVal('application_date') as string} onChange={v => { onChange('application_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('application_submitter') as string) || '', '신청서 제출') }} />
+          <DateTimeInput label="신청서 제출일시" value={getVal('application_date') as string} onChange={v => { onChange('application_date', v || null); if (v) syncSchedule({ projectId: project.id, buildingName: project.building_name || '', dateValue: v, staffName: (getVal('application_submitter') as string) || '', docType: '신청서 제출', address: (project.road_address || ''), phone: (project.owner_phone || '') }) }} />
           <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="신청서" label="신청서" />
@@ -935,7 +956,7 @@ function TabStep2({ project, category, getVal, onChange, onRefresh, staffList }:
         <section>
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">착공서류</h3>
           <div className="grid grid-cols-2 gap-3">
-            <DateTimeInput label="착공서류 제출일시" value={getVal('construction_doc_date') as string} onChange={v => { onChange('construction_doc_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('construction_doc_submitter') as string) || '', '착공서류 제출') }} />
+            <DateTimeInput label="착공서류 제출일시" value={getVal('construction_doc_date') as string} onChange={v => { onChange('construction_doc_date', v || null); if (v) syncSchedule({ projectId: project.id, buildingName: project.building_name || '', dateValue: v, staffName: (getVal('construction_doc_submitter') as string) || '', docType: '착공서류 제출', address: (project.road_address || ''), phone: (project.owner_phone || '') }) }} />
             <StaffSelect label="제출자" value={getVal('construction_doc_submitter') as string} onChange={v => onChange('construction_doc_submitter', v || null)} staffList={staffList} />
           </div>
           <FileAttachSection projectId={project.id} fileType="착공서류" label="착공서류" />
@@ -1106,7 +1127,7 @@ function TabStep3({ project, getVal, onChange, onRefresh, staffList }: TabProps 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">완료서류</h3>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="완료서류 제출일시" value={getVal('completion_doc_date') as string} onChange={v => { onChange('completion_doc_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('completion_submitter') as string) || '', '완료서류 제출') }} />
+          <DateTimeInput label="완료서류 제출일시" value={getVal('completion_doc_date') as string} onChange={v => { onChange('completion_doc_date', v || null); if (v) syncSchedule({ projectId: project.id, buildingName: project.building_name || '', dateValue: v, staffName: (getVal('completion_submitter') as string) || '', docType: '완료서류 제출', address: (project.road_address || ''), phone: (project.owner_phone || '') }) }} />
           <StaffSelect label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="완료서류" label="완료서류" />

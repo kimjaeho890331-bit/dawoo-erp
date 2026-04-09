@@ -62,6 +62,11 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
   const [statusChanging, setStatusChanging] = useState(false)
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    supabase.from('staff').select('id, name').order('name').then(({ data }) => setStaffList(data || []))
+  }, [])
 
   useEffect(() => {
     if (project) {
@@ -342,9 +347,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
-          {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
-          {activeTab === '2단계' && <TabStep2 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
-          {activeTab === '3단계' && <TabStep3 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
+          {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} staffList={staffList} />}
+          {activeTab === '2단계' && <TabStep2 project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} staffList={staffList} />}
+          {activeTab === '3단계' && <TabStep3 project={project} getVal={getVal} onChange={updateField} onRefresh={onRefresh} staffList={staffList} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>
@@ -532,6 +537,77 @@ function FileAttachSection({ projectId, fileType, label }: { projectId: string; 
   )
 }
 
+// --- 제출자 드롭다운 (로그인유저 우선) ---
+function StaffSelect({ label, value, onChange, staffList, currentStaffName }: {
+  label: string; value: string | number | null | undefined; onChange: (v: string) => void
+  staffList: { id: string; name: string }[]; currentStaffName?: string
+}) {
+  // 로그인 유저를 맨 위로
+  const sorted = currentStaffName
+    ? [
+        ...staffList.filter(s => s.name === currentStaffName),
+        ...staffList.filter(s => s.name !== currentStaffName),
+      ]
+    : staffList
+
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <select
+        value={(value as string) ?? ''}
+        onChange={e => onChange(e.target.value)}
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+      >
+        <option value="">선택</option>
+        {sorted.map(s => (
+          <option key={s.id} value={s.name}>{s.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+// --- 날짜+시간 입력 ---
+function DateTimeInput({ label, value, onChange }: {
+  label: string; value: string | number | null | undefined; onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <input
+        type="datetime-local"
+        value={(value as string) ?? ''}
+        onChange={e => onChange(e.target.value)}
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light hover:border-border-secondary transition-colors"
+      />
+    </div>
+  )
+}
+
+// --- 일정 캘린더 자동 등록 ---
+async function syncSchedule(projectId: string, buildingName: string, dateValue: string, staffName: string, docType: string) {
+  if (!dateValue) return
+  const dt = new Date(dateValue)
+  const dateOnly = dateValue.includes('T') ? dateValue.split('T')[0] : dateValue
+  const timeStr = dateValue.includes('T') ? dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
+  const title = timeStr ? `${timeStr} ${buildingName} ${docType}` : `${buildingName} ${docType}`
+
+  // 기존 일정 삭제 후 재등록 (같은 프로젝트+문서유형)
+  await supabase.from('schedules').delete()
+    .eq('project_id', projectId)
+    .ilike('title', `%${buildingName}%${docType}%`)
+
+  await supabase.from('schedules').insert({
+    project_id: projectId,
+    schedule_type: 'project',
+    title,
+    start_date: dateOnly,
+    end_date: dateOnly,
+    confirmed: true,
+    memo: `${staffName} - ${docType}`,
+  })
+}
+
 // --- 탭별 Props ---
 interface TabProps {
   project: DBProject
@@ -587,15 +663,14 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
       </section>
 
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">주소</h3>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">건축물 정보</h3>
         <div className="space-y-3">
-          <LockedFormInput label="도로명주소" value={getVal('road_address') as string} onChange={v => onChange('road_address', v || null)} locked={apiFieldsLocked} />
           <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
         </div>
         <div className="grid grid-cols-3 gap-3 mt-3">
-          <LockedFormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="동" placeholder="예: A동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="호" placeholder="예: 101호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="전유면적 (m²)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} locked={apiFieldsLocked} />
         </div>
         <div className="grid grid-cols-3 gap-3 mt-3">
           <LockedFormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} locked={apiFieldsLocked} />
@@ -606,45 +681,28 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">통장 정보</h3>
-
-        {/* 통장사본 OCR 업로드 */}
         <div className="mb-3">
           <label
-            className="flex flex-col items-center justify-center border-2 border-dashed border-border-secondary rounded-lg p-4 cursor-pointer hover:border-accent hover:bg-accent/5 transition-colors"
+            className="flex items-center justify-center gap-1.5 border border-dashed border-border-secondary rounded-lg p-2 cursor-pointer text-[11px] text-txt-tertiary hover:border-accent hover:text-accent transition-colors"
             onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
             onDrop={e => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) handleBankImageUpload(f) }}
           >
-            {ocrLoading ? (
-              <p className="text-[13px] text-accent">OCR 처리 중...</p>
-            ) : bankImage ? (
-              <div className="flex items-center gap-3">
-                <img src={bankImage} alt="통장사본" className="h-16 rounded border border-border-primary" />
-                <p className="text-[11px] text-txt-secondary">통장사본 업로드 완료</p>
-              </div>
-            ) : (
-              <>
-                <p className="text-[13px] text-txt-tertiary">통장사본 이미지를 드래그하거나 클릭</p>
-                <p className="text-[10px] text-txt-quaternary mt-1">은행명, 계좌번호, 예금주 자동 추출</p>
-              </>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleBankImageUpload(f) }}
-            />
+            <Upload size={12} />
+            {ocrLoading ? 'OCR 처리 중...' : bankImage ? '통장사본 업로드 완료' : '통장사본 드래그 또는 클릭 (OCR 자동추출)'}
+            <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleBankImageUpload(f) }} />
           </label>
         </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput label="은행" placeholder="예: 국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
-          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
+        <div className="grid grid-cols-3 gap-3">
+          <FormInput label="은행" placeholder="국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
           <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
+        </div>
+        <div className="mt-3">
+          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
         </div>
       </section>
 
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">메모</h3>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">상담내용</h3>
         <textarea
           value={(getVal('note') as string) ?? ''}
           onChange={e => onChange('note', e.target.value || null)}
@@ -671,7 +729,7 @@ interface WaterPricing {
 }
 
 // --- 탭 2: 1단계 (실측~신청서) ---
-function TabStep1({ project, category, getVal, onChange, onRefresh }: TabProps & { category: '소규모' | '수도'; onRefresh?: () => void }) {
+function TabStep1({ project, category, getVal, onChange, onRefresh, staffList }: TabProps & { category: '소규모' | '수도'; onRefresh?: () => void; staffList: { id: string; name: string }[] }) {
   const router = useRouter()
   const urlCategory = category === '소규모' ? 'small' : 'water'
   const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
@@ -746,8 +804,8 @@ function TabStep1({ project, category, getVal, onChange, onRefresh }: TabProps &
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="실측일" type="date" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v || null)} />
-          <FormInput label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v || null)} />
+          <DateTimeInput label="실측일시" value={getVal('survey_date') as string} onChange={v => { onChange('survey_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('survey_staff') as string) || '', '실측') }} />
+          <StaffSelect label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="실측지" label="실측지" />
       </section>
@@ -784,8 +842,8 @@ function TabStep1({ project, category, getVal, onChange, onRefresh }: TabProps &
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="동의서 수령일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} />
-          <FormInput label="수령자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} />
+          <DateTimeInput label="동의서 회수일시" value={getVal('consent_date') as string} onChange={v => { onChange('consent_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('consent_submitter') as string) || '', '동의서 회수') }} />
+          <StaffSelect label="회수자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="동의서" label="동의서" />
       </section>
@@ -793,8 +851,8 @@ function TabStep1({ project, category, getVal, onChange, onRefresh }: TabProps &
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">신청서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="신청서 제출일" type="date" value={getVal('application_date') as string} onChange={v => onChange('application_date', v || null)} />
-          <FormInput label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} />
+          <DateTimeInput label="신청서 제출일시" value={getVal('application_date') as string} onChange={v => { onChange('application_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('application_submitter') as string) || '', '신청서 제출') }} />
+          <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="신청서" label="신청서" />
       </section>
@@ -804,7 +862,7 @@ function TabStep1({ project, category, getVal, onChange, onRefresh }: TabProps &
 }
 
 // --- 탭 3: 2단계 (승인 → 시공 분리) ---
-function TabStep2({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
+function TabStep2({ project, category, getVal, onChange, onRefresh, staffList }: TabProps & { category: '소규모' | '수도'; onRefresh?: () => void; staffList: { id: string; name: string }[] }) {
   const [vendorSearch, setVendorSearch] = useState('')
   const [vendorResults, setVendorResults] = useState<{ id: string; name: string; phone: string | null }[]>([])
   const [showVendorDropdown, setShowVendorDropdown] = useState(false)
@@ -829,9 +887,20 @@ function TabStep2({ project, getVal, onChange, onRefresh }: TabProps & { onRefre
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">승인</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} />
+          <FormInput label="승인일" type="date" value={getVal('receipt_date') as string} onChange={v => onChange('receipt_date', v || null)} />
         </div>
       </section>
+
+      {category === '소규모' && (
+        <section>
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">착공서류</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <DateTimeInput label="착공서류 제출일시" value={getVal('construction_doc_date') as string} onChange={v => { onChange('construction_doc_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('construction_doc_submitter') as string) || '', '착공서류 제출') }} />
+            <StaffSelect label="제출자" value={getVal('construction_doc_submitter') as string} onChange={v => onChange('construction_doc_submitter', v || null)} staffList={staffList} />
+          </div>
+          <FileAttachSection projectId={project.id} fileType="착공서류" label="착공서류" />
+        </section>
+      )}
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>
@@ -991,14 +1060,14 @@ function PaymentSection({ project, onRefresh }: { project: DBProject; onRefresh?
 }
 
 // --- 탭 4: 3단계 (완료서류) ---
-function TabStep3({ project, getVal, onChange, onRefresh }: TabProps & { onRefresh?: () => void }) {
+function TabStep3({ project, getVal, onChange, onRefresh, staffList }: TabProps & { onRefresh?: () => void; staffList: { id: string; name: string }[] }) {
   return (
     <div className="space-y-5">
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">완료서류</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="완료서류 제출일" type="date" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v || null)} />
-          <FormInput label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v || null)} />
+          <DateTimeInput label="완료서류 제출일시" value={getVal('completion_doc_date') as string} onChange={v => { onChange('completion_doc_date', v || null); if (v) syncSchedule(project.id, project.building_name || '', v, (getVal('completion_submitter') as string) || '', '완료서류 제출') }} />
+          <StaffSelect label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v || null)} staffList={staffList} />
         </div>
         <FileAttachSection projectId={project.id} fileType="완료서류" label="완료서류" />
       </section>

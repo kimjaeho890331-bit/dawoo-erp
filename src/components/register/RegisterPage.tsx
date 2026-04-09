@@ -42,6 +42,11 @@ export interface DBProject {
   down_payment: number
   completion_doc_date: string | null
   completion_submitter: string | null
+  consent_date: string | null
+  consent_submitter: string | null
+  receipt_date: string | null
+  construction_doc_date: string | null
+  construction_doc_submitter: string | null
   dong: string | null
   ho: string | null
   exclusive_area: number | null
@@ -49,6 +54,7 @@ export interface DBProject {
   bank_name: string | null
   account_number: string | null
   account_holder: string | null
+  support_program: string | null
   year: number | null
   created_at: string
   updated_at: string
@@ -446,27 +452,25 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
               <tr>
                 <th className="px-4 py-3 text-left">담당직원</th>
                 <th className="px-4 py-3 text-left">빌라명</th>
-                <th className="px-4 py-3 text-left">소유주</th>
+                <th className="px-4 py-3 text-left">호수</th>
                 <th className="px-4 py-3 text-left">연락처</th>
                 <th className="px-4 py-3 text-left">주소</th>
-                <th className="px-4 py-3 text-left">종류</th>
-                <th className="px-4 py-3 text-left">단계</th>
+                <th className="px-4 py-3 text-left">{category === '소규모' ? '지원사업' : '종류'}</th>
                 <th className="px-4 py-3 text-left">상담내역</th>
-                <th className="px-4 py-3 text-right">총공사비</th>
-                <th className="px-4 py-3 text-right">미수금</th>
+                <th className="px-4 py-3 text-left">단계</th>
                 <th className="w-10 px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-16 text-center text-txt-tertiary">
+                  <td colSpan={9} className="px-4 py-16 text-center text-txt-tertiary">
                     불러오는 중...
                   </td>
                 </tr>
               ) : filteredProjects.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-16 text-center text-txt-tertiary">
+                  <td colSpan={9} className="px-4 py-16 text-center text-txt-tertiary">
                     등록된 프로젝트가 없습니다
                   </td>
                 </tr>
@@ -483,17 +487,24 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                   >
                     <td className="px-4 py-2.5 font-medium text-txt-primary">{project.staff?.name || '-'}</td>
                     <td className="px-4 py-2.5 text-txt-primary">{project.building_name || '-'}</td>
-                    <td className="px-4 py-2.5 text-txt-secondary">{project.owner_name || '-'}</td>
+                    <td className="px-4 py-2.5 text-txt-secondary">{[project.dong, project.ho].filter(Boolean).join(' ') || '-'}</td>
                     <td className="px-4 py-2.5 text-txt-secondary">{project.owner_phone ? formatPhone(project.owner_phone) : '-'}</td>
                     <td className="px-4 py-2.5 text-txt-secondary max-w-[200px] truncate" title={project.road_address || ''}>
                       {project.road_address || '-'}
                     </td>
                     <td className="px-4 py-2.5">
-                      {project.work_types?.name ? (
+                      {category === '소규모' ? (
+                        <span className={`badge ${getTypeBadgeColor()}`}>
+                          {project.support_program || project.work_types?.name || '-'}
+                        </span>
+                      ) : project.work_types?.name ? (
                         <span className={`badge ${getTypeBadgeColor()}`}>
                           {project.work_types.name}
                         </span>
                       ) : '-'}
+                    </td>
+                    <td className="px-4 py-2.5 text-txt-tertiary max-w-[160px] truncate" title={project.note || ''}>
+                      {project.note || '-'}
                     </td>
                     <td className="px-4 py-2.5">
                       <span className={`badge ${getStepBadgeColor(project.status)}`}>
@@ -502,15 +513,6 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                       {project.outstanding > 0 && project.total_cost > 0 && (
                         <span className="ml-1 text-[10px] font-semibold text-money-negative">미수금</span>
                       )}
-                    </td>
-                    <td className="px-4 py-2.5 text-txt-tertiary max-w-[160px] truncate" title={project.note || ''}>
-                      {project.note || '-'}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-txt-primary whitespace-nowrap tabular-nums">
-                      {project.total_cost > 0 ? `${project.total_cost.toLocaleString()}원` : '-'}
-                    </td>
-                    <td className={`px-4 py-2.5 text-right whitespace-nowrap tabular-nums ${project.outstanding > 0 ? 'text-money-negative font-medium' : 'text-txt-tertiary'}`}>
-                      {project.outstanding > 0 ? `${project.outstanding.toLocaleString()}원` : '-'}
                     </td>
                     <td className="px-2 py-2.5">
                       <KebabMenu

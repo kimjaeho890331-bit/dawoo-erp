@@ -19,7 +19,7 @@ const STEP_LABELS_SHORT = [
   '승인', '착공', '공사', '완료', '입금',
 ]
 
-const TABS = ['기본정보', '1단계', '2단계', '3~4단계', '서류/첨부', '이력'] as const
+const TABS = ['기본정보', '1단계', '2단계', '3단계', '이력'] as const
 type TabKey = (typeof TABS)[number]
 
 function getStepIndex(step: string): number {
@@ -55,7 +55,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       if (stepIdx <= 0) setActiveTab('기본정보')
       else if (stepIdx <= 4) setActiveTab('1단계')
       else if (stepIdx <= 7) setActiveTab('2단계')
-      else if (stepIdx <= 9) setActiveTab('3~4단계')
+      else if (stepIdx <= 9) setActiveTab('3단계')
       else setActiveTab('기본정보')
     }
   }, [project])
@@ -350,8 +350,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
           {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
           {activeTab === '2단계' && <TabStep2 project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} />}
-          {activeTab === '3~4단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
-          {activeTab === '서류/첨부' && <TabDocuments projectId={project.id} />}
+          {activeTab === '3단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>
@@ -664,7 +663,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
   const urlCategory = category === '소규모' ? 'small' : 'water'
   const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
   const [pricingLoaded, setPricingLoaded] = useState(false)
-  const [autoApplied, setAutoApplied] = useState(false)
+
 
   const area = (getVal('exclusive_area') as number) || 0
   const units = (getVal('unit_count') as number) || 0
@@ -684,24 +683,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       .catch(() => setPricingLoaded(true))
   }, [cityName, category])
 
-  // 전유면적 있고, 총공사비 없으면 자동 기입
-  useEffect(() => {
-    if (!pricingLoaded || autoApplied || !area || currentTotal > 0) return
-
-    const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
-    const cost = isPublic
-      ? Math.round(area * pricing.공용 + units * pricing.공용_세대)
-      : Math.round(area * pricing.전용)
-    const vat = Math.round(cost * 0.1)
-    const grandTotal = cost + vat
-    const citySupport = Math.round(grandTotal * 0.8)
-    const selfPay = grandTotal - citySupport
-
-    onChange('total_cost', grandTotal)
-    onChange('city_support', citySupport)
-    onChange('self_pay', selfPay)
-    setAutoApplied(true)
-  }, [pricingLoaded, autoApplied, area, units, currentTotal, pricing, workTypeName, onChange])
+  // 견적 자동기입 정지 — 재산출 버튼으로만 계산
 
   // 수동 재산출
   const handleRecalculate = () => {
@@ -955,124 +937,7 @@ function TabStep34({ project, getVal, onChange }: TabProps) {
 }
 
 // --- 탭 5: 서류/첨부 ---
-function TabDocuments({ projectId }: { projectId: string }) {
-  const [documents, setDocuments] = useState<{ id: string; name: string; doc_type: string; file_path: string; created_at: string }[]>([])
-  const [attachments, setAttachments] = useState<{ id: string; name: string; file_type: string; file_path: string; created_at: string }[]>([])
-
-  useEffect(() => {
-    async function load() {
-      const [docRes, attRes] = await Promise.all([
-        supabase.from('documents').select('id, name, doc_type, file_path, created_at').eq('project_id', projectId).order('created_at'),
-        supabase.from('attachments').select('id, name, file_type, file_path, created_at').eq('project_id', projectId).order('created_at'),
-      ])
-      setDocuments(docRes.data || [])
-      setAttachments(attRes.data || [])
-    }
-    load()
-  }, [projectId])
-
-  const getPublicUrl = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path)
-    return data.publicUrl
-  }
-
-  const docTypeBadge = (type: string) => {
-    switch (type) {
-      case '견적서': return 'bg-blue-50 text-blue-700'
-      case '신청서': return 'bg-green-50 text-green-700'
-      case '완료보고서': return 'bg-purple-50 text-purple-700'
-      default: return 'bg-surface-secondary text-txt-secondary'
-    }
-  }
-
-  // 첨부파일을 file_type별로 그룹핑
-  const FILE_TYPE_GROUPS = ['통장사본', '동의서', '실측사진', '시공전', '시공중', '시공후', '완료보고서', '기타']
-  const groupedAttachments = FILE_TYPE_GROUPS.map(type => ({
-    type,
-    files: attachments.filter(a => a.file_type === type),
-  })).filter(g => g.files.length > 0)
-
-  return (
-    <div className="space-y-6">
-      {/* 서류 목록 */}
-      <div>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">서류 목록</h3>
-        {documents.length === 0 ? (
-          <div className="border border-dashed border-border-secondary rounded-[10px] p-6 text-center text-txt-tertiary text-[13px]">
-            서류가 없습니다. 서류함에서 생성하면 여기에 표시됩니다.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {documents.map(doc => (
-              <div key={doc.id} className="flex items-center gap-3 px-3 py-2 bg-surface-secondary rounded-lg">
-                <FileText size={16} className="text-txt-tertiary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] text-txt-primary truncate">{doc.name}</p>
-                  <p className="text-[10px] text-txt-tertiary">{new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
-                </div>
-                <span className={`badge text-[10px] ${docTypeBadge(doc.doc_type)}`}>{doc.doc_type}</span>
-                {doc.file_path && (
-                  <button
-                    onClick={() => window.open(getPublicUrl(doc.file_path), '_blank')}
-                    className="text-[11px] text-link hover:underline"
-                  >
-                    보기
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 첨부파일 (그룹별) */}
-      <div>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">첨부파일</h3>
-        {groupedAttachments.length === 0 ? (
-          <div className="border border-dashed border-border-secondary rounded-[10px] p-6 text-center text-txt-tertiary text-[13px]">
-            첨부파일이 없습니다. 각 단계 탭에서 업로드하세요.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {groupedAttachments.map(group => (
-              <div key={group.type}>
-                <p className="text-[11px] font-medium text-txt-tertiary mb-1">{group.type} ({group.files.length})</p>
-                <div className="space-y-1">
-                  {group.files.map(file => (
-                    <div key={file.id} className="flex items-center gap-2 px-2 py-1.5 bg-surface-secondary rounded-lg">
-                      {/\.(jpg|jpeg|png|gif|webp)$/i.test(file.name) ? (
-                        <img
-                          src={getPublicUrl(file.file_path)}
-                          alt={file.name}
-                          className="w-8 h-8 rounded object-cover border border-border-primary cursor-pointer"
-                          onClick={() => window.open(getPublicUrl(file.file_path), '_blank')}
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded bg-surface-tertiary flex items-center justify-center">
-                          <FileText size={14} className="text-txt-tertiary" />
-                        </div>
-                      )}
-                      <span className="flex-1 text-[11px] text-txt-secondary truncate">{file.name}</span>
-                      <span className="text-[10px] text-txt-quaternary">{new Date(file.created_at).toLocaleDateString('ko-KR')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 기타 파일 추가 업로드 */}
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">기타 파일 추가</p>
-          <FileDropZone projectId={projectId} fileType="기타" accept="image/*,application/pdf" multiple compact />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// --- 탭 6: 이력 ---
+// --- 탭: 이력 ---
 function TabHistory({ projectId }: { projectId: string }) {
   const [logs, setLogs] = useState<{ from_status: string; to_status: string; note: string | null; created_at: string; staff_name: string | null }[]>([])
 

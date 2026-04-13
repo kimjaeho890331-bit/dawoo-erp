@@ -111,9 +111,13 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     for (const field of dateFields) {
       const dateVal = savedData[field] as string | null
       const scheduleType = SCHEDULE_MAP[field]
-      const title = `${project.building_name || '(이름없음)'} ${scheduleType}`
-      const surveyTime = field === 'survey_date' ? ((editData as Record<string,unknown>)?.survey_time as string || project.survey_time || '') : ''
-      const memo = [surveyTime, project.road_address, project.owner_phone].filter(Boolean).join(' / ')
+      // 시간: 실측은 survey_time, 나머지는 해당 time 필드
+      const timeField = field.replace('_date', '_time')
+      const timeVal = (editData as Record<string,unknown>)?.[timeField] as string || (project as unknown as Record<string,string>)[timeField] || ''
+      const title = `${timeVal ? timeVal + ' ' : ''}${project.building_name || '(이름없음)'} ${scheduleType}`
+      const addr = project.jibun_address || project.road_address || ''
+      const ownerInfo = [project.owner_name, project.owner_phone].filter(Boolean).join(' · ')
+      const memo = [addr, ownerInfo].filter(Boolean).join('\n')
 
       if (!dateVal) {
         // 날짜 삭제 시 일정도 삭제
@@ -143,7 +147,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         title,
         start_date: cleanDate,
         end_date: cleanDate,
-        memo: `${scheduleType} / ${memo}`,
+        memo,
         confirmed: false,
         all_day: true,
       }

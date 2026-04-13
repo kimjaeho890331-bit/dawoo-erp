@@ -41,6 +41,18 @@ interface UnitInfo {
   exposPubuseGbCdNm: string
 }
 
+// --- 소유자 결과 타입 ---
+interface OwnerInfo {
+  name: string
+  registNo: string
+  ownerType: string
+  share: string
+  coOwnerCount: number
+  changeDate: string
+  dongNm: string
+  hoNm: string
+}
+
 interface Props {
   category: '소규모' | '수도'
   onClose: () => void
@@ -227,16 +239,27 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     })
 
     try {
-      const [bldRes, unitRes] = await Promise.all([
+      const [bldRes, unitRes, ownerRes] = await Promise.all([
         fetch(`/api/address/building?${params.toString()}`),
         fetch(`/api/address/units?${params.toString()}`),
+        fetch(`/api/address/owner?${params.toString()}`),
       ])
 
       const bldData: BuildingInfo | null = await bldRes.json()
       const unitData: UnitInfo[] = await unitRes.json()
+      const ownerData: OwnerInfo[] = await ownerRes.json()
 
       setBuildingInfo(bldData)
       setUnits(Array.isArray(unitData) ? unitData : [])
+
+      // 소유자 정보가 있으면 첫 번째 소유자 이름 자동 입력
+      if (Array.isArray(ownerData) && ownerData.length > 0) {
+        const firstOwner = ownerData[0]
+        setForm(prev => ({
+          ...prev,
+          owner_name: prev.owner_name || firstOwner.name || '',
+        }))
+      }
 
       if (bldData) {
         // 사용승인일 포맷: YYYYMMDD -> YYYY-MM-DD

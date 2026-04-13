@@ -1,191 +1,53 @@
-# docs/API_ADDRESS.md - 주소/건축물대장 API 연동 가이드
-
-> 접수대장에서 주소 검색 시 자동으로 건물 정보를 가져오는 흐름입니다.
-> 잘못된 데이터가 들어오지 않도록 각 단계별 추출 필드를 명확히 정의합니다.
-
----
+# 주소/건축물대장 API 연동 가이드
 
 ## 연동 흐름
-
 ```
-[사용자 입력] 주소 키워드 (예: "고색동 888-98")
-      ↓
-[1단계] 도로명주소 검색 API → 주소 목록 표시
-      ↓ (사용자가 선택)
-[2단계] 건축물대장 표제부 API → 건물 전체 정보
-      ↓ (자동)
-[3단계] 건축물대장 전유부 API → 호별 면적
-      ↓ (사용자가 동호수 선택)
-[결과] 접수대장 자동 입력
+[1] 주소 키워드 → 도로명주소 API → 주소 목록
+[2] 선택 → 표제부 API → 건물 전체 정보
+[3] 자동 → 전유부 API → 호별 면적
+[4] 선택 → 소유자 API → 소유자 이름/주민번호 (활성화 대기)
+→ 접수대장 자동 입력
 ```
-
----
 
 ## 1단계: 도로명주소 검색
-
-### API 정보
 - URL: `https://business.juso.go.kr/addrlink/addrLinkApi.do`
-- Method: GET
-- API Route: `/api/address/search?keyword=검색어`
+- Route: `/api/address/search?keyword=검색어`
+- 추출: `roadAddr`→도로명, `jibunAddr`→지번, `bdNm`→건물명
+- 내부용: `admCd`(앞5=시군구,뒤5=법정동), `lnbrMnnm`(번), `lnbrSlno`(지)
 
-### 요청 파라미터
-| 파라미터 | 값 | 설명 |
-|----------|------|------|
-| confmKey | env에 저장 | 인증키 |
-| keyword | 사용자 입력 | 검색 키워드 |
-| currentPage | 1 | 페이지 |
-| countPerPage | 10 | 결과 수 |
-| resultType | json | 응답 형식 |
-
-### 추출 필드 (→ 접수대장에 저장)
-| API 필드 | 접수대장 필드 | 설명 | 예시 |
-|----------|-------------|------|------|
-| `roadAddr` | `road_address` | 도로명주소 (전체) | 경기도 수원시 권선구 매송고색로711번길 32 |
-| `jibunAddr` | `jibun_address` | 지번주소 (전체) | 경기도 수원시 권선구 고색동 888-98 |
-| `bdNm` | `building_name` | 건물명 | 신한빌라 |
-| `admCd` 앞5자리 | (내부용) | 시군구코드 → 2단계 전달 | 41113 |
-| `admCd` 뒤5자리 | (내부용) | 법정동코드 → 2단계 전달 | 12800 |
-| `lnbrMnnm` | (내부용) | 번 → 2단계 전달 | 888 |
-| `lnbrSlno` | (내부용) | 지 → 2단계 전달 | 98 |
-
-### 주의사항
-- `bdNm`이 빈 문자열일 수 있음 → 빈 경우 사용자 직접 입력
-- `admCd`는 10자리: 앞 5자리 = 시군구코드, 뒤 5자리 = 법정동코드
-- 검색 결과가 여러 개면 사용자가 선택
-
----
-
-## 2단계: 건축물대장 표제부 (건물 전체 정보)
-
-### API 정보
+## 2단계: 표제부 (건물 전체)
 - URL: `https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo`
-- Method: GET
-- API Route: `/api/address/building?sigunguCd=41113&bjdongCd=12800&bun=888&ji=98`
+- Route: `/api/address/building?sigunguCd=&bjdongCd=&bun=&ji=`
+- 추출: `bldNm`(건물명), `mainPurpsCdNm`(용도), `hhldCnt`(세대수), `useAprDay`(사용승인일 YYYYMMDD)
+- 주의: `useAprDay` YYYYMMDD→YYYY-MM-DD 변환, 빈 값 가능
 
-### 요청 파라미터
-| 파라미터 | 값 | 설명 |
-|----------|------|------|
-| serviceKey | env에 저장 | 인증키 |
-| sigunguCd | 1단계에서 추출 | 시군구코드 (5자리) |
-| bjdongCd | 1단계에서 추출 | 법정동코드 (5자리) |
-| bun | 1단계에서 추출 | 번 (4자리 zero-pad: 0888) |
-| ji | 1단계에서 추출 | 지 (4자리 zero-pad: 0098) |
-| _type | json | 응답 형식 |
+## 3단계: 전유부 (호별 면적)
+- URL: `getBrExposPubuseAreaInfo` (같은 서비스)
+- Route: `/api/address/units?sigunguCd=&bjdongCd=&bun=&ji=`
+- 필터: `exposPubuseGbCd==="1"` (전유만, 공용 무시)
+- 추출: `dongNm`(동), `hoNm`(호), `area`(전유면적㎡)
+- 페이징: numOfRows 최대100건 → totalCount 기반 병렬 요청
 
-### 추출 필드 (→ 접수대장에 저장)
-| API 필드 | 접수대장 필드 | 설명 | 예시 |
-|----------|-------------|------|------|
-| `bldNm` | `building_name` | 건물명 (1단계 보완) | 신한빌라 |
-| `mainPurpsCdNm` + `etcPurps` | `building_purpose` | 용도 | 공동주택 (연립주택) |
-| `hhldCnt` | `household_count` | 세대수 | 30 |
-| `useAprDay` | `approval_date` | 사용승인일 (YYYYMMDD) | 19851226 |
-| `strctCdNm` | (참고용) | 구조 | 철근콘크리트구조 |
-| `grndFlrCnt` | (참고용) | 지상 층수 | 3 |
-| `ugrndFlrCnt` | (참고용) | 지하 층수 | 1 |
-| `totArea` | (참고용) | 연면적 | 2691 |
+## 4단계: 소유자 (활성화 대기)
+- URL: `getBrOwnrInfo` (별도 서비스 `15021136` 신청 필요)
+- Route: `/api/address/owner?sigunguCd=&bjdongCd=&bun=&ji=`
+- 추출: `ownrNm`(이름), `ownrRgstNo`(주민번호 앞7자리), `ownrGbCdNm`(개인/법인)
+- 현재 상태: 코드 구현 완료, API 키 활성화 대기
 
-### 주의사항
-- `useAprDay`는 `YYYYMMDD` 형식 → 표시할 때 `YYYY-MM-DD`로 변환
-- `useAprDay`가 빈 문자열(" ")일 수 있음 → 빈 경우 "-" 표시
-- `etcPurps`가 `mainPurpsCdNm`과 다를 때만 괄호로 추가: "공동주택 (연립주택)"
-- `hhldCnt`가 0이면 표시하지 않음 (단독주택 등)
-- 결과가 없으면 "건축물대장 정보를 찾을 수 없습니다" 표시
-
-### 사용하지 않는 필드 (혼동 방지)
-| API 필드 | 이유 |
-|----------|------|
-| `archArea` | 건축면적 — 견적서에서 사용, 접수대장 불필요 |
-| `vlRat`, `bcRat` | 용적률/건폐율 — 접수대장 불필요 |
-| `roofCd`, `roofCdNm` | 지붕 — 접수대장 불필요 |
-| `pmsDay`, `stcnsDay` | 허가일/착공일 — 사용승인일만 필요 |
-
----
-
-## 3단계: 건축물대장 전유부 (호별 면적)
-
-### API 정보
-- URL: `https://apis.data.go.kr/1613000/BldRgstHubService/getBrExposPubuseAreaInfo`
-- Method: GET
-- API Route: `/api/address/units?sigunguCd=41113&bjdongCd=12800&bun=888&ji=98`
-
-### 요청 파라미터
-- 2단계와 동일 (sigunguCd, bjdongCd, bun, ji)
-- `numOfRows=200` (세대수 많은 아파트 대비)
-
-### 추출 필드 (→ 접수대장에 저장)
-| API 필드 | 접수대장 필드 | 설명 | 예시 |
-|----------|-------------|------|------|
-| `hoNm` | `dong_ho` | 동호수 (사용자 선택) | 301호 |
-| `area` | `exclusive_area` | 전유면적 (㎡) | 60.12 |
-
-### 필터링 규칙 (중요!)
-```
-exposPubuseGbCd === "1"  → 전유 (실제 집 면적) ← 이것만 사용
-exposPubuseGbCd === "2"  → 공용 (계단, 복도, 지하) ← 무시
-```
-
-한 호수에 여러 행이 나옴:
-- 전유 1개 (60.12㎡) ← 이것만 추출
-- 공용 여러 개 (지하 20.02㎡, 계단 6.12㎡) ← 무시
-
-### 동호수 목록 생성 규칙
-1. `exposPubuseGbCd === "1"` (전유)인 행만 필터
-2. `hoNm`으로 그룹화 → 중복 제거
-3. 호수 순으로 정렬 (숫자 기준)
-4. 동이 있는 경우: `dongNm + hoNm` (예: "가동 301호")
-5. 동이 없는 경우: `hoNm`만 (예: "301호")
-
-### 주의사항
-- `dongNm`이 빈 문자열(" ")이면 동 없는 건물
-- `hoNm`이 빈 문자열이면 건축물대장 미등록 호수
-- `area`는 소수점 2자리 (㎡)
-- 아파트는 200세대+ → numOfRows 충분히 설정
-
----
-
-## 접수대장 필드 매핑 총정리
-
-| 접수대장 필드 | DB 컬럼 | 입력 방식 | 소스 |
-|-------------|---------|----------|------|
-| 도로명주소 | `road_address` | 자동 (1단계) | 주소검색 API |
-| 지번주소 | `jibun_address` | 자동 (1단계) | 주소검색 API |
-| 건물명 (빌라명) | `building_name` | 자동 + 수정가능 | 주소검색 → 표제부 |
-| 용도 | `building_purpose` | 자동 (2단계) | 표제부 API |
-| 세대수 | `household_count` | 자동 (2단계) | 표제부 API |
-| 사용승인일 | `approval_date` | 자동 (2단계) | 표제부 API |
-| 동호수 | `dong_ho` | 선택 (3단계) | 전유부 API 목록 |
-| 전유면적 | `exclusive_area` | 자동 (3단계) | 전유부 API |
-| 소유주 (집주인) | `owner_name` | **수동 입력** | 개인정보라 API 미제공 |
-| 소유주 연락처 | `owner_phone` | **수동 입력** | 개인정보라 API 미제공 |
-
-> **소유주/연락처는 건축물대장 API에서 제공하지 않습니다** (개인정보보호법).
-> 반드시 사용자가 직접 입력해야 합니다.
-
----
+## 필드 매핑
+| 접수대장 필드 | 소스 | 방식 |
+|-------------|------|------|
+| road_address / jibun_address | 1단계 | 자동 |
+| building_name | 1→2단계 | 자동+수정가능 |
+| building_use / unit_count / approval_date | 2단계 | 자동 |
+| dong / ho / exclusive_area | 3단계 | 선택 |
+| owner_name | 4단계 또는 수동 | 자동/수동 |
+| owner_phone | - | 수동 입력 |
 
 ## 에러 처리
-
 | 상황 | 처리 |
 |------|------|
-| 주소 검색 결과 없음 | "검색 결과가 없습니다" 메시지 |
-| 표제부 조회 실패 | 건물정보 영역 숨김, 수동 입력 허용 |
-| 전유부 조회 실패 | 동호수 직접 입력 + 면적 직접 입력 |
-| API 타임아웃 | 5초 제한, 실패 시 수동 입력 안내 |
-| 빈 건물명 | 사용자 직접 입력 유도 |
-
----
-
-## 테스트 데이터 (검증용)
-
-### 고색동 888-98 301호 (신한빌라)
-```
-도로명: 경기도 수원시 권선구 매송고색로711번길 32
-지번: 경기도 수원시 권선구 고색동 888-98
-건물명: 신한빌라
-용도: 공동주택 (연립주택)
-세대수: 30
-사용승인일: 1985-12-26
-동호수: 301호
-전유면적: 60.12㎡
-소유주: (수동입력)
-```
+| 주소 검색 없음 | "검색 결과가 없습니다" |
+| 표제부 실패 | 수동 입력 허용 |
+| 전유부 실패 | 동호수+면적 직접 입력 |
+| API 타임아웃 | 5초 제한, 수동 입력 안내 |

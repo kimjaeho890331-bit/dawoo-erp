@@ -384,10 +384,69 @@ interface TabProps {
   apiFieldsLocked?: boolean
 }
 
+// --- 소유자 타입 ---
+interface OwnerInfo {
+  name: string
+  registNo: string
+  ownerType: string
+  share: string
+  coOwnerCount: number
+  changeDate: string
+  dongNm: string
+  hoNm: string
+}
+
 // --- 탭 1: 기본정보 ---
 function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) {
   const [bankImage, setBankImage] = useState<string | null>(null)
   const [ocrLoading, setOcrLoading] = useState(false)
+  const [owners, setOwners] = useState<OwnerInfo[]>([])
+  const [ownerLoading, setOwnerLoading] = useState(false)
+  const [ownerError, setOwnerError] = useState('')
+
+  // 소유자 조회 (주소 → 주소검색 → 코드 추출 → 소유자 API)
+  const fetchOwners = async () => {
+    const addr = project.road_address || project.jibun_address
+    if (!addr) { setOwnerError('주소가 없습니다'); return }
+
+    setOwnerLoading(true)
+    setOwnerError('')
+    setOwners([])
+    try {
+      // 1. 주소 검색으로 코드 추출
+      const searchRes = await fetch(`/api/address/search?keyword=${encodeURIComponent(addr)}`)
+      const results = await searchRes.json()
+      if (!Array.isArray(results) || results.length === 0) {
+        setOwnerError('주소 코드를 찾을 수 없습니다')
+        return
+      }
+      const matched = results[0]
+      const params = new URLSearchParams({
+        sigunguCd: matched.sigunguCd || '',
+        bjdongCd: matched.bjdongCd || '',
+        bun: matched.lnbrMnnm || '0',
+        ji: matched.lnbrSlno || '0',
+      })
+
+      // 2. 소유자 API 호출
+      const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
+      const ownerData: OwnerInfo[] = await ownerRes.json()
+      if (Array.isArray(ownerData) && ownerData.length > 0) {
+        setOwners(ownerData)
+        // 첫 소유자를 owner_name에 자동 입력 (비어있을 때만)
+        if (!getVal('owner_name')) {
+          onChange('owner_name', ownerData[0].name)
+        }
+      } else {
+        setOwnerError('소유자 정보가 없습니다')
+      }
+    } catch (err) {
+      console.error('소유자 조회 실패:', err)
+      setOwnerError('소유자 조회에 실패했습니다')
+    } finally {
+      setOwnerLoading(false)
+    }
+  }
 
   const handleBankImageUpload = async (file: File) => {
     const reader = new FileReader()
@@ -422,7 +481,39 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
   return (
     <div className="space-y-5">
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">소유주/세입자</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider">소유주/세입자</h3>
+          <button
+            onClick={fetchOwners}
+            disabled={ownerLoading}
+            className="px-2.5 py-1 text-[10px] font-medium text-accent border border-accent/30 rounded-md hover:bg-accent/5 transition-colors disabled:opacity-50"
+          >
+            {ownerLoading ? '조회 중...' : '건축물대장 소유자 조회'}
+          </button>
+        </div>
+
+        {/* 소유자 조회 결과 */}
+        {owners.length > 0 && (
+          <div className="mb-3 p-3 bg-surface-secondary rounded-lg border border-border-tertiary">
+            <p className="text-[10px] font-medium text-txt-tertiary mb-2">건축물대장 소유자 ({owners.length}명)</p>
+            <div className="space-y-1.5">
+              {owners.map((o, i) => (
+                <div key={i} className="flex items-center justify-between text-[12px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-txt-primary">{o.name}</span>
+                    <span className="text-txt-tertiary">({o.ownerType})</span>
+                    {o.registNo && <span className="text-txt-quaternary text-[11px]">{o.registNo}</span>}
+                  </div>
+                  {o.share && <span className="text-[11px] text-txt-tertiary">지분 {o.share}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {ownerError && (
+          <p className="mb-3 text-[11px] text-[#dc2626]">{ownerError}</p>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="소유주" value={getVal('owner_name') as string} onChange={v => onChange('owner_name', v || null)} />
           <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', v || null)} />

@@ -9,12 +9,17 @@
       "Bash(git log*)",
       "Bash(git add*)",
       "Bash(git commit*)",
-      "Bash(ls*)"
+      "Bash(ls*)",
+      "mcp__supabase__*",
+      "mcp__context7__*",
+      "mcp__chrome-devtools__*",
+      "Skill"
     ],
     "deny": [
       "Bash(rm -rf*)",
       "Bash(git push --force*)",
-      "Bash(git reset --hard*)"
+      "Bash(git reset --hard*)",
+      "mcp__supabase__execute_sql"
     ]
   }
 }

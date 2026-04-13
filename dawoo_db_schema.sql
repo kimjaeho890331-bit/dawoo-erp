@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS staff (
   name TEXT NOT NULL,
   phone TEXT,
   role TEXT DEFAULT '직원',  -- 관리자, 직원
+  email TEXT UNIQUE,         -- 카카오 OAuth 연결 이메일
+  is_verified BOOLEAN DEFAULT false,  -- 초대코드 인증 완료 여부
   telegram_id TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );

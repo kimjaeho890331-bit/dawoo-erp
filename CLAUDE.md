@@ -422,3 +422,31 @@ dawoo-erp/
 │       └── api/                       # 데이터 액세스 함수
 └── .env.local                         # 환경변수 (git 제외)
 ```
+
+---
+
+## Claude Code 개발 환경
+
+### MCP 서버 (4개)
+| MCP | 용도 | 모드 |
+|-----|------|------|
+| supabase | DB 스키마 직접 조회, 마이그레이션 검증, RLS 확인 | read-only (쓰기 SQL은 사람 승인) |
+| chrome-devtools | UI 클릭/스크린샷/콘솔 에러 캡처 | — |
+| context7 | Next.js 16 / Supabase / Tailwind v4 최신 문서 즉시 조회 | — |
+| github | issue/PR 조회 및 생성 (`kimjaeho890331-bit/dawoo-erp`) | GITHUB_TOKEN 필요 |
+
+### 프로젝트 스킬 (5개)
+| 스킬 | 트리거 | 설명 |
+|------|-------|------|
+| supabase-migration | "테이블/컬럼 추가" | SQL + TS타입 + RLS 한 번에 작성 |
+| add-agent-tool | "AI 도구 추가" | /api/chat에 tool 추가 표준 절차 |
+| rls-check | "RLS 확인" | 22개 테이블 보안 정책 점검 |
+| design-lint | "디자인 검사" | 이모지/아이콘/색토큰 위반 검출 |
+| db-check | "타입 일치" | DB 스키마 ↔ TS 타입 동기화 확인 |
+
+### 슬래시 명령
+- `/build` — 빌드 + 린트 확인
+- `/db-check` — DB 스키마 ↔ 코드 타입 일치 확인
+
+### 워크플로우 가이드
+- 상세 → docs/CC_WORKFLOW.md

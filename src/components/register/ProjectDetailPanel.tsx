@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { validateProjectData } from '@/lib/utils/validate'
 import FileDropZone from '@/components/common/FileDropZone'
 import PaymentTable from '@/components/register/PaymentTable'
 import StepTransition from '@/components/register/StepTransition'
@@ -68,44 +69,13 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     setHasChanges(true)
   }, [])
 
-  // 저장 전 데이터 검증
-  const validateData = (data: Record<string, string | number | null>): Record<string, string | number | null> => {
-    const validated = { ...data }
-    // 시간 필드: HH:MM 형식만 허용
-    if ('survey_time' in validated) {
-      const t = (validated.survey_time as string) || ''
-      if (t && !/^\d{1,2}:\d{2}$/.test(t)) {
-        // 숫자만 있으면 자동 포맷
-        const digits = t.replace(/[^0-9]/g, '')
-        if (digits.length >= 3) {
-          validated.survey_time = digits.substring(0, digits.length - 2) + ':' + digits.substring(digits.length - 2)
-        } else {
-          validated.survey_time = null // 유효하지 않으면 저장 안 함
-        }
-      }
-    }
-    // 날짜 필드: YYYY-MM-DD 형식만 허용
-    const dateFields = ['survey_date', 'construction_date', 'application_date', 'completion_doc_date', 'consent_date', 'approval_received_date', 'construction_end_date', 'construction_doc_date', 'receipt_date']
-    for (const f of dateFields) {
-      if (f in validated && validated[f]) {
-        const d = (validated[f] as string).substring(0, 10) // T이후 제거
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-          validated[f] = null // 유효하지 않으면 저장 안 함
-        } else {
-          validated[f] = d
-        }
-      }
-    }
-    return validated
-  }
-
   // 자동저장 (2초 debounce)
   useEffect(() => {
     if (!hasChanges || !project) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const dataToSave = validateData({ ...editData })
+        const dataToSave = validateProjectData({ ...editData })
         const { error } = await supabase
           .from('projects')
           .update(dataToSave)
@@ -189,7 +159,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     if (!project || !hasChanges) return
     setSaving(true)
     try {
-      const dataToSave = validateData({ ...editData })
+      const dataToSave = validateProjectData({ ...editData })
       const { error } = await supabase
         .from('projects')
         .update(dataToSave)

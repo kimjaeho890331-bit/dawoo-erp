@@ -94,6 +94,12 @@
 | AI 비서 | 🔶 (5개 도구: 주소검색, 표제부, 전유부, 접수등록, 조회) |
 | 보고서/KPI | ✅ UI만 (AI 엔진 미연동) |
 
+## 데이터 검증 규칙
+- **DB 저장 전 반드시 `validateProjectData()` 통과** (`src/lib/utils/validate.ts`)
+- 필드 타입 스키마(`PROJECT_FIELD_SCHEMA`)에 새 필드 추가 시 등록 필수
+- date → YYYY-MM-DD만 허용 / time → HH:MM만 허용 / number → 숫자만 / phone → 숫자+하이픈만
+- 유효하지 않은 값은 null로 치환 (DB 오염 방지)
+
 ## 코드 패턴
 ```
 src/components/[기능명]/[기능명]Page.tsx   ← 메인 컴포넌트

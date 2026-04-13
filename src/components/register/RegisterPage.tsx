@@ -33,6 +33,7 @@ export interface DBProject {
   unit_count: number | null
   approval_date: string | null
   survey_date: string | null
+  survey_time: string | null
   survey_staff: string | null
   application_date: string | null
   application_submitter: string | null

@@ -113,7 +113,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       const dateVal = savedData[field] as string | null
       const scheduleType = SCHEDULE_MAP[field]
       const title = `${project.building_name || '(이름없음)'} ${scheduleType}`
-      const memo = [project.road_address, project.owner_phone].filter(Boolean).join(' / ')
+      const surveyTime = field === 'survey_date' ? ((editData as Record<string,unknown>)?.survey_time as string || project.survey_time || '') : ''
+      const memo = [surveyTime, project.road_address, project.owner_phone].filter(Boolean).join(' / ')
 
       if (!dateVal) {
         // 날짜 삭제 시 일정도 삭제
@@ -881,8 +882,9 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
     <div className="space-y-5">
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
+          <FormInput label="시간(24h)" placeholder="14:00" value={getVal('survey_time') as string} onChange={v => onChange('survey_time', v || null)} />
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>
         {category === '소규모' && (

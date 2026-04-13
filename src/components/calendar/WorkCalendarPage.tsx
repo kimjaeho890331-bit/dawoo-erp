@@ -152,6 +152,13 @@ export default function WorkCalendarPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return
+    // 접수대장 연동: 삭제 전에 project_id 확인
+    const target = schedules.find(s => s.id === id)
+    if (target?.project_id) {
+      const t = target.title || ''
+      const df = t.includes('실측') ? 'survey_date' : t.includes('시공') ? 'construction_date' : t.includes('신청서') ? 'application_date' : t.includes('완료서류') ? 'completion_doc_date' : null
+      if (df) await supabase.from('projects').update({ [df]: null }).eq('id', target.project_id)
+    }
     await supabase.from('schedules').delete().eq('id', id)
     setEditSchedule(null); setShowModal(false); loadData()
   }

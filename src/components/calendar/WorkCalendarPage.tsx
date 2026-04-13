@@ -173,6 +173,20 @@ export default function WorkCalendarPage() {
     newEnd.setDate(newEnd.getDate() + duration)
     const endStr = newEnd.toISOString().substring(0, 10)
     await supabase.from('schedules').update({ start_date: targetDate, end_date: endStr }).eq('id', dragSchedule.id)
+
+    // 접수대장 연동: project_id가 있으면 해당 날짜 필드도 업데이트
+    if (dragSchedule.project_id) {
+      const title = dragSchedule.title || ''
+      const dateField =
+        title.includes('실측') ? 'survey_date' :
+        title.includes('시공') ? 'construction_date' :
+        title.includes('신청서') ? 'application_date' :
+        title.includes('완료서류') ? 'completion_doc_date' : null
+      if (dateField) {
+        await supabase.from('projects').update({ [dateField]: targetDate }).eq('id', dragSchedule.project_id)
+      }
+    }
+
     setDragSchedule(null)
     loadData()
   }
@@ -569,8 +583,14 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
     setSaving(true)
     if (isEdit) {
       const color = staffId && staffColorMap[staffId] ? staffColorMap[staffId] : TYPE_COLORS[scheduleType] || '#3B82F6'
-      const payload = { title, start_date: startDate, end_date: endDate, staff_id: staffId || null, schedule_type: scheduleType, memo: memo || null, confirmed, color, all_day: true, site_id: null, project_id: null }
+      const payload = { title, start_date: startDate, end_date: endDate, staff_id: staffId || null, schedule_type: scheduleType, memo: memo || null, confirmed, color, all_day: true, site_id: schedule!.site_id, project_id: schedule!.project_id }
       await supabase.from('schedules').update(payload).eq('id', schedule!.id)
+      // 접수대장 연동
+      if (schedule!.project_id) {
+        const t = schedule!.title || ''
+        const df = t.includes('실측') ? 'survey_date' : t.includes('시공') ? 'construction_date' : t.includes('신청서') ? 'application_date' : t.includes('완료서류') ? 'completion_doc_date' : null
+        if (df) await supabase.from('projects').update({ [df]: startDate }).eq('id', schedule!.project_id)
+      }
     } else {
       // 복수 담당자: 각각 일정 생성
       const ids = selectedStaffIds.length > 0 ? selectedStaffIds : [null]

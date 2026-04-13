@@ -42,7 +42,6 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [hasChanges, setHasChanges] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
-  const [infoExpanded, setInfoExpanded] = useState(false)
   const [editingMemo, setEditingMemo] = useState(false)
   const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
   const [statusReason, setStatusReason] = useState('')
@@ -83,7 +82,12 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         if (error) throw error
         await syncSchedules(dataToSave)
         setHasChanges(false)
-        setEditData({})
+        // 저장 완료된 필드만 제거 (입력 중인 다른 필드 보존)
+        setEditData(prev => {
+          const remaining = { ...prev }
+          for (const key of Object.keys(dataToSave)) delete remaining[key]
+          return remaining
+        })
       } catch (err) {
         console.error('자동저장 실패:', err)
       }
@@ -165,7 +169,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
       setHasChanges(false)
       setEditData({})
-      onRefresh?.()
+      // onRefresh 호출하지 않음 — 입력 중 데이터 보존
     } catch (err) {
       console.error('저장 실패:', err)
       alert('저장에 실패했습니다.')
@@ -314,56 +318,57 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         {/* 단계 전환 */}
         <StepTransition project={project} onStepChange={() => onRefresh?.()} />
 
-        {/* 상시 표시 영역 - 접기/펼치기 */}
+        {/* 상시 표시 영역 (항상 전체 표시) */}
         <div className="px-6 py-3 border-b border-border-tertiary bg-surface-secondary">
-          {/* 항상 표시: 빌라명 + 단계 */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[14px] font-semibold text-txt-primary">{project.building_name || '(이름없음)'}</span>
+          {/* 1행: 소유주 / 연락처 / 담당자 */}
+          <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
+            <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
+            <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
+            <InfoField label="담당자" value={project.staff?.name || '-'} />
+          </div>
+          {/* 2행: 빌라명+동 / 단계 */}
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[14px] font-semibold text-txt-primary">
+              {project.building_name || '(이름없음)'}
+              {project.dong ? ` ${project.dong}` : ''}
+            </span>
             <span className={`badge ${
               currentStepIdx <= 4 ? 'bg-status-docs-bg text-status-docs-text' :
               currentStepIdx <= 7 ? 'bg-status-construction-bg text-status-construction-text' :
               'bg-status-done-bg text-status-done-text'
             }`}>{project.status}</span>
           </div>
-
-          {/* 펼친 상태: 상세 정보 */}
-          {infoExpanded && (
-            <div className="space-y-1.5 mb-2 text-[13px]">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                <InfoField label="담당자" value={project.staff?.name || '-'} />
-                <InfoField label="공사종류" value={project.work_types?.name || '-'} />
-              </div>
-              <InfoField label="주소" value={project.road_address || '-'} full />
-              <div className="grid grid-cols-2 gap-x-6">
-                <InfoField label="소유주" value={project.owner_name || '-'} />
-                <InfoField label="연락처" value={project.owner_phone || '-'} />
-              </div>
-              {/* 메모 인라인 편집 */}
-              <div>
-                <span className="text-[11px] text-txt-tertiary">상담내역</span>
-                {editingMemo ? (
-                  <textarea
-                    autoFocus
-                    rows={2}
-                    value={(getVal('note') as string) ?? ''}
-                    onChange={e => updateField('note', e.target.value || null)}
-                    onBlur={() => setEditingMemo(false)}
-                    className="w-full mt-0.5 px-2 py-1 border border-accent rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-light"
-                  />
-                ) : (
-                  <p
-                    onClick={() => setEditingMemo(true)}
-                    className="text-[13px] text-txt-secondary cursor-pointer hover:bg-surface-tertiary rounded px-1 py-0.5 -mx-1 transition-colors truncate"
-                    title="클릭하여 수정"
-                  >
-                    {(getVal('note') as string) || '-'}
-                  </p>
-                )}
-              </div>
+          {/* 3행: 주소 */}
+          <div className="text-[12px] text-txt-secondary mb-1.5">{project.jibun_address || project.road_address || '-'}</div>
+          {/* 4행: 지원사업 */}
+          {project.support_program && (
+            <div className="text-[12px] mb-1.5">
+              <span className="text-txt-tertiary">지원사업:</span> <span className="text-txt-primary">{project.support_program}</span>
             </div>
           )}
-
-          {/* 항상 표시: 금액 5개 */}
+          {/* 상담내역 인라인 편집 */}
+          <div className="mb-2">
+            <span className="text-[11px] text-txt-tertiary">상담내역</span>
+            {editingMemo ? (
+              <textarea
+                autoFocus
+                rows={2}
+                value={(getVal('note') as string) ?? ''}
+                onChange={e => updateField('note', e.target.value || null)}
+                onBlur={() => setEditingMemo(false)}
+                className="w-full mt-0.5 px-2 py-1 border border-accent rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-light"
+              />
+            ) : (
+              <p
+                onClick={() => setEditingMemo(true)}
+                className="text-[13px] text-txt-secondary cursor-pointer hover:bg-surface-tertiary rounded px-1 py-0.5 -mx-1 transition-colors truncate"
+                title="클릭하여 수정"
+              >
+                {(getVal('note') as string) || '-'}
+              </p>
+            )}
+          </div>
+          {/* 금액 5개 */}
           <div className="grid grid-cols-5 gap-2 pt-2 border-t border-surface-tertiary">
             <MiniStat label="총공사비" value={project.total_cost} />
             <MiniStat label="자부담금" value={project.self_pay} />
@@ -371,18 +376,6 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             <MiniStat label="추가공사금" value={project.additional_cost || 0} />
             <MiniStat label="미수금" value={project.outstanding} highlight />
           </div>
-
-          {/* 펼치기/접기 토글 */}
-          <button
-            onClick={() => setInfoExpanded(prev => !prev)}
-            className="w-full mt-2 py-1 text-[11px] text-txt-tertiary hover:text-accent transition-colors flex items-center justify-center gap-1"
-          >
-            {infoExpanded ? (
-              <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg> 접기</>
-            ) : (
-              <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg> 상세 펼치기</>
-            )}
-          </button>
         </div>
 
         {/* 탭 */}
@@ -886,9 +879,9 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
     <div className="space-y-5">
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
-          <StaffSelect label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
+        <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+          <DateTimeInput label="실측일시" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
+          <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>
         {category === '소규모' && (
           <div className="grid grid-cols-2 gap-3 mt-3">

@@ -146,4 +146,5 @@ NEIS_API_KEY               # 학교 (NEIS)
 | docs/AGENT.md | AI 에이전트 (접수/서류/조회팀 통합) |
 | docs/AI_RULES.md | AI 행동규칙 (문지기/비서/분석가 + 대표/직원 규칙) |
 | docs/API_ADDRESS.md | 주소/건축물대장 API 연동 가이드 |
+| docs/DRIVE_STRUCTURE.md | 구글드라이브 폴더 구조 (Phase 2) |
 | dawoo_db_schema.sql | DB 스키마 |

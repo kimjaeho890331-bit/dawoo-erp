@@ -121,26 +121,29 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           .from('schedules')
           .delete()
           .eq('project_id', project.id)
-          .eq('schedule_type', scheduleType)
+          .ilike('title', `%${scheduleType}`)
         continue
       }
 
-      // upsert: project_id + schedule_type 기준
+      // upsert: project_id + title 기준 (schedule_type은 'project' 고정)
       const { data: existing } = await supabase
         .from('schedules')
         .select('id')
         .eq('project_id', project.id)
-        .eq('schedule_type', scheduleType)
+        .ilike('title', `%${scheduleType}`)
         .limit(1)
+
+      // DB date 타입에 맞게 날짜만 추출 (T14:00 제거)
+      const cleanDate = dateVal.substring(0, 10)
 
       const payload = {
         project_id: project.id,
         staff_id: project.staff_id,
-        schedule_type: scheduleType,
+        schedule_type: 'project' as const, // DB CHECK 제약: site/project/personal/promo/ai
         title,
-        start_date: dateVal,
-        end_date: dateVal,
-        memo,
+        start_date: cleanDate,
+        end_date: cleanDate,
+        memo: `${scheduleType} / ${memo}`,
         confirmed: false,
         all_day: true,
       }
@@ -495,28 +498,25 @@ function FormInput({ label, type = 'text', placeholder, value, onChange }: {
 }
 
 // --- 날짜+시간 분리 입력 (MM/DD 표시 + 24h 타이핑) ---
-function DateTimeInput({ label, value, onChange }: {
+function DateTimeInput({ label, value, onChange, showTime, timeValue, onTimeChange }: {
   label: string
   value: string | null | undefined
   onChange: (v: string | null) => void
+  showTime?: boolean
+  timeValue?: string
+  onTimeChange?: (v: string) => void
 }) {
   const dateRef = useRef<HTMLInputElement>(null)
-  const dateVal = value ? value.substring(0, 10) : ''
-  const timeVal = value && value.length > 10 ? value.substring(11, 16) : ''
-
-  const updateDateTime = (newDate: string, newTime: string) => {
-    if (!newDate) { onChange(null); return }
-    onChange(newTime ? `${newDate}T${newTime}` : newDate)
-  }
+  const dateVal = (value || '').substring(0, 10)
 
   const displayDate = dateVal
-    ? `${parseInt(dateVal.substring(5, 7))}/${parseInt(dateVal.substring(8, 10))}`
+    ? `${parseInt(dateVal.substring(5, 7))}월 ${parseInt(dateVal.substring(8, 10))}일`
     : ''
 
   return (
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className={`grid gap-1.5 ${showTime ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div className="relative">
           <button
             type="button"
@@ -529,23 +529,25 @@ function DateTimeInput({ label, value, onChange }: {
             ref={dateRef}
             type="date"
             value={dateVal}
-            onChange={e => updateDateTime(e.target.value, timeVal)}
+            onChange={e => onChange(e.target.value || null)}
             className="absolute inset-0 opacity-0 pointer-events-none"
             tabIndex={-1}
           />
         </div>
-        <input
-          type="text"
-          placeholder="14:00"
-          value={timeVal}
-          onChange={e => {
-            let v = e.target.value.replace(/[^0-9:]/g, '')
-            if (v.length === 2 && !v.includes(':')) v += ':'
-            if (v.length > 5) v = v.substring(0, 5)
-            updateDateTime(dateVal, v)
-          }}
-          className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-        />
+        {showTime && (
+          <input
+            type="text"
+            placeholder="14:00"
+            value={timeValue || ''}
+            onChange={e => {
+              let v = e.target.value.replace(/[^0-9:]/g, '')
+              if (v.length === 2 && !v.includes(':')) v += ':'
+              if (v.length > 5) v = v.substring(0, 5)
+              onTimeChange?.(v)
+            }}
+            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+          />
+        )}
       </div>
     </div>
   )
@@ -880,7 +882,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="실측일시" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
+          <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>
         {category === '소규모' && (

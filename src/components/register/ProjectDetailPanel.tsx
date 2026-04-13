@@ -998,19 +998,6 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
-        {/* 동의서 기본정보 (읽기전용) */}
-        <div className="mb-3 p-3 bg-surface-secondary rounded-lg border border-border-tertiary text-[12px] space-y-1">
-          <div className="grid grid-cols-2 gap-x-4">
-            <div><span className="text-txt-tertiary">빌라명:</span> <span className="text-txt-primary font-medium">{project.building_name || '-'}</span></div>
-            <div><span className="text-txt-tertiary">소유주:</span> <span className="text-txt-primary">{(getVal('owner_name') as string) || '-'}</span></div>
-          </div>
-          <div><span className="text-txt-tertiary">주소:</span> <span className="text-txt-primary">{project.jibun_address || project.road_address || '-'}</span></div>
-          <div className="grid grid-cols-3 gap-x-4">
-            <div><span className="text-txt-tertiary">동/호:</span> <span className="text-txt-primary">{[project.dong, project.ho].filter(Boolean).join(' ') || '-'}</span></div>
-            <div><span className="text-txt-tertiary">면적:</span> <span className="text-txt-primary">{(getVal('exclusive_area') as number) || '-'}m²</span></div>
-            <div><span className="text-txt-tertiary">연락처:</span> <span className="text-txt-primary">{(getVal('owner_phone') as string) || '-'}</span></div>
-          </div>
-        </div>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
           <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />

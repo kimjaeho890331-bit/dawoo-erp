@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { validateProjectData } from '@/lib/utils/validate'
+import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 import FileDropZone from '@/components/common/FileDropZone'
 import PaymentTable from '@/components/register/PaymentTable'
 import StepTransition from '@/components/register/StepTransition'
@@ -470,7 +471,7 @@ function MiniStat({ label, value, highlight }: { label: string; value: number; h
     <div className="text-center">
       <p className="text-[10px] text-txt-tertiary">{label}</p>
       <p className={`text-[11px] font-semibold tabular-nums ${highlight && value > 0 ? 'text-[#dc2626] font-medium' : 'text-txt-secondary'}`}>
-        {value > 0 ? `${value.toLocaleString()}` : '-'}
+        {value > 0 ? `${value.toLocaleString()}원` : '-'}
       </p>
     </div>
   )
@@ -753,8 +754,8 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
 
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="소유주" value={getVal('owner_name') as string} onChange={v => onChange('owner_name', v || null)} />
-          <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', v || null)} />
-          <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', v || null)} />
+          <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', formatPhone(v) || null)} />
+          <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
         </div>
       </section>
 
@@ -961,21 +962,21 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="시지원금" type="number" value={getVal('city_support') as number} onChange={v => {
-            const cs = Number(v) || 0
+          <FormInput label="시지원금" value={formatMoney((getVal('city_support') as number) || 0)} onChange={v => {
+            const cs = parseMoney(v)
             onChange('city_support', cs)
             onChange('total_cost', cs + ((getVal('self_pay') as number) || 0) + ((getVal('additional_cost') as number) || 0))
-          }} />
-          <FormInput label="자부담금" type="number" value={getVal('self_pay') as number} onChange={v => {
-            const sp = Number(v) || 0
+          }} placeholder="0" />
+          <FormInput label="자부담금" value={formatMoney((getVal('self_pay') as number) || 0)} onChange={v => {
+            const sp = parseMoney(v)
             onChange('self_pay', sp)
             onChange('total_cost', ((getVal('city_support') as number) || 0) + sp + ((getVal('additional_cost') as number) || 0))
-          }} />
-          <FormInput label="추가공사금" type="number" value={getVal('additional_cost') as number} onChange={v => {
-            const ac = Number(v) || 0
+          }} placeholder="0" />
+          <FormInput label="추가공사금" value={formatMoney((getVal('additional_cost') as number) || 0)} onChange={v => {
+            const ac = parseMoney(v)
             onChange('additional_cost', ac)
             onChange('total_cost', ((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + ac)
-          }} />
+          }} placeholder="0" />
           <div>
             <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">총공사비 (자동)</label>
             <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] font-semibold text-txt-primary bg-surface-secondary tabular-nums">
@@ -1039,6 +1040,52 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
   )
 }
 
+// --- 시공업체 검색 자동완성 ---
+function VendorSearch({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
+  const [query, setQuery] = useState((value as string) || '')
+  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
+  const [showList, setShowList] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setQuery((value as string) || '') }, [value])
+
+  useEffect(() => {
+    if (!query.trim()) { setVendors([]); return }
+    supabase.from('vendors').select('id, name').ilike('name', `%${query}%`).limit(10)
+      .then(({ data }) => setVendors(data || []))
+  }, [query])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setShowList(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">시공업체</label>
+      <input
+        type="text"
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value || null); setShowList(true) }}
+        onFocus={() => query && setShowList(true)}
+        placeholder="업체명 검색"
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+      />
+      {showList && vendors.length > 0 && (
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[150px] overflow-y-auto">
+          {vendors.map(v => (
+            <button key={v.id} onClick={() => { setQuery(v.name); onChange(v.name); setShowList(false) }}
+              className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-secondary transition-colors border-b border-border-tertiary last:border-b-0">
+              {v.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- 탭 3: 2단계 (승인 → 시공 분리) ---
 function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabProps & { category: '소규모' | '수도'; currentStepIdx: number }) {
   const isBeforeApproval = currentStepIdx < 5 // '승인' 이전
@@ -1069,7 +1116,7 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>
           <div className="grid grid-cols-2 gap-3">
             <DateTimeInput label="시공일" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v)} timeValue={getVal('construction_time') as string} onTimeChange={v => onChange('construction_time', v)} />
-            <FormInput label="시공업체" value={getVal('contractor') as string} onChange={v => onChange('contractor', v || null)} />
+            <VendorSearch value={getVal('contractor') as string} onChange={v => onChange('contractor', v)} />
             <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
             <DateTimeInput label="공사완료일" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v)} />
           </div>

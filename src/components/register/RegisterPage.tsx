@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
-import { Settings, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'

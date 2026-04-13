@@ -82,12 +82,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         if (error) throw error
         await syncSchedules(dataToSave)
         setHasChanges(false)
-        // 저장 완료된 필드만 제거 (입력 중인 다른 필드 보존)
-        setEditData(prev => {
-          const remaining = { ...prev }
-          for (const key of Object.keys(dataToSave)) delete remaining[key]
-          return remaining
-        })
+        setEditData({})
+        // DB에서 최신 데이터 다시 읽어오기
+        onRefresh?.()
       } catch (err) {
         console.error('자동저장 실패:', err)
       }
@@ -884,7 +881,22 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
         <div className="grid grid-cols-3 gap-2">
           <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
-          <FormInput label="시간(24h)" placeholder="14:00" value={getVal('survey_time') as string} onChange={v => onChange('survey_time', v || null)} />
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">시간(24h)</label>
+            <input
+              type="text"
+              placeholder="14:00"
+              value={(getVal('survey_time') as string) || ''}
+              onChange={e => {
+                let v = e.target.value.replace(/[^0-9]/g, '')
+                if (v.length > 4) v = v.substring(0, 4)
+                if (v.length >= 3) v = v.substring(0, 2) + ':' + v.substring(2)
+                onChange('survey_time', v || null)
+              }}
+              maxLength={5}
+              className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+            />
+          </div>
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>
         {category === '소규모' && (

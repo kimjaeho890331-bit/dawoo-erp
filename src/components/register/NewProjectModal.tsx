@@ -591,31 +591,21 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             />
           </div>
 
-          <ModalField
-            label="세입자 연락처"
-            value={form.tenant_phone}
-            onChange={v => update('tenant_phone', formatPhone(v))}
-            placeholder="010-0000-0000"
-            type="tel"
-          />
-
-          {category === '소규모' && (
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업</label>
-              <select value={form.support_program || ''} onChange={e => update('support_program', e.target.value)}
-                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light">
-                <option value="">선택</option>
-                <option value="소규모">소규모</option>
-                <option value="공동주택">공동주택</option>
-                <option value="새빛">새빛</option>
-                <option value="녹색">녹색</option>
-                <option value="개인">개인</option>
-              </select>
-            </div>
-          )}
-
-          <div className={`grid ${category === '소규모' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
-            {category !== '소규모' && (
+          <div className="grid grid-cols-2 gap-4">
+            {category === '소규모' ? (
+              <div>
+                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업</label>
+                <select value={form.support_program || ''} onChange={e => update('support_program', e.target.value)}
+                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light">
+                  <option value="">선택</option>
+                  <option value="소규모">소규모</option>
+                  <option value="공동주택">공동주택</option>
+                  <option value="새빛">새빛</option>
+                  <option value="녹색">녹색</option>
+                  <option value="개인">개인</option>
+                </select>
+              </div>
+            ) : (
               <div>
                 <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">공사종류 *</label>
                 <select

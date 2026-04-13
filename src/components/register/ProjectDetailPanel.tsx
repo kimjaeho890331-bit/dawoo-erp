@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -44,6 +44,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
   const [infoExpanded, setInfoExpanded] = useState(false)
   const [editingMemo, setEditingMemo] = useState(false)
+  const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
+  const [statusReason, setStatusReason] = useState('')
 
   useEffect(() => {
     if (project) {
@@ -60,10 +62,35 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     }
   }, [project])
 
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const updateField = useCallback((field: string, value: string | number | null) => {
     setEditData(prev => ({ ...prev, [field]: value }))
     setHasChanges(true)
   }, [])
+
+  // 자동저장 (2초 debounce)
+  useEffect(() => {
+    if (!hasChanges || !project) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const dataToSave = { ...editData }
+        const { error } = await supabase
+          .from('projects')
+          .update(dataToSave)
+          .eq('id', project.id)
+        if (error) throw error
+        await syncSchedules(dataToSave)
+        setHasChanges(false)
+        setEditData({})
+      } catch (err) {
+        console.error('자동저장 실패:', err)
+      }
+    }, 2000)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData])
 
   // 날짜 필드 → 캘린더 자동 동기화
   const SCHEDULE_MAP: Record<string, string> = {
@@ -164,6 +191,24 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     }
   }
 
+  const handleStatusChange = async () => {
+    if (!project || !showStatusModal) return
+    try {
+      await supabase.from('projects').update({ status: showStatusModal }).eq('id', project.id)
+      await supabase.from('status_logs').insert({
+        project_id: project.id,
+        from_status: project.status,
+        to_status: showStatusModal,
+        note: statusReason || null,
+      })
+      setShowStatusModal(null)
+      setStatusReason('')
+      onRefresh?.()
+    } catch (err) {
+      console.error('상태 변경 실패:', err)
+    }
+  }
+
   if (!project) return null
 
   const currentStepIdx = getStepIndex(project.status)
@@ -200,6 +245,18 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               }`}
             >
               {apiFieldsLocked ? '수정' : '수정중'}
+            </button>
+            <button
+              onClick={() => setShowStatusModal('취소')}
+              className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => setShowStatusModal('문의(예약)')}
+              className="px-3 py-1.5 text-[11px] font-medium text-[#d97706] border border-[#fef3c7] rounded-lg hover:bg-amber-50 transition-colors"
+            >
+              예약
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -363,6 +420,33 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         />
       )}
 
+      {showStatusModal && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-50" onClick={() => setShowStatusModal(null)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-xl shadow-xl z-50 p-6 w-[360px]">
+            <h3 className="text-[15px] font-semibold text-txt-primary mb-3">
+              {showStatusModal === '취소' ? '취소 처리' : '예약으로 전환'}
+            </h3>
+            <textarea
+              autoFocus
+              rows={3}
+              placeholder="사유를 입력하세요"
+              value={statusReason}
+              onChange={e => setStatusReason(e.target.value)}
+              className="w-full px-3 py-2 border border-border-primary rounded-lg text-[13px] resize-none focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+            />
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowStatusModal(null)} className="flex-1 px-4 py-2 text-[13px] text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">
+                닫기
+              </button>
+              <button onClick={handleStatusChange} className={`flex-1 px-4 py-2 text-[13px] font-medium text-white rounded-lg ${showStatusModal === '취소' ? 'bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#d97706] hover:bg-[#b45309]'}`}>
+                {showStatusModal === '취소' ? '취소 처리' : '예약 전환'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       <style jsx global>{`
         @keyframes slideIn {
           from { transform: translateX(100%); }
@@ -413,6 +497,94 @@ function FormInput({ label, type = 'text', placeholder, value, onChange }: {
         placeholder={placeholder || label}
         className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light hover:border-border-secondary transition-colors"
       />
+    </div>
+  )
+}
+
+// --- 날짜+시간 분리 입력 (MM/DD 표시 + 24h 타이핑) ---
+function DateTimeInput({ label, value, onChange }: {
+  label: string
+  value: string | null | undefined
+  onChange: (v: string | null) => void
+}) {
+  const dateRef = useRef<HTMLInputElement>(null)
+  const dateVal = value ? value.substring(0, 10) : ''
+  const timeVal = value && value.length > 10 ? value.substring(11, 16) : ''
+
+  const updateDateTime = (newDate: string, newTime: string) => {
+    if (!newDate) { onChange(null); return }
+    onChange(newTime ? `${newDate}T${newTime}` : newDate)
+  }
+
+  const displayDate = dateVal
+    ? `${parseInt(dateVal.substring(5, 7))}/${parseInt(dateVal.substring(8, 10))}`
+    : ''
+
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <div className="flex gap-1.5">
+        <div className="relative flex-1">
+          <button
+            type="button"
+            onClick={() => dateRef.current?.showPicker?.()}
+            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-left hover:border-border-secondary transition-colors bg-white"
+          >
+            {displayDate || <span className="text-txt-quaternary">날짜</span>}
+          </button>
+          <input
+            ref={dateRef}
+            type="date"
+            value={dateVal}
+            onChange={e => updateDateTime(e.target.value, timeVal)}
+            className="absolute inset-0 opacity-0 pointer-events-none"
+            tabIndex={-1}
+          />
+        </div>
+        <input
+          type="text"
+          placeholder="14:00"
+          value={timeVal}
+          onChange={e => {
+            let v = e.target.value.replace(/[^0-9:]/g, '')
+            if (v.length === 2 && !v.includes(':')) v += ':'
+            if (v.length > 5) v = v.substring(0, 5)
+            updateDateTime(dateVal, v)
+          }}
+          className="w-[70px] h-[36px] px-2 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+        />
+      </div>
+    </div>
+  )
+}
+
+// --- 직원 드롭다운 선택 ---
+function StaffSelect({ label, value, onChange }: {
+  label: string
+  value: string | null | undefined
+  onChange: (v: string | null) => void
+}) {
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+      setStaffList(data || [])
+    })
+  }, [])
+
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value || null)}
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light bg-white"
+      >
+        <option value="">선택</option>
+        {staffList.map(s => (
+          <option key={s.id} value={s.name}>{s.name}</option>
+        ))}
+      </select>
     </div>
   )
 }
@@ -585,7 +757,6 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">주소</h3>
         <div className="space-y-3">
-          <LockedFormInput label="도로명주소" value={getVal('road_address') as string} onChange={v => onChange('road_address', v || null)} locked={apiFieldsLocked} />
           <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
         </div>
         <div className="grid grid-cols-3 gap-3 mt-3">
@@ -632,10 +803,10 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput label="은행" placeholder="예: 국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
-          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
+        <div className="grid grid-cols-3 gap-2">
+          <FormInput label="은행" placeholder="국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
           <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
+          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
         </div>
       </section>
 
@@ -716,12 +887,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="실측일" type="date" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v || null)} />
-          <FormInput label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v || null)} />
-          <FormInput label="면적결과" placeholder="예: 59.94m²" value={getVal('area_result') as string} onChange={v => onChange('area_result', v || null)} />
-        </div>
-        <div className="mt-3">
-          <FormInput label="현장메모" placeholder="실측 시 특이사항" value={getVal('field_memo') as string} onChange={v => onChange('field_memo', v || null)} />
+          <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
+          <StaffSelect label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>
         {category === '소규모' && (
           <div className="grid grid-cols-2 gap-3 mt-3">
@@ -790,10 +957,27 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="총공사비" type="number" value={getVal('total_cost') as number} onChange={v => onChange('total_cost', Number(v) || 0)} />
-          <FormInput label="시지원금" type="number" value={getVal('city_support') as number} onChange={v => onChange('city_support', Number(v) || 0)} />
-          <FormInput label="자부담금" type="number" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', Number(v) || 0)} />
-          <FormInput label="추가공사금" type="number" value={getVal('additional_cost') as number} onChange={v => onChange('additional_cost', Number(v) || 0)} />
+          <FormInput label="시지원금" type="number" value={getVal('city_support') as number} onChange={v => {
+            const cs = Number(v) || 0
+            onChange('city_support', cs)
+            onChange('total_cost', cs + ((getVal('self_pay') as number) || 0) + ((getVal('additional_cost') as number) || 0))
+          }} />
+          <FormInput label="자부담금" type="number" value={getVal('self_pay') as number} onChange={v => {
+            const sp = Number(v) || 0
+            onChange('self_pay', sp)
+            onChange('total_cost', ((getVal('city_support') as number) || 0) + sp + ((getVal('additional_cost') as number) || 0))
+          }} />
+          <FormInput label="추가공사금" type="number" value={getVal('additional_cost') as number} onChange={v => {
+            const ac = Number(v) || 0
+            onChange('additional_cost', ac)
+            onChange('total_cost', ((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + ac)
+          }} />
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">총공사비 (자동)</label>
+            <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] font-semibold text-txt-primary bg-surface-secondary tabular-nums">
+              {((getVal('total_cost') as number) || 0).toLocaleString()}원
+            </p>
+          </div>
         </div>
         <button
           onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
@@ -806,7 +990,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="동의서 수령일" type="date" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v || null)} />
+          <DateTimeInput label="동의서 수령일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} />
+          <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />
         </div>
         <div className="mt-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
@@ -817,8 +1002,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">신청서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="신청서 제출일" type="date" value={getVal('application_date') as string} onChange={v => onChange('application_date', v || null)} />
-          <FormInput label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} />
+          <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} />
+          <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />
         </div>
         <div className="flex gap-2 mt-3">
           <button
@@ -853,18 +1038,24 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
         <section>
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">승인</h3>
           <div className="grid grid-cols-2 gap-3">
-            <FormInput label="승인일" type="date" value={getVal('approval_received_date') as string} onChange={v => onChange('approval_received_date', v || null)} />
+            <DateTimeInput label="승인일" value={getVal('approval_received_date') as string} onChange={v => onChange('approval_received_date', v)} />
           </div>
+          {category === '소규모' && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <DateTimeInput label="착공서류 제출일" value={getVal('construction_doc_date') as string} onChange={v => onChange('construction_doc_date', v)} />
+              <StaffSelect label="착공서류 제출자" value={getVal('construction_doc_submitter') as string} onChange={v => onChange('construction_doc_submitter', v)} />
+            </div>
+          )}
         </section>
 
         <section className="mt-5">
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>
           <div className="grid grid-cols-2 gap-3">
-            <FormInput label="시공일" type="date" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v || null)} />
+            <DateTimeInput label="시공일" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v)} />
             <FormInput label="시공업체" value={getVal('contractor') as string} onChange={v => onChange('contractor', v || null)} />
             <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
             <FormInput label="착수금" type="number" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', Number(v) || 0)} />
-            <FormInput label="공사완료일" type="date" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v || null)} />
+            <DateTimeInput label="공사완료일" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v)} />
           </div>
 
           {/* 소규모/수도 전용 */}
@@ -914,8 +1105,8 @@ function TabStep34({ project, getVal, onChange }: TabProps) {
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">완료서류</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="완료서류 제출일" type="date" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v || null)} />
-          <FormInput label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v || null)} />
+          <DateTimeInput label="완료서류 제출일" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v)} />
+          <StaffSelect label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v)} />
         </div>
         <div className="mt-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">완료보고서</p>

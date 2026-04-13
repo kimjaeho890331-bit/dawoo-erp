@@ -497,25 +497,34 @@ function FormInput({ label, type = 'text', placeholder, value, onChange }: {
 }
 
 // --- 날짜+시간 분리 입력 (MM/DD 표시 + 24h 타이핑) ---
-function DateTimeInput({ label, value, onChange, showTime, timeValue, onTimeChange }: {
+function DateTimeInput({ label, value, onChange, timeValue, onTimeChange }: {
   label: string
   value: string | null | undefined
   onChange: (v: string | null) => void
-  showTime?: boolean
-  timeValue?: string
-  onTimeChange?: (v: string) => void
+  timeValue?: string | null
+  onTimeChange?: (v: string | null) => void
 }) {
   const dateRef = useRef<HTMLInputElement>(null)
   const dateVal = (value || '').substring(0, 10)
+  const hasTime = onTimeChange !== undefined
 
   const displayDate = dateVal
     ? `${parseInt(dateVal.substring(5, 7))}월 ${parseInt(dateVal.substring(8, 10))}일`
     : ''
 
+  // DB에서 콜론 없이 저장된 시간값 보정
+  const formatTimeDisplay = (raw: string | null | undefined) => {
+    if (!raw) return ''
+    if (raw.includes(':')) return raw
+    const digits = raw.replace(/[^0-9]/g, '')
+    if (digits.length >= 3) return digits.substring(0, digits.length - 2) + ':' + digits.substring(digits.length - 2)
+    return raw
+  }
+
   return (
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <div className={`grid gap-1.5 ${showTime ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div className={`grid gap-1.5 ${hasTime ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div className="relative">
           <button
             type="button"
@@ -533,17 +542,18 @@ function DateTimeInput({ label, value, onChange, showTime, timeValue, onTimeChan
             tabIndex={-1}
           />
         </div>
-        {showTime && (
+        {hasTime && (
           <input
             type="text"
             placeholder="14:00"
-            value={timeValue || ''}
+            value={formatTimeDisplay(timeValue)}
             onChange={e => {
-              let v = e.target.value.replace(/[^0-9:]/g, '')
-              if (v.length === 2 && !v.includes(':')) v += ':'
-              if (v.length > 5) v = v.substring(0, 5)
-              onTimeChange?.(v)
+              let v = e.target.value.replace(/[^0-9]/g, '')
+              if (v.length > 4) v = v.substring(0, 4)
+              if (v.length >= 3) v = v.substring(0, 2) + ':' + v.substring(2)
+              onTimeChange!(v || null)
             }}
+            maxLength={5}
             className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
           />
         )}
@@ -880,31 +890,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
     <div className="space-y-5">
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
-        <div className="grid grid-cols-3 gap-2">
-          <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
-          <div>
-            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">시간(24h)</label>
-            <input
-              type="text"
-              placeholder="14:00"
-              value={(() => {
-                const raw = (getVal('survey_time') as string) || ''
-                // DB에서 콜론 없이 저장된 값 보정 (140 → 1:40, 1400 → 14:00)
-                const digits = raw.replace(/[^0-9]/g, '')
-                if (raw.includes(':')) return raw
-                if (digits.length >= 3) return digits.substring(0, digits.length - 2) + ':' + digits.substring(digits.length - 2)
-                return raw
-              })()}
-              onChange={e => {
-                let v = e.target.value.replace(/[^0-9]/g, '')
-                if (v.length > 4) v = v.substring(0, 4)
-                if (v.length >= 3) v = v.substring(0, 2) + ':' + v.substring(2)
-                onChange('survey_time', v || null)
-              }}
-              maxLength={5}
-              className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-            />
-          </div>
+        <div className="grid grid-cols-2 gap-3">
+          <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} timeValue={getVal('survey_time') as string} onTimeChange={v => onChange('survey_time', v)} />
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>
         {category === '소규모' && (
@@ -1020,7 +1007,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="동의서 수령일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} />
+          <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
           <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />
         </div>
         <div className="mt-3">
@@ -1032,7 +1019,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">신청서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} />
+          <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
           <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />
         </div>
         <div className="flex gap-2 mt-3">
@@ -1072,7 +1059,7 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
           </div>
           {category === '소규모' && (
             <div className="grid grid-cols-2 gap-3 mt-3">
-              <DateTimeInput label="착공서류 제출일" value={getVal('construction_doc_date') as string} onChange={v => onChange('construction_doc_date', v)} />
+              <DateTimeInput label="착공서류 제출일" value={getVal('construction_doc_date') as string} onChange={v => onChange('construction_doc_date', v)} timeValue={getVal('construction_doc_time') as string} onTimeChange={v => onChange('construction_doc_time', v)} />
               <StaffSelect label="착공서류 제출자" value={getVal('construction_doc_submitter') as string} onChange={v => onChange('construction_doc_submitter', v)} />
             </div>
           )}
@@ -1081,10 +1068,9 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
         <section className="mt-5">
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>
           <div className="grid grid-cols-2 gap-3">
-            <DateTimeInput label="시공일" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v)} />
+            <DateTimeInput label="시공일" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v)} timeValue={getVal('construction_time') as string} onTimeChange={v => onChange('construction_time', v)} />
             <FormInput label="시공업체" value={getVal('contractor') as string} onChange={v => onChange('contractor', v || null)} />
             <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
-            <FormInput label="착수금" type="number" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', Number(v) || 0)} />
             <DateTimeInput label="공사완료일" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v)} />
           </div>
 
@@ -1135,7 +1121,7 @@ function TabStep34({ project, getVal, onChange }: TabProps) {
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">완료서류</h3>
         <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="완료서류 제출일" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v)} />
+          <DateTimeInput label="완료서류 제출일" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v)} timeValue={getVal('completion_doc_time') as string} onTimeChange={v => onChange('completion_doc_time', v)} />
           <StaffSelect label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v)} />
         </div>
         <div className="mt-3">

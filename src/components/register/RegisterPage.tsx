@@ -35,6 +35,11 @@ export interface DBProject {
   survey_date: string | null
   survey_time: string | null
   survey_staff: string | null
+  consent_time: string | null
+  application_time: string | null
+  construction_time: string | null
+  construction_doc_time: string | null
+  completion_doc_time: string | null
   application_date: string | null
   application_submitter: string | null
   construction_date: string | null

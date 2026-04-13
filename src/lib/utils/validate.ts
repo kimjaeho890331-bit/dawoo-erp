@@ -30,6 +30,11 @@ const PROJECT_FIELD_SCHEMA: Record<string, FieldRule> = {
   payment_date: { type: 'date' },
   // 시간 (HH:MM)
   survey_time: { type: 'time' },
+  consent_time: { type: 'time' },
+  application_time: { type: 'time' },
+  construction_time: { type: 'time' },
+  construction_doc_time: { type: 'time' },
+  completion_doc_time: { type: 'time' },
   // 숫자
   total_cost: { type: 'number' },
   self_pay: { type: 'number' },

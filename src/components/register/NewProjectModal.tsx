@@ -660,22 +660,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             </div>
           )}
 
-          {/* 소규모 전용: 지원사업 종류 */}
-          {category === '소규모' && (
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업 종류</label>
-              <select
-                value={form.support_program}
-                onChange={e => update('support_program', e.target.value)}
-                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-              >
-                <option value="">선택 안함</option>
-                <option value="새빛">새빛</option>
-                <option value="녹색">녹색</option>
-                <option value="공동주택">공동주택</option>
-              </select>
-            </div>
-          )}
+          {/* 소규모 지원사업 중복 드롭다운 삭제됨 — 위에 1개만 유지 */}
 
           <div>
             <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">상담내역/메모 *</label>

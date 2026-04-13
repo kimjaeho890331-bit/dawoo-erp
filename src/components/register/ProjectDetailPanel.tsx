@@ -906,7 +906,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           </div>
         )}
         {category === '수도' && (
-          <div className="mt-3">
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
             <FormInput label="세대 비밀번호" placeholder="예: 1234#" value={getVal('unit_password') as string} onChange={v => onChange('unit_password', v || null)} />
           </div>
         )}
@@ -1014,18 +1015,20 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
           <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />
         </div>
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => window.open(`/register/application?projectId=${project.id}`, '_blank')}
-            className="px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
-          >
-            신청서 미리보기
-          </button>
+        <div className="mt-3">
+          <p className="text-[11px] font-medium text-txt-tertiary mb-1">신청서 첨부</p>
+          <FileDropZone projectId={project.id} fileType="신청서" accept="image/*,application/pdf,.hwp" multiple compact />
         </div>
         <div className="mt-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
           <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
         </div>
+      </section>
+
+      {/* 수금 (1~3단계 공통) */}
+      <section>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
+        <PaymentTable projectId={project.id} totalCost={project.total_cost || 0} additionalCost={project.additional_cost || 0} onOutstandingChange={() => {}} />
       </section>
     </div>
   )
@@ -1108,16 +1111,13 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
           <div className="grid grid-cols-2 gap-3">
             <DateTimeInput label="시공일" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v)} timeValue={getVal('construction_time') as string} onTimeChange={v => onChange('construction_time', v)} />
             <VendorSearch value={getVal('contractor') as string} onChange={v => onChange('contractor', v)} />
+            {category === '수도' && (
+              <FormInput label="직영 시공자" value={getVal('direct_worker') as string} onChange={v => onChange('direct_worker', v || null)} />
+            )}
             <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
             <DateTimeInput label="공사완료일" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v)} />
           </div>
 
-          {/* 소규모/수도 전용 */}
-          {category === '수도' && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <FormInput label="직영 시공자" value={getVal('direct_worker') as string} onChange={v => onChange('direct_worker', v || null)} />
-            </div>
-          )}
           {category === '소규모' && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <FormInput label="시공업체 (외부)" value={getVal('external_contractor') as string} onChange={v => onChange('external_contractor', v || null)} />
@@ -1127,21 +1127,26 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
         </section>
 
         <section className="mt-5">
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공 사진</h3>
-          <div className="space-y-3">
-            <div>
-              <p className="text-[11px] font-medium text-txt-tertiary mb-1">시공전 사진</p>
-              <FileDropZone projectId={project.id} fileType="시공전" accept="image/*" multiple compact />
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-txt-tertiary mb-1">시공중 사진</p>
-              <FileDropZone projectId={project.id} fileType="시공중" accept="image/*" multiple compact />
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-txt-tertiary mb-1">시공후 사진</p>
-              <FileDropZone projectId={project.id} fileType="시공후" accept="image/*" multiple compact />
-            </div>
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공 사진 (A4 1장 6매)</h3>
+          <div className="space-y-4">
+            {['시공전', '시공중', '시공후'].map(type => (
+              <div key={type}>
+                <p className="text-[11px] font-medium text-txt-tertiary mb-2">{type}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 2].map(slot => (
+                    <FileDropZone key={`${type}-${slot}`} projectId={project.id} fileType={`${type}_${slot}`} accept="image/*" compact />
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[10px] text-txt-quaternary">시공전 2장 + 시공중 2장 + 시공후 2장 = A4 1장 기준 6매</p>
           </div>
+        </section>
+
+        {/* 수금 (1~3단계 공통) */}
+        <section className="mt-5">
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
+          <PaymentTable projectId={project.id} totalCost={project.total_cost || 0} additionalCost={project.additional_cost || 0} onOutstandingChange={() => {}} />
         </section>
       </div>
     </div>

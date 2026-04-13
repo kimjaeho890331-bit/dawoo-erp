@@ -516,8 +516,8 @@ function DateTimeInput({ label, value, onChange }: {
   return (
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <div className="flex gap-1.5">
-        <div className="relative flex-1">
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="relative">
           <button
             type="button"
             onClick={() => dateRef.current?.showPicker?.()}
@@ -544,7 +544,7 @@ function DateTimeInput({ label, value, onChange }: {
             if (v.length > 5) v = v.substring(0, 5)
             updateDateTime(dateVal, v)
           }}
-          className="w-[70px] h-[36px] px-2 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+          className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
         />
       </div>
     </div>
@@ -879,7 +879,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
     <div className="space-y-5">
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
-        <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+        <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="실측일시" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} />
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>

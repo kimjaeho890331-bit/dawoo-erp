@@ -65,15 +65,77 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     setHasChanges(true)
   }, [])
 
+  // 날짜 필드 → 캘린더 자동 동기화
+  const SCHEDULE_MAP: Record<string, string> = {
+    survey_date: '실측',
+    construction_date: '시공',
+    application_date: '신청서제출',
+    completion_doc_date: '완료서류제출',
+  }
+
+  const syncSchedules = async (savedData: Record<string, string | number | null>) => {
+    if (!project) return
+    const dateFields = Object.keys(savedData).filter(k => k in SCHEDULE_MAP)
+    if (dateFields.length === 0) return
+
+    for (const field of dateFields) {
+      const dateVal = savedData[field] as string | null
+      const scheduleType = SCHEDULE_MAP[field]
+      const title = `${project.building_name || '(이름없음)'} ${scheduleType}`
+      const memo = [project.road_address, project.owner_phone].filter(Boolean).join(' / ')
+
+      if (!dateVal) {
+        // 날짜 삭제 시 일정도 삭제
+        await supabase
+          .from('schedules')
+          .delete()
+          .eq('project_id', project.id)
+          .eq('schedule_type', scheduleType)
+        continue
+      }
+
+      // upsert: project_id + schedule_type 기준
+      const { data: existing } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('project_id', project.id)
+        .eq('schedule_type', scheduleType)
+        .limit(1)
+
+      const payload = {
+        project_id: project.id,
+        staff_id: project.staff_id,
+        schedule_type: scheduleType,
+        title,
+        start_date: dateVal,
+        end_date: dateVal,
+        memo,
+        confirmed: false,
+        all_day: true,
+      }
+
+      if (existing && existing.length > 0) {
+        await supabase.from('schedules').update(payload).eq('id', existing[0].id)
+      } else {
+        await supabase.from('schedules').insert(payload)
+      }
+    }
+  }
+
   const handleSave = async () => {
     if (!project || !hasChanges) return
     setSaving(true)
     try {
+      const dataToSave = { ...editData }
       const { error } = await supabase
         .from('projects')
-        .update(editData)
+        .update(dataToSave)
         .eq('id', project.id)
       if (error) throw error
+
+      // 날짜 변경 시 캘린더 동기화
+      await syncSchedules(dataToSave)
+
       setHasChanges(false)
       setEditData({})
       onRefresh?.()

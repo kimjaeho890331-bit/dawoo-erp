@@ -886,7 +886,14 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
             <input
               type="text"
               placeholder="14:00"
-              value={(getVal('survey_time') as string) || ''}
+              value={(() => {
+                const raw = (getVal('survey_time') as string) || ''
+                // DB에서 콜론 없이 저장된 값 보정 (140 → 1:40, 1400 → 14:00)
+                const digits = raw.replace(/[^0-9]/g, '')
+                if (raw.includes(':')) return raw
+                if (digits.length >= 3) return digits.substring(0, digits.length - 2) + ':' + digits.substring(digits.length - 2)
+                return raw
+              })()}
               onChange={e => {
                 let v = e.target.value.replace(/[^0-9]/g, '')
                 if (v.length > 4) v = v.substring(0, 4)

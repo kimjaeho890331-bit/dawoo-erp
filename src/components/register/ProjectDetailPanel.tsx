@@ -648,7 +648,7 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
   const [ownerLoading, setOwnerLoading] = useState(false)
   const [ownerError, setOwnerError] = useState('')
 
-  // 소유자 조회 (주소 → 주소검색 → 코드 추출 → 소유자 API)
+  // 소유자 조회 (CODEF API — 주소로 건축물대장 소유자 조회)
   const fetchOwners = async () => {
     const addr = project.road_address || project.jibun_address
     if (!addr) { setOwnerError('주소가 없습니다'); return }
@@ -657,27 +657,20 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
     setOwnerError('')
     setOwners([])
     try {
-      // 1. 주소 검색으로 코드 추출
-      const searchRes = await fetch(`/api/address/search?keyword=${encodeURIComponent(addr)}`)
-      const results = await searchRes.json()
-      if (!Array.isArray(results) || results.length === 0) {
-        setOwnerError('주소 코드를 찾을 수 없습니다')
+      const params = new URLSearchParams({ address: addr })
+      if (project.dong || project.ho) {
+        params.set('detailAddress', [project.dong, project.ho].filter(Boolean).join(' '))
+      }
+      const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
+      const ownerData = await ownerRes.json()
+
+      if (ownerData.error) {
+        setOwnerError(ownerData.demo ? 'CODEF 데모: API 키를 확인하세요' : ownerData.error)
         return
       }
-      const matched = results[0]
-      const params = new URLSearchParams({
-        sigunguCd: matched.sigunguCd || '',
-        bjdongCd: matched.bjdongCd || '',
-        bun: matched.lnbrMnnm || '0',
-        ji: matched.lnbrSlno || '0',
-      })
 
-      // 2. 소유자 API 호출
-      const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
-      const ownerData: OwnerInfo[] = await ownerRes.json()
       if (Array.isArray(ownerData) && ownerData.length > 0) {
         setOwners(ownerData)
-        // 첫 소유자를 owner_name에 자동 입력 (비어있을 때만)
         if (!getVal('owner_name')) {
           onChange('owner_name', ownerData[0].name)
         }

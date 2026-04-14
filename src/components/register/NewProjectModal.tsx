@@ -239,27 +239,29 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     })
 
     try {
-      const [bldRes, unitRes, ownerRes] = await Promise.all([
+      const [bldRes, unitRes] = await Promise.all([
         fetch(`/api/address/building?${params.toString()}`),
         fetch(`/api/address/units?${params.toString()}`),
-        fetch(`/api/address/owner?${params.toString()}`),
       ])
 
       const bldData: BuildingInfo | null = await bldRes.json()
       const unitData: UnitInfo[] = await unitRes.json()
-      const ownerData: OwnerInfo[] = await ownerRes.json()
 
       setBuildingInfo(bldData)
       setUnits(Array.isArray(unitData) ? unitData : [])
 
-      // 소유자 정보가 있으면 첫 번째 소유자 이름 자동 입력
-      if (Array.isArray(ownerData) && ownerData.length > 0) {
-        const firstOwner = ownerData[0]
-        setForm(prev => ({
-          ...prev,
-          owner_name: prev.owner_name || firstOwner.name || '',
-        }))
-      }
+      // CODEF 소유자 조회 (별도 호출 — 주소 기반)
+      try {
+        const ownerParams = new URLSearchParams({ address: addr.roadAddr })
+        const ownerRes = await fetch(`/api/address/owner?${ownerParams.toString()}`)
+        const ownerData = await ownerRes.json()
+        if (Array.isArray(ownerData) && ownerData.length > 0) {
+          setForm(prev => ({
+            ...prev,
+            owner_name: prev.owner_name || ownerData[0].name || '',
+          }))
+        }
+      } catch { /* 소유자 조회 실패해도 진행 */ }
 
       if (bldData) {
         // 사용승인일 포맷: YYYYMMDD -> YYYY-MM-DD

@@ -648,7 +648,7 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
   const [ownerLoading, setOwnerLoading] = useState(false)
   const [ownerError, setOwnerError] = useState('')
 
-  // 소유자 조회 (CODEF API — 주소로 건축물대장 소유자 조회)
+  // 소유자 조회 (공공데이터포털 getBrOwnrInfo — 승인 대기중)
   const fetchOwners = async () => {
     const addr = project.road_address || project.jibun_address
     if (!addr) { setOwnerError('주소가 없습니다'); return }
@@ -657,25 +657,31 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
     setOwnerError('')
     setOwners([])
     try {
-      const params = new URLSearchParams({ address: addr })
-      if (project.dong || project.ho) {
-        params.set('detailAddress', [project.dong, project.ho].filter(Boolean).join(' '))
-      }
-      const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
-      const ownerData = await ownerRes.json()
-
-      if (ownerData.error) {
-        setOwnerError(ownerData.demo ? 'CODEF 데모: API 키를 확인하세요' : ownerData.error)
+      // 주소 검색으로 코드 추출
+      const searchRes = await fetch(`/api/address/search?keyword=${encodeURIComponent(addr)}`)
+      const searchData = await searchRes.json()
+      const results = searchData?.results?.juso
+      if (!results || results.length === 0) {
+        setOwnerError('주소 코드를 찾을 수 없습니다')
         return
       }
+      const matched = results[0]
+      const params = new URLSearchParams({
+        sigunguCd: matched.admCd?.substring(0, 5) || '',
+        bjdongCd: matched.admCd?.substring(5, 10) || '',
+        bun: (matched.lnbrMnnm || '0').padStart(4, '0'),
+        ji: (matched.lnbrSlno || '0').padStart(4, '0'),
+      })
 
+      const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
+      const ownerData: OwnerInfo[] = await ownerRes.json()
       if (Array.isArray(ownerData) && ownerData.length > 0) {
         setOwners(ownerData)
         if (!getVal('owner_name')) {
           onChange('owner_name', ownerData[0].name)
         }
       } else {
-        setOwnerError('소유자 정보가 없습니다')
+        setOwnerError('소유자 API 승인 대기중 (공공데이터포털)')
       }
     } catch (err) {
       console.error('소유자 조회 실패:', err)

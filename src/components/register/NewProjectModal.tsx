@@ -250,10 +250,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
       setBuildingInfo(bldData)
       setUnits(Array.isArray(unitData) ? unitData : [])
 
-      // CODEF 소유자 조회 (별도 호출 — 주소 기반)
+      // 소유자 조회 (공공데이터포털 승인 후 동작)
       try {
-        const ownerParams = new URLSearchParams({ address: addr.roadAddr })
-        const ownerRes = await fetch(`/api/address/owner?${ownerParams.toString()}`)
+        const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
         const ownerData = await ownerRes.json()
         if (Array.isArray(ownerData) && ownerData.length > 0) {
           setForm(prev => ({

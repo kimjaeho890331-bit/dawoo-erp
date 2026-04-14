@@ -27,6 +27,7 @@ export interface DBProject {
   self_pay: number
   city_support: number
   outstanding: number
+  collected: number
   status: string
   note: string | null
   area: number | null

@@ -156,7 +156,7 @@ export default function WorkCalendarPage() {
     const target = schedules.find(s => s.id === id)
     if (target?.project_id) {
       const t = target.title || ''
-      const df = t.includes('실측') ? 'survey_date' : t.includes('시공') ? 'construction_date' : t.includes('신청서') ? 'application_date' : t.includes('완료서류') ? 'completion_doc_date' : null
+      const df = t.includes('실측') ? 'survey_date' : t.includes('동의서') ? 'consent_date' : t.includes('신청서') ? 'application_date' : t.includes('착공서류') ? 'construction_doc_date' : t.includes('시공') ? 'construction_date' : t.includes('완료서류') ? 'completion_doc_date' : null
       if (df) await supabase.from('projects').update({ [df]: null }).eq('id', target.project_id)
     }
     await supabase.from('schedules').delete().eq('id', id)
@@ -186,8 +186,10 @@ export default function WorkCalendarPage() {
       const title = dragSchedule.title || ''
       const dateField =
         title.includes('실측') ? 'survey_date' :
-        title.includes('시공') ? 'construction_date' :
+        title.includes('동의서') ? 'consent_date' :
         title.includes('신청서') ? 'application_date' :
+        title.includes('착공서류') ? 'construction_doc_date' :
+        title.includes('시공') ? 'construction_date' :
         title.includes('완료서류') ? 'completion_doc_date' : null
       if (dateField) {
         await supabase.from('projects').update({ [dateField]: targetDate }).eq('id', dragSchedule.project_id)
@@ -595,7 +597,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
       // 접수대장 연동
       if (schedule!.project_id) {
         const t = schedule!.title || ''
-        const df = t.includes('실측') ? 'survey_date' : t.includes('시공') ? 'construction_date' : t.includes('신청서') ? 'application_date' : t.includes('완료서류') ? 'completion_doc_date' : null
+        const df = t.includes('실측') ? 'survey_date' : t.includes('동의서') ? 'consent_date' : t.includes('신청서') ? 'application_date' : t.includes('착공서류') ? 'construction_doc_date' : t.includes('시공') ? 'construction_date' : t.includes('완료서류') ? 'completion_doc_date' : null
         if (df) await supabase.from('projects').update({ [df]: startDate }).eq('id', schedule!.project_id)
       }
     } else {

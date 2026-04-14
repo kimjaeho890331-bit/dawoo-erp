@@ -90,7 +90,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       } catch (err) {
         console.error('자동저장 실패:', err)
       }
-    }, 2000)
+    }, 1000)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editData])
@@ -98,8 +98,10 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   // 날짜 필드 → 캘린더 자동 동기화
   const SCHEDULE_MAP: Record<string, string> = {
     survey_date: '실측',
-    construction_date: '시공',
+    consent_date: '동의서회수',
     application_date: '신청서제출',
+    construction_doc_date: '착공서류제출',
+    construction_date: '시공',
     completion_doc_date: '완료서류제출',
   }
 

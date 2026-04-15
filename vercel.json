@@ -11,10 +11,6 @@
     {
       "path": "/api/notifications/cron/evening",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/notifications/cron/imminent",
-      "schedule": "*/10 * * * *"
     }
   ]
 }

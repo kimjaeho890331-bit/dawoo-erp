@@ -223,3 +223,64 @@ export interface Attachment {
   file_type: string | null;
   created_at: string;
 }
+
+// ============================================
+// 할 일 / 시킨 일 (tasks 테이블)
+// ============================================
+
+export interface Task {
+  id: string;
+  content: string;
+  assigned_to: string | null;   // 수행자 staff_id
+  assigned_by: string | null;   // 지시자 staff_id
+  deadline: string | null;      // YYYY-MM-DD
+  done: boolean;
+  done_at: string | null;
+  project_id: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================
+// 대시보드 AI 브리핑
+// ============================================
+
+export type BriefingCategory = 'now' | 'today' | 'week';
+
+export type BriefingRuleKey =
+  | 'today_schedule_imminent'     // 오늘 일정 곧 시작
+  | 'consent_missing'              // 동의서 단계 필수 누락
+  | 'application_missing'          // 신청서 제출 누락
+  | 'survey_time_missing'          // 실측 시간 미입력
+  | 'application_stale'            // 신청서 제출 3일+ 방치
+  | 'completion_doc_stale'         // 완료서류 5일+ 미제출
+  | 'stage_upgradeable'            // 다음 단계 전환 가능
+  | 'week_schedule_upcoming'       // 이번 주 일정 예고
+  | 'payment_incoming_info';       // 입금 예정 (정보성)
+
+export interface BriefingItem {
+  id: string;                      // rule_key + project_id or schedule_id
+  category: BriefingCategory;      // now | today | week
+  rule: BriefingRuleKey;           // 어떤 룰이 이 카드를 만들었는지
+  priority: number;                // 카테고리 내부 정렬 (낮을수록 먼저)
+  title: string;                   // 한 줄 제목 (카드 전면)
+  reason: string;                  // "왜 이 카드?" 근거 설명
+  actionHref: string | null;       // 클릭 시 이동 경로
+  actionLabel: string | null;      // 액션 버튼 텍스트
+  projectId: string | null;        // 관련 프로젝트 ID
+  scheduleId: string | null;       // 관련 일정 ID
+  meta?: Record<string, string | number | null>; // 추가 데이터 (주소/연락처 등)
+}
+
+export interface BriefingResponse {
+  generatedAt: string;             // ISO timestamp
+  staffId: string | null;          // 필터 기준 담당자 (null = 전체)
+  summary: string;                 // 상단 한 줄 요약
+  items: BriefingItem[];
+  info: {
+    outstandingCount: number;      // 미수금 건수 (정보성)
+    outstandingTotal: number;      // 미수금 총액 (정보성, 경고 아님)
+    todayScheduleCount: number;
+  };
+}

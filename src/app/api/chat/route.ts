@@ -382,6 +382,79 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
   }
 }
 
+// --- Non-streaming handler (텔레그램 및 기타 용도) ---
+async function handleNonStreaming(
+  apiKey: string,
+  claudeMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
+  staffId?: string,
+  channel?: 'web' | 'telegram',
+): Promise<Response> {
+  const MAX_ITERATIONS = 8
+  let finalText = ''
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages: claudeMessages,
+        tools: TOOLS,
+      }),
+    })
+
+    if (!response.ok) {
+      return Response.json({ content: '오류가 발생했습니다.' }, { status: 500 })
+    }
+
+    const result = await response.json()
+    for (const block of result.content || []) {
+      if (block.type === 'text' && block.text) {
+        finalText += block.text
+      }
+    }
+
+    if (result.stop_reason === 'end_turn' || result.stop_reason !== 'tool_use') {
+      break
+    }
+
+    claudeMessages.push({ role: 'assistant', content: result.content })
+    const toolResultBlocks: Array<Record<string, unknown>> = []
+    for (const block of result.content || []) {
+      if (block.type === 'tool_use') {
+        const toolResult = await executeTool(block.name, block.input as Record<string, unknown>)
+        toolResultBlocks.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: toolResult,
+        })
+      }
+    }
+    claudeMessages.push({ role: 'user', content: toolResultBlocks })
+  }
+
+  // assistant 응답 저장
+  if (staffId && channel && finalText) {
+    try {
+      await supabaseAdmin.from('chat_messages').insert({
+        staff_id: staffId,
+        role: 'assistant',
+        content: finalText,
+        channel,
+      })
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_e) { /* graceful */ }
+  }
+
+  return Response.json({ content: finalText || '응답을 생성하지 못했습니다.' })
+}
+
 // --- API 핸들러 ---
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
@@ -398,8 +471,30 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { messages } = await request.json()
+    const body = await request.json()
+    const { messages, staffId, channel, nonStreaming } = body as {
+      messages: Array<{ role: string; content: string }>
+      staffId?: string
+      channel?: 'web' | 'telegram'
+      nonStreaming?: boolean
+    }
     const recentMessages = (messages || []).slice(-20)
+
+    // 대화 저장: staffId가 있으면 마지막 user 메시지 저장
+    if (staffId && channel && recentMessages.length > 0) {
+      const lastMsg = recentMessages[recentMessages.length - 1]
+      if (lastMsg.role === 'user') {
+        try {
+          await supabaseAdmin.from('chat_messages').insert({
+            staff_id: staffId,
+            role: 'user',
+            content: lastMsg.content,
+            channel,
+          })
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (_e) { /* graceful: 테이블 없으면 스킵 */ }
+      }
+    }
 
     // Claude API 메시지 형식으로 변환
     const claudeMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }> =
@@ -408,7 +503,13 @@ export async function POST(request: NextRequest) {
         content: msg.content,
       }))
 
+    // non-streaming 모드 (텔레그램용): JSON 한 번에 반환
+    if (nonStreaming) {
+      return handleNonStreaming(apiKey, claudeMessages, staffId, channel)
+    }
+
     const encoder = new TextEncoder()
+    let streamedText = '' // assistant 최종 응답 누적 (저장용)
     const stream = new ReadableStream({
       async start(controller) {
         try {
@@ -444,6 +545,7 @@ export async function POST(request: NextRequest) {
             // 텍스트 블록 → 클라이언트로 스트림
             for (const block of result.content || []) {
               if (block.type === 'text' && block.text) {
+                streamedText += block.text
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: block.text })}\n\n`))
               }
             }
@@ -477,6 +579,18 @@ export async function POST(request: NextRequest) {
             encoder.encode(`data: ${JSON.stringify({ text: '\n\n처리 중 오류가 발생했습니다.' })}\n\n`)
           )
         } finally {
+          // assistant 응답 저장 (웹 대화 기록)
+          if (staffId && channel && streamedText) {
+            try {
+              await supabaseAdmin.from('chat_messages').insert({
+                staff_id: staffId,
+                role: 'assistant',
+                content: streamedText,
+                channel,
+              })
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            } catch (_e) { /* graceful */ }
+          }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()
         }

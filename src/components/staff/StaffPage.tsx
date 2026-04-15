@@ -5,11 +5,15 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { formatPhone, formatMoney } from '@/lib/utils/format'
+import { generateInviteCode } from '@/lib/staff/inviteCode'
 
 interface Staff {
   id: string
   name: string
-  phone: string | null
+  phone: string | null           // 호환성 유지 (기존 데이터)
+  work_phone: string | null      // 업무용 연락처 (회사폰)
+  personal_phone: string | null  // 개인 연락처
+  employee_no: string | null     // 사번
   role: string
   position: string | null
   email: string | null
@@ -20,12 +24,28 @@ interface Staff {
   bank_name: string | null
   bank_account: string | null
   salary: number | null
-  telegram_id: string | null
+  // 4대보험
+  ins_pension: boolean | null
+  ins_health: boolean | null
+  ins_employment: boolean | null
+  ins_industrial: boolean | null
+  // 텔레그램 연결
+  telegram_chat_id: string | null
+  telegram_linked_at: string | null
   join_date: string | null
   resign_date: string | null
   memo: string | null
   color: string | null
   created_at: string
+}
+
+interface StaffAttachment {
+  id: string
+  staff_id: string
+  doc_type: 'salary_contract' | 'bank_account' | 'id_card'
+  file_url: string
+  file_name: string | null
+  uploaded_at: string
 }
 
 type Tab = 'info' | 'salary'
@@ -49,6 +69,7 @@ export default function StaffPage() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
   const [editItem, setEditItem] = useState<Staff | null>(null)
   const [detailItem, setDetailItem] = useState<Staff | null>(null)
   const [tab, setTab] = useState<Tab>('info')
@@ -92,10 +113,12 @@ export default function StaffPage() {
             </button>
           </div>
         </div>
-        <button onClick={() => { setEditItem(null); setShowModal(true) }}
-          className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
-          + 직원 등록
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowInviteModal(true)}
+            className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
+            + 직원 초대
+          </button>
+        </div>
       </div>
 
       {/* === 직원정보 탭 === */}
@@ -113,6 +136,7 @@ export default function StaffPage() {
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직책</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직급</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연락처</th>
+                    <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">📱</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">입사일</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">근속</th>
                     <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연차</th>
@@ -137,7 +161,16 @@ export default function StaffPage() {
                         </td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.role}</td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.position || '-'}</td>
-                        <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.phone || '-'}</td>
+                        <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.work_phone || s.phone || '-'}</td>
+                        <td className="px-4 py-3 text-center">
+                          {s.telegram_chat_id ? (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] text-[#059669]" title={`연결됨 ${s.telegram_linked_at ? '· ' + s.telegram_linked_at.slice(0,10) : ''}`}>
+                              ✓
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-txt-quaternary" title="미연결">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.join_date || '-'}</td>
                         <td className="px-4 py-3 text-[13px] text-txt-tertiary">{calcYearsMonths(s.join_date)}</td>
                         <td className="px-4 py-3 text-center text-[13px] text-txt-secondary">{isResigned ? '-' : `${calcTotalLeave(s.join_date)}일`}</td>
@@ -279,13 +312,18 @@ export default function StaffPage() {
         </>
       )}
 
-      {/* 모달 */}
+      {/* 수정 모달 */}
       {showModal && (
         <StaffModal
           item={editItem}
           onClose={() => { setShowModal(false); setEditItem(null) }}
           onSaved={() => { setShowModal(false); setEditItem(null); loadData() }}
         />
+      )}
+
+      {/* 초대 모달 */}
+      {showInviteModal && (
+        <InviteModal onClose={() => setShowInviteModal(false)} />
       )}
     </div>
   )
@@ -329,11 +367,12 @@ function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => 
       <div className="grid grid-cols-2 gap-x-8">
         <div>
           <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">기본 정보</p>
-          <Row label="연락처" value={staff.phone} />
+          <Row label="사번" value={staff.employee_no} />
+          <Row label="업무 연락처" value={staff.work_phone || staff.phone} />
+          <Row label="개인 연락처" value={staff.personal_phone} />
           <Row label="이메일" value={staff.email} />
           <Row label="생년월일" value={staff.birth_date} />
           <Row label="주소" value={staff.address} />
-          <Row label="Telegram" value={staff.telegram_id} />
           <div className="flex py-2 border-b border-surface-secondary">
             <span className="w-24 shrink-0 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">캘린더 색깔</span>
             <div className="w-5 h-5 rounded-full" style={{ backgroundColor: staff.color || '#94a3b8' }} />
@@ -346,8 +385,24 @@ function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => 
           <Row label="연봉" value={staff.salary ? `${staff.salary.toLocaleString()}원` : null} />
           <Row label="급여계좌" value={staff.bank_name && staff.bank_account ? `${staff.bank_name} ${staff.bank_account}` : null} />
           <Row label="비상연락처" value={staff.emergency_contact ? `${staff.emergency_contact} ${staff.emergency_phone || ''}` : null} />
+          <div className="flex py-2 border-b border-surface-secondary">
+            <span className="w-24 shrink-0 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">4대보험</span>
+            <div className="text-[12px] text-txt-secondary flex gap-2 flex-wrap">
+              {staff.ins_pension && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">국민</span>}
+              {staff.ins_health && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">건강</span>}
+              {staff.ins_employment && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">고용</span>}
+              {staff.ins_industrial && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">산재</span>}
+              {!staff.ins_pension && !staff.ins_health && !staff.ins_employment && !staff.ins_industrial && (
+                <span className="text-txt-quaternary">미가입</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* 첨부 파일 섹션 */}
+      <StaffAttachmentsSection staffId={staff.id} />
+
       {staff.memo && (
         <div className="mt-3 pt-3 border-t border-border-tertiary">
           <p className="text-[11px] text-txt-tertiary mb-1">메모</p>
@@ -358,11 +413,125 @@ function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => 
   )
 }
 
-// ===== 직원 등록/수정 모달 =====
+// ===== 직원 첨부 파일 섹션 (연봉계약서/통장사본/신분증사본) =====
+const DOC_LABELS: Record<StaffAttachment['doc_type'], string> = {
+  salary_contract: '연봉 계약서',
+  bank_account: '통장 사본',
+  id_card: '신분증 사본',
+}
+const DOC_TYPES: StaffAttachment['doc_type'][] = ['salary_contract', 'bank_account', 'id_card']
+
+function StaffAttachmentsSection({ staffId }: { staffId: string }) {
+  const [atts, setAtts] = useState<StaffAttachment[]>([])
+  const [tableMissing, setTableMissing] = useState(false)
+  const [uploadingType, setUploadingType] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.from('staff_attachments').select('*').eq('staff_id', staffId)
+    if (error) {
+      if (/does not exist|relation/.test(error.message)) setTableMissing(true)
+      setAtts([])
+      return
+    }
+    setTableMissing(false)
+    setAtts((data as StaffAttachment[]) || [])
+  }, [staffId])
+
+  useEffect(() => { load() }, [load])
+
+  const handleUpload = async (docType: StaffAttachment['doc_type'], file: File) => {
+    if (tableMissing) return
+    setUploadingType(docType)
+    try {
+      const ext = file.name.split('.').pop() || 'bin'
+      const path = `staff/${staffId}/${docType}_${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
+      if (upErr) { alert('업로드 실패: ' + upErr.message); return }
+      const { data: pub } = supabase.storage.from('attachments').getPublicUrl(path)
+      // 기존 같은 타입 있으면 삭제 후 교체
+      const existing = atts.find(a => a.doc_type === docType)
+      if (existing) {
+        await supabase.from('staff_attachments').delete().eq('id', existing.id)
+      }
+      await supabase.from('staff_attachments').insert({
+        staff_id: staffId, doc_type: docType,
+        file_url: pub.publicUrl, file_name: file.name,
+      })
+      load()
+    } finally {
+      setUploadingType(null)
+    }
+  }
+
+  const handleDelete = async (att: StaffAttachment) => {
+    if (!confirm(`${DOC_LABELS[att.doc_type]}을 삭제하시겠습니까?`)) return
+    await supabase.from('staff_attachments').delete().eq('id', att.id)
+    load()
+  }
+
+  if (tableMissing) {
+    return (
+      <div className="mt-4 pt-4 border-t border-border-tertiary">
+        <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">첨부 파일</p>
+        <div className="text-[11px] text-txt-quaternary bg-surface-tertiary/40 rounded-lg p-3">
+          DB 준비 필요 — Supabase SQL Editor에서{' '}
+          <code className="px-1 py-0.5 bg-surface-secondary rounded">sql/migration_calendar_sites_staff.sql</code> 실행해주세요.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border-tertiary">
+      <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">첨부 파일</p>
+      <div className="grid grid-cols-3 gap-3">
+        {DOC_TYPES.map(doc => {
+          const existing = atts.find(a => a.doc_type === doc)
+          const isUploading = uploadingType === doc
+          return (
+            <div key={doc} className="border border-border-primary rounded-lg p-3 bg-surface">
+              <div className="text-[11px] font-medium text-txt-secondary mb-2">{DOC_LABELS[doc]}</div>
+              {existing ? (
+                <div>
+                  <div className="text-[11px] text-txt-primary truncate mb-1.5" title={existing.file_name || ''}>
+                    📄 {existing.file_name || '첨부됨'}
+                  </div>
+                  <div className="flex gap-1">
+                    <a href={existing.file_url} target="_blank" rel="noreferrer"
+                      className="text-[10px] px-2 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded hover:bg-[#dbeafe]">열기</a>
+                    <label className="text-[10px] px-2 py-0.5 bg-surface-tertiary text-txt-secondary rounded hover:bg-surface-secondary cursor-pointer">
+                      교체
+                      <input type="file" className="hidden" onChange={e => {
+                        const f = e.target.files?.[0]; if (f) handleUpload(doc, f)
+                      }} />
+                    </label>
+                    <button onClick={() => handleDelete(existing)}
+                      className="text-[10px] px-2 py-0.5 bg-[#fef2f2] text-[#dc2626] rounded hover:bg-[#fee2e2]">삭제</button>
+                  </div>
+                </div>
+              ) : (
+                <label className="block cursor-pointer border border-dashed border-border-primary rounded p-3 text-center text-[11px] text-txt-quaternary hover:border-accent hover:text-accent transition-colors">
+                  {isUploading ? '업로드 중...' : '+ 파일 선택'}
+                  <input type="file" className="hidden" onChange={e => {
+                    const f = e.target.files?.[0]; if (f) handleUpload(doc, f)
+                  }} />
+                </label>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ===== 직원 수정 모달 =====
 function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: () => void; onSaved: () => void }) {
   const isEdit = !!item
   const [name, setName] = useState(item?.name || '')
-  const [phone, setPhone] = useState(item?.phone || '')
+  const [employeeNo, setEmployeeNo] = useState(item?.employee_no || '')
+  const [workPhone, setWorkPhone] = useState(item?.work_phone || item?.phone || '')
+  const [personalPhone, setPersonalPhone] = useState(item?.personal_phone || '')
   const [role, setRole] = useState(item?.role || '직원')
   const [position, setPosition] = useState(item?.position || '')
   const [email, setEmail] = useState(item?.email || '')
@@ -375,7 +544,13 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
   const [salary, setSalary] = useState(item?.salary?.toString() || '')
   const [joinDate, setJoinDate] = useState(item?.join_date || '')
   const [resignDate, setResignDate] = useState(item?.resign_date || '')
-  const [telegramId, setTelegramId] = useState(item?.telegram_id || '')
+  // 상태: resign_date 기반으로 자동 판정
+  const [status, setStatus] = useState<'재직' | '퇴사'>(item?.resign_date ? '퇴사' : '재직')
+  // 4대보험
+  const [insPension, setInsPension] = useState(item?.ins_pension ?? false)
+  const [insHealth, setInsHealth] = useState(item?.ins_health ?? false)
+  const [insEmployment, setInsEmployment] = useState(item?.ins_employment ?? false)
+  const [insIndustrial, setInsIndustrial] = useState(item?.ins_industrial ?? false)
   const [memo, setMemo] = useState(item?.memo || '')
   const [color, setColor] = useState(item?.color || '#5e6ad2')
   const [saving, setSaving] = useState(false)
@@ -384,12 +559,23 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
 
   const formatSalary = (v: string) => formatMoney(v)
 
+  // 상태 재직 → 퇴사 변경 시 resign_date 자동
+  const handleStatusChange = (next: '재직' | '퇴사') => {
+    setStatus(next)
+    if (next === '퇴사' && !resignDate) {
+      setResignDate(new Date().toISOString().slice(0, 10))
+    }
+  }
+
   const handleSave = async () => {
     if (!name.trim()) return
     setSaving(true)
-    const payload = {
+    const payload: Record<string, unknown> = {
       name: name.trim(),
-      phone: phone || null,
+      phone: workPhone || null,          // 호환성: 기존 phone 컬럼도 업무폰으로 유지
+      work_phone: workPhone || null,
+      personal_phone: personalPhone || null,
+      employee_no: employeeNo || null,
       role,
       position: position || null,
       email: email || null,
@@ -401,15 +587,30 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
       bank_account: bankAccount || null,
       salary: salary ? parseInt(salary.replace(/,/g, '')) : null,
       join_date: joinDate || null,
-      resign_date: resignDate || null,
-      telegram_id: telegramId || null,
+      resign_date: status === '퇴사' ? (resignDate || new Date().toISOString().slice(0, 10)) : (resignDate || null),
+      ins_pension: insPension,
+      ins_health: insHealth,
+      ins_employment: insEmployment,
+      ins_industrial: insIndustrial,
       memo: memo || null,
       color: color || null,
     }
-    if (isEdit && item) {
-      await supabase.from('staff').update(payload).eq('id', item.id)
-    } else {
-      await supabase.from('staff').insert(payload)
+
+    const tryUpdate = async (p: Record<string, unknown>) => {
+      if (isEdit && item) return supabase.from('staff').update(p).eq('id', item.id)
+      return supabase.from('staff').insert(p)
+    }
+
+    const { error } = await tryUpdate(payload)
+    if (error) {
+      // 신규 컬럼 미존재 시 legacy payload로 fallback
+      const msg = error.message
+      if (/work_phone|personal_phone|employee_no|ins_pension|ins_health|ins_employment|ins_industrial/.test(msg)) {
+        const legacy = { ...payload }
+        delete legacy.work_phone; delete legacy.personal_phone; delete legacy.employee_no
+        delete legacy.ins_pension; delete legacy.ins_health; delete legacy.ins_employment; delete legacy.ins_industrial
+        await tryUpdate(legacy)
+      }
     }
     setSaving(false)
     onSaved()
@@ -435,8 +636,16 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="홍길동" className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>연락처</label>
-                <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))} placeholder="010-0000-0000" className={inputCls} />
+                <label className={labelCls}>사번</label>
+                <input value={employeeNo} onChange={e => setEmployeeNo(e.target.value)} placeholder="D2026-001" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>업무 연락처 (회사폰)</label>
+                <input value={workPhone} onChange={e => setWorkPhone(formatPhone(e.target.value))} placeholder="010-0000-0000" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>개인 연락처</label>
+                <input value={personalPhone} onChange={e => setPersonalPhone(formatPhone(e.target.value))} placeholder="010-0000-0000" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>직책</label>
@@ -493,7 +702,14 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
           {/* 근무정보 */}
           <div>
             <p className="text-[11px] font-semibold text-txt-secondary mb-3 pb-1 border-b border-border-tertiary">근무정보</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={labelCls}>상태</label>
+                <select value={status} onChange={e => handleStatusChange(e.target.value as '재직' | '퇴사')} className={inputCls}>
+                  <option value="재직">재직</option>
+                  <option value="퇴사">퇴사</option>
+                </select>
+              </div>
               <div>
                 <label className={labelCls}>입사일</label>
                 <input type="date" value={joinDate} onChange={e => setJoinDate(e.target.value)} className={inputCls} />
@@ -504,9 +720,30 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
                 )}
               </div>
               <div>
-                <label className={labelCls}>퇴사일</label>
+                <label className={labelCls}>퇴사일 {status === '퇴사' && <span className="text-[10px] text-accent">(자동)</span>}</label>
                 <input type="date" value={resignDate} onChange={e => setResignDate(e.target.value)} className={inputCls} />
               </div>
+            </div>
+          </div>
+
+          {/* 4대보험 */}
+          <div>
+            <p className="text-[11px] font-semibold text-txt-secondary mb-3 pb-1 border-b border-border-tertiary">4대보험</p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { label: '국민연금', value: insPension, setter: setInsPension },
+                { label: '건강보험', value: insHealth, setter: setInsHealth },
+                { label: '고용보험', value: insEmployment, setter: setInsEmployment },
+                { label: '산재보험', value: insIndustrial, setter: setInsIndustrial },
+              ] as const).map(item => (
+                <label key={item.label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] cursor-pointer transition-colors ${
+                  item.value ? 'border-accent bg-accent/10 text-accent font-medium' : 'border-border-primary text-txt-secondary hover:border-accent'
+                }`}>
+                  <input type="checkbox" checked={item.value} onChange={e => item.setter(e.target.checked)} className="sr-only" />
+                  <span>{item.value ? '☑' : '☐'}</span>
+                  {item.label}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -538,14 +775,7 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
           {/* 기타 */}
           <div>
             <p className="text-[11px] font-semibold text-txt-secondary mb-3 pb-1 border-b border-border-tertiary">기타</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Telegram ID</label>
-                <input value={telegramId} onChange={e => setTelegramId(e.target.value)} placeholder="@username" className={inputCls} />
-              </div>
-              <div></div>
-            </div>
-            <div className="mt-3">
+            <div>
               <label className={labelCls}>메모</label>
               <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} placeholder="특이사항, 자격증 등"
                 className={`${inputCls} h-auto resize-none`} />
@@ -559,6 +789,123 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
             {saving ? '저장 중...' : isEdit ? '수정' : '등록'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ===== 직원 초대 모달 =====
+function InviteModal({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('직원')
+  const [daysValid, setDaysValid] = useState(7)
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [tableMissing, setTableMissing] = useState(false)
+
+  const handleGenerate = async () => {
+    setSaving(true)
+    const code = generateInviteCode(6)
+    const expires_at = new Date(Date.now() + daysValid * 24 * 60 * 60 * 1000).toISOString()
+    const { error } = await supabase.from('staff_invitations').insert({
+      code, name: name.trim() || null, role, expires_at,
+    })
+    if (error) {
+      if (/does not exist|relation/.test(error.message)) {
+        setTableMissing(true)
+      } else {
+        alert('초대 코드 생성 실패: ' + error.message)
+      }
+      setSaving(false)
+      return
+    }
+    setGeneratedCode(code)
+    setSaving(false)
+  }
+
+  const handleCopy = () => {
+    if (!generatedCode) return
+    const msg = `[다우건설 ERP 초대]\n${name ? `${name}님, ` : ''}다우건설 ERP 직원 초대 코드입니다.\n\n초대 코드: ${generatedCode}\n\n아래 링크로 접속 후 코드를 입력해주세요.\nhttps://dawoo-erp.vercel.app/invite/${generatedCode}`
+    navigator.clipboard.writeText(msg)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-border-tertiary flex items-center justify-between">
+          <h3 className="font-semibold text-txt-primary">직원 초대</h3>
+          <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
+        </div>
+
+        {tableMissing ? (
+          <div className="p-5">
+            <p className="text-[13px] text-txt-secondary leading-relaxed">
+              DB 준비가 필요합니다. Supabase SQL Editor에서{' '}
+              <code className="px-1 py-0.5 bg-surface-tertiary rounded text-[11px]">sql/migration_calendar_sites_staff.sql</code>{' '}
+              을 실행해주세요.
+            </p>
+          </div>
+        ) : !generatedCode ? (
+          <div className="p-5 space-y-4">
+            <p className="text-[12px] text-txt-secondary leading-relaxed">
+              초대 코드를 생성해서 카톡/문자로 전달하면, 받은 직원이 본인 정보를 직접 등록합니다.
+            </p>
+            <div>
+              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">이름 (선택)</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="홍길동" className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-txt-tertiary mb-1">직책</label>
+                <select value={role} onChange={e => setRole(e.target.value)} className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
+                  <option value="관리자">관리자</option>
+                  <option value="직원">직원</option>
+                  <option value="현장소장">현장소장</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-txt-tertiary mb-1">유효기간</label>
+                <select value={daysValid} onChange={e => setDaysValid(parseInt(e.target.value))} className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
+                  <option value={1}>1일</option>
+                  <option value={3}>3일</option>
+                  <option value={7}>7일</option>
+                  <option value={30}>30일</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
+              <button onClick={handleGenerate} disabled={saving}
+                className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium">
+                {saving ? '생성 중...' : '초대 코드 생성'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-5 space-y-4">
+            <p className="text-[12px] text-txt-secondary">
+              초대 코드가 생성되었습니다. 아래 코드를 카톡/문자로 전달해주세요.
+            </p>
+            <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-lg p-4 text-center">
+              <div className="text-[11px] text-[#1e40af] mb-1">초대 코드</div>
+              <div className="text-[32px] font-bold text-[#1e40af] tabular-nums tracking-wider">{generatedCode}</div>
+              <div className="text-[11px] text-[#1e40af]/70 mt-1">{daysValid}일간 유효</div>
+            </div>
+            <button onClick={handleCopy}
+              className="w-full py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
+              {copied ? '✓ 복사됨' : '📋 전체 메시지 복사 (카톡 발송용)'}
+            </button>
+            <div className="text-[11px] text-txt-tertiary leading-relaxed bg-surface-tertiary/40 p-3 rounded-lg">
+              💡 나중에 카톡 API 연동 예정. 지금은 복사 후 수동 전달.
+            </div>
+            <div className="flex justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">닫기</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

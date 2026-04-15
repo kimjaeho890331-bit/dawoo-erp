@@ -152,9 +152,55 @@ export default function WorkCalendarPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return
+    // 접수대장 연동: 삭제 전에 project_id 확인
+    const target = schedules.find(s => s.id === id)
+    if (target?.project_id) {
+      const t = target.title || ''
+      const df = t.includes('실측') ? 'survey_date' : t.includes('동의서') ? 'consent_date' : t.includes('신청서') ? 'application_date' : t.includes('착공서류') ? 'construction_doc_date' : t.includes('시공') ? 'construction_date' : t.includes('완료서류') ? 'completion_doc_date' : null
+      if (df) await supabase.from('projects').update({ [df]: null }).eq('id', target.project_id)
+    }
     await supabase.from('schedules').delete().eq('id', id)
     setEditSchedule(null); setShowModal(false); loadData()
   }
+
+  // 드래그앤드롭: 일정 이동
+  const [dragSchedule, setDragSchedule] = useState<Schedule | null>(null)
+
+  const handleDragStart = (e: React.DragEvent, s: Schedule) => {
+    setDragSchedule(s)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', s.id)
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetDate: string) => {
+    e.preventDefault()
+    if (!dragSchedule) return
+    const duration = Math.max(0, Math.round((new Date(dragSchedule.end_date).getTime() - new Date(dragSchedule.start_date).getTime()) / 86400000))
+    const newEnd = new Date(targetDate)
+    newEnd.setDate(newEnd.getDate() + duration)
+    const endStr = newEnd.toISOString().substring(0, 10)
+    await supabase.from('schedules').update({ start_date: targetDate, end_date: endStr }).eq('id', dragSchedule.id)
+
+    // 접수대장 연동: project_id가 있으면 해당 날짜 필드도 업데이트
+    if (dragSchedule.project_id) {
+      const title = dragSchedule.title || ''
+      const dateField =
+        title.includes('실측') ? 'survey_date' :
+        title.includes('동의서') ? 'consent_date' :
+        title.includes('신청서') ? 'application_date' :
+        title.includes('착공서류') ? 'construction_doc_date' :
+        title.includes('시공') ? 'construction_date' :
+        title.includes('완료서류') ? 'completion_doc_date' : null
+      if (dateField) {
+        await supabase.from('projects').update({ [dateField]: targetDate }).eq('id', dragSchedule.project_id)
+      }
+    }
+
+    setDragSchedule(null)
+    loadData()
+  }
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
 
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -245,7 +291,9 @@ export default function WorkCalendarPage() {
                           const d = day ? ds(month.year, month.month, day) : ''
                           return (
                             <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 cursor-pointer hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''}`}
-                              onClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}>
+                              onClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
+                              onDragOver={day ? handleDragOver : undefined}
+                              onDrop={day ? (e) => handleDrop(e, d) : undefined}>
                               {day && <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-medium
                                 ${d === today ? 'bg-accent text-white' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{day}</span>}
                             </div>
@@ -253,7 +301,12 @@ export default function WorkCalendarPage() {
                         })}
                       </div>
                       <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 116) }}>
-                        {week.map((_, di) => <div key={di} className="border-r border-surface-secondary last:border-r-0" />)}
+                        {week.map((day, di) => {
+                          const d = day ? ds(month.year, month.month, day) : ''
+                          return <div key={di} className="border-r border-surface-secondary last:border-r-0"
+                            onDragOver={day ? handleDragOver : undefined}
+                            onDrop={day ? (e) => handleDrop(e, d) : undefined} />
+                        })}
                         {rows.map((row: any[], ri) => row.map((bar: any) => {
                           const s = bar.schedule as Schedule
                           const color = getBarColor(s)
@@ -261,8 +314,10 @@ export default function WorkCalendarPage() {
                           const barColor = isLeave ? '#EF4444' : s.schedule_type === 'promo' ? '#F59E0B' : color
                           return (
                             <div key={s.id + '-' + wi}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, s)}
                               onClick={(e) => { e.stopPropagation(); setEditSchedule(s); setShowModal(true) }}
-                              className="absolute flex flex-col justify-center rounded-md cursor-pointer hover:brightness-95 overflow-hidden shadow-sm px-1.5 py-0.5"
+                              className="absolute flex flex-col justify-center rounded-md cursor-grab active:cursor-grabbing hover:brightness-95 overflow-hidden shadow-sm px-1.5 py-0.5"
                               style={{
                                 left: `${bar.left}%`, width: `${bar.width}%`, top: ri * (bh + bg) + 1, height: bh,
                                 backgroundColor: s.confirmed ? barColor : 'white',
@@ -537,8 +592,14 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
     setSaving(true)
     if (isEdit) {
       const color = staffId && staffColorMap[staffId] ? staffColorMap[staffId] : TYPE_COLORS[scheduleType] || '#3B82F6'
-      const payload = { title, start_date: startDate, end_date: endDate, staff_id: staffId || null, schedule_type: scheduleType, memo: memo || null, confirmed, color, all_day: true, site_id: null, project_id: null }
+      const payload = { title, start_date: startDate, end_date: endDate, staff_id: staffId || null, schedule_type: scheduleType, memo: memo || null, confirmed, color, all_day: true, site_id: schedule!.site_id, project_id: schedule!.project_id }
       await supabase.from('schedules').update(payload).eq('id', schedule!.id)
+      // 접수대장 연동
+      if (schedule!.project_id) {
+        const t = schedule!.title || ''
+        const df = t.includes('실측') ? 'survey_date' : t.includes('동의서') ? 'consent_date' : t.includes('신청서') ? 'application_date' : t.includes('착공서류') ? 'construction_doc_date' : t.includes('시공') ? 'construction_date' : t.includes('완료서류') ? 'completion_doc_date' : null
+        if (df) await supabase.from('projects').update({ [df]: startDate }).eq('id', schedule!.project_id)
+      }
     } else {
       // 복수 담당자: 각각 일정 생성
       const ids = selectedStaffIds.length > 0 ? selectedStaffIds : [null]

@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { validateProjectData } from '@/lib/utils/validate'
+import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 import FileDropZone from '@/components/common/FileDropZone'
 import PaymentTable from '@/components/register/PaymentTable'
 import StepTransition from '@/components/register/StepTransition'
@@ -19,7 +21,7 @@ const STEP_LABELS_SHORT = [
   '승인', '착공', '공사', '완료', '입금',
 ]
 
-const TABS = ['기본정보', '1단계', '2단계', '3~4단계', '서류/첨부', '이력'] as const
+const TABS = ['기본정보', '1단계', '2단계', '3단계', '이력'] as const
 type TabKey = (typeof TABS)[number]
 
 function getStepIndex(step: string): number {
@@ -42,8 +44,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [hasChanges, setHasChanges] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
-  const [infoExpanded, setInfoExpanded] = useState(false)
   const [editingMemo, setEditingMemo] = useState(false)
+  const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
+  const [statusReason, setStatusReason] = useState('')
 
   useEffect(() => {
     if (project) {
@@ -55,28 +58,127 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       if (stepIdx <= 0) setActiveTab('기본정보')
       else if (stepIdx <= 4) setActiveTab('1단계')
       else if (stepIdx <= 7) setActiveTab('2단계')
-      else if (stepIdx <= 9) setActiveTab('3~4단계')
+      else if (stepIdx <= 9) setActiveTab('3단계')
       else setActiveTab('기본정보')
     }
   }, [project])
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const updateField = useCallback((field: string, value: string | number | null) => {
     setEditData(prev => ({ ...prev, [field]: value }))
     setHasChanges(true)
   }, [])
 
+  // 자동저장 (2초 debounce)
+  useEffect(() => {
+    if (!hasChanges || !project) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const dataToSave = validateProjectData({ ...editData })
+        const { error } = await supabase
+          .from('projects')
+          .update(dataToSave)
+          .eq('id', project.id)
+        if (error) throw error
+        await syncSchedules(dataToSave)
+        setHasChanges(false)
+        setEditData({})
+        // DB에서 최신 데이터 다시 읽어오기
+        onRefresh?.()
+      } catch (err) {
+        console.error('자동저장 실패:', err)
+      }
+    }, 1000)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData])
+
+  // 날짜 필드 → 캘린더 자동 동기화
+  const SCHEDULE_MAP: Record<string, string> = {
+    survey_date: '실측',
+    consent_date: '동의서회수',
+    application_date: '신청서제출',
+    construction_doc_date: '착공서류제출',
+    construction_date: '시공',
+    completion_doc_date: '완료서류제출',
+  }
+
+  const syncSchedules = async (savedData: Record<string, string | number | null>) => {
+    if (!project) return
+    const dateFields = Object.keys(savedData).filter(k => k in SCHEDULE_MAP)
+    if (dateFields.length === 0) return
+
+    for (const field of dateFields) {
+      const dateVal = savedData[field] as string | null
+      const scheduleType = SCHEDULE_MAP[field]
+      // 시간: 실측은 survey_time, 나머지는 해당 time 필드
+      const timeField = field.replace('_date', '_time')
+      const timeVal = (editData as Record<string,unknown>)?.[timeField] as string || (project as unknown as Record<string,string>)[timeField] || ''
+      const title = `${timeVal ? timeVal + ' ' : ''}${project.building_name || '(이름없음)'} ${scheduleType}`
+      const addr = project.jibun_address || project.road_address || ''
+      const ownerInfo = [project.owner_name, project.owner_phone].filter(Boolean).join(' · ')
+      const memo = [addr, ownerInfo].filter(Boolean).join('\n')
+
+      if (!dateVal) {
+        // 날짜 삭제 시 일정도 삭제
+        await supabase
+          .from('schedules')
+          .delete()
+          .eq('project_id', project.id)
+          .ilike('title', `%${scheduleType}`)
+        continue
+      }
+
+      // upsert: project_id + title 기준 (schedule_type은 'project' 고정)
+      const { data: existing } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('project_id', project.id)
+        .ilike('title', `%${scheduleType}`)
+        .limit(1)
+
+      // DB date 타입에 맞게 날짜만 추출 (T14:00 제거)
+      const cleanDate = dateVal.substring(0, 10)
+
+      const payload = {
+        project_id: project.id,
+        staff_id: project.staff_id,
+        schedule_type: 'project' as const, // DB CHECK 제약: site/project/personal/promo/ai
+        title,
+        start_date: cleanDate,
+        end_date: cleanDate,
+        memo,
+        confirmed: false,
+        all_day: true,
+      }
+
+      if (existing && existing.length > 0) {
+        await supabase.from('schedules').update(payload).eq('id', existing[0].id)
+      } else {
+        await supabase.from('schedules').insert(payload)
+      }
+    }
+  }
+
   const handleSave = async () => {
     if (!project || !hasChanges) return
     setSaving(true)
     try {
+      const dataToSave = validateProjectData({ ...editData })
       const { error } = await supabase
         .from('projects')
-        .update(editData)
+        .update(dataToSave)
         .eq('id', project.id)
       if (error) throw error
+
+      // 날짜 변경 시 캘린더 동기화
+      await syncSchedules(dataToSave)
+
       setHasChanges(false)
       setEditData({})
-      onRefresh?.()
+      // onRefresh 호출하지 않음 — 입력 중 데이터 보존
     } catch (err) {
       console.error('저장 실패:', err)
       alert('저장에 실패했습니다.')
@@ -99,6 +201,24 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     } catch (err) {
       console.error('삭제 실패:', err)
       alert('삭제에 실패했습니다.')
+    }
+  }
+
+  const handleStatusChange = async () => {
+    if (!project || !showStatusModal) return
+    try {
+      await supabase.from('projects').update({ status: showStatusModal }).eq('id', project.id)
+      await supabase.from('status_logs').insert({
+        project_id: project.id,
+        from_status: project.status,
+        to_status: showStatusModal,
+        note: statusReason || null,
+      })
+      setShowStatusModal(null)
+      setStatusReason('')
+      onRefresh?.()
+    } catch (err) {
+      console.error('상태 변경 실패:', err)
     }
   }
 
@@ -138,6 +258,18 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               }`}
             >
               {apiFieldsLocked ? '수정' : '수정중'}
+            </button>
+            <button
+              onClick={() => setShowStatusModal('취소')}
+              className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => setShowStatusModal('문의(예약)')}
+              className="px-3 py-1.5 text-[11px] font-medium text-[#d97706] border border-[#fef3c7] rounded-lg hover:bg-amber-50 transition-colors"
+            >
+              예약
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -195,56 +327,57 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         {/* 단계 전환 */}
         <StepTransition project={project} onStepChange={() => onRefresh?.()} />
 
-        {/* 상시 표시 영역 - 접기/펼치기 */}
+        {/* 상시 표시 영역 (항상 전체 표시) */}
         <div className="px-6 py-3 border-b border-border-tertiary bg-surface-secondary">
-          {/* 항상 표시: 빌라명 + 단계 */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[14px] font-semibold text-txt-primary">{project.building_name || '(이름없음)'}</span>
+          {/* 1행: 소유주 / 연락처 / 담당자 */}
+          <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
+            <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
+            <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
+            <InfoField label="담당자" value={project.staff?.name || '-'} />
+          </div>
+          {/* 2행: 빌라명+동 / 단계 */}
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[14px] font-semibold text-txt-primary">
+              {project.building_name || '(이름없음)'}
+              {project.dong ? ` ${project.dong}` : ''}
+            </span>
             <span className={`badge ${
               currentStepIdx <= 4 ? 'bg-status-docs-bg text-status-docs-text' :
               currentStepIdx <= 7 ? 'bg-status-construction-bg text-status-construction-text' :
               'bg-status-done-bg text-status-done-text'
             }`}>{project.status}</span>
           </div>
-
-          {/* 펼친 상태: 상세 정보 */}
-          {infoExpanded && (
-            <div className="space-y-1.5 mb-2 text-[13px]">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                <InfoField label="담당자" value={project.staff?.name || '-'} />
-                <InfoField label="공사종류" value={project.work_types?.name || '-'} />
-              </div>
-              <InfoField label="주소" value={project.road_address || '-'} full />
-              <div className="grid grid-cols-2 gap-x-6">
-                <InfoField label="소유주" value={project.owner_name || '-'} />
-                <InfoField label="연락처" value={project.owner_phone || '-'} />
-              </div>
-              {/* 메모 인라인 편집 */}
-              <div>
-                <span className="text-[11px] text-txt-tertiary">상담내역</span>
-                {editingMemo ? (
-                  <textarea
-                    autoFocus
-                    rows={2}
-                    value={(getVal('note') as string) ?? ''}
-                    onChange={e => updateField('note', e.target.value || null)}
-                    onBlur={() => setEditingMemo(false)}
-                    className="w-full mt-0.5 px-2 py-1 border border-accent rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-light"
-                  />
-                ) : (
-                  <p
-                    onClick={() => setEditingMemo(true)}
-                    className="text-[13px] text-txt-secondary cursor-pointer hover:bg-surface-tertiary rounded px-1 py-0.5 -mx-1 transition-colors truncate"
-                    title="클릭하여 수정"
-                  >
-                    {(getVal('note') as string) || '-'}
-                  </p>
-                )}
-              </div>
+          {/* 3행: 주소 */}
+          <div className="text-[12px] text-txt-secondary mb-1.5">{project.jibun_address || project.road_address || '-'}</div>
+          {/* 4행: 지원사업 */}
+          {project.support_program && (
+            <div className="text-[12px] mb-1.5">
+              <span className="text-txt-tertiary">지원사업:</span> <span className="text-txt-primary">{project.support_program}</span>
             </div>
           )}
-
-          {/* 항상 표시: 금액 5개 */}
+          {/* 상담내역 인라인 편집 */}
+          <div className="mb-2">
+            <span className="text-[11px] text-txt-tertiary">상담내역</span>
+            {editingMemo ? (
+              <textarea
+                autoFocus
+                rows={2}
+                value={(getVal('note') as string) ?? ''}
+                onChange={e => updateField('note', e.target.value || null)}
+                onBlur={() => setEditingMemo(false)}
+                className="w-full mt-0.5 px-2 py-1 border border-accent rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-light"
+              />
+            ) : (
+              <p
+                onClick={() => setEditingMemo(true)}
+                className="text-[13px] text-txt-secondary cursor-pointer hover:bg-surface-tertiary rounded px-1 py-0.5 -mx-1 transition-colors truncate"
+                title="클릭하여 수정"
+              >
+                {(getVal('note') as string) || '-'}
+              </p>
+            )}
+          </div>
+          {/* 금액 5개 */}
           <div className="grid grid-cols-5 gap-2 pt-2 border-t border-surface-tertiary">
             <MiniStat label="총공사비" value={project.total_cost} />
             <MiniStat label="자부담금" value={project.self_pay} />
@@ -252,18 +385,6 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             <MiniStat label="추가공사금" value={project.additional_cost || 0} />
             <MiniStat label="미수금" value={project.outstanding} highlight />
           </div>
-
-          {/* 펼치기/접기 토글 */}
-          <button
-            onClick={() => setInfoExpanded(prev => !prev)}
-            className="w-full mt-2 py-1 text-[11px] text-txt-tertiary hover:text-accent transition-colors flex items-center justify-center gap-1"
-          >
-            {infoExpanded ? (
-              <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg> 접기</>
-            ) : (
-              <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg> 상세 펼치기</>
-            )}
-          </button>
         </div>
 
         {/* 탭 */}
@@ -288,8 +409,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
           {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
           {activeTab === '2단계' && <TabStep2 project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} />}
-          {activeTab === '3~4단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
-          {activeTab === '서류/첨부' && <TabDocuments projectId={project.id} />}
+          {activeTab === '3단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>
@@ -300,6 +420,33 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           onConfirm={handleDeleteConfirm}
           onCancel={() => setShowDeleteConfirm(false)}
         />
+      )}
+
+      {showStatusModal && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-50" onClick={() => setShowStatusModal(null)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-xl shadow-xl z-50 p-6 w-[360px]">
+            <h3 className="text-[15px] font-semibold text-txt-primary mb-3">
+              {showStatusModal === '취소' ? '취소 처리' : '예약으로 전환'}
+            </h3>
+            <textarea
+              autoFocus
+              rows={3}
+              placeholder="사유를 입력하세요"
+              value={statusReason}
+              onChange={e => setStatusReason(e.target.value)}
+              className="w-full px-3 py-2 border border-border-primary rounded-lg text-[13px] resize-none focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+            />
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowStatusModal(null)} className="flex-1 px-4 py-2 text-[13px] text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">
+                닫기
+              </button>
+              <button onClick={handleStatusChange} className={`flex-1 px-4 py-2 text-[13px] font-medium text-white rounded-lg ${showStatusModal === '취소' ? 'bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#d97706] hover:bg-[#b45309]'}`}>
+                {showStatusModal === '취소' ? '취소 처리' : '예약 전환'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       <style jsx global>{`
@@ -330,7 +477,7 @@ function MiniStat({ label, value, highlight }: { label: string; value: number; h
     <div className="text-center">
       <p className="text-[10px] text-txt-tertiary">{label}</p>
       <p className={`text-[11px] font-semibold tabular-nums ${highlight && value > 0 ? 'text-[#dc2626] font-medium' : 'text-txt-secondary'}`}>
-        {value > 0 ? `${value.toLocaleString()}` : '-'}
+        {value > 0 ? `${value.toLocaleString()}원` : '-'}
       </p>
     </div>
   )
@@ -352,6 +499,103 @@ function FormInput({ label, type = 'text', placeholder, value, onChange }: {
         placeholder={placeholder || label}
         className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light hover:border-border-secondary transition-colors"
       />
+    </div>
+  )
+}
+
+// --- 날짜+시간 분리 입력 (MM/DD 표시 + 24h 타이핑) ---
+function DateTimeInput({ label, value, onChange, timeValue, onTimeChange }: {
+  label: string
+  value: string | null | undefined
+  onChange: (v: string | null) => void
+  timeValue?: string | null
+  onTimeChange?: (v: string | null) => void
+}) {
+  const dateRef = useRef<HTMLInputElement>(null)
+  const dateVal = (value || '').substring(0, 10)
+  const hasTime = onTimeChange !== undefined
+
+  const displayDate = dateVal
+    ? `${parseInt(dateVal.substring(5, 7))}월 ${parseInt(dateVal.substring(8, 10))}일`
+    : ''
+
+  // DB에서 콜론 없이 저장된 시간값 보정
+  const formatTimeDisplay = (raw: string | null | undefined) => {
+    if (!raw) return ''
+    if (raw.includes(':')) return raw
+    const digits = raw.replace(/[^0-9]/g, '')
+    if (digits.length >= 3) return digits.substring(0, digits.length - 2) + ':' + digits.substring(digits.length - 2)
+    return raw
+  }
+
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <div className={`grid gap-1.5 ${hasTime ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => dateRef.current?.showPicker?.()}
+            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-left hover:border-border-secondary transition-colors bg-white"
+          >
+            {displayDate || <span className="text-txt-quaternary">날짜</span>}
+          </button>
+          <input
+            ref={dateRef}
+            type="date"
+            value={dateVal}
+            onChange={e => onChange(e.target.value || null)}
+            className="absolute inset-0 opacity-0 pointer-events-none"
+            tabIndex={-1}
+          />
+        </div>
+        {hasTime && (
+          <input
+            type="text"
+            placeholder="14:00"
+            value={formatTimeDisplay(timeValue)}
+            onChange={e => {
+              let v = e.target.value.replace(/[^0-9]/g, '')
+              if (v.length > 4) v = v.substring(0, 4)
+              if (v.length >= 3) v = v.substring(0, 2) + ':' + v.substring(2)
+              onTimeChange!(v || null)
+            }}
+            maxLength={5}
+            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// --- 직원 드롭다운 선택 ---
+function StaffSelect({ label, value, onChange }: {
+  label: string
+  value: string | null | undefined
+  onChange: (v: string | null) => void
+}) {
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+      setStaffList(data || [])
+    })
+  }, [])
+
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value || null)}
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light bg-white"
+      >
+        <option value="">선택</option>
+        {staffList.map(s => (
+          <option key={s.id} value={s.name}>{s.name}</option>
+        ))}
+      </select>
     </div>
   )
 }
@@ -384,10 +628,68 @@ interface TabProps {
   apiFieldsLocked?: boolean
 }
 
+// --- 소유자 타입 ---
+interface OwnerInfo {
+  name: string
+  registNo: string
+  ownerType: string
+  share: string
+  coOwnerCount: number
+  changeDate: string
+  dongNm: string
+  hoNm: string
+}
+
 // --- 탭 1: 기본정보 ---
 function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) {
   const [bankImage, setBankImage] = useState<string | null>(null)
   const [ocrLoading, setOcrLoading] = useState(false)
+  const [owners, setOwners] = useState<OwnerInfo[]>([])
+  const [ownerLoading, setOwnerLoading] = useState(false)
+  const [ownerError, setOwnerError] = useState('')
+
+  // 소유자 조회 (공공데이터포털 getBrOwnrInfo — 승인 대기중)
+  const fetchOwners = async () => {
+    const addr = project.road_address || project.jibun_address
+    if (!addr) { setOwnerError('주소가 없습니다'); return }
+
+    setOwnerLoading(true)
+    setOwnerError('')
+    setOwners([])
+    try {
+      // 주소 검색으로 코드 추출
+      const searchRes = await fetch(`/api/address/search?keyword=${encodeURIComponent(addr)}`)
+      const searchData = await searchRes.json()
+      const results = searchData?.results?.juso
+      if (!results || results.length === 0) {
+        setOwnerError('주소 코드를 찾을 수 없습니다')
+        return
+      }
+      const matched = results[0]
+      const params = new URLSearchParams({
+        sigunguCd: matched.admCd?.substring(0, 5) || '',
+        bjdongCd: matched.admCd?.substring(5, 10) || '',
+        bun: (matched.lnbrMnnm || '0').padStart(4, '0'),
+        ji: (matched.lnbrSlno || '0').padStart(4, '0'),
+      })
+
+      const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
+      const ownerData: OwnerInfo[] = await ownerRes.json()
+      if (Array.isArray(ownerData) && ownerData.length > 0) {
+        setOwners(ownerData)
+        if (!getVal('owner_name')) {
+          onChange('owner_name', ownerData[0].name)
+        }
+      } else {
+        setOwnerError('소유자 API 승인 대기중 (공공데이터포털)')
+      }
+    } catch (err) {
+      console.error('소유자 조회 실패:', err)
+      setOwnerError('소유자 조회에 실패했습니다')
+    } finally {
+      setOwnerLoading(false)
+    }
+  }
 
   const handleBankImageUpload = async (file: File) => {
     const reader = new FileReader()
@@ -422,18 +724,49 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
   return (
     <div className="space-y-5">
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">소유주/세입자</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider">소유주/세입자</h3>
+          <button
+            onClick={fetchOwners}
+            disabled={ownerLoading}
+            className="px-2.5 py-1 text-[10px] font-medium text-accent border border-accent/30 rounded-md hover:bg-accent/5 transition-colors disabled:opacity-50"
+          >
+            {ownerLoading ? '조회 중...' : '건축물대장 소유자 조회'}
+          </button>
+        </div>
+
+        {/* 소유자 조회 결과 */}
+        {owners.length > 0 && (
+          <div className="mb-3 p-3 bg-surface-secondary rounded-lg border border-border-tertiary">
+            <p className="text-[10px] font-medium text-txt-tertiary mb-2">건축물대장 소유자 ({owners.length}명)</p>
+            <div className="space-y-1.5">
+              {owners.map((o, i) => (
+                <div key={i} className="flex items-center justify-between text-[12px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-txt-primary">{o.name}</span>
+                    <span className="text-txt-tertiary">({o.ownerType})</span>
+                    {o.registNo && <span className="text-txt-quaternary text-[11px]">{o.registNo}</span>}
+                  </div>
+                  {o.share && <span className="text-[11px] text-txt-tertiary">지분 {o.share}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {ownerError && (
+          <p className="mb-3 text-[11px] text-[#dc2626]">{ownerError}</p>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="소유주" value={getVal('owner_name') as string} onChange={v => onChange('owner_name', v || null)} />
-          <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', v || null)} />
-          <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', v || null)} />
+          <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', formatPhone(v) || null)} />
+          <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
         </div>
       </section>
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">주소</h3>
         <div className="space-y-3">
-          <LockedFormInput label="도로명주소" value={getVal('road_address') as string} onChange={v => onChange('road_address', v || null)} locked={apiFieldsLocked} />
           <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
         </div>
         <div className="grid grid-cols-3 gap-3 mt-3">
@@ -480,10 +813,10 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput label="은행" placeholder="예: 국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
-          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
+        <div className="grid grid-cols-3 gap-2">
+          <FormInput label="은행" placeholder="국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
           <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
+          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
         </div>
       </section>
 
@@ -511,7 +844,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
   const urlCategory = category === '소규모' ? 'small' : 'water'
   const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
   const [pricingLoaded, setPricingLoaded] = useState(false)
-  const [autoApplied, setAutoApplied] = useState(false)
+
 
   const area = (getVal('exclusive_area') as number) || 0
   const units = (getVal('unit_count') as number) || 0
@@ -531,24 +864,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       .catch(() => setPricingLoaded(true))
   }, [cityName, category])
 
-  // 전유면적 있고, 총공사비 없으면 자동 기입
-  useEffect(() => {
-    if (!pricingLoaded || autoApplied || !area || currentTotal > 0) return
-
-    const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
-    const cost = isPublic
-      ? Math.round(area * pricing.공용 + units * pricing.공용_세대)
-      : Math.round(area * pricing.전용)
-    const vat = Math.round(cost * 0.1)
-    const grandTotal = cost + vat
-    const citySupport = Math.round(grandTotal * 0.8)
-    const selfPay = grandTotal - citySupport
-
-    onChange('total_cost', grandTotal)
-    onChange('city_support', citySupport)
-    onChange('self_pay', selfPay)
-    setAutoApplied(true)
-  }, [pricingLoaded, autoApplied, area, units, currentTotal, pricing, workTypeName, onChange])
+  // 견적 자동기입 정지 — 재산출 버튼으로만 계산
 
   // 수동 재산출
   const handleRecalculate = () => {
@@ -581,12 +897,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="실측일" type="date" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v || null)} />
-          <FormInput label="실측 담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v || null)} />
-          <FormInput label="면적결과" placeholder="예: 59.94m²" value={getVal('area_result') as string} onChange={v => onChange('area_result', v || null)} />
-        </div>
-        <div className="mt-3">
-          <FormInput label="현장메모" placeholder="실측 시 특이사항" value={getVal('field_memo') as string} onChange={v => onChange('field_memo', v || null)} />
+          <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} timeValue={getVal('survey_time') as string} onTimeChange={v => onChange('survey_time', v)} />
+          <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
         </div>
         {category === '소규모' && (
           <div className="grid grid-cols-2 gap-3 mt-3">
@@ -595,7 +907,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           </div>
         )}
         {category === '수도' && (
-          <div className="mt-3">
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
             <FormInput label="세대 비밀번호" placeholder="예: 1234#" value={getVal('unit_password') as string} onChange={v => onChange('unit_password', v || null)} />
           </div>
         )}
@@ -655,10 +968,27 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="총공사비" type="number" value={getVal('total_cost') as number} onChange={v => onChange('total_cost', Number(v) || 0)} />
-          <FormInput label="시지원금" type="number" value={getVal('city_support') as number} onChange={v => onChange('city_support', Number(v) || 0)} />
-          <FormInput label="자부담금" type="number" value={getVal('self_pay') as number} onChange={v => onChange('self_pay', Number(v) || 0)} />
-          <FormInput label="추가공사금" type="number" value={getVal('additional_cost') as number} onChange={v => onChange('additional_cost', Number(v) || 0)} />
+          <FormInput label="시지원금" value={formatMoney((getVal('city_support') as number) || 0)} onChange={v => {
+            const cs = parseMoney(v)
+            onChange('city_support', cs)
+            onChange('total_cost', cs + ((getVal('self_pay') as number) || 0) + ((getVal('additional_cost') as number) || 0))
+          }} placeholder="0" />
+          <FormInput label="자부담금" value={formatMoney((getVal('self_pay') as number) || 0)} onChange={v => {
+            const sp = parseMoney(v)
+            onChange('self_pay', sp)
+            onChange('total_cost', ((getVal('city_support') as number) || 0) + sp + ((getVal('additional_cost') as number) || 0))
+          }} placeholder="0" />
+          <FormInput label="추가공사금" value={formatMoney((getVal('additional_cost') as number) || 0)} onChange={v => {
+            const ac = parseMoney(v)
+            onChange('additional_cost', ac)
+            onChange('total_cost', ((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + ac)
+          }} placeholder="0" />
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">총공사비 (자동)</label>
+            <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] font-semibold text-txt-primary bg-surface-secondary tabular-nums">
+              {((getVal('total_cost') as number) || 0).toLocaleString()}원
+            </p>
+          </div>
         </div>
         <button
           onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
@@ -671,7 +1001,8 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="동의서 수령일" type="date" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v || null)} />
+          <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
+          <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />
         </div>
         <div className="mt-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
@@ -682,22 +1013,70 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">신청서</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="신청서 제출일" type="date" value={getVal('application_date') as string} onChange={v => onChange('application_date', v || null)} />
-          <FormInput label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v || null)} />
+          <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
+          <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />
         </div>
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => window.open(`/register/application?projectId=${project.id}`, '_blank')}
-            className="px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
-          >
-            신청서 미리보기
-          </button>
+        <div className="mt-3">
+          <p className="text-[11px] font-medium text-txt-tertiary mb-1">신청서 첨부</p>
+          <FileDropZone projectId={project.id} fileType="신청서" accept="image/*,application/pdf,.hwp" multiple compact />
         </div>
         <div className="mt-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
           <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
         </div>
       </section>
+
+      {/* 수금 (1~3단계 공통) */}
+      <section>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
+        <PaymentTable projectId={project.id} totalCost={project.total_cost || 0} additionalCost={project.additional_cost || 0} onOutstandingChange={() => {}} />
+      </section>
+    </div>
+  )
+}
+
+// --- 시공업체 검색 자동완성 ---
+function VendorSearch({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
+  const [query, setQuery] = useState((value as string) || '')
+  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
+  const [showList, setShowList] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setQuery((value as string) || '') }, [value])
+
+  useEffect(() => {
+    if (!query.trim()) { setVendors([]); return }
+    supabase.from('vendors').select('id, name').ilike('name', `%${query}%`).limit(10)
+      .then(({ data }) => setVendors(data || []))
+  }, [query])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setShowList(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">시공업체</label>
+      <input
+        type="text"
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value || null); setShowList(true) }}
+        onFocus={() => query && setShowList(true)}
+        placeholder="업체명 검색"
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+      />
+      {showList && vendors.length > 0 && (
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[150px] overflow-y-auto">
+          {vendors.map(v => (
+            <button key={v.id} onClick={() => { setQuery(v.name); onChange(v.name); setShowList(false) }}
+              className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-secondary transition-colors border-b border-border-tertiary last:border-b-0">
+              {v.name}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -718,26 +1097,28 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
         <section>
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">승인</h3>
           <div className="grid grid-cols-2 gap-3">
-            <FormInput label="승인일" type="date" value={getVal('approval_received_date') as string} onChange={v => onChange('approval_received_date', v || null)} />
+            <DateTimeInput label="승인일" value={getVal('approval_received_date') as string} onChange={v => onChange('approval_received_date', v)} />
           </div>
+          {category === '소규모' && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <DateTimeInput label="착공서류 제출일" value={getVal('construction_doc_date') as string} onChange={v => onChange('construction_doc_date', v)} timeValue={getVal('construction_doc_time') as string} onTimeChange={v => onChange('construction_doc_time', v)} />
+              <StaffSelect label="착공서류 제출자" value={getVal('construction_doc_submitter') as string} onChange={v => onChange('construction_doc_submitter', v)} />
+            </div>
+          )}
         </section>
 
         <section className="mt-5">
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>
           <div className="grid grid-cols-2 gap-3">
-            <FormInput label="시공일" type="date" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v || null)} />
-            <FormInput label="시공업체" value={getVal('contractor') as string} onChange={v => onChange('contractor', v || null)} />
+            <DateTimeInput label="시공일" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v)} timeValue={getVal('construction_time') as string} onTimeChange={v => onChange('construction_time', v)} />
+            <VendorSearch value={getVal('contractor') as string} onChange={v => onChange('contractor', v)} />
+            {category === '수도' && (
+              <FormInput label="직영 시공자" value={getVal('direct_worker') as string} onChange={v => onChange('direct_worker', v || null)} />
+            )}
             <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
-            <FormInput label="착수금" type="number" value={getVal('down_payment') as number} onChange={v => onChange('down_payment', Number(v) || 0)} />
-            <FormInput label="공사완료일" type="date" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v || null)} />
+            <DateTimeInput label="공사완료일" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v)} />
           </div>
 
-          {/* 소규모/수도 전용 */}
-          {category === '수도' && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <FormInput label="직영 시공자" value={getVal('direct_worker') as string} onChange={v => onChange('direct_worker', v || null)} />
-            </div>
-          )}
           {category === '소규모' && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <FormInput label="시공업체 (외부)" value={getVal('external_contractor') as string} onChange={v => onChange('external_contractor', v || null)} />
@@ -747,21 +1128,26 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
         </section>
 
         <section className="mt-5">
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공 사진</h3>
-          <div className="space-y-3">
-            <div>
-              <p className="text-[11px] font-medium text-txt-tertiary mb-1">시공전 사진</p>
-              <FileDropZone projectId={project.id} fileType="시공전" accept="image/*" multiple compact />
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-txt-tertiary mb-1">시공중 사진</p>
-              <FileDropZone projectId={project.id} fileType="시공중" accept="image/*" multiple compact />
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-txt-tertiary mb-1">시공후 사진</p>
-              <FileDropZone projectId={project.id} fileType="시공후" accept="image/*" multiple compact />
-            </div>
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공 사진 (A4 1장 6매)</h3>
+          <div className="space-y-4">
+            {['시공전', '시공중', '시공후'].map(type => (
+              <div key={type}>
+                <p className="text-[11px] font-medium text-txt-tertiary mb-2">{type}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 2].map(slot => (
+                    <FileDropZone key={`${type}-${slot}`} projectId={project.id} fileType={`${type}_${slot}`} accept="image/*" compact />
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[10px] text-txt-quaternary">시공전 2장 + 시공중 2장 + 시공후 2장 = A4 1장 기준 6매</p>
           </div>
+        </section>
+
+        {/* 수금 (1~3단계 공통) */}
+        <section className="mt-5">
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
+          <PaymentTable projectId={project.id} totalCost={project.total_cost || 0} additionalCost={project.additional_cost || 0} onOutstandingChange={() => {}} />
         </section>
       </div>
     </div>
@@ -779,8 +1165,8 @@ function TabStep34({ project, getVal, onChange }: TabProps) {
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">완료서류</h3>
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="완료서류 제출일" type="date" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v || null)} />
-          <FormInput label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v || null)} />
+          <DateTimeInput label="완료서류 제출일" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v)} timeValue={getVal('completion_doc_time') as string} onTimeChange={v => onChange('completion_doc_time', v)} />
+          <StaffSelect label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v)} />
         </div>
         <div className="mt-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">완료보고서</p>
@@ -802,124 +1188,7 @@ function TabStep34({ project, getVal, onChange }: TabProps) {
 }
 
 // --- 탭 5: 서류/첨부 ---
-function TabDocuments({ projectId }: { projectId: string }) {
-  const [documents, setDocuments] = useState<{ id: string; name: string; doc_type: string; file_path: string; created_at: string }[]>([])
-  const [attachments, setAttachments] = useState<{ id: string; name: string; file_type: string; file_path: string; created_at: string }[]>([])
-
-  useEffect(() => {
-    async function load() {
-      const [docRes, attRes] = await Promise.all([
-        supabase.from('documents').select('id, name, doc_type, file_path, created_at').eq('project_id', projectId).order('created_at'),
-        supabase.from('attachments').select('id, name, file_type, file_path, created_at').eq('project_id', projectId).order('created_at'),
-      ])
-      setDocuments(docRes.data || [])
-      setAttachments(attRes.data || [])
-    }
-    load()
-  }, [projectId])
-
-  const getPublicUrl = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path)
-    return data.publicUrl
-  }
-
-  const docTypeBadge = (type: string) => {
-    switch (type) {
-      case '견적서': return 'bg-blue-50 text-blue-700'
-      case '신청서': return 'bg-green-50 text-green-700'
-      case '완료보고서': return 'bg-purple-50 text-purple-700'
-      default: return 'bg-surface-secondary text-txt-secondary'
-    }
-  }
-
-  // 첨부파일을 file_type별로 그룹핑
-  const FILE_TYPE_GROUPS = ['통장사본', '동의서', '실측사진', '시공전', '시공중', '시공후', '완료보고서', '기타']
-  const groupedAttachments = FILE_TYPE_GROUPS.map(type => ({
-    type,
-    files: attachments.filter(a => a.file_type === type),
-  })).filter(g => g.files.length > 0)
-
-  return (
-    <div className="space-y-6">
-      {/* 서류 목록 */}
-      <div>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">서류 목록</h3>
-        {documents.length === 0 ? (
-          <div className="border border-dashed border-border-secondary rounded-[10px] p-6 text-center text-txt-tertiary text-[13px]">
-            서류가 없습니다. 서류함에서 생성하면 여기에 표시됩니다.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {documents.map(doc => (
-              <div key={doc.id} className="flex items-center gap-3 px-3 py-2 bg-surface-secondary rounded-lg">
-                <FileText size={16} className="text-txt-tertiary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] text-txt-primary truncate">{doc.name}</p>
-                  <p className="text-[10px] text-txt-tertiary">{new Date(doc.created_at).toLocaleDateString('ko-KR')}</p>
-                </div>
-                <span className={`badge text-[10px] ${docTypeBadge(doc.doc_type)}`}>{doc.doc_type}</span>
-                {doc.file_path && (
-                  <button
-                    onClick={() => window.open(getPublicUrl(doc.file_path), '_blank')}
-                    className="text-[11px] text-link hover:underline"
-                  >
-                    보기
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 첨부파일 (그룹별) */}
-      <div>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">첨부파일</h3>
-        {groupedAttachments.length === 0 ? (
-          <div className="border border-dashed border-border-secondary rounded-[10px] p-6 text-center text-txt-tertiary text-[13px]">
-            첨부파일이 없습니다. 각 단계 탭에서 업로드하세요.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {groupedAttachments.map(group => (
-              <div key={group.type}>
-                <p className="text-[11px] font-medium text-txt-tertiary mb-1">{group.type} ({group.files.length})</p>
-                <div className="space-y-1">
-                  {group.files.map(file => (
-                    <div key={file.id} className="flex items-center gap-2 px-2 py-1.5 bg-surface-secondary rounded-lg">
-                      {/\.(jpg|jpeg|png|gif|webp)$/i.test(file.name) ? (
-                        <img
-                          src={getPublicUrl(file.file_path)}
-                          alt={file.name}
-                          className="w-8 h-8 rounded object-cover border border-border-primary cursor-pointer"
-                          onClick={() => window.open(getPublicUrl(file.file_path), '_blank')}
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded bg-surface-tertiary flex items-center justify-center">
-                          <FileText size={14} className="text-txt-tertiary" />
-                        </div>
-                      )}
-                      <span className="flex-1 text-[11px] text-txt-secondary truncate">{file.name}</span>
-                      <span className="text-[10px] text-txt-quaternary">{new Date(file.created_at).toLocaleDateString('ko-KR')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 기타 파일 추가 업로드 */}
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">기타 파일 추가</p>
-          <FileDropZone projectId={projectId} fileType="기타" accept="image/*,application/pdf" multiple compact />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// --- 탭 6: 이력 ---
+// --- 탭: 이력 ---
 function TabHistory({ projectId }: { projectId: string }) {
   const [logs, setLogs] = useState<{ from_status: string; to_status: string; note: string | null; created_at: string; staff_name: string | null }[]>([])
 

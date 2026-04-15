@@ -41,6 +41,18 @@ interface UnitInfo {
   exposPubuseGbCdNm: string
 }
 
+// --- 소유자 결과 타입 ---
+interface OwnerInfo {
+  name: string
+  registNo: string
+  ownerType: string
+  share: string
+  coOwnerCount: number
+  changeDate: string
+  dongNm: string
+  hoNm: string
+}
+
 interface Props {
   category: '소규모' | '수도'
   onClose: () => void
@@ -237,6 +249,18 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
 
       setBuildingInfo(bldData)
       setUnits(Array.isArray(unitData) ? unitData : [])
+
+      // 소유자 조회 (공공데이터포털 승인 후 동작)
+      try {
+        const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
+        const ownerData = await ownerRes.json()
+        if (Array.isArray(ownerData) && ownerData.length > 0) {
+          setForm(prev => ({
+            ...prev,
+            owner_name: prev.owner_name || ownerData[0].name || '',
+          }))
+        }
+      } catch { /* 소유자 조회 실패해도 진행 */ }
 
       if (bldData) {
         // 사용승인일 포맷: YYYYMMDD -> YYYY-MM-DD
@@ -568,31 +592,21 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             />
           </div>
 
-          <ModalField
-            label="세입자 연락처"
-            value={form.tenant_phone}
-            onChange={v => update('tenant_phone', formatPhone(v))}
-            placeholder="010-0000-0000"
-            type="tel"
-          />
-
-          {category === '소규모' && (
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업</label>
-              <select value={form.support_program || ''} onChange={e => update('support_program', e.target.value)}
-                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light">
-                <option value="">선택</option>
-                <option value="소규모">소규모</option>
-                <option value="공동주택">공동주택</option>
-                <option value="새빛">새빛</option>
-                <option value="녹색">녹색</option>
-                <option value="개인">개인</option>
-              </select>
-            </div>
-          )}
-
-          <div className={`grid ${category === '소규모' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
-            {category !== '소규모' && (
+          <div className="grid grid-cols-2 gap-4">
+            {category === '소규모' ? (
+              <div>
+                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업</label>
+                <select value={form.support_program || ''} onChange={e => update('support_program', e.target.value)}
+                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light">
+                  <option value="">선택</option>
+                  <option value="소규모">소규모</option>
+                  <option value="공동주택">공동주택</option>
+                  <option value="새빛">새빛</option>
+                  <option value="녹색">녹색</option>
+                  <option value="개인">개인</option>
+                </select>
+              </div>
+            ) : (
               <div>
                 <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">공사종류 *</label>
                 <select
@@ -637,22 +651,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             </div>
           )}
 
-          {/* 소규모 전용: 지원사업 종류 */}
-          {category === '소규모' && (
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">지원사업 종류</label>
-              <select
-                value={form.support_program}
-                onChange={e => update('support_program', e.target.value)}
-                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-              >
-                <option value="">선택 안함</option>
-                <option value="새빛">새빛</option>
-                <option value="녹색">녹색</option>
-                <option value="공동주택">공동주택</option>
-              </select>
-            </div>
-          )}
+          {/* 소규모 지원사업 중복 드롭다운 삭제됨 — 위에 1개만 유지 */}
 
           <div>
             <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">상담내역/메모 *</label>

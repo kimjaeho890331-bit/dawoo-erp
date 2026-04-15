@@ -29,6 +29,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // 외부 시스템이 호출하는 엔드포인트는 인증 스킵 (자체 시크릿으로 검증)
+  // - 텔레그램 웹훅: X-Telegram-Bot-Api-Secret-Token 헤더
+  // - 텔레그램 setup: 최초 1회 수동 호출
+  // - Vercel Cron: CRON_SECRET 헤더
+  if (
+    pathname.startsWith('/api/telegram/') ||
+    pathname.startsWith('/api/notifications/cron/')
+  ) {
+    return NextResponse.next()
+  }
+
   // 개발 환경에서는 인증 건너뛰기 (Supabase Auth 유저 생성 전)
   if (process.env.NODE_ENV === 'development' && process.env.SKIP_AUTH === '1') {
     return NextResponse.next()

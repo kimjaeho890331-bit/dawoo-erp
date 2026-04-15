@@ -271,11 +271,14 @@ export default function NoticePage() {
 // ================================================
 // 텔레그램 연결 가이드 박스 (고정)
 // ================================================
+const BOT_HANDLE = 'Agents_DW_bot'  // BotFather 등록명 — 실제 봇 username
+
 function TelegramGuideBox() {
   const [expanded, setExpanded] = useState(true)
   const [myCode, setMyCode] = useState<string | null>(null)
+  const [myName, setMyName] = useState<string | null>(null)
   const [connected, setConnected] = useState<boolean>(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'code' | 'msg' | null>(null)
 
   useEffect(() => {
     const staffId = typeof window !== 'undefined'
@@ -283,47 +286,54 @@ function TelegramGuideBox() {
       : null
     if (!staffId) return
 
-    // 현재 사용자 텔레그램 연결 상태 확인
-    supabase.from('staff').select('telegram_chat_id').eq('id', staffId).maybeSingle().then(({ data }) => {
-      if (data?.telegram_chat_id) setConnected(true)
-    })
-
-    // 해당 사용자의 미사용 초대 코드 조회 (최신 1개)
-    supabase.from('staff_invitations')
-      .select('code, expires_at')
-      .eq('used_by_staff_id', staffId)
-      .is('used_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    // 1. 현재 사용자 정보 + 텔레그램 연결 상태
+    supabase
+      .from('staff')
+      .select('name, telegram_chat_id')
+      .eq('id', staffId)
       .maybeSingle()
       .then(({ data }) => {
-        if (data) setMyCode(data.code)
+        if (!data) return
+        setMyName(data.name)
+        if (data.telegram_chat_id) setConnected(true)
+
+        // 2. 내 초대코드 조회 — 발급 방식 2가지 모두 지원
+        //    (a) used_by_staff_id로 사전 할당된 코드
+        //    (b) name 매칭으로 발급된 코드 (현재 운영 방식)
+        supabase
+          .from('staff_invitations')
+          .select('code, name, used_by_staff_id, used_at')
+          .or(`used_by_staff_id.eq.${staffId},name.eq.${data.name}`)
+          .is('used_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+          .then(({ data: inv }) => {
+            if (inv?.code) setMyCode(inv.code)
+          })
       })
   }, [])
 
+  const botLink = `https://t.me/${BOT_HANDLE}`
+  const deepLink = myCode ? `https://t.me/${BOT_HANDLE}?start=${myCode}` : botLink
+
   const inviteMessage = myCode
-    ? `[다우건설 ERP 초대]
-다우건설 ERP 텔레그램 알리미 연결 안내입니다.
+    ? `[다우건설 ERP 텔레그램 연결]
+${myName ? `${myName}님, ` : ''}아래 순서대로 1회만 설정하면 됩니다.
 
-1. 텔레그램 앱 설치
-2. @다우건설알리미_bot 검색
-3. 채팅창에 입력: /start ${myCode}
+1) 텔레그램 앱 설치
+2) 아래 링크 클릭 (자동으로 봇 대화창 열림)
+   ${deepLink}
+3) "시작(START)" 버튼 누르면 끝
 
-완료되면 업무 알림을 텔레그램으로 자동 수신합니다.`
+※ 수동으로 하려면: 텔레그램에서 @${BOT_HANDLE} 검색 → /start ${myCode}`
     : ''
 
-  const copyCode = () => {
-    if (!myCode) return
-    navigator.clipboard.writeText(myCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const copyMessage = () => {
-    if (!inviteMessage) return
-    navigator.clipboard.writeText(inviteMessage)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copy = (text: string, kind: 'code' | 'msg') => {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    setCopied(kind)
+    setTimeout(() => setCopied(null), 2000)
   }
 
   return (
@@ -344,84 +354,130 @@ function TelegramGuideBox() {
       {expanded && (
         <div className="border-t border-[#0891b2]/20 px-5 py-4 bg-[#ecfeff]/30">
           <p className="text-[13px] text-txt-secondary mb-4 leading-relaxed">
-            다우건설 ERP는 텔레그램 봇으로 자동 알림과 AI 비서 기능을 제공합니다.
-            아래 4단계로 연결해주세요. (한 번만 설정하면 됩니다)
+            다우건설 ERP는 <span className="font-semibold text-txt-primary">텔레그램 봇</span>으로 자동 브리핑(08:30/15:00/18:00),
+            마감 알림, AI 비서 대화를 제공합니다. 한 번만 연결하면 됩니다.
           </p>
 
-          <div className="space-y-3">
-            {/* 1단계 */}
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">1</div>
-              <div className="flex-1">
-                <div className="text-[13px] font-semibold text-txt-primary">텔레그램 앱 설치</div>
-                <div className="text-[12px] text-txt-tertiary mt-0.5 space-y-0.5">
-                  <div>• iOS: App Store에서 <span className="font-medium">&quot;Telegram&quot;</span> 검색</div>
-                  <div>• Android: Play Store에서 <span className="font-medium">&quot;Telegram&quot;</span> 검색</div>
-                  <div>• PC: <a href="https://desktop.telegram.org" target="_blank" rel="noreferrer" className="text-[#0891b2] underline">desktop.telegram.org</a></div>
-                </div>
-              </div>
+          {connected ? (
+            <div className="rounded-lg bg-[#d1fae5] border border-[#059669]/30 px-4 py-3 text-[13px] text-[#065f46]">
+              ✅ 이미 연결되어 있습니다. 텔레그램에서 <code className="font-mono">/help</code> 입력하면 명령어 목록이 나옵니다.
             </div>
+          ) : (
+            <div className="space-y-3">
+              {/* 1단계 — 앱 설치 */}
+              <Step n={1} title="텔레그램 앱 설치">
+                <div>• 📱 iOS: App Store → <span className="font-medium">&quot;Telegram&quot;</span></div>
+                <div>• 📱 Android: Play Store → <span className="font-medium">&quot;Telegram&quot;</span></div>
+                <div>• 💻 PC: <a href="https://desktop.telegram.org" target="_blank" rel="noreferrer" className="text-[#0891b2] underline">desktop.telegram.org</a></div>
+                <div className="text-txt-quaternary mt-1">휴대폰 번호로 회원가입 (카카오톡 처음 쓸 때랑 똑같습니다)</div>
+              </Step>
 
-            {/* 2단계 */}
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">2</div>
-              <div className="flex-1">
-                <div className="text-[13px] font-semibold text-txt-primary">다우건설 봇 검색</div>
-                <div className="text-[12px] text-txt-tertiary mt-0.5">
-                  텔레그램 상단 돋보기 → <span className="font-medium text-txt-primary">@다우건설알리미_bot</span> 검색 → 대화 시작
+              {/* 2단계 — 봇 열기 */}
+              <Step n={2} title="다우건설 봇 대화창 열기">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <a
+                    href={deepLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 h-[30px] px-3 bg-[#0891b2] text-white rounded-md text-[12px] font-medium hover:bg-[#0e7490] transition"
+                  >
+                    🚀 봇 대화창 바로 열기
+                  </a>
+                  <span className="text-[11px] text-txt-tertiary">또는 텔레그램 검색에서 <span className="font-mono text-txt-primary">@{BOT_HANDLE}</span></span>
                 </div>
-              </div>
-            </div>
+                <div className="text-txt-quaternary">대화창이 열리면 하단 <span className="font-semibold">&quot;시작(START)&quot;</span> 버튼 클릭</div>
+              </Step>
 
-            {/* 3단계 */}
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">3</div>
-              <div className="flex-1">
-                <div className="text-[13px] font-semibold text-txt-primary">초대 코드 입력</div>
-                <div className="text-[12px] text-txt-tertiary mt-0.5">
-                  봇 채팅창에 입력: <code className="px-1.5 py-0.5 bg-white rounded text-[11px] border border-border-tertiary">/start 초대코드</code>
+              {/* 3단계 — 초대코드 */}
+              <Step n={3} title="초대 코드 입력">
+                <div>봇 채팅창에 입력:</div>
+                <div className="mt-1">
+                  <code className="px-2 py-0.5 bg-white rounded text-[11px] border border-border-tertiary">
+                    /start {myCode || '초대코드'}
+                  </code>
                 </div>
                 {myCode ? (
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="text-[11px] text-txt-tertiary">내 초대 코드:</div>
-                    <code className="px-2 py-1 bg-white rounded font-mono text-[13px] font-bold text-[#0891b2] border border-[#0891b2]/30">{myCode}</code>
-                    <button onClick={copyCode} className="h-[28px] px-2.5 text-[11px] text-[#0891b2] border border-[#0891b2]/30 rounded hover:bg-[#ecfeff]">
-                      {copied ? '✓ 복사됨' : '복사'}
-                    </button>
+                  <div className="mt-2 rounded-md bg-white border border-[#0891b2]/30 p-2.5">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[11px] text-txt-tertiary">{myName ? `${myName}님 ` : ''}초대 코드</span>
+                      <code className="px-2 py-0.5 bg-[#ecfeff] rounded font-mono text-[13px] font-bold text-[#0891b2] border border-[#0891b2]/30">
+                        {myCode}
+                      </code>
+                      <button
+                        onClick={() => copy(myCode, 'code')}
+                        className="h-[24px] px-2 text-[11px] text-[#0891b2] border border-[#0891b2]/30 rounded hover:bg-[#ecfeff]"
+                      >
+                        {copied === 'code' ? '✓ 복사됨' : '코드 복사'}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-txt-quaternary">
+                      위 <span className="font-semibold">&quot;봇 대화창 바로 열기&quot;</span> 링크로 들어갔으면 /start만 자동으로 눌러도 연결됩니다.
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-2 text-[11px] text-txt-quaternary italic">
-                    관리자에게 초대 코드를 받아주세요.
+                    ※ 초대 코드가 보이지 않으면 관리자(김재호)에게 요청해주세요.
                   </div>
                 )}
-                {inviteMessage && (
-                  <button onClick={copyMessage} className="mt-2 h-[28px] px-2.5 text-[11px] bg-[#0891b2] text-white rounded hover:bg-[#0e7490]">
-                    📋 전체 안내 메시지 복사 (카톡 전달용)
-                  </button>
-                )}
-              </div>
-            </div>
+              </Step>
 
-            {/* 4단계 */}
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">4</div>
-              <div className="flex-1">
-                <div className="text-[13px] font-semibold text-txt-primary">명령어 확인</div>
-                <div className="text-[12px] text-txt-tertiary mt-0.5 space-y-0.5">
-                  <div>• <code className="text-[11px]">/help</code> — 전체 명령어</div>
-                  <div>• <code className="text-[11px]">/오늘</code> — 오늘 일정</div>
-                  <div>• <code className="text-[11px]">/브리핑</code> — AI 긴급 체크</div>
-                  <div>• 자연어: <span className="italic">&quot;오늘 내 일정 뭐야?&quot;</span></div>
-                </div>
-              </div>
+              {/* 4단계 — 연결 확인 */}
+              <Step n={4} title="연결 확인">
+                <div>봇이 <span className="font-semibold text-txt-primary">&quot;✅ OO님 연결 완료!&quot;</span> 메시지를 보내면 끝입니다.</div>
+                <div className="text-txt-quaternary mt-1">이후 업무 알림·브리핑이 자동 전송됩니다.</div>
+              </Step>
+            </div>
+          )}
+
+          {/* 자주 쓰는 명령어 */}
+          <div className="mt-4 rounded-lg bg-white/60 border border-[#0891b2]/20 p-3">
+            <div className="text-[11px] font-semibold text-txt-tertiary tracking-[0.3px] mb-1.5">자주 쓰는 명령어</div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-txt-secondary">
+              <div><code className="font-mono">/오늘</code> 오늘 일정·업무</div>
+              <div><code className="font-mono">/이번주</code> 주간 일정</div>
+              <div><code className="font-mono">/브리핑</code> AI 긴급 체크</div>
+              <div><code className="font-mono">/마감</code> 마감 임박</div>
+              <div><code className="font-mono">/끄기</code> 알림 일시중단</div>
+              <div><code className="font-mono">/켜기</code> 알림 재개</div>
+            </div>
+            <div className="text-[11px] text-txt-quaternary mt-2">
+              자연어도 가능합니다 — 예: <span className="italic">&quot;오늘 내 일정 뭐야?&quot;</span>, <span className="italic">&quot;신한빌라 상태 어때?&quot;</span>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-[#0891b2]/20 text-[11px] text-txt-tertiary">
-            자동 알림 시각: <span className="font-medium text-txt-secondary">매일 08:30 / 15:00 / 18:00</span> · 조용한 시간(22:00~07:00)·주말 OFF
+          {/* 관리자용: 카톡 전달 메시지 복사 */}
+          {inviteMessage && (
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-surface border border-border-tertiary px-3 py-2">
+              <div className="text-[11px] text-txt-tertiary">관리자: 직원에게 카톡으로 전달할 안내문</div>
+              <button
+                onClick={() => copy(inviteMessage, 'msg')}
+                className="h-[28px] px-2.5 text-[11px] bg-[#0891b2] text-white rounded hover:bg-[#0e7490]"
+              >
+                {copied === 'msg' ? '✓ 복사됨' : '📋 안내문 복사'}
+              </button>
+            </div>
+          )}
+
+          <div className="mt-4 pt-3 border-t border-[#0891b2]/20 text-[11px] text-txt-tertiary leading-relaxed">
+            <div>🔔 자동 알림: <span className="font-medium text-txt-secondary">매일 08:30 / 15:00 / 18:00</span></div>
+            <div>🌙 조용한 시간: 22:00~07:00 / 주말 자동 OFF</div>
+            <div className="mt-1 text-txt-quaternary">※ 봇은 @{BOT_HANDLE} 1개이며, 메시지 발신자(from.id)로 직원이 자동 식별됩니다.</div>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// 스텝 행 (번호 동그라미 + 제목 + children)
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">{n}</div>
+      <div className="flex-1">
+        <div className="text-[13px] font-semibold text-txt-primary">{title}</div>
+        <div className="text-[12px] text-txt-tertiary mt-0.5 space-y-0.5">{children}</div>
+      </div>
     </div>
   )
 }

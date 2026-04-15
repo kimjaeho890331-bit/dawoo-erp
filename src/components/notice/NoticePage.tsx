@@ -139,6 +139,9 @@ export default function NoticePage() {
         </button>
       </div>
 
+      {/* 텔레그램 연결 가이드 (고정 박스) */}
+      <TelegramGuideBox />
+
       {/* 목록 */}
       <div className="space-y-2">
         {loading ? (
@@ -258,6 +261,164 @@ export default function NoticePage() {
                 {saving ? '저장 중...' : editId ? '수정' : '등록'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ================================================
+// 텔레그램 연결 가이드 박스 (고정)
+// ================================================
+function TelegramGuideBox() {
+  const [expanded, setExpanded] = useState(true)
+  const [myCode, setMyCode] = useState<string | null>(null)
+  const [connected, setConnected] = useState<boolean>(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    const staffId = typeof window !== 'undefined'
+      ? localStorage.getItem('dawoo_current_staff_id')
+      : null
+    if (!staffId) return
+
+    // 현재 사용자 텔레그램 연결 상태 확인
+    supabase.from('staff').select('telegram_chat_id').eq('id', staffId).maybeSingle().then(({ data }) => {
+      if (data?.telegram_chat_id) setConnected(true)
+    })
+
+    // 해당 사용자의 미사용 초대 코드 조회 (최신 1개)
+    supabase.from('staff_invitations')
+      .select('code, expires_at')
+      .eq('used_by_staff_id', staffId)
+      .is('used_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setMyCode(data.code)
+      })
+  }, [])
+
+  const inviteMessage = myCode
+    ? `[다우건설 ERP 초대]
+다우건설 ERP 텔레그램 알리미 연결 안내입니다.
+
+1. 텔레그램 앱 설치
+2. @다우건설알리미_bot 검색
+3. 채팅창에 입력: /start ${myCode}
+
+완료되면 업무 알림을 텔레그램으로 자동 수신합니다.`
+    : ''
+
+  const copyCode = () => {
+    if (!myCode) return
+    navigator.clipboard.writeText(myCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const copyMessage = () => {
+    if (!inviteMessage) return
+    navigator.clipboard.writeText(inviteMessage)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="bg-surface rounded-[10px] border border-[#0891b2]/30 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[#ecfeff] transition"
+      >
+        <span className="text-[11px] px-[10px] py-[2px] rounded-full font-medium bg-[#cffafe] text-[#0e7490]">📱 텔레그램</span>
+        <span className="text-[14px] font-semibold text-txt-primary flex-1 text-left tracking-[-0.1px]">
+          텔레그램 봇 연결 안내 (필수)
+        </span>
+        {connected && <span className="text-[11px] text-[#059669] font-medium">✓ 연결됨</span>}
+        {expanded ? <ChevronUp size={16} className="text-txt-tertiary" /> : <ChevronDown size={16} className="text-txt-tertiary" />}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-[#0891b2]/20 px-5 py-4 bg-[#ecfeff]/30">
+          <p className="text-[13px] text-txt-secondary mb-4 leading-relaxed">
+            다우건설 ERP는 텔레그램 봇으로 자동 알림과 AI 비서 기능을 제공합니다.
+            아래 4단계로 연결해주세요. (한 번만 설정하면 됩니다)
+          </p>
+
+          <div className="space-y-3">
+            {/* 1단계 */}
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">1</div>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold text-txt-primary">텔레그램 앱 설치</div>
+                <div className="text-[12px] text-txt-tertiary mt-0.5 space-y-0.5">
+                  <div>• iOS: App Store에서 <span className="font-medium">&quot;Telegram&quot;</span> 검색</div>
+                  <div>• Android: Play Store에서 <span className="font-medium">&quot;Telegram&quot;</span> 검색</div>
+                  <div>• PC: <a href="https://desktop.telegram.org" target="_blank" rel="noreferrer" className="text-[#0891b2] underline">desktop.telegram.org</a></div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2단계 */}
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">2</div>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold text-txt-primary">다우건설 봇 검색</div>
+                <div className="text-[12px] text-txt-tertiary mt-0.5">
+                  텔레그램 상단 돋보기 → <span className="font-medium text-txt-primary">@다우건설알리미_bot</span> 검색 → 대화 시작
+                </div>
+              </div>
+            </div>
+
+            {/* 3단계 */}
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">3</div>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold text-txt-primary">초대 코드 입력</div>
+                <div className="text-[12px] text-txt-tertiary mt-0.5">
+                  봇 채팅창에 입력: <code className="px-1.5 py-0.5 bg-white rounded text-[11px] border border-border-tertiary">/start 초대코드</code>
+                </div>
+                {myCode ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="text-[11px] text-txt-tertiary">내 초대 코드:</div>
+                    <code className="px-2 py-1 bg-white rounded font-mono text-[13px] font-bold text-[#0891b2] border border-[#0891b2]/30">{myCode}</code>
+                    <button onClick={copyCode} className="h-[28px] px-2.5 text-[11px] text-[#0891b2] border border-[#0891b2]/30 rounded hover:bg-[#ecfeff]">
+                      {copied ? '✓ 복사됨' : '복사'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-[11px] text-txt-quaternary italic">
+                    관리자에게 초대 코드를 받아주세요.
+                  </div>
+                )}
+                {inviteMessage && (
+                  <button onClick={copyMessage} className="mt-2 h-[28px] px-2.5 text-[11px] bg-[#0891b2] text-white rounded hover:bg-[#0e7490]">
+                    📋 전체 안내 메시지 복사 (카톡 전달용)
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 4단계 */}
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#0891b2] text-white text-[11px] font-bold flex items-center justify-center shrink-0">4</div>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold text-txt-primary">명령어 확인</div>
+                <div className="text-[12px] text-txt-tertiary mt-0.5 space-y-0.5">
+                  <div>• <code className="text-[11px]">/help</code> — 전체 명령어</div>
+                  <div>• <code className="text-[11px]">/오늘</code> — 오늘 일정</div>
+                  <div>• <code className="text-[11px]">/브리핑</code> — AI 긴급 체크</div>
+                  <div>• 자연어: <span className="italic">&quot;오늘 내 일정 뭐야?&quot;</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-[#0891b2]/20 text-[11px] text-txt-tertiary">
+            자동 알림 시각: <span className="font-medium text-txt-secondary">매일 08:30 / 15:00 / 18:00</span> · 조용한 시간(22:00~07:00)·주말 OFF
           </div>
         </div>
       )}

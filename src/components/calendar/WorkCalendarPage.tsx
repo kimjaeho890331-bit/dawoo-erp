@@ -10,6 +10,7 @@ interface Schedule {
   site_id: string | null
   project_id: string | null
   staff_id: string | null
+  staff_ids: string[] | null  // 다중 담당자 (신규, 기존 staff_id와 병행)
   schedule_type: string
   title: string
   start_date: string
@@ -124,7 +125,13 @@ export default function WorkCalendarPage() {
   }, [staffList])
 
   const filtered = useMemo(() =>
-    schedules.filter(s => activeStaff.size === 0 || (s.staff_id && activeStaff.has(s.staff_id)))
+    schedules.filter(s => {
+      if (activeStaff.size === 0) return true
+      // 다중 담당자 필터: staff_id 또는 staff_ids 중 하나라도 매칭되면 노출
+      if (s.staff_id && activeStaff.has(s.staff_id)) return true
+      if (s.staff_ids && s.staff_ids.some(id => activeStaff.has(id))) return true
+      return false
+    })
   , [schedules, activeStaff])
 
   // 주 단위 그룹
@@ -143,7 +150,10 @@ export default function WorkCalendarPage() {
       const bs = s.start_date < ws ? ws : s.start_date, be = s.end_date > we ? we : s.end_date
       const si = wd.indexOf(bs), ei = wd.indexOf(be)
       if (si < 0 || ei < 0) return null
-      const sn = staffList.find(st => st.id === s.staff_id)?.name
+      // 다중 담당자: staff_ids 우선, 없으면 staff_id fallback
+      const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
+      const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean) as string[]
+      const sn = names.length === 0 ? undefined : names.length === 1 ? names[0] : `${names[0]} 외${names.length - 1}`
       return { schedule: s, left: (si / 7) * 100, width: ((ei - si + 1) / 7) * 100, si, ei, staffName: sn }
     }).filter(Boolean) as any[]
   }, [filtered, month, staffList])
@@ -290,8 +300,9 @@ export default function WorkCalendarPage() {
                         {week.map((day, di) => {
                           const d = day ? ds(month.year, month.month, day) : ''
                           return (
-                            <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 cursor-pointer hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''}`}
-                              onClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
+                            <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
+                              onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
+                              title={day ? '더블클릭 → 일정 추가' : ''}
                               onDragOver={day ? handleDragOver : undefined}
                               onDrop={day ? (e) => handleDrop(e, d) : undefined}>
                               {day && <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-medium
@@ -303,7 +314,8 @@ export default function WorkCalendarPage() {
                       <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 116) }}>
                         {week.map((day, di) => {
                           const d = day ? ds(month.year, month.month, day) : ''
-                          return <div key={di} className="border-r border-surface-secondary last:border-r-0"
+                          return <div key={di} className={`border-r border-surface-secondary last:border-r-0 ${day ? 'cursor-pointer' : ''}`}
+                            onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
                             onDragOver={day ? handleDragOver : undefined}
                             onDrop={day ? (e) => handleDrop(e, d) : undefined} />
                         })}
@@ -574,42 +586,87 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
 }) {
   const isEdit = !!schedule
   const [title, setTitle] = useState(schedule?.title || '')
-  const [startDate, setStartDate] = useState(schedule?.start_date || defaultDate)
+  const [startDate, setStartDateRaw] = useState(schedule?.start_date || defaultDate)
   const [endDate, setEndDate] = useState(schedule?.end_date || defaultDate)
-  const [staffId, setStaffId] = useState(schedule?.staff_id || '')
-  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>(schedule?.staff_id ? [schedule.staff_id] : [])
+  // 다중 담당자: 편집 시 schedule.staff_ids 또는 staff_id fallback
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>(
+    schedule?.staff_ids && schedule.staff_ids.length > 0
+      ? schedule.staff_ids
+      : schedule?.staff_id ? [schedule.staff_id] : []
+  )
+  const [staffExpanded, setStaffExpanded] = useState(false)
   const [scheduleType, setScheduleType] = useState(schedule?.schedule_type || 'personal')
+  const [userTouchedType, setUserTouchedType] = useState(false)
   const [memo, setMemo] = useState(schedule?.memo || '')
   const [confirmed, setConfirmed] = useState(schedule?.confirmed ?? false)
   const [saving, setSaving] = useState(false)
+
+  // 시작일 변경 시: 오늘 이후 + 종료일이 시작일 이전이면 종료일 자동 동기화
+  const setStartDate = (next: string) => {
+    setStartDateRaw(next)
+    const todayISO = new Date().toISOString().slice(0, 10)
+    if (next > todayISO && endDate < next) {
+      setEndDate(next)
+    }
+  }
 
   const toggleStaff = (id: string) => {
     setSelectedStaffIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
   }
 
+  // 제목에 "홍보" 포함 && 사용자가 직접 type을 바꾼 적 없으면 자동 'promo' 설정
+  useEffect(() => {
+    if (!userTouchedType && title.includes('홍보') && scheduleType !== 'promo') {
+      setScheduleType('promo')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title])
+
+  const selectedStaffNames = selectedStaffIds
+    .map(id => staffList.find(s => s.id === id)?.name)
+    .filter(Boolean)
+    .join(', ')
+
   const handleSubmit = async () => {
     if (!title || !startDate || !endDate) return
     setSaving(true)
+    // 제목에 "홍보" 포함 시 자동 promo (저장 직전 최종 보정)
+    const finalType = (!userTouchedType && title.includes('홍보')) ? 'promo' : scheduleType
+    const primaryStaff = selectedStaffIds[0] || null
+    const color = primaryStaff && staffColorMap[primaryStaff]
+      ? staffColorMap[primaryStaff]
+      : TYPE_COLORS[finalType] || '#3B82F6'
+    const payload = {
+      title, start_date: startDate, end_date: endDate,
+      staff_id: primaryStaff,              // 호환성: 첫번째 담당자 미러링
+      staff_ids: selectedStaffIds.length > 0 ? selectedStaffIds : null,
+      schedule_type: finalType,
+      memo: memo || null,
+      confirmed, color, all_day: true,
+      site_id: schedule?.site_id || null,
+      project_id: schedule?.project_id || null,
+    }
     if (isEdit) {
-      const color = staffId && staffColorMap[staffId] ? staffColorMap[staffId] : TYPE_COLORS[scheduleType] || '#3B82F6'
-      const payload = { title, start_date: startDate, end_date: endDate, staff_id: staffId || null, schedule_type: scheduleType, memo: memo || null, confirmed, color, all_day: true, site_id: schedule!.site_id, project_id: schedule!.project_id }
-      await supabase.from('schedules').update(payload).eq('id', schedule!.id)
-      // 접수대장 연동
+      // staff_ids 컬럼 미존재 시 graceful fallback
+      const { error } = await supabase.from('schedules').update(payload).eq('id', schedule!.id)
+      if (error && /staff_ids/.test(error.message)) {
+        const { staff_ids: _ignore, ...legacy } = payload
+        void _ignore
+        await supabase.from('schedules').update(legacy).eq('id', schedule!.id)
+      }
+      // 접수대장 연동 (기존 로직 유지)
       if (schedule!.project_id) {
         const t = schedule!.title || ''
         const df = t.includes('실측') ? 'survey_date' : t.includes('동의서') ? 'consent_date' : t.includes('신청서') ? 'application_date' : t.includes('착공서류') ? 'construction_doc_date' : t.includes('시공') ? 'construction_date' : t.includes('완료서류') ? 'completion_doc_date' : null
         if (df) await supabase.from('projects').update({ [df]: startDate }).eq('id', schedule!.project_id)
       }
     } else {
-      // 복수 담당자: 각각 일정 생성
-      const ids = selectedStaffIds.length > 0 ? selectedStaffIds : [null]
-      const inserts = ids.map(sid => ({
-        title, start_date: startDate, end_date: endDate,
-        staff_id: sid, schedule_type: scheduleType, memo: memo || null,
-        confirmed, color: sid && staffColorMap[sid] ? staffColorMap[sid] : TYPE_COLORS[scheduleType] || '#3B82F6',
-        all_day: true, site_id: null, project_id: null,
-      }))
-      await supabase.from('schedules').insert(inserts)
+      const { error } = await supabase.from('schedules').insert(payload)
+      if (error && /staff_ids/.test(error.message)) {
+        const { staff_ids: _ignore, ...legacy } = payload
+        void _ignore
+        await supabase.from('schedules').insert(legacy)
+      }
     }
     setSaving(false); onSave()
   }
@@ -634,17 +691,22 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" /></div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-txt-secondary mb-1">담당자 {!isEdit && '(복수 선택 가능)'}</label>
-            {isEdit ? (
-              <select value={staffId} onChange={e => setStaffId(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
-                <option value="">선택</option>
-                {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            ) : (
-              <div className="flex flex-wrap gap-2 mt-1">
+            <button
+              type="button"
+              onClick={() => setStaffExpanded(v => !v)}
+              className="w-full flex items-center justify-between gap-2 h-[36px] px-3 bg-surface border border-border-primary rounded-lg text-[13px] hover:border-accent transition-colors"
+            >
+              <span className="text-xs font-medium text-txt-secondary">담당자 배정</span>
+              <span className={`text-[12px] truncate flex-1 text-right ${selectedStaffNames ? 'text-txt-primary' : 'text-txt-quaternary'}`}>
+                {selectedStaffNames || '담당자 선택 (다중 가능)'}
+              </span>
+              <span className={`text-txt-tertiary transition-transform ${staffExpanded ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+            {staffExpanded && (
+              <div className="mt-2 p-2 bg-surface-tertiary/40 rounded-lg flex flex-wrap gap-2">
                 {staffList.map(s => (
                   <label key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] cursor-pointer transition-colors ${
-                    selectedStaffIds.includes(s.id) ? 'border-accent bg-accent/10 text-accent font-medium' : 'border-border-primary text-txt-secondary hover:border-accent'
+                    selectedStaffIds.includes(s.id) ? 'border-accent bg-accent/10 text-accent font-medium' : 'border-border-primary bg-surface text-txt-secondary hover:border-accent'
                   }`}>
                     <input type="checkbox" checked={selectedStaffIds.includes(s.id)} onChange={() => toggleStaff(s.id)} className="sr-only" />
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: staffColorMap[s.id] || '#999' }} />
@@ -652,6 +714,22 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                   </label>
                 ))}
               </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-txt-secondary mb-1">분류</label>
+            <select
+              value={scheduleType}
+              onChange={e => { setScheduleType(e.target.value); setUserTouchedType(true) }}
+              className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none"
+            >
+              <option value="personal">개인</option>
+              <option value="project">지원사업</option>
+              <option value="promo">홍보</option>
+              <option value="ai">AI제안</option>
+            </select>
+            {!userTouchedType && title.includes('홍보') && (
+              <p className="text-[10px] text-[#F59E0B] mt-1">제목에 "홍보"가 포함되어 자동으로 홍보 분류로 저장됩니다</p>
             )}
           </div>
           <div><label className="block text-xs font-medium text-txt-secondary mb-1">메모</label>

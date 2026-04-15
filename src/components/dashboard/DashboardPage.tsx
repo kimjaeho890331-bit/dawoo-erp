@@ -1,47 +1,30 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import Link from 'next/link'
-import { Pin, X, ClipboardList, Loader, CheckCircle2, Banknote } from 'lucide-react'
+import { Pin, X } from 'lucide-react'
+import AIBriefingCard from './AIBriefingCard'
+import MyTodoCard, { type TodoItem } from './MyTodoCard'
+import AssignedTasksCard from './AssignedTasksCard'
+import FirstVisitModal from './FirstVisitModal'
+import SitesTimeline from './SitesTimeline'
+import type { BriefingResponse, Task } from '@/types'
 
 // --- 타입 ---
 interface Schedule {
   id: string
-  site_id: string | null
-  project_id: string | null
   staff_id: string | null
   schedule_type: string
   title: string
   start_date: string
   end_date: string
-  contractor: string | null
   confirmed: boolean
-  color: string
-  memo: string | null
-}
-
-interface Site {
-  id: string
-  name: string
-  status: string
-  progress: number
-  site_manager: string | null
+  project_id: string | null
 }
 
 interface Staff {
   id: string
   name: string
-  role: string
-}
-
-interface Task {
-  id: string
-  content: string
-  assigned_to: string | null
-  assigned_by: string | null
-  deadline: string | null
-  done: boolean
 }
 
 interface Memo {
@@ -50,318 +33,268 @@ interface Memo {
   pinned: boolean
 }
 
-interface ProjectRow {
-  id: string
-  staff_id: string | null
-  status: string
-  outstanding: number
-  updated_at: string
-}
-
 const MEMO_STORAGE_KEY = 'dawoo_dashboard_memos'
+const STAFF_STORAGE_KEY = 'dawoo_current_staff_id'
 
 function loadMemosFromStorage(): Memo[] | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(MEMO_STORAGE_KEY)
     if (raw) return JSON.parse(raw) as Memo[]
-  } catch { /* ignore corrupt data */ }
+  } catch { /* */ }
   return null
 }
 
 function saveMemosToStorage(memos: Memo[]) {
   try {
     localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memos))
-  } catch { /* storage full etc */ }
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  project: '#3B82F6', personal: '#8B5CF6', promo: '#F59E0B', ai: '#06B6D4',
-}
-const TYPE_LABELS: Record<string, string> = {
-  project: '지원사업', personal: '개인', promo: '홍보', ai: 'AI제안',
-}
-
-function addDays(d: string, n: number) {
-  const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10)
-}
-function getDday(deadline: string | null) {
-  if (!deadline) return null
-  const t = new Date(); t.setHours(0, 0, 0, 0)
-  const d = new Date(deadline); d.setHours(0, 0, 0, 0)
-  const diff = Math.round((d.getTime() - t.getTime()) / 86400000)
-  return diff === 0 ? 'D-DAY' : diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`
-}
-function getDdayColor(dday: string | null) {
-  if (!dday) return 'text-txt-tertiary'
-  if (dday === 'D-DAY' || dday.startsWith('D+')) return 'text-[#dc2626] font-semibold'
-  const n = parseInt(dday.replace('D-', ''))
-  return n <= 3 ? 'text-[#9a3412] font-medium' : 'text-txt-secondary'
+  } catch { /* */ }
 }
 
 export default function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10)
-  const weekEnd = addDays(today, 6)
-  const [todaySchedules, setTodaySchedules] = useState<Schedule[]>([])
-  const [weekSchedules, setWeekSchedules] = useState<Schedule[]>([])
-  const [sites, setSites] = useState<Site[]>([])
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토']
+  const now = new Date()
+  const todayLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${dayNames[now.getDay()]})`
+
   const [staffList, setStaffList] = useState<Staff[]>([])
-  const [projects, setProjects] = useState<ProjectRow[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // 업무 (2차 개발 예정 - DB 연동)
-  const receivedTasks: Task[] = []
-  const givenTasks: Task[] = []
-
-  // 메모장 (localStorage 연동)
-  const [memos, setMemos] = useState<Memo[]>(() => {
-    const stored = loadMemosFromStorage()
-    return stored ?? [
-      { id: '1', content: '이번 주 금요일 회의 - 상반기 실적 리뷰', pinned: true },
-      { id: '2', content: '광명시 담당자 연락처 확인', pinned: false },
-    ]
+  const [currentStaffId, setCurrentStaffId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem(STAFF_STORAGE_KEY)
   })
+  const [briefing, setBriefing] = useState<BriefingResponse | null>(null)
+  const [briefingLoading, setBriefingLoading] = useState(true)
+  const [mySchedules, setMySchedules] = useState<Schedule[]>([])
+  const [myTasksReceived, setMyTasksReceived] = useState<Task[]>([])  // 내가 받은 일
+  const [myTasksAssigned, setMyTasksAssigned] = useState<Task[]>([])  // 내가 시킨 일
+  const [tasksTableMissing, setTasksTableMissing] = useState(false)
+
+  // 메모장
+  const [memos, setMemos] = useState<Memo[]>(() => loadMemosFromStorage() ?? [])
   const [newMemo, setNewMemo] = useState('')
+  useEffect(() => { saveMemosToStorage(memos) }, [memos])
 
-  // 메모 변경 시 localStorage 동기화
+  // 담당자 변경 시 localStorage 저장
   useEffect(() => {
-    saveMemosToStorage(memos)
-  }, [memos])
+    if (typeof window === 'undefined') return
+    if (currentStaffId) localStorage.setItem(STAFF_STORAGE_KEY, currentStaffId)
+  }, [currentStaffId])
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  // staff 목록 로드
+  useEffect(() => {
+    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+      if (data) setStaffList(data as Staff[])
+    })
+  }, [])
+
+  // 내 일정 로드 (schedules + tasks)
+  const loadMyWork = useCallback(async () => {
+    if (!currentStaffId) {
+      setMySchedules([]); setMyTasksReceived([]); setMyTasksAssigned([])
+      return
+    }
+
+    // 1) 내 schedules (담당자=나, 아직 안 지난 일정)
+    const sRes = await supabase.from('schedules').select('*')
+      .neq('schedule_type', 'site')
+      .eq('staff_id', currentStaffId)
+      .gte('end_date', today)
+      .order('start_date')
+    if (!sRes.error) setMySchedules((sRes.data as Schedule[]) || [])
+
+    // 2) 내가 받은 tasks (assigned_to = 나, 미완료)
+    const rRes = await supabase.from('tasks').select('*')
+      .eq('assigned_to', currentStaffId)
+      .eq('done', false)
+      .order('deadline', { ascending: true, nullsFirst: false })
+    if (rRes.error) {
+      if (rRes.error.code === '42P01' || /does not exist|relation/.test(rRes.error.message)) {
+        setTasksTableMissing(true)
+      }
+      setMyTasksReceived([])
+    } else {
+      setTasksTableMissing(false)
+      setMyTasksReceived((rRes.data as Task[]) || [])
+    }
+
+    // 3) 내가 시킨 tasks (assigned_by = 나, 미완료)
+    const aRes = await supabase.from('tasks').select('*')
+      .eq('assigned_by', currentStaffId)
+      .eq('done', false)
+      .order('deadline', { ascending: true, nullsFirst: false })
+    if (!aRes.error) setMyTasksAssigned((aRes.data as Task[]) || [])
+  }, [today, currentStaffId])
+
+  // 브리핑 API 호출
+  const loadBriefing = useCallback(async () => {
+    if (!currentStaffId) return
+    setBriefingLoading(true)
     try {
-      const [todayRes, weekRes, sitesRes, staffRes, projectsRes] = await Promise.all([
-        supabase.from('schedules').select('*')
-          .neq('schedule_type', 'site')
-          .lte('start_date', today).gte('end_date', today)
-          .order('start_date'),
-        supabase.from('schedules').select('*')
-          .neq('schedule_type', 'site')
-          .lte('start_date', weekEnd).gte('end_date', today)
-          .order('start_date'),
-        supabase.from('sites').select('*')
-          .in('status', ['착공', '공사중', '계약'])
-          .order('created_at', { ascending: false })
-          .limit(5),
-        supabase.from('staff').select('*').order('name'),
-        supabase.from('projects').select('id, staff_id, status, outstanding, updated_at'),
-      ])
-      if (!todayRes.error) setTodaySchedules((todayRes.data as Schedule[]) || [])
-      if (!weekRes.error) setWeekSchedules((weekRes.data as Schedule[]) || [])
-      if (!sitesRes.error) setSites((sitesRes.data as Site[]) || [])
-      if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
-      if (!projectsRes.error) setProjects((projectsRes.data as ProjectRow[]) || [])
+      const res = await fetch(`/api/dashboard/briefing?staff_id=${currentStaffId}`)
+      if (res.ok) {
+        const data = (await res.json()) as BriefingResponse
+        setBriefing(data)
+      }
     } catch { /* */ }
-    setLoading(false)
-  }, [today, weekEnd])
+    setBriefingLoading(false)
+  }, [currentStaffId])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadMyWork(); loadBriefing() }, [loadMyWork, loadBriefing])
 
   const getStaffName = (id: string | null) => !id ? '' : staffList.find(s => s.id === id)?.name || ''
-  const addMemo = () => { if (!newMemo.trim()) return; setMemos(p => [{ id: Date.now().toString(), content: newMemo.trim(), pinned: false }, ...p]); setNewMemo('') }
+
+  // --- 내 할 일 통합: schedules + 받은 tasks ---
+  const todoItems: TodoItem[] = useMemo(() => {
+    const fromSchedules: TodoItem[] = mySchedules.map(s => ({
+      id: `sch-${s.id}`,
+      source: 'schedule',
+      title: s.title,
+      date: s.start_date,
+      href: s.project_id ? `/register/${s.project_id}` : '/calendar/work',
+      projectId: s.project_id,
+      assignerName: null,
+      scheduleType: s.schedule_type,
+      rawId: s.id,
+    }))
+    const fromTasks: TodoItem[] = myTasksReceived.map(t => ({
+      id: `task-${t.id}`,
+      source: 'task',
+      title: t.content,
+      date: t.deadline,
+      href: t.project_id ? `/register/${t.project_id}` : '/dashboard',
+      projectId: t.project_id,
+      assignerName: getStaffName(t.assigned_by),
+      rawId: t.id,
+    }))
+    return [...fromSchedules, ...fromTasks].sort((a, b) => {
+      const aKey = a.date ?? '9999-99-99'
+      const bKey = b.date ?? '9999-99-99'
+      return aKey.localeCompare(bKey)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mySchedules, myTasksReceived, staffList])
+
+  // 메모장
+  const addMemo = () => {
+    if (!newMemo.trim()) return
+    setMemos(p => [{ id: Date.now().toString(), content: newMemo.trim(), pinned: false }, ...p])
+    setNewMemo('')
+  }
   const togglePin = (id: string) => setMemos(p => p.map(m => m.id === id ? { ...m, pinned: !m.pinned } : m))
   const deleteMemo = (id: string) => setMemos(p => p.filter(m => m.id !== id))
-
-  const now = new Date()
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토']
-  const todayLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${dayNames[now.getDay()]})`
   const sortedMemos = [...memos].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
 
-  // 나의 현황 통계 계산
-  const COMPLETED_STATUSES = ['입금']
-  const ACTIVE_STATUSES = ['실사', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출']
-  const thisMonthStart = `${today.slice(0, 7)}-01`
+  // 시킨 일 CRUD
+  const addAssignedTask = async (content: string, assigneeId: string, deadline: string | null) => {
+    if (!currentStaffId) return
+    const { error } = await supabase.from('tasks').insert({
+      content, assigned_to: assigneeId, assigned_by: currentStaffId, deadline, done: false,
+    })
+    if (!error) loadMyWork()
+  }
+  const toggleAssignedDone = async (taskId: string, done: boolean) => {
+    await supabase.from('tasks').update({ done, done_at: done ? new Date().toISOString() : null }).eq('id', taskId)
+    loadMyWork()
+  }
+  const deleteAssignedTask = async (taskId: string) => {
+    await supabase.from('tasks').delete().eq('id', taskId)
+    loadMyWork()
+  }
+  // 내가 받은 task 완료 처리 (내 할 일 카드에서)
+  const completeReceivedTask = async (taskId: string) => {
+    await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', taskId)
+    loadMyWork()
+  }
 
-  const totalProjects = projects.length
-  const activeProjects = projects.filter(p => ACTIVE_STATUSES.includes(p.status)).length
-  const completedThisMonth = projects.filter(
-    p => COMPLETED_STATUSES.includes(p.status) && p.updated_at >= thisMonthStart
-  ).length
-  const totalOutstanding = projects.reduce((sum, p) => sum + (p.outstanding || 0), 0)
+  // --- 첫 방문 모달 ---
+  const showFirstVisitModal = !currentStaffId && staffList.length > 0
+  const handleFirstSelect = (id: string) => {
+    setCurrentStaffId(id)
+  }
 
-  if (loading) return <div className="p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary text-[13px]">불러오는 중...</div></div>
+  const currentStaffName = currentStaffId ? getStaffName(currentStaffId) : ''
+  const greeting = currentStaffName ? `${currentStaffName}님` : '안녕하세요'
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-4 bg-page min-h-screen">
+    <>
+      {showFirstVisitModal && (
+        <FirstVisitModal options={staffList} onSelect={handleFirstSelect} />
+      )}
 
-      {/* 헤더 */}
-      <div className="bg-surface rounded-[10px] border border-border-primary px-6 py-5 border-l-4 border-l-accent">
-        <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">{todayLabel}</h1>
-        <p className="text-[13px] text-txt-secondary mt-0.5">
-          오늘 일정 {todaySchedules.length}건 · 진행 현장 {sites.length}개 · 담당 프로젝트 {totalProjects}건
-        </p>
-      </div>
-
-      {/* 나의 현황 */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          { icon: <ClipboardList size={18} className="text-txt-tertiary" />, label: '담당 건수', value: `${totalProjects}건`, color: 'text-txt-primary' },
-          { icon: <Loader size={18} className="text-txt-tertiary" />, label: '진행 중', value: `${activeProjects}건`, color: 'text-[#2563eb]' },
-          { icon: <CheckCircle2 size={18} className="text-txt-tertiary" />, label: '이번 달 완료', value: `${completedThisMonth}건`, color: 'text-[#065f46]' },
-          { icon: <Banknote size={18} className="text-txt-tertiary" />, label: '미수금', value: totalOutstanding > 0 ? `${totalOutstanding.toLocaleString()}원` : '0원', color: totalOutstanding > 0 ? 'text-[#dc2626]' : 'text-txt-primary' },
-        ].map((card) => (
-          <div key={card.label} className="bg-surface rounded-[10px] border border-border-primary px-5 py-4 flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-lg bg-surface-tertiary flex items-center justify-center shrink-0">
-              {card.icon}
-            </div>
-            <div>
-              <div className="text-[11px] font-medium text-txt-tertiary tracking-[0.3px]">{card.label}</div>
-              <div className={`text-[18px] font-semibold tracking-[-0.3px] ${card.color}`}>{card.value}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 1행: 받은업무 | 지시한업무 */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* 받은 업무 */}
-        <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center gap-2">
-            <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">받은 업무</h2>
-          </div>
-          <div className="px-4 py-3">
-            <div className="text-center py-8 text-txt-quaternary text-[13px]">
-              업무 관리 기능 준비 중
-            </div>
-          </div>
+      <div className="p-6 max-w-[1200px] mx-auto space-y-4 bg-page min-h-screen">
+        {/* 헤더 */}
+        <div className="bg-surface rounded-[10px] border border-border-primary px-6 py-5 border-l-4 border-l-accent">
+          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">{todayLabel}</h1>
+          <p className="text-[13px] text-txt-secondary mt-0.5">
+            {greeting}, {briefing?.summary ?? '분석 준비 중...'}
+          </p>
         </div>
 
-        {/* 지시한 업무 */}
-        <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center gap-2">
-            <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">지시한 업무</h2>
-          </div>
-          <div className="px-4 py-3">
-            <div className="text-center py-8 text-txt-quaternary text-[13px]">
-              업무 관리 기능 준비 중
-            </div>
-          </div>
-        </div>
-      </div>
+        {/* 메인 그리드: 사이드바 (2/5, 왼쪽) + AI 브리핑 (3/5, 오른쪽) */}
+        <div className="grid grid-cols-5 gap-4 items-stretch min-h-[640px]">
+          {/* 왼쪽: 사이드바 (할 일/시킨 일/메모장 세로 스택, 균등 분배) */}
+          <div className="col-span-2 flex flex-col gap-4">
+            <MyTodoCard
+              todos={todoItems}
+              staffSelected={!!currentStaffId}
+              tasksTableMissing={tasksTableMissing}
+              onCompleteTask={completeReceivedTask}
+            />
+            <AssignedTasksCard
+              tasks={myTasksAssigned}
+              staffList={staffList}
+              currentStaffId={currentStaffId}
+              staffSelected={!!currentStaffId}
+              tableMissing={tasksTableMissing}
+              onAdd={addAssignedTask}
+              onToggleDone={toggleAssignedDone}
+              onDelete={deleteAssignedTask}
+              getStaffName={getStaffName}
+            />
 
-      {/* 2행: 오늘일정 | 이번주일정 | 메모장 */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* 오늘 일정 */}
-        <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">오늘 일정</h2>
-              <span className="text-[11px] min-w-[18px] h-[18px] flex items-center justify-center bg-surface-tertiary text-txt-secondary rounded-full font-medium">{todaySchedules.length}</span>
-            </div>
-            <Link href="/calendar/work" className="text-[11px] text-link hover:underline">캘린더 →</Link>
-          </div>
-          <div className="px-4 py-3">
-            {todaySchedules.length === 0 ? (
-              <div className="text-center py-8 text-txt-quaternary text-[13px]">일정 없음</div>
-            ) : (
-              todaySchedules.map(s => (
-                <div key={s.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surface-tertiary">
-                  <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: TYPE_COLORS[s.schedule_type] || '#3B82F6' }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-medium text-txt-primary truncate">
-                      {getStaffName(s.staff_id) ? <span className="text-link">{getStaffName(s.staff_id)} </span> : ''}{s.title}
-                    </div>
-                    <span className="text-[11px] px-1 py-0.5 rounded font-medium"
-                      style={{ backgroundColor: (TYPE_COLORS[s.schedule_type] || '#3B82F6') + '15', color: TYPE_COLORS[s.schedule_type] || '#3B82F6' }}>
-                      {TYPE_LABELS[s.schedule_type] || s.schedule_type}
-                    </span>
-                  </div>
-                  <div className={`w-1.5 h-1.5 rounded-full ${s.confirmed ? 'bg-[#065f46]' : 'bg-txt-quaternary'}`} />
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* 이번 주 */}
-        <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
-            <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">이번 주</h2>
-            <span className="text-[11px] font-medium text-txt-tertiary tracking-[0.3px]">{today} ~ {weekEnd}</span>
-          </div>
-          <div className="px-4 py-3">
-            {weekSchedules.filter(s => s.start_date > today).length === 0 ? (
-              <div className="text-center py-8 text-txt-quaternary text-[13px]">추가 일정 없음</div>
-            ) : (
-              weekSchedules.filter(s => s.start_date > today).slice(0, 6).map(s => {
-                const d = new Date(s.start_date)
-                const dl = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]})`
-                return (
-                  <div key={s.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surface-tertiary">
-                    <span className="text-[11px] font-medium text-txt-tertiary tracking-[0.3px] w-16 shrink-0">{dl}</span>
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: TYPE_COLORS[s.schedule_type] || '#3B82F6' }} />
-                    <span className="text-[13px] text-txt-primary truncate">{getStaffName(s.staff_id) ? `${getStaffName(s.staff_id)} ` : ''}{s.title}</span>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </div>
-
-        {/* 메모장 */}
-        <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border-tertiary">
-            <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">메모장</h2>
-          </div>
-          <div className="px-4 py-3">
-            <div className="flex gap-1.5 mb-2 px-1">
-              <input value={newMemo} onChange={e => setNewMemo(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMemo()}
-                placeholder="메모 입력..." className="flex-1 text-[13px] border border-border-primary rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-accent focus:outline-none bg-surface text-txt-primary placeholder:text-txt-tertiary" />
-              <button onClick={addMemo} className="px-2.5 py-1.5 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shrink-0">추가</button>
-            </div>
-            {sortedMemos.length === 0 ? (
-              <div className="text-center py-6 text-txt-quaternary text-[13px]">메모 없음</div>
-            ) : (
-              sortedMemos.map(m => (
-                <div key={m.id} className={`flex items-start gap-1.5 px-2.5 py-2 rounded-lg group ${m.pinned ? 'bg-[#ffedd5]/30' : 'hover:bg-surface-tertiary'}`}>
-                  <button onClick={() => togglePin(m.id)} className={`mt-0.5 shrink-0 ${m.pinned ? '' : 'opacity-0 group-hover:opacity-100'}`}>
-                    <Pin size={16} className={m.pinned ? 'text-[#d97706]' : 'text-txt-quaternary'} />
-                  </button>
-                  <span className="text-[13px] text-txt-secondary flex-1 leading-snug">{m.content}</span>
-                  <button onClick={() => deleteMemo(m.id)} className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 text-txt-quaternary hover:text-[#dc2626]">
-                    <X size={14} className="text-txt-tertiary" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 3행: 진행 현장 */}
-      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
-          <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">진행 현장</h2>
-          <Link href="/sites" className="text-[11px] text-link hover:underline">전체 보기 →</Link>
-        </div>
-        {sites.length === 0 ? (
-          <div className="text-center py-6 text-txt-quaternary text-[13px]">진행 중인 현장 없음</div>
-        ) : (
-          <div className="grid grid-cols-3 gap-0 divide-x divide-border-tertiary">
-            {sites.map(s => (
-              <div key={s.id} className="px-5 py-4 hover:bg-surface-tertiary transition-colors">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[13px] font-medium text-txt-primary truncate">{s.name}</span>
-                  <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${
-                    s.status === '공사중' ? 'bg-[#d1fae5] text-[#065f46]' :
-                    s.status === '착공' ? 'bg-[#ffedd5] text-[#9a3412]' :
-                    'bg-surface-tertiary text-txt-secondary'
-                  }`}>{s.status}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-surface-tertiary rounded-full overflow-hidden">
-                    <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${s.progress}%` }} />
-                  </div>
-                  <span className="text-[11px] font-medium text-txt-tertiary tracking-[0.3px] w-8 text-right tabular-nums">{s.progress}%</span>
-                </div>
-                {s.site_manager && <div className="text-[11px] font-medium text-txt-tertiary tracking-[0.3px] mt-1">소장: {s.site_manager}</div>}
+            {/* 메모장 */}
+            <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden flex flex-col flex-1 min-h-0">
+              <div className="px-5 py-3.5 border-b border-border-tertiary">
+                <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">메모장</h2>
               </div>
-            ))}
+              <div className="px-4 py-3 flex-1 overflow-y-auto">
+                <div className="flex gap-1.5 mb-2 px-1">
+                  <input value={newMemo} onChange={e => setNewMemo(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMemo()}
+                    placeholder="메모 입력..." className="flex-1 text-[13px] border border-border-primary rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-accent focus:outline-none bg-surface text-txt-primary placeholder:text-txt-tertiary" />
+                  <button onClick={addMemo} className="px-2.5 py-1.5 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shrink-0">추가</button>
+                </div>
+                {sortedMemos.length === 0 ? (
+                  <div className="text-center py-6 text-txt-quaternary text-[13px]">메모 없음</div>
+                ) : (
+                  sortedMemos.map(m => (
+                    <div key={m.id} className={`flex items-start gap-1.5 px-2.5 py-2 rounded-lg group ${m.pinned ? 'bg-[#ffedd5]/30' : 'hover:bg-surface-tertiary'}`}>
+                      <button onClick={() => togglePin(m.id)} className={`mt-0.5 shrink-0 ${m.pinned ? '' : 'opacity-0 group-hover:opacity-100'}`}>
+                        <Pin size={16} className={m.pinned ? 'text-[#d97706]' : 'text-txt-quaternary'} />
+                      </button>
+                      <span className="text-[13px] text-txt-secondary flex-1 leading-snug">{m.content}</span>
+                      <button onClick={() => deleteMemo(m.id)} className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 text-txt-quaternary hover:text-[#dc2626]">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* 오른쪽: AI 브리핑 (col-span-3) */}
+          <div className="col-span-3">
+            <AIBriefingCard
+              items={briefing?.items ?? []}
+              summary={briefing?.summary ?? ''}
+              loading={briefingLoading}
+            />
+          </div>
+        </div>
+
+        {/* 통합 현장 스케줄 (간트 타임라인) */}
+        <SitesTimeline />
       </div>
-    </div>
+    </>
   )
 }
-

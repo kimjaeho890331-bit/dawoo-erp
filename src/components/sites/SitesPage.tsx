@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import ImageViewer from '@/components/common/ImageViewer'
 import ProcessCalendar from '@/components/sites/ProcessCalendar'
@@ -17,6 +17,7 @@ interface Site {
   start_date: string | null
   end_date: string | null
   status: string
+  contract_type: string | null  // 수의계약 / 입찰
   budget: number
   spent: number
   memo: string | null
@@ -396,8 +397,8 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 // ===========================
 //   탭 1: 기본정보 (인라인 수정 - 레이아웃 유지)
 // ===========================
+// 박스 형태 인라인 필드 — 클릭 즉시 편집 가능, 1초 debounce 자동저장
 function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }) {
-  const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     name: site.name,
     address: site.address || '',
@@ -408,119 +409,196 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
     start_date: site.start_date || '',
     end_date: site.end_date || '',
     status: site.status,
+    contract_type: site.contract_type || '',
     budget: site.budget.toString(),
     memo: site.memo || '',
   })
-  const [saving, setSaving] = useState(false)
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+  const [expenseTotal, setExpenseTotal] = useState(0)
+  const [savedAt, setSavedAt] = useState<string>('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSavedRef = useRef(form)
 
-  const remaining = site.budget - site.spent
-  const execRate = site.budget > 0 ? Math.round((site.spent / site.budget) * 100) : 0
-
-  const handleSave = async () => {
-    setSaving(true)
-    await supabase.from('sites').update({
-      name: form.name, address: form.address || null,
-      site_manager: form.site_manager || null, site_assistant: form.site_assistant || null,
-      client_manager: form.client_manager || null, client_phone: form.client_phone || null,
-      start_date: form.start_date || null, end_date: form.end_date || null,
-      status: form.status, budget: parseInt(form.budget) || 0,
-      memo: form.memo || null,
-    }).eq('id', site.id)
-    setSaving(false)
-    setEditing(false)
-    onRefresh()
-  }
-
-  const handleCancel = () => {
-    setForm({
+  // 사이트 변경(다른 아코디언 펼침) 시 form 리셋
+  useEffect(() => {
+    const next = {
       name: site.name, address: site.address || '',
       site_manager: site.site_manager || '', site_assistant: site.site_assistant || '',
       client_manager: site.client_manager || '', client_phone: site.client_phone || '',
       start_date: site.start_date || '', end_date: site.end_date || '',
-      status: site.status, budget: site.budget.toString(), memo: site.memo || '',
+      status: site.status, contract_type: site.contract_type || '',
+      budget: site.budget.toString(), memo: site.memo || '',
+    }
+    setForm(next)
+    lastSavedRef.current = next
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [site.id])
+
+  // 직원 목록 로드 (드롭다운용)
+  useEffect(() => {
+    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+      if (data) setStaffList(data as { id: string; name: string }[])
     })
-    setEditing(false)
+  }, [])
+
+  // 지출내역서 합계 (expenses 테이블에서 site_id로 집계)
+  useEffect(() => {
+    supabase.from('expenses').select('amount').eq('site_id', site.id).then(({ data }) => {
+      if (data) {
+        const total = (data as { amount: number }[]).reduce((sum, e) => sum + (e.amount || 0), 0)
+        setExpenseTotal(total)
+      }
+    })
+  }, [site.id])
+
+  // 값 업데이트 + 1초 debounce 자동저장
+  const u = (key: keyof typeof form, val: string) => {
+    setForm(prev => {
+      const next = { ...prev, [key]: val }
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => autoSave(next), 1000)
+      return next
+    })
   }
 
-  const u = (key: keyof typeof form, val: string) => setForm(prev => ({ ...prev, [key]: val }))
-
-  // 인라인 값 렌더 (수정 시 같은 자리에 input, 보기 시 텍스트)
-  const V = ({ k, type = 'text', options }: { k: keyof typeof form; type?: string; options?: readonly string[] }) => {
-    if (!editing) {
-      const val = form[k]
-      if (type === 'number') return <span className="text-[13px] text-[#111827] tabular-nums">{(parseInt(val) || 0).toLocaleString()}원</span>
-      return <span className="text-[13px] text-[#111827]">{val || '-'}</span>
+  const autoSave = async (next: typeof form) => {
+    // 변화 없으면 스킵
+    if (JSON.stringify(next) === JSON.stringify(lastSavedRef.current)) return
+    const payload: Record<string, unknown> = {
+      name: next.name,
+      address: next.address || null,
+      site_manager: next.site_manager || null,
+      site_assistant: next.site_assistant || null,
+      client_manager: next.client_manager || null,
+      client_phone: next.client_phone || null,
+      start_date: next.start_date || null,
+      end_date: next.end_date || null,
+      status: next.status,
+      contract_type: next.contract_type || null,
+      budget: parseInt(next.budget) || 0,
+      memo: next.memo || null,
     }
-    if (type === 'select' && options) {
-      return <select value={form[k]} onChange={e => u(k, e.target.value)}
-        className="text-[13px] text-[#111827] bg-transparent border-b border-[#5e6ad2]/40 focus:border-[#5e6ad2] outline-none py-0 px-0 -mb-px"
-      >{options.map(o => <option key={o} value={o}>{o}</option>)}</select>
+    const { error } = await supabase.from('sites').update(payload).eq('id', site.id)
+    // contract_type 컬럼 없을 때 graceful fallback
+    if (error && /contract_type/.test(error.message)) {
+      delete payload.contract_type
+      await supabase.from('sites').update(payload).eq('id', site.id)
     }
-    return <input type={type} value={form[k]} onChange={e => u(k, e.target.value)}
-      className="text-[13px] text-[#111827] bg-transparent border-b border-[#5e6ad2]/40 focus:border-[#5e6ad2] outline-none py-0 px-0 -mb-px w-full" />
+    lastSavedRef.current = next
+    const t = new Date()
+    setSavedAt(`${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`)
+    setTimeout(() => setSavedAt(''), 2000)
+    onRefresh()
   }
+
+  // 전화번호 하이픈 자동
+  const formatPhone = (v: string) => {
+    const digits = v.replace(/\D/g, '')
+    if (digits.length < 4) return digits
+    if (digits.length < 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+    if (digits.length < 11) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`
+  }
+  // 금액 콤마
+  const formatMoney = (v: string) => {
+    const digits = v.replace(/\D/g, '')
+    if (!digits) return ''
+    return parseInt(digits).toLocaleString()
+  }
+  const parseMoney = (v: string) => v.replace(/\D/g, '')
+
+  // 박스 필드 컴포넌트
+  const Box = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div className="border border-[#e5e7eb] rounded-[10px] px-3 py-2 bg-[#ffffff] hover:border-[#5e6ad2]/40 focus-within:border-[#5e6ad2] focus-within:ring-2 focus-within:ring-[#5e6ad2]/10 transition-colors">
+      <div className="text-[10px] font-medium text-[#9ca3af] mb-0.5">{label}</div>
+      <div className="text-[13px] text-[#111827]">{children}</div>
+    </div>
+  )
+
+  const inputCls = "w-full bg-transparent border-0 outline-none text-[13px] text-[#111827] placeholder:text-[#d1d5db] p-0"
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        {!editing ? (
-          <button onClick={() => setEditing(true)} className="px-3 py-1 text-[11px] text-[#5e6ad2] border border-[#5e6ad2]/30 rounded-lg hover:bg-[#5e6ad2]/5 transition-colors">수정</button>
-        ) : (
-          <div className="flex gap-2">
-            <button onClick={handleCancel} className="px-3 py-1 text-[11px] border border-[#e5e7eb] text-[#4b5563] rounded-lg hover:bg-[#e9ecef] transition-colors">취소</button>
-            <button onClick={handleSave} disabled={saving} className="px-3 py-1 text-[11px] bg-[#5e6ad2] text-white rounded-lg hover:bg-[#4f56b3] disabled:opacity-50 transition-colors">{saving ? '저장 중...' : '저장'}</button>
-          </div>
-        )}
+    <div className="space-y-3">
+      {/* 자동저장 상태 표시 */}
+      <div className="flex justify-end h-4">
+        {savedAt && <span className="text-[10px] text-[#059669]">✓ 저장됨 ({savedAt})</span>}
       </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">현장명</span><V k="name" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">상태</span><V k="status" type="select" options={SITE_STATUSES} /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">주소</span><V k="address" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">현장소장</span><V k="site_manager" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">현장보조</span><V k="site_assistant" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">발주처 담당자</span><V k="client_manager" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">발주처 연락처</span><V k="client_phone" type="tel" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">착공예정일</span><V k="start_date" type="date" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">준공예정일</span><V k="end_date" type="date" /></div>
-        <div className="flex items-center gap-2"><span className="text-[11px] text-[#9ca3af] w-24 shrink-0">예산 (원)</span><V k="budget" type="number" /></div>
+      {/* 1행: 현장명 | 진행 상황 | 계약 종류 */}
+      <div className="grid grid-cols-3 gap-3">
+        <Box label="현장명">
+          <input className={inputCls} value={form.name} onChange={e => u('name', e.target.value)} />
+        </Box>
+        <Box label="진행 상황">
+          <select className={inputCls} value={form.status} onChange={e => u('status', e.target.value)}>
+            {SITE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Box>
+        <Box label="계약 종류">
+          <select className={inputCls} value={form.contract_type} onChange={e => u('contract_type', e.target.value)}>
+            <option value="">선택</option>
+            <option value="수의계약">수의계약</option>
+            <option value="입찰">입찰</option>
+          </select>
+        </Box>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
-        <StatCard label="예산" value={site.budget} color="blue" />
-        <StatCard label="지출" value={site.spent} color="red" />
-        <StatCard label="잔액" value={remaining} color={remaining < 0 ? 'negative' : 'green'} />
-        <div className="border border-[#e5e7eb] rounded-[10px] p-3 bg-[#ffffff]">
-          <div className="text-[11px] text-[#9ca3af]">집행률</div>
-          <div className="text-[16px] font-semibold text-[#111827] mt-0.5 tabular-nums">{execRate}%</div>
+      {/* 2행: 주소 (전체 폭) */}
+      <Box label="주소">
+        <input className={inputCls} value={form.address} onChange={e => u('address', e.target.value)} placeholder="경기도 수원시 ..." />
+      </Box>
+
+      {/* 3행: 현장소장 | 현장보조 — 직원 드롭다운 */}
+      <div className="grid grid-cols-2 gap-3">
+        <Box label="현장소장">
+          <select className={inputCls} value={form.site_manager} onChange={e => u('site_manager', e.target.value)}>
+            <option value="">선택</option>
+            {staffList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </Box>
+        <Box label="현장보조">
+          <select className={inputCls} value={form.site_assistant} onChange={e => u('site_assistant', e.target.value)}>
+            <option value="">선택</option>
+            {staffList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </Box>
+      </div>
+
+      {/* 4행: 계약부서 담당자 + 연락처 같은 라인 */}
+      <div className="grid grid-cols-2 gap-3">
+        <Box label="계약부서 담당자">
+          <input className={inputCls} value={form.client_manager} onChange={e => u('client_manager', e.target.value)} />
+        </Box>
+        <Box label="계약부서 연락처">
+          <input className={inputCls} value={form.client_phone} onChange={e => u('client_phone', formatPhone(e.target.value))} placeholder="010-0000-0000" />
+        </Box>
+      </div>
+
+      {/* 5행: 착공예정일 | 준공예정일 같은 라인 */}
+      <div className="grid grid-cols-2 gap-3">
+        <Box label="착공예정일">
+          <input type="date" className={inputCls} value={form.start_date} onChange={e => u('start_date', e.target.value)} />
+        </Box>
+        <Box label="준공예정일">
+          <input type="date" className={inputCls} value={form.end_date} onChange={e => u('end_date', e.target.value)} />
+        </Box>
+      </div>
+
+      {/* 6행: 공사금액 | 지출 (자동) */}
+      <div className="grid grid-cols-2 gap-3">
+        <Box label="공사금액 (원)">
+          <input className={`${inputCls} tabular-nums`} value={formatMoney(form.budget)} onChange={e => u('budget', parseMoney(e.target.value))} placeholder="0" />
+        </Box>
+        <div className="border border-[#e5e7eb] rounded-[10px] px-3 py-2 bg-[#f9fafb]">
+          <div className="text-[10px] font-medium text-[#9ca3af] mb-0.5">지출 (지출내역서 합계)</div>
+          <div className="text-[13px] text-[#111827] tabular-nums">{expenseTotal.toLocaleString()}원</div>
         </div>
       </div>
 
-      <div>
-        <span className="text-[11px] text-[#9ca3af]">메모</span>
-        {editing ? (
-          <textarea value={form.memo} onChange={e => u('memo', e.target.value)} rows={2}
-            className="w-full text-[13px] text-[#4b5563] bg-transparent border-b border-[#5e6ad2]/40 focus:border-[#5e6ad2] outline-none resize-none mt-1" />
-        ) : (
-          <div className="text-[13px] text-[#4b5563] whitespace-pre-wrap mt-1">{site.memo || '-'}</div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  const isNegative = color === 'negative'
-  const colors: Record<string, string> = {
-    blue: 'bg-[#ffffff] text-[#111827] border-[#e5e7eb]',
-    green: 'bg-[#ffffff] text-[#111827] border-[#e5e7eb]',
-    red: 'bg-[#ffffff] text-[#111827] border-[#e5e7eb]',
-    negative: 'bg-[#ffffff] border-[#fecaca]',
-  }
-  return (
-    <div className={`border rounded-[10px] p-3 ${colors[color] || colors.blue}`}>
-      <div className="text-[11px] text-[#9ca3af]">{label}</div>
-      <div className={`text-[16px] font-semibold mt-0.5 tabular-nums ${isNegative ? 'text-[#dc2626]' : 'text-[#111827]'}`}>{value.toLocaleString()}원</div>
+      {/* 메모 */}
+      <Box label="메모">
+        <textarea className={`${inputCls} resize-none`} rows={2} value={form.memo} onChange={e => u('memo', e.target.value)} />
+      </Box>
     </div>
   )
 }
@@ -528,6 +606,35 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 // ===========================
 //   탭 2: 현장일지 (가로 테이블 형태)
 // ===========================
+
+// 일지 완성도 계산 (6개 필드 × 각 1점 = 0~6)
+// KPI "현장일지 성실도 5점" 산출 기반 데이터
+function calcLogCompletion(log: SiteLog): { score: number; max: number } {
+  let score = 0
+  if (log.weather && log.weather.trim()) score++
+  if (log.workers_detail && log.workers_detail.trim()) score++
+  if (log.materials && log.materials.trim()) score++
+  if (log.today_work && log.today_work.trim().length >= 10) score++
+  if (log.remarks && log.remarks.trim()) score++
+  if (log.tomorrow_plan && log.tomorrow_plan.trim()) score++
+  return { score, max: 6 }
+}
+
+function CompletionBadge({ score, max }: { score: number; max: number }) {
+  const dots = Array.from({ length: max }, (_, i) => i < score)
+  const color = score >= 5 ? '#059669' : score >= 3 ? '#d97706' : '#dc2626'
+  return (
+    <div className="inline-flex items-center gap-1 text-[10px] tabular-nums" title={`완성도 ${score}/${max}`}>
+      <div className="flex gap-0.5">
+        {dots.map((filled, i) => (
+          <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filled ? color : '#e5e7eb' }} />
+        ))}
+      </div>
+      <span className="font-medium" style={{ color }}>{score}/{max}</span>
+    </div>
+  )
+}
+
 function TabSiteLogs({ siteId }: { siteId: string }) {
   const [logs, setLogs] = useState<SiteLog[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -580,10 +687,12 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
             <thead>
               <tr className="bg-[#f1f3f5] border-b border-[#e5e7eb]">
                 <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-24">날짜</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af]">금일작업</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-32">특이사항</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-32">익일계획</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-16">사진</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-24">날씨</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af]">금일작업 / 인력 / 자재</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-28">특이사항</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-28">익일계획</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-14">사진</th>
+                <th className="px-3 py-2 text-center text-[11px] font-medium text-[#9ca3af] w-20">완성도</th>
                 <th className="px-3 py-2 text-center text-[11px] font-medium text-[#9ca3af] w-20">관리</th>
               </tr>
             </thead>
@@ -591,17 +700,26 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
               {logs.map(log => {
                 const photos = log.site_photos || []
                 const allImages = photos.map(p => ({ url: p.file_url, name: p.file_name || '' }))
+                const completion = calcLogCompletion(log)
                 return (
                   <tr key={log.id} className="border-b border-[#f3f4f6] hover:bg-[#e9ecef]/50">
                     <td className="px-3 py-2 text-[#111827] font-medium whitespace-nowrap">{log.log_date}</td>
+                    <td className="px-3 py-2 text-[#4b5563] text-[11px]">{log.weather || '-'}</td>
                     <td className="px-3 py-2 text-[#4b5563] max-w-[300px]">
-                      <div className="line-clamp-2">{log.today_work || '-'}</div>
+                      <div className="line-clamp-2 text-[13px]">{log.today_work || '-'}</div>
+                      {(log.workers_detail || log.materials) && (
+                        <div className="mt-0.5 text-[10px] text-[#9ca3af] leading-tight">
+                          {log.workers_detail && <span>👷 {log.workers_detail}</span>}
+                          {log.workers_detail && log.materials && <span> · </span>}
+                          {log.materials && <span>📦 {log.materials}</span>}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-[#4b5563]">
                       <div className="line-clamp-2 text-[11px]">{log.remarks || '-'}</div>
                     </td>
                     <td className="px-3 py-2 text-[#4b5563]">
-                      <div className="line-clamp-2 text-[11px]">{log.tomorrow_plan || '-'}</div>
+                      <div className="line-clamp-2 text-[11px] whitespace-pre-wrap">{log.tomorrow_plan || '-'}</div>
                     </td>
                     <td className="px-3 py-2">
                       {allImages.length > 0 ? (
@@ -614,6 +732,9 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
                       ) : (
                         <span className="text-[11px] text-[#d1d5db]">-</span>
                       )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <CompletionBadge score={completion.score} max={completion.max} />
                     </td>
                     <td className="px-3 py-2 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -636,17 +757,77 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
   )
 }
 
-// --- 현장일지 작성 폼 (간소화: 날씨제거, 투입/자재 통합, 익일=다음날공정) ---
+// --- 날씨 분해 헬퍼 ---
+function splitWeather(weatherStr: string | null): { cond: string; temp: string } {
+  if (!weatherStr) return { cond: '', temp: '' }
+  const parts = weatherStr.split('·').map(s => s.trim())
+  return { cond: parts[0] || '', temp: parts[1] || '' }
+}
+function joinWeather(cond: string, temp: string): string | null {
+  const c = cond.trim(), t = temp.trim()
+  if (!c && !t) return null
+  if (c && t) return `${c} · ${t}`
+  return c || t
+}
+
+// --- 익일 계획 병합 헬퍼 ---
+function buildTomorrowPlan(autoSchedules: string[], manualText: string): string | null {
+  const autoPart = autoSchedules.length > 0 ? `[자동] ${autoSchedules.join(', ')}` : ''
+  const manualPart = manualText.trim() ? `[수동] ${manualText.trim()}` : ''
+  if (!autoPart && !manualPart) return null
+  return [autoPart, manualPart].filter(Boolean).join('\n')
+}
+
+// --- 사용자 수동 입력만 추출 (기존 값에서 [자동] 행 제거) ---
+function extractManualPlan(savedValue: string | null): string {
+  if (!savedValue) return ''
+  return savedValue
+    .split('\n')
+    .filter(line => !line.trim().startsWith('[자동]'))
+    .map(line => line.replace(/^\[수동\]\s*/, ''))
+    .join('\n')
+    .trim()
+}
+
+// --- 현장일지 작성 폼 ---
 function SiteLogForm({ siteId, log, onClose, onSave }: {
   siteId: string; log: SiteLog | null; onClose: () => void; onSave: () => void
 }) {
   const isEdit = !!log
+  const initialWeather = splitWeather(log?.weather || null)
   const [logDate, setLogDate] = useState(log?.log_date || new Date().toISOString().slice(0, 10))
+  const [weatherCond, setWeatherCond] = useState(initialWeather.cond)
+  const [weatherTemp, setWeatherTemp] = useState(initialWeather.temp)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [workersDetail, setWorkersDetail] = useState(log?.workers_detail || '')
+  const [materials, setMaterials] = useState(log?.materials || '')
   const [todayWork, setTodayWork] = useState(log?.today_work || '')
   const [remarks, setRemarks] = useState(log?.remarks || '')
-  const [tomorrowPlan, setTomorrowPlan] = useState(log?.tomorrow_plan || '')
+  const [tomorrowPlan, setTomorrowPlan] = useState(extractManualPlan(log?.tomorrow_plan || null))
   const [saving, setSaving] = useState(false)
   const [tomorrowSchedules, setTomorrowSchedules] = useState<{ title: string; contractor: string | null }[]>([])
+
+  // 날씨 자동 조회 (기상청 API)
+  const fetchWeather = useCallback(async () => {
+    setWeatherLoading(true)
+    try {
+      const res = await fetch(`/api/weather?siteId=${siteId}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.cond) setWeatherCond(data.cond)
+        if (data.temp) setWeatherTemp(data.temp)
+      }
+    } catch { /* 수동 입력 fallback */ }
+    setWeatherLoading(false)
+  }, [siteId])
+
+  // 신규 작성 시 자동 조회 (수정 시엔 기존 값 유지)
+  useEffect(() => {
+    if (!isEdit && !weatherCond && !weatherTemp) {
+      fetchWeather()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 날짜 변경 시 다음날 공정 가져오기
   useEffect(() => {
@@ -670,11 +851,18 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
   const handleSubmit = async () => {
     if (!logDate) return
     setSaving(true)
+    const autoSchedules = tomorrowSchedules.map(s =>
+      s.contractor ? `${s.title}(${s.contractor})` : s.title
+    )
     const payload = {
-      site_id: siteId, log_date: logDate,
-      weather: null, today_work: todayWork || null,
-      workers_detail: null, materials: null,
-      remarks: remarks || null, tomorrow_plan: tomorrowPlan || null,
+      site_id: siteId,
+      log_date: logDate,
+      weather: joinWeather(weatherCond, weatherTemp),
+      today_work: todayWork || null,
+      workers_detail: workersDetail || null,
+      materials: materials || null,
+      remarks: remarks || null,
+      tomorrow_plan: buildTomorrowPlan(autoSchedules, tomorrowPlan),
     }
     if (isEdit) await supabase.from('site_logs').update(payload).eq('id', log!.id)
     else await supabase.from('site_logs').insert(payload)
@@ -694,20 +882,58 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
       </div>
 
       <div className="p-5 space-y-3">
+        {/* 1행: 날짜 + 날씨 + 온도 */}
         <div className="flex gap-3 items-start">
           <div className="w-36 shrink-0">
             <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">날짜 *</label>
             <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
               className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
           </div>
+          <div className="w-32 shrink-0">
+            <label className="flex items-center justify-between text-[11px] font-medium text-[#9ca3af] mb-1">
+              <span>날씨</span>
+              <button type="button" onClick={fetchWeather} disabled={weatherLoading}
+                className="text-[10px] text-[#5e6ad2] hover:text-[#4f56b3] disabled:text-[#d1d5db]">
+                {weatherLoading ? '조회중...' : '🔄 자동'}
+              </button>
+            </label>
+            <select value={weatherCond} onChange={e => setWeatherCond(e.target.value)}
+              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]">
+              <option value="">선택</option>
+              {WEATHER_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+          </div>
+          <div className="w-28 shrink-0">
+            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">온도</label>
+            <input type="text" value={weatherTemp} onChange={e => setWeatherTemp(e.target.value)}
+              placeholder="18°C"
+              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+          </div>
           <div className="flex-1">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">금일작업 (투입인원, 자재 포함)</label>
-            <textarea value={todayWork} onChange={e => setTodayWork(e.target.value)} rows={2}
-              placeholder="예) 방수공 3명, 우레탄 20kg 투입. 옥상 방수 1차 완료."
-              className="w-full border border-[#e5e7eb] rounded-lg px-2.5 py-2 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none resize-none bg-[#ffffff]" />
+            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">금일작업</label>
+            <input type="text" value={todayWork} onChange={e => setTodayWork(e.target.value)}
+              placeholder="예) 2층 천장 목공 마감, 1층 화장실 방수 시공"
+              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
           </div>
         </div>
 
+        {/* 2행: 투입 인력 + 자재 */}
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">투입 인력</label>
+            <input type="text" value={workersDetail} onChange={e => setWorkersDetail(e.target.value)}
+              placeholder="예) 목공 3명, 철근 2명, 미장 4명"
+              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+          </div>
+          <div className="flex-1">
+            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">자재 투입</label>
+            <input type="text" value={materials} onChange={e => setMaterials(e.target.value)}
+              placeholder="예) 시멘트 10포, 방수제 5통, 타일 20박스"
+              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+          </div>
+        </div>
+
+        {/* 3행: 특이사항 + 익일계획 */}
         <div className="flex gap-3">
           <div className="flex-1">
             <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">특이사항</label>
@@ -717,6 +943,7 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
           <div className="flex-1">
             <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">
               익일계획 <span className="text-[#5e6ad2]">({tomorrowLabel})</span>
+              <span className="text-[10px] text-[#9ca3af] font-normal ml-1">· 다음날 캘린더 자동 포함</span>
             </label>
             {tomorrowSchedules.length > 0 ? (
               <div className="mb-1.5 flex flex-wrap gap-1">

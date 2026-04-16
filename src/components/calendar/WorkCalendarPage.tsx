@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Bot } from 'lucide-react'
 
 // --- 타입 ---
 interface Schedule {
@@ -21,6 +20,8 @@ interface Schedule {
   confirmed: boolean
   color: string
   all_day: boolean
+  start_time: string | null
+  end_time: string | null
 }
 
 interface Staff {
@@ -81,7 +82,6 @@ const CITIES_WATER = ['수원', '성남', '안양', '부천', '안산', '시흥'
 export default function WorkCalendarPage() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'promo'>('calendar')
   const [month, setMonth] = useState(() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() } })
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month')
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
@@ -146,7 +146,12 @@ export default function WorkCalendarPage() {
   const getWeekBars = useCallback((week: (number | null)[]) => {
     const wd = week.map(d => d ? ds(month.year, month.month, d) : null)
     const ws = wd.find(d => d) || '', we = [...wd].reverse().find(d => d) || ''
-    return filtered.filter(s => s.start_date <= we && s.end_date >= ws).map(s => {
+    return filtered.filter(s => s.start_date <= we && s.end_date >= ws).sort((a, b) => {
+      if (!a.start_time && !b.start_time) return 0
+      if (!a.start_time) return -1
+      if (!b.start_time) return 1
+      return a.start_time.localeCompare(b.start_time)
+    }).map(s => {
       const bs = s.start_date < ws ? ws : s.start_date, be = s.end_date > we ? we : s.end_date
       const si = wd.indexOf(bs), ei = wd.indexOf(be)
       if (si < 0 || ei < 0) return null
@@ -253,14 +258,6 @@ export default function WorkCalendarPage() {
               <span className="mx-2 w-px h-4 bg-border-primary" />
               <span className="text-[10px] text-txt-tertiary">연차=<span className="text-red-400">빨강</span> 홍보=<span className="text-yellow-500">노랑</span></span>
             </div>
-            <div className="flex items-center gap-1 bg-surface-secondary rounded-lg p-0.5">
-              {(['month', 'week', 'day'] as const).map(v => (
-                <button key={v} onClick={() => setViewMode(v)}
-                  className={`px-3 py-1 text-xs rounded-md transition ${viewMode === v ? 'bg-surface shadow-sm font-medium text-txt-primary' : 'text-txt-secondary'}`}>
-                  {v === 'month' ? '월' : v === 'week' ? '주' : '일'}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* 캘린더 */}
@@ -360,7 +357,18 @@ export default function WorkCalendarPage() {
             )}
           </div>
 
-          {/* AI 업무 교정 — 2차 개발 예정 */}
+          {/* 오늘 일정 */}
+          <TodaySection
+            schedules={schedules}
+            staffList={staffList}
+            staffColorMap={staffColorMap}
+            currentStaffId={typeof window !== 'undefined' ? localStorage.getItem('dawoo_current_staff_id') : null}
+            onScheduleClick={(s) => { setEditSchedule(s); setShowModal(true) }}
+            onToggleConfirmed={async (id, confirmed) => {
+              await supabase.from('schedules').update({ confirmed }).eq('id', id)
+              loadData()
+            }}
+          />
         </>
       ) : (
         /* 홍보현황 탭 */
@@ -578,6 +586,201 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
 }
 
 // ============================================================
+//  오늘 일정 영역
+// ============================================================
+function TodaySection({
+  schedules,
+  staffList,
+  staffColorMap,
+  currentStaffId,
+  onScheduleClick,
+  onToggleConfirmed,
+}: {
+  schedules: Schedule[]
+  staffList: Staff[]
+  staffColorMap: Record<string, string>
+  currentStaffId: string | null
+  onScheduleClick: (s: Schedule) => void
+  onToggleConfirmed: (id: string, confirmed: boolean) => void
+}) {
+  const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null)
+  const today = new Date().toISOString().slice(0, 10)
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토']
+  const todayDay = dayNames[new Date().getDay()]
+
+  // 오늘 일정 필터 (오늘에 걸쳐있는 모든 일정)
+  const todaySchedules = useMemo(() =>
+    schedules.filter(s => s.start_date <= today && s.end_date >= today)
+  , [schedules, today])
+
+  // staffList 재정렬: currentStaffId 맨 앞
+  const sortedStaff = useMemo(() => {
+    if (!currentStaffId) return staffList
+    const me = staffList.find(s => s.id === currentStaffId)
+    const rest = staffList.filter(s => s.id !== currentStaffId)
+    return me ? [me, ...rest] : staffList
+  }, [staffList, currentStaffId])
+
+  // 직원별 일정 그룹핑
+  const staffScheduleMap = useMemo(() => {
+    const map: Record<string, Schedule[]> = {}
+    for (const s of sortedStaff) {
+      const mine = todaySchedules.filter(sc =>
+        sc.staff_id === s.id || (sc.staff_ids && sc.staff_ids.includes(s.id))
+      )
+      // 정렬: 시간형 먼저(start_time 오름차순) → 마감형(end_date 가까운 순) → 종일형
+      mine.sort((a, b) => {
+        const aIsTime = a.start_date === a.end_date && !!a.start_time
+        const bIsTime = b.start_date === b.end_date && !!b.start_time
+        const aIsRange = a.start_date !== a.end_date
+        const bIsRange = b.start_date !== b.end_date
+        // 시간형 먼저
+        if (aIsTime && !bIsTime) return -1
+        if (!aIsTime && bIsTime) return 1
+        if (aIsTime && bIsTime) return (a.start_time || '').localeCompare(b.start_time || '')
+        // 마감형 다음
+        if (aIsRange && !bIsRange) return -1
+        if (!aIsRange && bIsRange) return 1
+        if (aIsRange && bIsRange) return a.end_date.localeCompare(b.end_date)
+        return 0
+      })
+      map[s.id] = mine
+    }
+    return map
+  }, [sortedStaff, todaySchedules])
+
+  const getScheduleLabel = (s: Schedule) => {
+    const isSameDay = s.start_date === s.end_date
+    if (isSameDay && s.start_time) {
+      return s.end_time ? `${s.start_time}~${s.end_time}` : s.start_time
+    }
+    if (!isSameDay) {
+      return `~${s.end_date.slice(5).replace('-', '/')}`
+    }
+    return '종일'
+  }
+
+  return (
+    <div className="mt-4 bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+      <div className="px-5 py-3 border-b border-border-tertiary flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-accent" />
+        <h3 className="text-[14px] font-semibold text-txt-primary">
+          오늘 일정
+        </h3>
+        <span className="text-[12px] text-txt-tertiary">
+          {today.slice(5).replace('-', '/')} ({todayDay})
+        </span>
+        <span className="text-[12px] text-txt-quaternary ml-auto">
+          총 {todaySchedules.length}건
+        </span>
+      </div>
+
+      {/* 직원 카드 그리드 */}
+      <div className="p-4">
+        <div className="grid grid-cols-5 gap-3">
+          {sortedStaff.map(staff => {
+            const color = staffColorMap[staff.id] || '#999'
+            const count = staffScheduleMap[staff.id]?.length || 0
+            const isExpanded = expandedStaffId === staff.id
+            const isMe = staff.id === currentStaffId
+
+            return (
+              <button
+                key={staff.id}
+                onClick={() => setExpandedStaffId(isExpanded ? null : staff.id)}
+                className={`relative flex flex-col items-center gap-1 py-3 px-2 rounded-lg border transition-all text-center ${
+                  isExpanded
+                    ? 'border-transparent shadow-sm ring-1'
+                    : count > 0
+                      ? 'border-border-primary hover:border-border-secondary hover:shadow-sm'
+                      : 'border-border-primary opacity-50'
+                }`}
+                style={isExpanded ? { borderColor: color, ringColor: color + '40', backgroundColor: color + '08' } : {}}
+              >
+                {isMe && (
+                  <span className="absolute top-1 right-1.5 text-[8px] text-txt-quaternary font-medium">나</span>
+                )}
+                <span
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold"
+                  style={{ backgroundColor: color }}
+                >
+                  {staff.name.length >= 2 ? staff.name.charAt(1) : staff.name.charAt(0)}
+                </span>
+                <span className="text-[12px] font-medium text-txt-primary">{staff.name}</span>
+                <span className={`text-[11px] tabular-nums ${count > 0 ? 'text-txt-secondary font-medium' : 'text-txt-quaternary'}`}>
+                  {count > 0 ? `${count}건` : '-'}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* 아코디언: 선택된 직원의 일정 리스트 */}
+        {expandedStaffId && staffScheduleMap[expandedStaffId] && (
+          <div className="mt-3 rounded-lg border border-border-tertiary overflow-hidden">
+            {staffScheduleMap[expandedStaffId].length === 0 ? (
+              <div className="px-4 py-6 text-center text-[12px] text-txt-quaternary">
+                오늘 예정된 일정이 없습니다
+              </div>
+            ) : (
+              staffScheduleMap[expandedStaffId].map((s, i) => {
+                const isSameDay = s.start_date === s.end_date
+                const isTimeType = isSameDay && !!s.start_time
+                const isRangeType = !isSameDay
+                const typeLabel = TYPE_LABELS[s.schedule_type] || s.schedule_type
+
+                return (
+                  <div
+                    key={s.id}
+                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-surface-secondary/50 transition ${
+                      i > 0 ? 'border-t border-border-tertiary' : ''
+                    }`}
+                    onClick={() => onScheduleClick(s)}
+                  >
+                    {/* 시간 라벨 */}
+                    <span className={`shrink-0 w-[90px] text-[12px] tabular-nums ${
+                      isTimeType ? 'text-txt-primary font-medium' : 'text-txt-tertiary'
+                    }`}>
+                      {isTimeType ? '●' : isRangeType ? '▬' : '○'}{' '}
+                      {getScheduleLabel(s)}
+                    </span>
+
+                    {/* 제목 */}
+                    <span className="flex-1 text-[13px] text-txt-primary truncate">{s.title}</span>
+
+                    {/* 분류 배지 */}
+                    <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                      s.schedule_type === 'project' ? 'bg-blue-50 text-blue-600' :
+                      s.schedule_type === 'promo' ? 'bg-yellow-50 text-yellow-700' :
+                      s.schedule_type === 'ai' ? 'bg-cyan-50 text-cyan-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {typeLabel}
+                    </span>
+
+                    {/* 완료 체크 */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onToggleConfirmed(s.id, !s.confirmed) }}
+                      className={`shrink-0 w-5 h-5 rounded border flex items-center justify-center transition ${
+                        s.confirmed
+                          ? 'bg-accent border-accent text-white'
+                          : 'border-border-secondary hover:border-accent'
+                      }`}
+                    >
+                      {s.confirmed && <span className="text-[10px]">&#10003;</span>}
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
 //  일정 추가/수정 모달
 // ============================================================
 function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClose, onSave, onDelete }: {
@@ -600,6 +803,10 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
   const [memo, setMemo] = useState(schedule?.memo || '')
   const [confirmed, setConfirmed] = useState(schedule?.confirmed ?? false)
   const [saving, setSaving] = useState(false)
+  const [startTime, setStartTime] = useState(schedule?.start_time || '')
+  const [endTime, setEndTime] = useState(schedule?.end_time || '')
+
+  const isSameDay = startDate === endDate
 
   // 시작일 변경 시: 오늘 이후 + 종료일이 시작일 이전이면 종료일 자동 동기화
   const setStartDate = (next: string) => {
@@ -643,6 +850,8 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
       schedule_type: finalType,
       memo: memo || null,
       confirmed, color, all_day: true,
+      start_time: isSameDay && startTime ? startTime : null,
+      end_time: isSameDay && endTime ? endTime : null,
       site_id: schedule?.site_id || null,
       project_id: schedule?.project_id || null,
     }
@@ -690,6 +899,36 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
             <div><label className="block text-xs font-medium text-txt-secondary mb-1">종료일 *</label>
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" /></div>
           </div>
+          {isSameDay && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-txt-secondary mb-1">시작 시간</label>
+                <select value={startTime} onChange={e => setStartTime(e.target.value)}
+                  className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
+                  <option value="">종일</option>
+                  {Array.from({ length: 31 }, (_, i) => {
+                    const h = Math.floor(i / 2) + 7
+                    const m = i % 2 === 0 ? '00' : '30'
+                    const v = `${String(h).padStart(2, '0')}:${m}`
+                    return <option key={v} value={v}>{v}</option>
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-txt-secondary mb-1">종료 시간</label>
+                <select value={endTime} onChange={e => setEndTime(e.target.value)}
+                  className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
+                  <option value="">-</option>
+                  {Array.from({ length: 31 }, (_, i) => {
+                    const h = Math.floor(i / 2) + 7
+                    const m = i % 2 === 0 ? '00' : '30'
+                    const v = `${String(h).padStart(2, '0')}:${m}`
+                    return <option key={v} value={v}>{v}</option>
+                  })}
+                </select>
+              </div>
+            </div>
+          )}
           <div>
             <button
               type="button"

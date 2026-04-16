@@ -505,18 +505,18 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       {/* 테이블 */}
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[12px]">
             <thead>
-              <tr>
-                <th className="px-4 py-3 text-left">담당직원</th>
-                <th className="px-4 py-3 text-left">빌라명</th>
-                <th className="px-4 py-3 text-left">호수</th>
-                <th className="px-4 py-3 text-left">연락처</th>
-                <th className="px-4 py-3 text-left">주소</th>
-                <th className="px-4 py-3 text-left">{category === '소규모' ? '지원사업' : '종류'}</th>
-                <th className="px-4 py-3 text-left">상담내역</th>
-                <th className="px-4 py-3 text-left">단계</th>
-                <th className="w-10 px-2 py-3"></th>
+              <tr className="bg-surface-secondary/50">
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">담당</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">빌라명</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">호수</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">연락처</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">주소</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">{category === '소규모' ? '지원사업' : '종류'}</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">상담내역</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">단계</th>
+                <th className="w-8 px-1 py-2"></th>
               </tr>
             </thead>
             <tbody>
@@ -537,31 +537,31 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                   <tr
                     key={project.id}
                     onClick={() => setSelectedProjectId(project.id)}
-                    className={`border-b border-border-primary cursor-pointer transition-colors ${
+                    className={`border-b border-border-primary cursor-pointer transition-colors hover:bg-surface-secondary/40 ${
                       selectedProjectId === project.id
                         ? 'bg-accent-light'
                         : ''
                     }`}
                   >
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 py-1.5">
                       {project.staff?.name ? (
                         <span
-                          className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-semibold text-white whitespace-nowrap"
+                          className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-semibold text-white whitespace-nowrap"
                           style={{ backgroundColor: project.staff.color || '#94a3b8' }}
                         >
                           {project.staff.name}
                         </span>
                       ) : (
-                        <span className="text-txt-quaternary">-</span>
+                        <span className="text-txt-quaternary text-[11px]">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-txt-primary">{project.building_name || '-'}</td>
-                    <td className="px-4 py-2.5 text-txt-secondary">{[project.dong, project.ho].filter(Boolean).join(' ') || '-'}</td>
-                    <td className="px-4 py-2.5 text-txt-secondary">{project.owner_phone ? formatPhone(project.owner_phone) : '-'}</td>
-                    <td className="px-4 py-2.5 text-txt-secondary max-w-[200px] truncate" title={project.road_address || ''}>
+                    <td className="px-3 py-1.5 font-medium text-txt-primary">{project.building_name || '-'}</td>
+                    <td className="px-3 py-1.5 text-txt-secondary">{[project.dong, project.ho].filter(Boolean).join(' ') || '-'}</td>
+                    <td className="px-3 py-1.5 text-txt-secondary">{project.owner_phone ? formatPhone(project.owner_phone) : '-'}</td>
+                    <td className="px-3 py-1.5 text-txt-secondary max-w-[180px] truncate" title={project.road_address || ''}>
                       {project.road_address || '-'}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 py-1.5">
                       {category === '소규모' ? (
                         <span className={`badge ${getTypeBadgeColor()}`}>
                           {project.support_program || project.work_types?.name || '-'}
@@ -577,10 +577,10 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-txt-tertiary max-w-[160px] truncate" title={project.note || ''}>
+                    <td className="px-3 py-1.5 text-txt-tertiary max-w-[140px] truncate" title={project.note || ''}>
                       {project.note || '-'}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 py-1.5">
                       <span className={`badge ${getStepBadgeColor(project.status)}`}>
                         {project.status}
                       </span>

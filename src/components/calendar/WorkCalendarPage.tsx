@@ -89,6 +89,7 @@ export default function WorkCalendarPage() {
   const [showModal, setShowModal] = useState(false)
   const [editSchedule, setEditSchedule] = useState<Schedule | null>(null)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [showDailyLog, setShowDailyLog] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
   const daysInMonth = new Date(month.year, month.month + 1, 0).getDate()
@@ -368,6 +369,7 @@ export default function WorkCalendarPage() {
               await supabase.from('schedules').update({ confirmed }).eq('id', id)
               loadData()
             }}
+            onOpenDailyLog={() => setShowDailyLog(true)}
           />
         </>
       ) : (
@@ -381,6 +383,15 @@ export default function WorkCalendarPage() {
           onClose={() => { setShowModal(false); setEditSchedule(null); setSelectedDate(null) }}
           onSave={() => { setShowModal(false); setEditSchedule(null); setSelectedDate(null); loadData() }}
           onDelete={editSchedule ? () => handleDelete(editSchedule.id) : undefined} />
+      )}
+
+      {showDailyLog && (
+        <DailyLogModal
+          staffId={typeof window !== 'undefined' ? localStorage.getItem('dawoo_current_staff_id') : null}
+          schedules={schedules}
+          staffList={staffList}
+          onClose={() => setShowDailyLog(false)}
+        />
       )}
     </div>
   )
@@ -595,6 +606,7 @@ function TodaySection({
   currentStaffId,
   onScheduleClick,
   onToggleConfirmed,
+  onOpenDailyLog,
 }: {
   schedules: Schedule[]
   staffList: Staff[]
@@ -602,6 +614,7 @@ function TodaySection({
   currentStaffId: string | null
   onScheduleClick: (s: Schedule) => void
   onToggleConfirmed: (id: string, confirmed: boolean) => void
+  onOpenDailyLog?: () => void
 }) {
   const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null)
   const today = new Date().toISOString().slice(0, 10)
@@ -670,15 +683,26 @@ function TodaySection({
         <span className="text-[12px] text-txt-tertiary">
           {today.slice(5).replace('-', '/')} ({todayDay})
         </span>
-        <span className="text-[12px] text-txt-quaternary ml-auto">
+        <span className="text-[12px] text-txt-quaternary ml-auto mr-2">
           총 {todaySchedules.length}건
         </span>
+        <button
+          onClick={() => onOpenDailyLog?.()}
+          className="px-3 py-1.5 text-[12px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition"
+        >
+          업무일지
+        </button>
       </div>
 
       {/* 직원 카드 그리드 */}
       <div className="p-4">
+        {sortedStaff.filter(s => (staffScheduleMap[s.id]?.length || 0) > 0).length === 0 ? (
+          <div className="py-6 text-center text-[13px] text-txt-quaternary">
+            오늘 예정된 일정이 없습니다
+          </div>
+        ) : (
         <div className="grid grid-cols-5 gap-3">
-          {sortedStaff.map(staff => {
+          {sortedStaff.filter(s => (staffScheduleMap[s.id]?.length || 0) > 0).map(staff => {
             const color = staffColorMap[staff.id] || '#999'
             const count = staffScheduleMap[staff.id]?.length || 0
             const isExpanded = expandedStaffId === staff.id
@@ -714,6 +738,7 @@ function TodaySection({
             )
           })}
         </div>
+        )}
 
         {/* 아코디언: 선택된 직원의 일정 리스트 */}
         {expandedStaffId && staffScheduleMap[expandedStaffId] && (
@@ -1137,6 +1162,248 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
             <button onClick={handleSubmit} disabled={saving || !title || !startDate || !endDate}
               className="px-5 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium shadow-sm">{saving ? '저장 중...' : '저장'}</button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+//  업무일지 모달
+// ============================================================
+function DailyLogModal({
+  staffId,
+  schedules,
+  staffList,
+  onClose,
+}: {
+  staffId: string | null
+  schedules: Schedule[]
+  staffList: Staff[]
+  onClose: () => void
+}) {
+  const [logDate, setLogDate] = useState(new Date().toISOString().slice(0, 10))
+  const [memo, setMemo] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  // Load existing log
+  useEffect(() => {
+    if (!staffId) return
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('daily_logs')
+          .select('*')
+          .eq('staff_id', staffId)
+          .eq('log_date', logDate)
+          .maybeSingle()
+        if (data) {
+          setMemo(data.memo || '')
+        } else {
+          setMemo('')
+        }
+      } catch {
+        // daily_logs table may not exist yet
+        setMemo('')
+      }
+    })()
+  }, [staffId, logDate])
+
+  // Today's schedules for this staff
+  const todaySchedules = useMemo(() =>
+    schedules.filter(s =>
+      s.start_date <= logDate && s.end_date >= logDate &&
+      (s.staff_id === staffId || (s.staff_ids && s.staff_ids.includes(staffId || '')))
+    ).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+  , [schedules, logDate, staffId])
+
+  const completed = todaySchedules.filter(s => s.confirmed)
+  const incomplete = todaySchedules.filter(s => !s.confirmed)
+
+  // Tomorrow's schedules
+  const tomorrow = new Date(logDate)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowStr = tomorrow.toISOString().slice(0, 10)
+
+  const tomorrowSchedules = useMemo(() =>
+    schedules.filter(s =>
+      s.start_date <= tomorrowStr && s.end_date >= tomorrowStr &&
+      (s.staff_id === staffId || (s.staff_ids && s.staff_ids.includes(staffId || '')))
+    ).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+  , [schedules, tomorrowStr, staffId])
+
+  // My projects count
+  const [projectStats, setProjectStats] = useState({ active: 0, outstanding: 0, deadline: 0 })
+  useEffect(() => {
+    if (!staffId) return
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('projects')
+          .select('status, outstanding')
+          .eq('staff_id', staffId)
+        if (data) {
+          const active = data.filter((p: { status: string }) => !['취소', '입금'].includes(p.status)).length
+          const outstanding = data.filter((p: { outstanding: number }) => p.outstanding > 0).length
+          setProjectStats({ active, outstanding, deadline: 0 })
+        }
+      } catch {
+        // ignore
+      }
+    })()
+  }, [staffId])
+
+  const staffName = staffList.find(s => s.id === staffId)?.name || ''
+
+  // Date navigation
+  const prevDay = () => {
+    const d = new Date(logDate)
+    d.setDate(d.getDate() - 1)
+    setLogDate(d.toISOString().slice(0, 10))
+  }
+  const nextDay = () => {
+    const d = new Date(logDate)
+    d.setDate(d.getDate() + 1)
+    setLogDate(d.toISOString().slice(0, 10))
+  }
+
+  const dayNames = ['일','월','화','수','목','금','토']
+  const dateObj = new Date(logDate)
+  const dateLabel = `${dateObj.getMonth()+1}월 ${dateObj.getDate()}일 (${dayNames[dateObj.getDay()]})`
+
+  const handleSave = async () => {
+    if (!staffId) return
+    setSaving(true)
+    try {
+      const payload = {
+        staff_id: staffId,
+        log_date: logDate,
+        completed_items: completed.map(s => ({ id: s.id, title: s.title, time: s.start_time })),
+        incomplete_items: incomplete.map(s => ({ id: s.id, title: s.title, time: s.start_time })),
+        tomorrow_items: tomorrowSchedules.map(s => ({ id: s.id, title: s.title, time: s.start_time })),
+        memo: memo || null,
+        project_summary: projectStats,
+      }
+
+      const { data: existing } = await supabase
+        .from('daily_logs')
+        .select('id')
+        .eq('staff_id', staffId)
+        .eq('log_date', logDate)
+        .maybeSingle()
+
+      if (existing) {
+        await supabase.from('daily_logs').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', existing.id)
+      } else {
+        await supabase.from('daily_logs').insert(payload)
+      }
+
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      // daily_logs table may not exist yet — fail gracefully
+      alert('업무일지 테이블이 아직 생성되지 않았습니다.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-[640px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {/* Header with date navigation */}
+        <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] font-semibold text-txt-primary">업무일지</span>
+            {staffName && <span className="text-[12px] text-txt-tertiary">({staffName})</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={prevDay} className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-tertiary text-txt-secondary">&lsaquo;</button>
+            <span className="text-[13px] font-medium text-txt-primary min-w-[120px] text-center">{dateLabel}</span>
+            <button onClick={nextDay} className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-tertiary text-txt-secondary">&rsaquo;</button>
+          </div>
+          <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Project summary */}
+          <div className="p-3 bg-surface-secondary rounded-lg">
+            <p className="text-[11px] font-semibold text-txt-tertiary mb-1">내 담당 프로젝트</p>
+            <div className="flex gap-4 text-[12px]">
+              <span>진행중 <span className="font-semibold text-accent">{projectStats.active}건</span></span>
+              <span>미수금 <span className="font-semibold text-[#e57e25]">{projectStats.outstanding}건</span></span>
+            </div>
+          </div>
+
+          {/* Today / Tomorrow side by side */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Left: Today */}
+            <div>
+              <h4 className="text-[12px] font-semibold text-txt-primary mb-2">오늘 한 일</h4>
+              {completed.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-[10px] font-medium text-green-600 mb-1">완료 {completed.length}건</p>
+                  {completed.map(s => (
+                    <div key={s.id} className="text-[12px] text-txt-secondary py-0.5">
+                      {s.start_time && <span className="text-txt-tertiary tabular-nums mr-1">{s.start_time}</span>}
+                      {s.title}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {incomplete.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-medium text-[#e57e25] mb-1">미완료 {incomplete.length}건</p>
+                  {incomplete.map(s => (
+                    <div key={s.id} className="text-[12px] text-txt-secondary py-0.5">
+                      {s.start_time && <span className="text-txt-tertiary tabular-nums mr-1">{s.start_time}</span>}
+                      {s.title}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {todaySchedules.length === 0 && (
+                <p className="text-[12px] text-txt-quaternary">일정 없음</p>
+              )}
+            </div>
+
+            {/* Right: Tomorrow */}
+            <div>
+              <h4 className="text-[12px] font-semibold text-txt-primary mb-2">내일 할 일</h4>
+              {tomorrowSchedules.length > 0 ? (
+                tomorrowSchedules.map(s => (
+                  <div key={s.id} className="text-[12px] text-txt-secondary py-0.5">
+                    {s.start_time && <span className="text-txt-tertiary tabular-nums mr-1">{s.start_time}</span>}
+                    {s.title}
+                  </div>
+                ))
+              ) : (
+                <p className="text-[12px] text-txt-quaternary">일정 없음</p>
+              )}
+            </div>
+          </div>
+
+          {/* Memo */}
+          <div>
+            <label className="block text-[12px] font-semibold text-txt-primary mb-1">메모</label>
+            <textarea
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              rows={5}
+              placeholder="오늘 업무 내용, 특이사항, 내일 추가 할 일 등을 메모하세요..."
+              className="w-full bg-surface border border-border-primary rounded-lg px-3 py-2.5 text-[13px] text-txt-primary focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none resize-none leading-relaxed"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3.5 border-t border-border-tertiary flex items-center justify-end gap-2">
+          {saved && <span className="text-[12px] text-green-600 font-medium mr-2">저장됨</span>}
+          <button onClick={onClose} className="px-4 py-2 text-[13px] border border-border-primary rounded-lg hover:bg-surface-tertiary transition">닫기</button>
+          <button onClick={handleSave} disabled={saving}
+            className="px-5 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 transition">
+            {saving ? '저장 중...' : '저장'}
+          </button>
         </div>
       </div>
     </div>

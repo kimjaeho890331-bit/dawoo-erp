@@ -908,13 +908,22 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
   const previewVat = Math.round(previewCost * 0.1)
   const previewTotal = previewCost + previewVat
 
+  const timelineSteps = [
+    { num: 1, label: '실측', color: 'bg-sky-500', textColor: 'text-sky-700' },
+    { num: 2, label: '견적', color: 'bg-indigo-500', textColor: 'text-indigo-700' },
+    { num: 3, label: '동의서', color: 'bg-violet-500', textColor: 'text-violet-700' },
+    { num: 4, label: '신청서', color: 'bg-purple-500', textColor: 'text-purple-700' },
+  ]
+
   return (
-    <div className="space-y-5">
-      <section>
-        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-sky-700 mb-3">
-          <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] flex items-center justify-center font-bold">1</span>
-          실측
-        </h3>
+    <div className="relative pl-8">
+      {/* 타임라인 세로 선 */}
+      <div className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-border-primary" />
+
+      {/* ① 실측 */}
+      <div className="relative pb-8">
+        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[0].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>1</div>
+        <h3 className={`text-[13px] font-semibold ${timelineSteps[0].textColor} mb-3`}>실측</h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} timeValue={getVal('survey_time') as string} onTimeChange={v => onChange('survey_time', v)} />
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
@@ -935,14 +944,12 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">실측사진</p>
           <FileDropZone projectId={project.id} fileType="실측사진" accept="image/*" multiple compact />
         </div>
-      </section>
+      </div>
 
-      <section>
-        <div className="border-t-2 border-dashed border-border-primary my-2" />
-        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-indigo-700 mb-3">
-          <span className="w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
-          견적
-        </h3>
+      {/* ② 견적 */}
+      <div className="relative pb-8">
+        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[1].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>2</div>
+        <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor} mb-3`}>견적</h3>
         {/* 공문 기준 견적 산출 정보 */}
         {area > 0 && (
           <div className="mb-3 p-3 bg-[#eef2ff] rounded-lg border border-[#c7d2fe]">
@@ -1019,15 +1026,13 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
         >
           견적서 열기
         </button>
-      </section>
+      </div>
 
+      {/* ③ 동의서 */}
       {project.water_work_type !== '옥내' && (
-      <section>
-        <div className="border-t-2 border-dashed border-border-primary my-2" />
-        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-violet-700 mb-3">
-          <span className="w-5 h-5 rounded-full bg-violet-500 text-white text-[10px] flex items-center justify-center font-bold">3</span>
-          동의서
-        </h3>
+      <div className="relative pb-8">
+        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[2].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>3</div>
+        <h3 className={`text-[13px] font-semibold ${timelineSteps[2].textColor} mb-3`}>동의서</h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
           <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />
@@ -1036,15 +1041,13 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
           <FileDropZone projectId={project.id} fileType="동의서" accept="image/*,application/pdf" compact />
         </div>
-      </section>
+      </div>
       )}
 
-      <section>
-        <div className="border-t-2 border-dashed border-border-primary my-2" />
-        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-purple-700 mb-3">
-          <span className="w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] flex items-center justify-center font-bold">4</span>
-          신청서
-        </h3>
+      {/* ④ 신청서 */}
+      <div className="relative pb-4">
+        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[3].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>{project.water_work_type === '옥내' ? 3 : 4}</div>
+        <h3 className={`text-[13px] font-semibold ${timelineSteps[3].textColor} mb-3`}>신청서</h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
           <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />
@@ -1057,7 +1060,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
           <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
         </div>
-      </section>
+      </div>
 
       {/* 수금 (1~3단계 공통) */}
       <section>

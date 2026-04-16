@@ -238,7 +238,14 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       <div className="fixed right-0 top-0 h-full w-[600px] bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.12)] z-40 flex flex-col animate-slide-in overflow-hidden">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-primary">
-          <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">{project.building_name || '(이름없음)'}</h2>
+          <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">
+            {project.building_name || '(이름없음)'}
+            {project.water_work_type && (
+              <span className="ml-2 text-[12px] font-normal text-txt-tertiary">
+                ({project.water_work_type})
+              </span>
+            )}
+          </h2>
           <div className="flex items-center gap-2">
             {hasChanges && (
               <button
@@ -298,19 +305,25 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             />
             {/* 단계 점 */}
             <div className="relative flex justify-between">
-              {PROGRESS_STEPS.map((step, idx) => (
-                <div key={step} className="flex flex-col items-center" style={{ width: '10%' }}>
+              {PROGRESS_STEPS.map((step, idx) => {
+                const isSkippedStep = idx === 3 && project.water_work_type === '옥내'
+                return (
+                <div key={step} className={`flex flex-col items-center ${isSkippedStep ? 'opacity-30' : ''}`} style={{ width: '10%' }}>
                   <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[9px] font-semibold transition-all ${
-                    idx < currentStepIdx
+                    isSkippedStep
+                      ? 'bg-surface text-txt-quaternary border-2 border-dashed border-[#d1d5db]'
+                      : idx < currentStepIdx
                       ? 'bg-accent text-white'
                       : idx === currentStepIdx
                       ? 'bg-accent text-white shadow-md shadow-accent/20'
                       : 'bg-surface text-txt-quaternary border-2 border-[#f3f4f6]'
                   }`}>
-                    {idx < currentStepIdx ? <Check size={12} className="text-white" /> : idx + 1}
+                    {isSkippedStep ? '-' : idx < currentStepIdx ? <Check size={12} className="text-white" /> : idx + 1}
                   </div>
                   <span className={`mt-1 text-[9px] leading-tight text-center whitespace-nowrap ${
-                    idx === currentStepIdx
+                    isSkippedStep
+                      ? 'text-txt-quaternary line-through'
+                      : idx === currentStepIdx
                       ? 'text-accent font-medium'
                       : idx < currentStepIdx
                       ? 'text-txt-secondary'
@@ -319,7 +332,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
                     {STEP_LABELS_SHORT[idx]}
                   </span>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
@@ -329,32 +343,17 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
         {/* 상시 표시 영역 (항상 전체 표시) */}
         <div className="px-6 py-3 border-b border-border-tertiary bg-surface-secondary">
-          {/* 1행: 소유주 / 연락처 / 담당자 */}
+          {/* 1행: 주소 */}
+          <div className="text-[12px] text-txt-secondary mb-1.5">{project.road_address || project.jibun_address || '-'}</div>
+          {project.jibun_address && project.road_address && (
+            <div className="text-[11px] text-txt-quaternary mb-1.5">{project.jibun_address}</div>
+          )}
+          {/* 2행: 소유주 / 연락처 / 담당자 */}
           <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
             <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
             <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
             <InfoField label="담당자" value={project.staff?.name || '-'} />
           </div>
-          {/* 2행: 빌라명+동 / 단계 */}
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[14px] font-semibold text-txt-primary">
-              {project.building_name || '(이름없음)'}
-              {project.dong ? ` ${project.dong}` : ''}
-            </span>
-            <span className={`badge ${
-              currentStepIdx <= 4 ? 'bg-status-docs-bg text-status-docs-text' :
-              currentStepIdx <= 7 ? 'bg-status-construction-bg text-status-construction-text' :
-              'bg-status-done-bg text-status-done-text'
-            }`}>{project.status}</span>
-          </div>
-          {/* 3행: 주소 */}
-          <div className="text-[12px] text-txt-secondary mb-1.5">{project.jibun_address || project.road_address || '-'}</div>
-          {/* 4행: 지원사업 */}
-          {project.support_program && (
-            <div className="text-[12px] mb-1.5">
-              <span className="text-txt-tertiary">지원사업:</span> <span className="text-txt-primary">{project.support_program}</span>
-            </div>
-          )}
           {/* 상담내역 인라인 편집 */}
           <div className="mb-2">
             <span className="text-[11px] text-txt-tertiary">상담내역</span>
@@ -779,6 +778,15 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
           <LockedFormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} locked={apiFieldsLocked} />
           <LockedFormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} locked={apiFieldsLocked} />
         </div>
+        {/* 전유면적 요약 표시 */}
+        {(getVal('exclusive_area') as number) > 0 && (getVal('unit_count') as number) > 0 && (
+          <div className="mt-3 p-2.5 bg-surface-tertiary rounded-lg text-[12px] text-txt-secondary">
+            <span className="text-txt-tertiary">면적 요약:</span>{' '}
+            <span className="font-medium text-txt-primary">{String(getVal('exclusive_area'))}m²</span>
+            {' x '}
+            <span className="font-medium text-txt-primary">{String(getVal('unit_count'))}세대</span>
+          </div>
+        )}
       </section>
 
       <section>
@@ -998,6 +1006,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
         </button>
       </section>
 
+      {project.water_work_type !== '옥내' && (
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -1009,6 +1018,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <FileDropZone projectId={project.id} fileType="동의서" accept="image/*,application/pdf" compact />
         </div>
       </section>
+      )}
 
       <section>
         <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">신청서</h3>

@@ -432,45 +432,19 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         </div>
       </div>
 
-      {/* 진행 흐름도 (항상 표시 — 업무 프로세스 가이드) */}
-      <div className="mb-4">
-        <div className="px-4 py-3 bg-surface border border-border-primary rounded-[10px]">
-          <div className="flex items-center gap-1 mb-1.5">
-            <span className="text-[11px] font-semibold text-txt-tertiary">진행 프로세스</span>
-            <span className="text-[10px] text-txt-quaternary ml-1">접수부터 수금까지의 업무 흐름</span>
-          </div>
-          <div className="flex items-center">
-            {PROGRESS_STEPS.map((step, i) => {
-              const groupColors = [
-                'bg-slate-500', 'bg-sky-500',          // 접수: 문의, 실측
-                'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', // 서류: 견적, 동의, 신청
-                'bg-emerald-600',                       // 승인
-                'bg-teal-500', 'bg-amber-500',          // 시공: 착공, 공사
-                'bg-blue-600',                          // 완료서류
-                'bg-green-600',                         // 입금
-              ]
-              return (
-                <div key={step} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center flex-1">
-                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${groupColors[i]}`}>
-                      {i + 1}
-                    </span>
-                    <span className="text-[11px] font-medium text-txt-secondary mt-1">{STEP_LABELS_SHORT[i]}</span>
-                  </div>
-                  {i < PROGRESS_STEPS.length - 1 && (
-                    <span className="text-txt-quaternary text-[12px] -mx-1">→</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-          <div className="flex mt-2 text-[9px] text-txt-quaternary">
-            <div className="flex-[2] text-center border-t border-slate-300 pt-0.5">접수</div>
-            <div className="flex-[3] text-center border-t border-indigo-300 pt-0.5">서류</div>
-            <div className="flex-[1] text-center border-t border-emerald-300 pt-0.5">승인</div>
-            <div className="flex-[2] text-center border-t border-amber-300 pt-0.5">시공</div>
-            <div className="flex-[2] text-center border-t border-green-300 pt-0.5">완료·수금</div>
-          </div>
+      {/* 진행 프로세스 가이드 — 오른쪽 상단 고정 */}
+      <div className="flex justify-end mb-3">
+        <div className="flex items-center gap-1 px-3 py-1.5 bg-surface border border-border-primary rounded-lg">
+          {PROGRESS_STEPS.map((step, i) => {
+            const colors = ['bg-slate-400','bg-sky-500','bg-indigo-500','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
+            return (
+              <div key={step} className="flex items-center gap-0.5">
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${colors[i]}`}>{i+1}</span>
+                <span className="text-[10px] text-txt-secondary">{STEP_LABELS_SHORT[i]}</span>
+                {i < PROGRESS_STEPS.length - 1 && <span className="text-[9px] text-txt-quaternary mx-0.5">›</span>}
+              </div>
+            )
+          })}
         </div>
       </div>
 

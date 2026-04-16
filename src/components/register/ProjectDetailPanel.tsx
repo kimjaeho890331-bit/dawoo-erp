@@ -21,7 +21,7 @@ const STEP_LABELS_SHORT = [
   '승인', '착공', '공사', '완료', '입금',
 ]
 
-const TABS = ['기본정보', '접수', '승인(시공)', '완료', '이력'] as const
+const TABS = ['접수', '승인(시공)', '완료', '이력', '기본정보'] as const
 type TabKey = (typeof TABS)[number]
 
 function getStepIndex(step: string): number {
@@ -38,7 +38,7 @@ interface Props {
 }
 
 export default function ProjectDetailPanel({ project, category, onClose, onDelete, onRefresh }: Props) {
-  const [activeTab, setActiveTab] = useState<TabKey>('기본정보')
+  const [activeTab, setActiveTab] = useState<TabKey>('접수')
   const [editData, setEditData] = useState<Record<string, string | number | null>>({})
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
@@ -55,11 +55,10 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       setApiFieldsLocked(true)
       // 현재 단계에 맞는 탭 자동 선택
       const stepIdx = getStepIndex(project.status)
-      if (stepIdx <= 0) setActiveTab('기본정보')
-      else if (stepIdx <= 4) setActiveTab('접수')
+      if (stepIdx <= 4) setActiveTab('접수')
       else if (stepIdx <= 7) setActiveTab('승인(시공)')
       else if (stepIdx <= 9) setActiveTab('완료')
-      else setActiveTab('기본정보')
+      else setActiveTab('접수')
     }
   }, [project])
 
@@ -353,6 +352,12 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
                 {project.water_work_type}
               </span>
             )}
+            <button
+              onClick={() => setActiveTab('기본정보')}
+              className="ml-auto text-[11px] text-txt-tertiary hover:text-accent transition-colors"
+            >
+              수정
+            </button>
           </div>
           {/* 주소 (도로명만 표시, 지번은 기본정보 탭에서) */}
           <div className="text-[12px] text-txt-secondary mb-1.5">{project.road_address || project.jibun_address || '-'}</div>
@@ -384,6 +389,11 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               </p>
             )}
           </div>
+          {project.tenant_phone && (
+            <div className="text-[12px] text-txt-secondary mb-1">
+              <span className="text-txt-tertiary">세입자: </span>{project.tenant_phone}
+            </div>
+          )}
           {/* 금액 5개 */}
           <div className="grid grid-cols-5 gap-2 pt-2 border-t border-surface-tertiary">
             <MiniStat label="총공사비" value={project.total_cost} />
@@ -731,6 +741,37 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
   return (
     <div className="space-y-5">
       <section>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">건축물대장 (표제부)</h3>
+        <div className="space-y-3">
+          <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
+        </div>
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <LockedFormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="면적 (m2)" type="number" value={getVal('area') as number} onChange={v => onChange('area', Number(v) || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} locked={apiFieldsLocked} />
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">전유부</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <LockedFormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} locked={apiFieldsLocked} />
+          <LockedFormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} locked={apiFieldsLocked} />
+        </div>
+        {/* 전유면적 요약 표시 */}
+        {(getVal('exclusive_area') as number) > 0 && (getVal('unit_count') as number) > 0 && (
+          <div className="mt-3 p-2.5 bg-surface-tertiary rounded-lg text-[12px] text-txt-secondary">
+            <span className="text-txt-tertiary">면적 요약:</span>{' '}
+            <span className="font-medium text-txt-primary">{String(getVal('exclusive_area'))}m²</span>
+            {' x '}
+            <span className="font-medium text-txt-primary">{String(getVal('unit_count'))}세대</span>
+          </div>
+        )}
+      </section>
+
+      <section>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider">소유주/세입자</h3>
           <button
@@ -770,73 +811,6 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
           <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
         </div>
       </section>
-
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">주소</h3>
-        <div className="space-y-3">
-          <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
-        </div>
-        <div className="grid grid-cols-3 gap-3 mt-3">
-          <LockedFormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} locked={apiFieldsLocked} />
-        </div>
-        <div className="grid grid-cols-3 gap-3 mt-3">
-          <LockedFormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} locked={apiFieldsLocked} />
-        </div>
-        {/* 전유면적 요약 표시 */}
-        {(getVal('exclusive_area') as number) > 0 && (getVal('unit_count') as number) > 0 && (
-          <div className="mt-3 p-2.5 bg-surface-tertiary rounded-lg text-[12px] text-txt-secondary">
-            <span className="text-txt-tertiary">면적 요약:</span>{' '}
-            <span className="font-medium text-txt-primary">{String(getVal('exclusive_area'))}m²</span>
-            {' x '}
-            <span className="font-medium text-txt-primary">{String(getVal('unit_count'))}세대</span>
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">통장 정보</h3>
-
-        {/* 통장사본 OCR 업로드 */}
-        <div className="mb-3">
-          <label
-            className="flex flex-col items-center justify-center border-2 border-dashed border-border-secondary rounded-lg p-4 cursor-pointer hover:border-accent hover:bg-accent/5 transition-colors"
-            onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
-            onDrop={e => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) handleBankImageUpload(f) }}
-          >
-            {ocrLoading ? (
-              <p className="text-[13px] text-accent">OCR 처리 중...</p>
-            ) : bankImage ? (
-              <div className="flex items-center gap-3">
-                <img src={bankImage} alt="통장사본" className="h-16 rounded border border-border-primary" />
-                <p className="text-[11px] text-txt-secondary">통장사본 업로드 완료</p>
-              </div>
-            ) : (
-              <>
-                <p className="text-[13px] text-txt-tertiary">통장사본 이미지를 드래그하거나 클릭</p>
-                <p className="text-[10px] text-txt-quaternary mt-1">은행명, 계좌번호, 예금주 자동 추출</p>
-              </>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleBankImageUpload(f) }}
-            />
-          </label>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <FormInput label="은행" placeholder="국민은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} />
-          <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
-          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
-        </div>
-      </section>
-
-      {/* 메모는 상시표시 영역으로 이동 (펼치기 시 인라인 편집) */}
     </div>
   )
 }
@@ -912,17 +886,18 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
     { num: 1, label: '실측', color: 'bg-sky-500', textColor: 'text-sky-700' },
     { num: 2, label: '견적', color: 'bg-indigo-500', textColor: 'text-indigo-700' },
     { num: 3, label: '동의서', color: 'bg-violet-500', textColor: 'text-violet-700' },
-    { num: 4, label: '신청서', color: 'bg-purple-500', textColor: 'text-purple-700' },
+    { num: 4, label: '통장', color: 'bg-pink-500', textColor: 'text-pink-700' },
+    { num: 5, label: '신청서', color: 'bg-purple-500', textColor: 'text-purple-700' },
   ]
 
   return (
-    <div className="relative pl-8">
+    <div className="relative pl-10">
       {/* 타임라인 세로 선 */}
       <div className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-border-primary" />
 
       {/* ① 실측 */}
       <div className="relative pb-8">
-        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[0].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>1</div>
+        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[0].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>1</div>
         <h3 className={`text-[13px] font-semibold ${timelineSteps[0].textColor} mb-3`}>실측</h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} timeValue={getVal('survey_time') as string} onTimeChange={v => onChange('survey_time', v)} />
@@ -936,7 +911,6 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
         )}
         {category === '수도' && (
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
             <FormInput label="세대 비밀번호" placeholder="예: 1234#" value={getVal('unit_password') as string} onChange={v => onChange('unit_password', v || null)} />
           </div>
         )}
@@ -948,7 +922,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
 
       {/* ② 견적 */}
       <div className="relative pb-8">
-        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[1].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>2</div>
+        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[1].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>2</div>
         <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor} mb-3`}>견적</h3>
         {/* 공문 기준 견적 산출 정보 */}
         {area > 0 && (
@@ -1031,7 +1005,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       {/* ③ 동의서 */}
       {project.water_work_type !== '옥내' && (
       <div className="relative pb-8">
-        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[2].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>3</div>
+        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[2].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>3</div>
         <h3 className={`text-[13px] font-semibold ${timelineSteps[2].textColor} mb-3`}>동의서</h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
@@ -1044,10 +1018,25 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       </div>
       )}
 
-      {/* ④ 신청서 */}
+      {/* ④ 통장 */}
+      <div className="relative pb-8">
+        <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-pink-500 text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
+        <h3 className="text-[13px] font-semibold text-pink-700 mb-3">통장</h3>
+        <div className="mb-3">
+          <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
+          <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <FormInput label="은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} placeholder="국민은행" />
+          <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
+          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
+        </div>
+      </div>
+
+      {/* ⑤ 신청서 */}
       <div className="relative pb-4">
-        <div className={`absolute left-[-21px] w-6 h-6 rounded-full ${timelineSteps[3].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>{project.water_work_type === '옥내' ? 3 : 4}</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[3].textColor} mb-3`}>신청서</h3>
+        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[4].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>{project.water_work_type === '옥내' ? 4 : 5}</div>
+        <h3 className={`text-[13px] font-semibold ${timelineSteps[4].textColor} mb-3`}>신청서</h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
           <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />
@@ -1056,17 +1045,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">신청서 첨부</p>
           <FileDropZone projectId={project.id} fileType="신청서" accept="image/*,application/pdf,.hwp" multiple compact />
         </div>
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
-          <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
-        </div>
       </div>
-
-      {/* 수금 (1~3단계 공통) */}
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
-        <PaymentTable projectId={project.id} totalCost={project.total_cost || 0} additionalCost={project.additional_cost || 0} onOutstandingChange={() => {}} />
-      </section>
     </div>
   )
 }

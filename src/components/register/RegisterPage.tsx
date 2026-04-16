@@ -121,14 +121,18 @@ function matchesStatusFilter(step: string, filter: StatusFilter): boolean {
 
 function getStepBadgeColor(step: string): string {
   switch (step) {
-    case '문의': case '실측': return 'bg-status-initial-bg text-status-initial-text'
-    case '견적전달': case '동의서': case '신청서제출': return 'bg-status-docs-bg text-status-docs-text'
-    case '승인': return 'bg-status-approved-bg text-status-approved-text'
-    case '착공계': case '공사': return 'bg-status-construction-bg text-status-construction-text'
-    case '완료서류제출': return 'bg-status-completion-bg text-status-completion-text'
-    case '입금': return 'bg-status-done-bg text-status-done-text'
-    case '취소': return 'bg-status-cancel-bg text-status-cancel-text'
-    default: return 'bg-status-initial-bg text-status-initial-text'
+    case '문의': return 'bg-slate-100 text-slate-600'
+    case '실측': return 'bg-sky-100 text-sky-700'
+    case '견적전달': return 'bg-indigo-100 text-indigo-700'
+    case '동의서': return 'bg-violet-100 text-violet-700'
+    case '신청서제출': return 'bg-purple-100 text-purple-700'
+    case '승인': return 'bg-emerald-100 text-emerald-700'
+    case '착공계': return 'bg-teal-100 text-teal-700'
+    case '공사': return 'bg-amber-100 text-amber-800'
+    case '완료서류제출': return 'bg-blue-100 text-blue-700'
+    case '입금': return 'bg-green-100 text-green-700'
+    case '취소': return 'bg-red-100 text-red-600'
+    default: return 'bg-gray-100 text-gray-600'
   }
 }
 
@@ -544,13 +548,17 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                         : ''
                     }`}
                   >
-                    <td className="px-4 py-2.5 font-medium">
-                      <span className="inline-flex items-center gap-1.5">
-                        {project.staff?.color && (
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: project.staff.color }} />
-                        )}
-                        <span className="text-txt-primary">{project.staff?.name || '-'}</span>
-                      </span>
+                    <td className="px-4 py-2.5">
+                      {project.staff?.name ? (
+                        <span
+                          className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-semibold text-white whitespace-nowrap"
+                          style={{ backgroundColor: project.staff.color || '#94a3b8' }}
+                        >
+                          {project.staff.name}
+                        </span>
+                      ) : (
+                        <span className="text-txt-quaternary">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-txt-primary">{project.building_name || '-'}</td>
                     <td className="px-4 py-2.5 text-txt-secondary">{[project.dong, project.ho].filter(Boolean).join(' ') || '-'}</td>

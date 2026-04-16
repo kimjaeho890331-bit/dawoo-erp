@@ -555,7 +555,16 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
   const [color, setColor] = useState(item?.color || '#5e6ad2')
   const [saving, setSaving] = useState(false)
 
-  const PRESET_COLORS = ['#5e6ad2', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899']
+  const PRESET_COLORS = [
+    // 1행: 파랑~보라 계열
+    '#3B82F6', '#6366F1', '#5e6ad2', '#8B5CF6', '#A855F7', '#D946EF',
+    // 2행: 핑크~빨강 계열
+    '#EC4899', '#F43F5E', '#EF4444', '#F97316', '#F59E0B', '#EAB308',
+    // 3행: 초록~청록 계열
+    '#22C55E', '#10B981', '#14B8A6', '#06B6D4', '#0EA5E9', '#0284C7',
+    // 4행: 어두운 톤
+    '#475569', '#64748B', '#78716C', '#92400E', '#166534', '#1E3A5F',
+  ]
 
   const formatSalary = (v: string) => formatMoney(v)
 
@@ -674,12 +683,17 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
             </div>
             <div className="mt-3">
               <label className={labelCls}>캘린더 색깔</label>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="grid grid-cols-6 gap-1.5 mt-1">
                 {PRESET_COLORS.map(c => (
                   <button key={c} type="button" onClick={() => setColor(c)}
                     className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-accent scale-110' : 'hover:scale-105'}`}
                     style={{ backgroundColor: c }} />
                 ))}
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <input type="color" value={color} onChange={e => setColor(e.target.value)}
+                  className="w-7 h-7 rounded cursor-pointer border-0 p-0" />
+                <span className="text-[11px] text-txt-quaternary">직접 선택</span>
               </div>
             </div>
           </div>

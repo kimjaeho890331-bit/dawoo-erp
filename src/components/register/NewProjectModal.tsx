@@ -507,20 +507,23 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
               {loadingBuilding ? (
                 <p className="text-[12px] text-txt-tertiary">조회 중...</p>
               ) : (
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <p className="text-[10px] text-txt-tertiary">용도</p>
-                    <p className="text-[13px] text-txt-primary">{form.building_use || '-'}</p>
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[10px] text-txt-tertiary">용도</p>
+                      <p className="text-[13px] text-txt-primary">{form.building_use || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-txt-tertiary">세대수</p>
+                      <p className="text-[13px] text-txt-primary">{form.unit_count || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-txt-tertiary">사용승인일</p>
+                      <p className="text-[13px] text-txt-primary">{form.approval_date || '-'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-txt-tertiary">세대수</p>
-                    <p className="text-[13px] text-txt-primary">{form.unit_count || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-txt-tertiary">사용승인일</p>
-                    <p className="text-[13px] text-txt-primary">{form.approval_date || '-'}</p>
-                  </div>
-                </div>
+                  <AreaGroupDisplay units={units} />
+                </>
               )}
             </div>
           )}
@@ -609,31 +612,22 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             ) : (
               <div>
                 <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">공사종류 *</label>
-                <div className="flex gap-2">
-                  {[
-                    { value: '옥내', label: '옥내', color: 'bg-emerald-500' },
-                    { value: '공용', label: '공용', color: 'bg-blue-500' },
-                    { value: '단독', label: '단독', color: 'bg-orange-500' },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        update('water_work_type', opt.value)
-                        // work_type_id도 자동 매핑
-                        const matched = workTypes.find(wt => wt.name.includes(opt.value === '단독' ? '옥내' : opt.value))
-                        if (matched) update('work_type_id', matched.id)
-                      }}
-                      className={`flex-1 h-[36px] rounded-lg text-[13px] font-medium transition-all ${
-                        form.water_work_type === opt.value
-                          ? `${opt.color} text-white shadow-sm`
-                          : 'bg-surface-secondary text-txt-secondary border border-border-primary hover:border-accent'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+                <select
+                  value={form.water_work_type}
+                  onChange={e => {
+                    const v = e.target.value
+                    update('water_work_type', v)
+                    const matched = workTypes.find(wt => wt.name.includes(v === '단독' || v === '개인' ? '옥내' : v))
+                    if (matched) update('work_type_id', matched.id)
+                  }}
+                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+                >
+                  <option value="">선택</option>
+                  <option value="옥내">옥내</option>
+                  <option value="공용">공용</option>
+                  <option value="단독">단독</option>
+                  <option value="개인">개인</option>
+                </select>
               </div>
             )}
             <div>
@@ -708,6 +702,32 @@ function ModalField({
         } ${readOnly ? 'bg-surface-secondary text-txt-secondary cursor-default' : ''}`}
       />
       {error && <p className="text-[11px] text-[#dc2626] mt-1">필수 입력입니다</p>}
+    </div>
+  )
+}
+
+// 전유면적 세대별 그룹핑 표시
+function AreaGroupDisplay({ units }: { units: UnitInfo[] }) {
+  if (units.length === 0) return null
+  const privateUnits = units.filter(u => u.exposPubuseGbCdNm === '전유')
+  if (privateUnits.length === 0) return null
+
+  const areaMap: Record<string, number> = {}
+  privateUnits.forEach(u => {
+    const key = String(u.area)
+    areaMap[key] = (areaMap[key] || 0) + 1
+  })
+
+  return (
+    <div className="mt-2 pt-2 border-t border-border-tertiary">
+      <p className="text-[10px] text-txt-tertiary mb-1">전유면적 (세대별)</p>
+      <div className="flex flex-wrap gap-1.5">
+        {Object.entries(areaMap).map(([area, count]) => (
+          <span key={area} className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-medium">
+            {area}m² x {count}세대
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

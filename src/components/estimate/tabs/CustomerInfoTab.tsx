@@ -77,8 +77,9 @@ interface Props {
   measurements: Measurements
   onMeasurementsChange: (m: Measurements) => void
   areas: Areas
-  costSummary: CostSummary
+  costSummary: CostSummary & { additionalCost?: number }
   checkedWorks: WorkType[]
+  onAdditionalCostChange?: (value: number) => void
 }
 
 // ── 컴포넌트 ──
@@ -91,6 +92,7 @@ export default function CustomerInfoTab({
   areas,
   costSummary,
   checkedWorks,
+  onAdditionalCostChange,
 }: Props) {
   // ── 주소에서 시 이름 자동 추출 ──
 
@@ -329,6 +331,10 @@ export default function CustomerInfoTab({
             {customerInfo.unitCount > 1 && (
               <SummaryRow label="세대당 부담" value={costSummary.perUnitBurden} />
             )}
+            <div className="border-t border-border-primary my-2" />
+            <SummaryRow label="추가공사비" value={costSummary.additionalCost ?? 0} editable
+              onEdit={onAdditionalCostChange} />
+            <SummaryRow label="최종 합계" value={costSummary.totalCost + (costSummary.additionalCost ?? 0)} bold accent />
           </div>
         </div>
       </div>
@@ -344,12 +350,16 @@ function SummaryRow({
   bold = false,
   accent = false,
   color,
+  editable = false,
+  onEdit,
 }: {
   label: string
   value: number
   bold?: boolean
   accent?: boolean
   color?: string
+  editable?: boolean
+  onEdit?: (v: number) => void
 }) {
   const valueColor = color
     ?? (accent ? 'text-accent-text' : 'text-txt-primary')
@@ -360,11 +370,21 @@ function SummaryRow({
       >
         {label}
       </span>
-      <span
-        className={`text-[13px] tabular-nums ${bold ? 'font-semibold' : 'font-medium'} ${valueColor}`}
-      >
-        {formatNumber(value)}원
-      </span>
+      {editable && onEdit ? (
+        <input
+          type="number"
+          value={value || ''}
+          onChange={e => onEdit(Number(e.target.value) || 0)}
+          className="w-[140px] h-[28px] text-[13px] text-right tabular-nums font-medium border border-border-primary rounded px-2 bg-surface focus:border-accent focus:ring-1 focus:ring-accent-light outline-none"
+          placeholder="0"
+        />
+      ) : (
+        <span
+          className={`text-[13px] tabular-nums ${bold ? 'font-semibold' : 'font-medium'} ${valueColor}`}
+        >
+          {formatNumber(value)}원
+        </span>
+      )}
     </div>
   )
 }

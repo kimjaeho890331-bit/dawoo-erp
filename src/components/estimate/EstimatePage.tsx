@@ -110,6 +110,7 @@ export default function EstimatePage({ category, projectId }: Props) {
   const [unitPrices, setUnitPrices] = useState<UnitPrice[]>([])
   const [priceYear, setPriceYear] = useState<number>(new Date().getFullYear())
 
+  const [additionalCost, setAdditionalCost] = useState(0)
   const [estimateId, setEstimateId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -129,29 +130,32 @@ export default function EstimatePage({ category, projectId }: Props) {
   useEffect(() => {
     if (!projectId) return
     ;(async () => {
+      // projects + cities JOIN으로 시 이름 가져오기
       const { data } = await supabase
         .from('projects')
-        .select('building_name, road_address, dong, unit_count, approval_date, owner_name, owner_phone, city_name, work_types')
+        .select('building_name, road_address, dong, unit_count, approval_date, owner_name, owner_phone, city_id, exclusive_area, cities(name)')
         .eq('id', projectId)
         .single()
       if (data) {
+        // 주소에서 시 이름 추출 (cities JOIN 또는 주소 파싱)
+        const citiesData = data.cities as unknown as { name: string } | { name: string }[] | null
+        const cityFromJoin = Array.isArray(citiesData) ? citiesData[0]?.name ?? '' : citiesData?.name ?? ''
+        const CITIES_15 = ['수원','성남','안양','부천','광명','시흥','안산','군포','의왕','과천','용인','화성','오산','평택','하남']
+        const cityFromAddr = CITIES_15.find(c => (data.road_address || '').includes(c)) ?? ''
+        const cityName = cityFromJoin || cityFromAddr
+
         setCustomerInfo(prev => ({
           ...prev,
           buildingName: data.building_name ?? '',
           roadAddress: data.road_address ?? '',
-          dong: data.dong ?? 1,
+          dong: 1,  // dong은 TEXT(동 이름)이므로 동수는 별도 입력
           unitCount: data.unit_count ?? 1,
           approvalDate: data.approval_date ?? '',
           ownerName: data.owner_name ?? '',
           ownerPhone: data.owner_phone ?? '',
-          cityName: data.city_name ?? '',
+          cityName,
+          constructionDesc: `${data.building_name ?? ''} 소규모 주택개보수`,
         }))
-        // work_types가 있으면 체크된 공종 초기값으로 사용
-        if (data.work_types && Array.isArray(data.work_types)) {
-          setCheckedWorks(data.work_types.filter((wt: string) =>
-            WORK_TYPE_ORDER.includes(wt as WorkType),
-          ) as WorkType[])
-        }
       }
     })()
   }, [projectId])
@@ -286,8 +290,9 @@ export default function EstimatePage({ category, projectId }: Props) {
             measurements={measurements}
             onMeasurementsChange={setMeasurements}
             areas={areas}
-            costSummary={costSummary}
+            costSummary={{ ...costSummary, additionalCost }}
             checkedWorks={checkedWorks}
+            onAdditionalCostChange={setAdditionalCost}
           />
         )
       case 'cover':
@@ -357,7 +362,7 @@ export default function EstimatePage({ category, projectId }: Props) {
   // ── 렌더 ──
 
   return (
-    <div className="p-6 pb-24 max-w-[1400px] mx-auto">
+    <div className="p-6 max-w-[1400px] mx-auto">
       {/* 상단 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -436,59 +441,12 @@ export default function EstimatePage({ category, projectId }: Props) {
         {renderTabContent()}
       </div>
 
-      {/* 하단 요약 바 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border-primary shadow-lg z-50">
-        <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <SummaryItem label="총 공사비" value={costSummary.totalCost} />
-            <div className="w-px h-5 bg-border-primary" />
-            <SummaryItem
-              label={`시 지원 ${Math.round(costRates.subsidyRate * 100)}%`}
-              value={costSummary.citySubsidy}
-              color="text-link"
-            />
-            <div className="w-px h-5 bg-border-primary" />
-            <SummaryItem
-              label={`자부담 ${Math.round((1 - costRates.subsidyRate) * 100)}%`}
-              value={costSummary.selfBurden}
-              color="text-[#e57e25]"
-            />
-            <div className="w-px h-5 bg-border-primary" />
-            <SummaryItem
-              label="세대당 부담"
-              value={costSummary.perUnitBurden}
-              color="text-txt-secondary"
-            />
-          </div>
-          <div className="text-[11px] text-txt-quaternary tabular-nums">
-            공급가 {formatNumber(costSummary.supplyPrice)} + 부가세 {formatNumber(costSummary.vat)}
-          </div>
-        </div>
-      </div>
+      {/* 하단 고정바 제거됨 — 총공사비/시지원/자부담은 고객정보 탭 원가요약에 통합 */}
     </div>
   )
 }
 
-// ── 하단 요약 아이템 ──
-
-function SummaryItem({
-  label,
-  value,
-  color = 'text-txt-primary',
-}: {
-  label: string
-  value: number
-  color?: string
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[13px] text-txt-tertiary">{label}</span>
-      <span className={`text-[15px] font-semibold ${color} tabular-nums`}>
-        {formatNumber(value)}원
-      </span>
-    </div>
-  )
-}
+// (하단 고정바 제거됨 — 원가요약은 CustomerInfoTab에서 표시)
 
 // ── 구현 예정 탭 플레이스홀더 ──
 

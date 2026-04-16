@@ -871,7 +871,6 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
         {category === '소규모' && (
           <div className="grid grid-cols-2 gap-3 mt-3">
             <FormInput label="접수일" type="date" value={getVal('receipt_date') as string} onChange={v => onChange('receipt_date', v || null)} />
-            <FormInput label="설계금액" type="number" value={getVal('design_amount') as number} onChange={v => onChange('design_amount', Number(v) || 0)} />
           </div>
         )}
         {category === '수도' && (

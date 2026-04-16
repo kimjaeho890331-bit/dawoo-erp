@@ -695,7 +695,7 @@ function TodaySection({
                       ? 'border-border-primary hover:border-border-secondary hover:shadow-sm'
                       : 'border-border-primary opacity-50'
                 }`}
-                style={isExpanded ? { borderColor: color, ringColor: color + '40', backgroundColor: color + '08' } : {}}
+                style={isExpanded ? { borderColor: color, boxShadow: `0 0 0 1px ${color}40`, backgroundColor: color + '08' } : {}}
               >
                 {isMe && (
                   <span className="absolute top-1 right-1.5 text-[8px] text-txt-quaternary font-medium">나</span>

@@ -366,8 +366,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null
 
   const toggleCity = (cityName: string) => {
+    // 1개씩만 선택 (같은 거 누르면 해제)
     setSelectedCities(prev =>
-      prev.includes(cityName) ? prev.filter(c => c !== cityName) : [...prev, cityName]
+      prev.includes(cityName) ? [] : [cityName]
     )
   }
 
@@ -470,22 +471,33 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
       {/* (상태 필터 탭은 위에서 프로세스 가이드와 함께 렌더됨) */}
 
-      {/* 지역 필터 (프로젝트 주소에서 자동 추출) */}
+      {/* 지역 필터 (1개씩 선택 + 건수 표시) */}
       {(() => {
         const cityNames = [...new Set(projects.map(p => p.cities?.name).filter(Boolean) as string[])].sort()
         if (cityNames.length === 0) return null
+        // 지역별 건수 (현재 탭 기준)
+        const cityCounts: Record<string, number> = {}
+        projects.forEach(p => {
+          const cn = p.cities?.name
+          if (cn && matchesStatusFilter(p.status, statusFilter)) {
+            cityCounts[cn] = (cityCounts[cn] || 0) + 1
+          }
+        })
         return (
           <div className="flex flex-wrap gap-2 mb-4">
-            {cityNames.map(name => (
-              <button key={name} onClick={() => toggleCity(name)}
-                className={`rounded-full px-[14px] py-1 text-[11px] font-medium border transition-colors ${
-                  selectedCities.includes(name) ? 'bg-accent-light text-accent border-accent' : 'bg-transparent text-txt-secondary border-border-primary hover:border-accent hover:text-accent'
-                }`}>{name}</button>
-            ))}
-            {selectedCities.length > 0 && (
-              <button onClick={() => setSelectedCities([])}
-                className="rounded-full px-[14px] py-1 text-[11px] font-medium text-danger border border-danger-border hover:bg-danger-bg transition-colors">초기화</button>
-            )}
+            {cityNames.map(name => {
+              const count = cityCounts[name] || 0
+              const isActive = selectedCities.includes(name)
+              return (
+                <button key={name} onClick={() => toggleCity(name)}
+                  className={`rounded-full px-[14px] py-1 text-[11px] font-medium border transition-colors ${
+                    isActive ? 'bg-accent-light text-accent border-accent' : 'bg-transparent text-txt-secondary border-border-primary hover:border-accent hover:text-accent'
+                  }`}>
+                  {name}
+                  <span className={`ml-1 text-[10px] ${isActive ? 'text-accent' : 'text-txt-quaternary'}`}>{count}</span>
+                </button>
+              )
+            })}
           </div>
         )
       })()}

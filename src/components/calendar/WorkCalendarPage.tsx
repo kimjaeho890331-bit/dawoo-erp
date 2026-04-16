@@ -981,6 +981,23 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                 </div>
               </div>
             )}
+
+            {/* 시공 정보 (project_id가 있을 때) */}
+            {schedule?.project_id && schedule.memo && (
+              <div className="mt-3 pt-3 border-t border-border-tertiary">
+                <p className="text-[11px] font-semibold text-txt-tertiary mb-2">시공 정보</p>
+                <pre className="text-[12px] text-txt-secondary leading-relaxed whitespace-pre-wrap font-[inherit]">
+                  {schedule.memo}
+                </pre>
+              </div>
+            )}
+
+            {/* 시공 사진 안내 */}
+            {schedule?.project_id && (
+              <div className="mt-3 pt-3 border-t border-border-tertiary">
+                <p className="text-[11px] text-txt-quaternary">시공 사진은 접수대장 상세에서 확인하세요</p>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

@@ -107,7 +107,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const syncSchedules = async (savedData: Record<string, string | number | null>) => {
     if (!project) return
     const dateFields = Object.keys(savedData).filter(k => k in SCHEDULE_MAP)
-    if (dateFields.length === 0) return
+    const hasWorkerChange = 'direct_worker' in savedData || 'construction_end_date' in savedData
+    if (dateFields.length === 0 && !hasWorkerChange) return
 
     for (const field of dateFields) {
       const dateVal = savedData[field] as string | null
@@ -157,6 +158,62 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         await supabase.from('schedules').update(payload).eq('id', existing[0].id)
       } else {
         await supabase.from('schedules').insert(payload)
+      }
+    }
+
+    // 시공 일정 자동 생성/업데이트
+    const constDate = savedData.construction_date || project.construction_date
+    const worker = (savedData.direct_worker ?? project.direct_worker) as string | null
+
+    if (constDate && worker) {
+      // 제목 생성 (옥내/공용 포맷)
+      const type = project.water_work_type || ''
+      const building = project.building_name || ''
+      let constTitle = ''
+      if (type === '옥내') {
+        const dongHo = [project.dong, project.ho].filter(Boolean).join(' ')
+        constTitle = `[${worker}] 수도옥내 ${building}${dongHo ? ' ' + dongHo : ''}`
+      } else {
+        constTitle = `[${worker}] 수도${type || ''} ${building}`
+      }
+
+      // 메모 생성
+      const memoLines: string[] = []
+      if (worker) memoLines.push(`작업자: ${worker}`)
+      if (project.staff?.name) memoLines.push(`담당자: ${project.staff.name}`)
+      const addr = project.road_address || project.jibun_address || ''
+      if (addr) memoLines.push(`주소: ${addr}`)
+      if (project.owner_phone) memoLines.push(`대표자 연락처: ${project.owner_phone}`)
+      if (project.note) memoLines.push(`특이사항: ${project.note}`)
+
+      const endDate = (savedData.construction_end_date || project.construction_end_date || constDate) as string
+      const cleanConstDate = String(constDate).substring(0, 10)
+      const cleanEndDate = String(endDate).substring(0, 10)
+
+      // upsert: project_id + title contains worker name
+      const { data: existingConst } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('project_id', project.id)
+        .ilike('title', `%${worker}%`)
+        .limit(1)
+
+      const constPayload = {
+        project_id: project.id,
+        staff_id: project.staff_id,
+        schedule_type: 'project' as const,
+        title: constTitle,
+        start_date: cleanConstDate,
+        end_date: cleanEndDate,
+        memo: memoLines.join('\n'),
+        confirmed: false,
+        all_day: true,
+      }
+
+      if (existingConst && existingConst.length > 0) {
+        await supabase.from('schedules').update(constPayload).eq('id', existingConst[0].id)
+      } else {
+        await supabase.from('schedules').insert(constPayload)
       }
     }
   }

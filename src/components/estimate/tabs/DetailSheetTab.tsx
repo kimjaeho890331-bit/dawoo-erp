@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { WorkType, DetailRow } from '../estimateTypes'
 import { WORK_TYPE_LABELS } from '../estimateTypes'
-import { calcDetailRow, calcDetailSubtotal, calcWasteTotal, formatNumber, trunc } from '../estimateCalc'
+import { calcDetailRow, calcDetailSubtotal, calcWasteTotal, formatNumber } from '../estimateCalc'
+import { DETAIL_TEMPLATES, type DetailTemplateRow } from '../estimateData'
 
 // ── ID 생성 ──
 
@@ -116,6 +117,38 @@ function AmountCell({
   )
 }
 
+// ── 템플릿에서 DetailRow 생성 ──
+
+function templateToRows(template: DetailTemplateRow[], area: number): DetailRow[] {
+  return template.map(t => {
+    let quantity = 0
+    if (t.defaultQty != null) {
+      quantity = t.defaultQty
+    } else if (t.areaRatio != null) {
+      quantity = Math.round(area * t.areaRatio * 100) / 100
+    }
+
+    const row: DetailRow = {
+      id: genId(),
+      name: t.name,
+      spec: t.spec,
+      quantity,
+      unit: t.unit,
+      materialPrice: t.materialPrice,
+      materialAmount: 0,
+      laborPrice: t.laborPrice,
+      laborAmount: 0,
+      expensePrice: t.expensePrice,
+      expenseAmount: 0,
+      total: 0,
+      memo: t.qtyNote || '',
+      isManual: false,
+      isWaste: t.isWaste,
+    }
+    return calcDetailRow(row)
+  })
+}
+
 // ── 메인 컴포넌트 ──
 
 interface Props {
@@ -127,6 +160,23 @@ interface Props {
 
 export default function DetailSheetTab({ workType, rows, onRowsChange, area }: Props) {
   const label = WORK_TYPE_LABELS[workType]
+  const initialized = useRef(false)
+
+  // 템플릿 자동 채우기: rows가 비어 있으면 템플릿으로 초기화
+  useEffect(() => {
+    if (rows.length === 0 && !initialized.current) {
+      const template = DETAIL_TEMPLATES[workType]
+      if (template && template.length > 0) {
+        initialized.current = true
+        onRowsChange(templateToRows(template, area))
+      }
+    }
+  }, [workType, rows.length, area, onRowsChange])
+
+  // workType 변경 시 ref 리셋
+  useEffect(() => {
+    initialized.current = false
+  }, [workType])
 
   // 행 금액 재계산 후 반환
   const recalcAndUpdate = useCallback(
@@ -148,29 +198,7 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
     [rows, recalcAndUpdate],
   )
 
-  // 일반 행 추가
-  const addRow = useCallback(() => {
-    const newRow: DetailRow = {
-      id: genId(),
-      name: '',
-      spec: '',
-      quantity: 0,
-      unit: 'm\u00B2',
-      materialPrice: 0,
-      materialAmount: 0,
-      laborPrice: 0,
-      laborAmount: 0,
-      expensePrice: 0,
-      expenseAmount: 0,
-      total: 0,
-      memo: '',
-      isManual: true,
-      isWaste: false,
-    }
-    onRowsChange([...rows, newRow])
-  }, [rows, onRowsChange])
-
-  // 폐기물 행 추가
+  // 폐기물 행 추가 (폐기물만 추가 가능)
   const addWasteRow = useCallback(() => {
     const newRow: DetailRow = {
       id: genId(),
@@ -192,8 +220,8 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
     onRowsChange([...rows, newRow])
   }, [rows, onRowsChange])
 
-  // 행 삭제
-  const removeRow = useCallback(
+  // 폐기물 행 삭제 (수기 추가한 폐기물만 삭제 가능)
+  const removeWasteRow = useCallback(
     (rowId: string) => {
       onRowsChange(rows.filter(r => r.id !== rowId))
     },
@@ -210,27 +238,42 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
 
   // 테이블 행 렌더링
   const renderRow = (row: DetailRow, index: number) => {
+    // 템플릿 행인 경우: name/spec/unit 읽기 전용
+    const isTemplate = !row.isManual
+
     return (
-      <tr key={row.id} className={row.isManual ? '' : ''}>
+      <tr key={row.id}>
         {/* 순번 */}
         <td className="border border-border-primary px-1.5 py-1 text-center text-[12px] bg-surface-secondary tabular-nums w-[36px]">
           {index + 1}
         </td>
 
-        {/* 공종/품명 */}
-        <EditableCell
-          value={row.name}
-          onChange={v => updateField(row.id, 'name', v)}
-        />
+        {/* 공종/품명 - 템플릿은 읽기 전용 */}
+        {isTemplate ? (
+          <td className="border border-border-primary px-1.5 py-1 text-[12px] bg-surface-secondary">
+            {row.name}
+          </td>
+        ) : (
+          <EditableCell
+            value={row.name}
+            onChange={v => updateField(row.id, 'name', v)}
+          />
+        )}
 
-        {/* 규격 */}
-        <EditableCell
-          value={row.spec}
-          onChange={v => updateField(row.id, 'spec', v)}
-          className="w-[72px]"
-        />
+        {/* 규격 - 템플릿은 읽기 전용 */}
+        {isTemplate ? (
+          <td className="border border-border-primary px-1.5 py-1 text-[12px] bg-surface-secondary w-[72px]">
+            {row.spec || '\u00A0'}
+          </td>
+        ) : (
+          <EditableCell
+            value={row.spec}
+            onChange={v => updateField(row.id, 'spec', v)}
+            className="w-[72px]"
+          />
+        )}
 
-        {/* 수량 */}
+        {/* 수량 - 항상 편집 가능 */}
         <EditableCell
           value={row.quantity}
           type="number"
@@ -239,15 +282,21 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
           className="w-[60px]"
         />
 
-        {/* 단위 */}
-        <EditableCell
-          value={row.unit}
-          align="center"
-          onChange={v => updateField(row.id, 'unit', v)}
-          className="w-[40px]"
-        />
+        {/* 단위 - 템플릿은 읽기 전용 */}
+        {isTemplate ? (
+          <td className="border border-border-primary px-1.5 py-1 text-[12px] text-center bg-surface-secondary w-[40px]">
+            {row.unit}
+          </td>
+        ) : (
+          <EditableCell
+            value={row.unit}
+            align="center"
+            onChange={v => updateField(row.id, 'unit', v)}
+            className="w-[40px]"
+          />
+        )}
 
-        {/* 재료비 단가 */}
+        {/* 재료비 단가 - 항상 편집 가능 */}
         <EditableCell
           value={row.materialPrice}
           type="number"
@@ -259,7 +308,7 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
         {/* 재료비 금액 */}
         <AmountCell value={row.materialAmount} className="w-[88px]" />
 
-        {/* 노무비 단가 */}
+        {/* 노무비 단가 - 항상 편집 가능 */}
         <EditableCell
           value={row.laborPrice}
           type="number"
@@ -271,7 +320,7 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
         {/* 노무비 금액 */}
         <AmountCell value={row.laborAmount} className="w-[88px]" />
 
-        {/* 경비 단가 */}
+        {/* 경비 단가 - 항상 편집 가능 */}
         <EditableCell
           value={row.expensePrice}
           type="number"
@@ -287,22 +336,24 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
         <AmountCell value={row.total} bold className="w-[96px]" />
 
         {/* 비고 */}
-        <EditableCell
-          value={row.memo}
-          onChange={v => updateField(row.id, 'memo', v)}
-          className="w-[72px]"
-        />
-
-        {/* 삭제 */}
-        <td className="border border-border-primary px-1 py-1 text-center w-[28px]">
-          <button
-            onClick={() => removeRow(row.id)}
-            className="text-[#dc2626]/40 hover:text-[#dc2626] text-[12px] leading-none"
-            title="삭제"
-          >
-            &times;
-          </button>
+        <td className="border border-border-primary px-1.5 py-1 text-[11px] text-txt-quaternary w-[72px]">
+          {row.memo || '\u00A0'}
         </td>
+
+        {/* 삭제: 수기 추가 폐기물만 삭제 가능 */}
+        {row.isManual && row.isWaste ? (
+          <td className="border border-border-primary px-1 py-1 text-center w-[28px]">
+            <button
+              onClick={() => removeWasteRow(row.id)}
+              className="text-[#dc2626]/40 hover:text-[#dc2626] text-[12px] leading-none"
+              title="삭제"
+            >
+              &times;
+            </button>
+          </td>
+        ) : (
+          <td className="border border-border-primary px-1 py-1 w-[28px]" />
+        )}
       </tr>
     )
   }
@@ -318,12 +369,6 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
           </span>
         </h3>
         <div className="flex items-center gap-2">
-          <button
-            onClick={addRow}
-            className="px-3 py-1 text-[11px] border border-accent/30 text-link rounded-lg hover:bg-accent/5 transition-colors"
-          >
-            + 행 추가
-          </button>
           <button
             onClick={addWasteRow}
             className="px-3 py-1 text-[11px] border border-border-secondary text-txt-tertiary rounded-lg hover:bg-surface-secondary transition-colors"
@@ -385,22 +430,20 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
             </tr>
 
             {/* 폐기물 구분선 */}
-            {(wasteRows.length > 0 || true) && (
-              <tr>
-                <td
-                  colSpan={14}
-                  className="border-x border-border-primary px-2 py-2 bg-surface-secondary"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 border-t border-dashed border-border-secondary" />
-                    <span className="text-[11px] font-medium text-txt-tertiary">
-                      폐기물처리
-                    </span>
-                    <div className="flex-1 border-t border-dashed border-border-secondary" />
-                  </div>
-                </td>
-              </tr>
-            )}
+            <tr>
+              <td
+                colSpan={14}
+                className="border-x border-border-primary px-2 py-2 bg-surface-secondary"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 border-t border-dashed border-border-secondary" />
+                  <span className="text-[11px] font-medium text-txt-tertiary">
+                    폐기물처리
+                  </span>
+                  <div className="flex-1 border-t border-dashed border-border-secondary" />
+                </div>
+              </td>
+            </tr>
 
             {/* 폐기물 행 */}
             {wasteRows.map((row, i) => renderRow(row, normalRows.length + i))}
@@ -457,7 +500,7 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
       {/* 하단 안내 */}
       <div className="mt-3 flex items-center justify-between">
         <p className="text-[11px] text-txt-quaternary">
-          셀을 클릭하여 값을 수정할 수 있습니다. 금액은 수량 x 단가로 자동 계산됩니다.
+          수량/단가를 클릭하여 수정할 수 있습니다. 금액은 수량 x 단가로 자동 계산됩니다.
         </p>
         <div className="flex items-center gap-4 text-[11px] text-txt-tertiary tabular-nums">
           <span>일반 {normalRows.length}건</span>

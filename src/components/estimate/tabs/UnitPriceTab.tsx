@@ -42,9 +42,11 @@ export default function UnitPriceTab({ workType }: Props) {
       {/* ── 공정별 테이블 ── */}
       {processes.map(proc => (
         <div key={proc.id}>
+          {/* 제 X호표 형식 헤더 */}
           <h4 className="text-[13px] font-medium text-txt-primary mb-2">
-            {proc.id}. {proc.name}
-            <span className="text-txt-quaternary font-normal ml-2">({proc.unit})</span>
+            <span className="text-txt-tertiary">제 {proc.id}호표</span>
+            {' '}{proc.name}
+            <span className="text-txt-quaternary font-normal ml-2">/ {proc.unit}</span>
           </h4>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[12px]">

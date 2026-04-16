@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { formatNumber } from '../estimateCalc'
 import { LABOR_PRICES, MATERIAL_PRICES } from '../estimateData'
-import { Plus, X, RotateCcw } from 'lucide-react'
 
 // ── 타입 ──
 
@@ -89,39 +88,15 @@ export default function PriceCompareTab() {
     setTimeout(() => setSaved(false), 2000)
   }, [labor, material, referenceDate])
 
-  const reset = () => {
-    if (!confirm('초기값(엑셀 원본)으로 되돌리시겠습니까?')) return
-    setLabor(defaultLabor())
-    setMaterial(defaultMaterial())
-    setReferenceDate('2025-07')
-    setDirty(true)
-  }
-
-  // ── 노임 CRUD ──
+  // ── 노임 수정 ──
   const updateLabor = (id: string, field: keyof LaborRow, value: string | number) => {
     setLabor(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
     setDirty(true)
   }
-  const addLabor = () => {
-    setLabor(prev => [...prev, { id: uid(), name: '', unit: '인', price: 0, reference: referenceDate }])
-    setDirty(true)
-  }
-  const removeLabor = (id: string) => {
-    setLabor(prev => prev.filter(r => r.id !== id))
-    setDirty(true)
-  }
 
-  // ── 재료 CRUD ──
+  // ── 재료 수정 ──
   const updateMaterial = (id: string, field: keyof MaterialRow, value: string | number) => {
     setMaterial(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
-    setDirty(true)
-  }
-  const addMaterial = () => {
-    setMaterial(prev => [...prev, { id: uid(), category: '', name: '', spec: '', unit: '', price: 0, reference: referenceDate, page: '' }])
-    setDirty(true)
-  }
-  const removeMaterial = (id: string) => {
-    setMaterial(prev => prev.filter(r => r.id !== id))
     setDirty(true)
   }
 
@@ -141,11 +116,8 @@ export default function PriceCompareTab() {
           <span className="text-[11px] text-txt-quaternary">기준</span>
         </div>
         <div className="flex items-center gap-2">
-          {saved && <span className="text-[12px] text-[#16a34a] font-medium">✓ 저장됨</span>}
+          {saved && <span className="text-[12px] text-[#16a34a] font-medium">저장됨</span>}
           {dirty && !saved && <span className="text-[11px] text-[#e57e25]">변경사항 있음</span>}
-          <button onClick={reset} className="flex items-center gap-1 h-[32px] px-3 text-[12px] text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary transition">
-            <RotateCcw size={12} /> 초기값
-          </button>
           <button onClick={save} disabled={!dirty}
             className="h-[32px] px-4 text-[12px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition">
             저장
@@ -165,7 +137,6 @@ export default function PriceCompareTab() {
                 <th className="border border-border-primary px-2 py-2 text-left w-[200px]">직종</th>
                 <th className="border border-border-primary px-2 py-2 text-center w-[60px]">단위</th>
                 <th className="border border-border-primary px-2 py-2 text-right w-[140px]">단가 (원)</th>
-                <th className="border border-border-primary px-2 py-2 text-center w-[50px]"></th>
               </tr>
             </thead>
             <tbody>
@@ -183,19 +154,11 @@ export default function PriceCompareTab() {
                     <input type="number" value={row.price || ''} onChange={e => updateLabor(row.id, 'price', Number(e.target.value))}
                       className="w-full h-[28px] px-1.5 text-[12px] text-right tabular-nums bg-transparent border-0 outline-none focus:bg-white focus:ring-1 focus:ring-accent-light rounded" />
                   </td>
-                  <td className="border border-border-primary px-1 py-0.5 text-center">
-                    <button onClick={() => removeLabor(row.id)} className="text-txt-quaternary hover:text-red-500 transition">
-                      <X size={14} />
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <button onClick={addLabor} className="mt-2 flex items-center gap-1 text-[12px] text-accent hover:text-accent-hover transition px-2 py-1">
-          <Plus size={13} /> 노임 추가
-        </button>
       </div>
 
       {/* ── 재료단가 ── */}
@@ -213,7 +176,6 @@ export default function PriceCompareTab() {
                 <th className="border border-border-primary px-2 py-2 text-center w-[60px]">단위</th>
                 <th className="border border-border-primary px-2 py-2 text-right w-[120px]">단가 (원)</th>
                 <th className="border border-border-primary px-2 py-2 text-center w-[70px]">참조 (p.)</th>
-                <th className="border border-border-primary px-2 py-2 text-center w-[40px]"></th>
               </tr>
             </thead>
             <tbody>
@@ -245,20 +207,12 @@ export default function PriceCompareTab() {
                       <input value={row.page} onChange={e => updateMaterial(row.id, 'page', e.target.value)}
                         className="w-full h-[28px] px-1 text-[12px] text-center text-txt-quaternary bg-transparent border-0 outline-none focus:bg-white focus:ring-1 focus:ring-accent-light rounded" />
                     </td>
-                    <td className="border border-border-primary px-1 py-0.5 text-center">
-                      <button onClick={() => removeMaterial(row.id)} className="text-txt-quaternary hover:text-red-500 transition">
-                        <X size={14} />
-                      </button>
-                    </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
-        <button onClick={addMaterial} className="mt-2 flex items-center gap-1 text-[12px] text-accent hover:text-accent-hover transition px-2 py-1">
-          <Plus size={13} /> 재료 추가
-        </button>
       </div>
 
       {/* 안내 */}

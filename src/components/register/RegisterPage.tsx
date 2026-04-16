@@ -433,26 +433,44 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       </div>
 
       {/* 진행 흐름도 (항상 표시 — 업무 프로세스 가이드) */}
-      <div className="mb-4 flex justify-end">
-        <div className="flex items-center gap-0.5 px-3 py-2 bg-surface border border-border-primary rounded-lg">
-          {PROGRESS_STEPS.map((step, i) => (
-            <div key={step} className="flex items-center">
-              <div className="flex items-center gap-1">
-                <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px] font-bold text-white ${
-                  i <= 1 ? 'bg-slate-400' :
-                  i <= 4 ? 'bg-indigo-400' :
-                  i <= 5 ? 'bg-emerald-500' :
-                  i <= 7 ? 'bg-amber-500' :
-                  i <= 8 ? 'bg-blue-500' :
-                  'bg-green-500'
-                }`}>{i + 1}</span>
-                <span className="text-[10px] text-txt-secondary whitespace-nowrap">{STEP_LABELS_SHORT[i]}</span>
-              </div>
-              {i < PROGRESS_STEPS.length - 1 && (
-                <span className="text-[10px] text-txt-quaternary mx-1">→</span>
-              )}
-            </div>
-          ))}
+      <div className="mb-4">
+        <div className="px-4 py-3 bg-surface border border-border-primary rounded-[10px]">
+          <div className="flex items-center gap-1 mb-1.5">
+            <span className="text-[11px] font-semibold text-txt-tertiary">진행 프로세스</span>
+            <span className="text-[10px] text-txt-quaternary ml-1">접수부터 수금까지의 업무 흐름</span>
+          </div>
+          <div className="flex items-center">
+            {PROGRESS_STEPS.map((step, i) => {
+              const groupColors = [
+                'bg-slate-500', 'bg-sky-500',          // 접수: 문의, 실측
+                'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', // 서류: 견적, 동의, 신청
+                'bg-emerald-600',                       // 승인
+                'bg-teal-500', 'bg-amber-500',          // 시공: 착공, 공사
+                'bg-blue-600',                          // 완료서류
+                'bg-green-600',                         // 입금
+              ]
+              return (
+                <div key={step} className="flex items-center flex-1">
+                  <div className="flex flex-col items-center flex-1">
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${groupColors[i]}`}>
+                      {i + 1}
+                    </span>
+                    <span className="text-[11px] font-medium text-txt-secondary mt-1">{STEP_LABELS_SHORT[i]}</span>
+                  </div>
+                  {i < PROGRESS_STEPS.length - 1 && (
+                    <span className="text-txt-quaternary text-[12px] -mx-1">→</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex mt-2 text-[9px] text-txt-quaternary">
+            <div className="flex-[2] text-center border-t border-slate-300 pt-0.5">접수</div>
+            <div className="flex-[3] text-center border-t border-indigo-300 pt-0.5">서류</div>
+            <div className="flex-[1] text-center border-t border-emerald-300 pt-0.5">승인</div>
+            <div className="flex-[2] text-center border-t border-amber-300 pt-0.5">시공</div>
+            <div className="flex-[2] text-center border-t border-green-300 pt-0.5">완료·수금</div>
+          </div>
         </div>
       </div>
 
@@ -580,7 +598,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                       <span className={`badge ${getStepBadgeColor(project.status)}`}>
                         {project.status}
                       </span>
-                      {project.outstanding > 0 && project.total_cost > 0 && (
+                      {project.outstanding > 0 && project.total_cost > 0 &&
+                        ['완료서류제출', '입금'].includes(project.status) && (
                         <span className="ml-1 text-[10px] font-semibold text-money-negative">미수금</span>
                       )}
                     </td>

@@ -413,7 +413,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   return (
     <div className="max-w-full bg-page min-h-screen">
       {/* 상단 헤더 */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-2">
         <h1>{category} 접수대장</h1>
         <div className="flex items-center gap-3">
           <input
@@ -432,39 +432,29 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         </div>
       </div>
 
-      {/* 선택된 프로젝트 진행단계 미니바 */}
-      {selectedProject && (
-        <div className="mb-4 px-4 py-2.5 bg-surface border border-border-primary rounded-[10px]">
-          <div className="flex items-center gap-3">
-            <span className="text-[13px] font-semibold text-txt-primary shrink-0 max-w-[200px] truncate">
-              {selectedProject.building_name}
-            </span>
-            <div className="flex items-center gap-0.5 flex-1 overflow-x-auto">
-              {PROGRESS_STEPS.map((step, i) => {
-                const currentIdx = PROGRESS_STEPS.indexOf(selectedProject.status as ProjectStep)
-                const isActive = i <= currentIdx
-                const isCurrent = i === currentIdx
-                return (
-                  <div key={step} className="flex items-center">
-                    <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${
-                      isCurrent
-                        ? 'bg-accent text-white'
-                        : isActive
-                          ? 'bg-accent/15 text-accent'
-                          : 'text-txt-quaternary'
-                    }`}>
-                      {STEP_LABELS_SHORT[i]}
-                    </div>
-                    {i < PROGRESS_STEPS.length - 1 && (
-                      <span className={`text-[8px] mx-0.5 ${isActive ? 'text-accent' : 'text-txt-quaternary'}`}>&rsaquo;</span>
-                    )}
-                  </div>
-                )
-              })}
+      {/* 진행 흐름도 (항상 표시 — 업무 프로세스 가이드) */}
+      <div className="mb-4 flex justify-end">
+        <div className="flex items-center gap-0.5 px-3 py-2 bg-surface border border-border-primary rounded-lg">
+          {PROGRESS_STEPS.map((step, i) => (
+            <div key={step} className="flex items-center">
+              <div className="flex items-center gap-1">
+                <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px] font-bold text-white ${
+                  i <= 1 ? 'bg-slate-400' :
+                  i <= 4 ? 'bg-indigo-400' :
+                  i <= 5 ? 'bg-emerald-500' :
+                  i <= 7 ? 'bg-amber-500' :
+                  i <= 8 ? 'bg-blue-500' :
+                  'bg-green-500'
+                }`}>{i + 1}</span>
+                <span className="text-[10px] text-txt-secondary whitespace-nowrap">{STEP_LABELS_SHORT[i]}</span>
+              </div>
+              {i < PROGRESS_STEPS.length - 1 && (
+                <span className="text-[10px] text-txt-quaternary mx-1">→</span>
+              )}
             </div>
-          </div>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* 상태 필터 탭 */}
       <div className="flex gap-1 mb-4 border-b border-border-primary">

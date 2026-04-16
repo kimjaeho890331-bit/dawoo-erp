@@ -609,15 +609,31 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             ) : (
               <div>
                 <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">공사종류 *</label>
-                <select
-                  value={form.work_type_id}
-                  onChange={e => update('work_type_id', e.target.value)}
-                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-                >
-                  {workTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                <div className="flex gap-2">
+                  {[
+                    { value: '옥내', label: '옥내', color: 'bg-emerald-500' },
+                    { value: '공용', label: '공용', color: 'bg-blue-500' },
+                    { value: '단독', label: '단독', color: 'bg-orange-500' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        update('water_work_type', opt.value)
+                        // work_type_id도 자동 매핑
+                        const matched = workTypes.find(wt => wt.name.includes(opt.value === '단독' ? '옥내' : opt.value))
+                        if (matched) update('work_type_id', matched.id)
+                      }}
+                      className={`flex-1 h-[36px] rounded-lg text-[13px] font-medium transition-all ${
+                        form.water_work_type === opt.value
+                          ? `${opt.color} text-white shadow-sm`
+                          : 'bg-surface-secondary text-txt-secondary border border-border-primary hover:border-accent'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             )}
             <div>
@@ -633,23 +649,6 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
               </select>
             </div>
           </div>
-
-          {/* 수도 전용: 공사세분류 */}
-          {category === '수도' && (
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">수도 공사 세분류</label>
-              <select
-                value={form.water_work_type}
-                onChange={e => update('water_work_type', e.target.value)}
-                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-              >
-                <option value="">선택 안함</option>
-                <option value="옥내">옥내</option>
-                <option value="공용">공용</option>
-                <option value="아파트">아파트</option>
-              </select>
-            </div>
-          )}
 
           {/* 소규모 지원사업 중복 드롭다운 삭제됨 — 위에 1개만 유지 */}
 

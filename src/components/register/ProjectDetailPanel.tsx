@@ -354,11 +354,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               </span>
             )}
           </div>
-          {/* 주소 */}
+          {/* 주소 (도로명만 표시, 지번은 기본정보 탭에서) */}
           <div className="text-[12px] text-txt-secondary mb-1.5">{project.road_address || project.jibun_address || '-'}</div>
-          {project.jibun_address && project.road_address && (
-            <div className="text-[11px] text-txt-quaternary mb-1.5">{project.jibun_address}</div>
-          )}
           {/* 2행: 소유주 / 연락처 / 담당자 */}
           <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
             <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
@@ -914,7 +911,10 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
   return (
     <div className="space-y-5">
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">실측</h3>
+        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-sky-700 mb-3">
+          <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] flex items-center justify-center font-bold">1</span>
+          실측
+        </h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} timeValue={getVal('survey_time') as string} onTimeChange={v => onChange('survey_time', v)} />
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
@@ -938,7 +938,11 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       </section>
 
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">견적</h3>
+        <div className="border-t-2 border-dashed border-border-primary my-2" />
+        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-indigo-700 mb-3">
+          <span className="w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+          견적
+        </h3>
         {/* 공문 기준 견적 산출 정보 */}
         {area > 0 && (
           <div className="mb-3 p-3 bg-[#eef2ff] rounded-lg border border-[#c7d2fe]">
@@ -1019,7 +1023,11 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
 
       {project.water_work_type !== '옥내' && (
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">동의서</h3>
+        <div className="border-t-2 border-dashed border-border-primary my-2" />
+        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-violet-700 mb-3">
+          <span className="w-5 h-5 rounded-full bg-violet-500 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+          동의서
+        </h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
           <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />
@@ -1032,7 +1040,11 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
       )}
 
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">신청서</h3>
+        <div className="border-t-2 border-dashed border-border-primary my-2" />
+        <h3 className="flex items-center gap-2 text-[12px] font-semibold text-purple-700 mb-3">
+          <span className="w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] flex items-center justify-center font-bold">4</span>
+          신청서
+        </h3>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
           <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />

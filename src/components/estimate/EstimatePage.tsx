@@ -343,12 +343,12 @@ export default function EstimatePage({ category, projectId }: Props) {
         return (
           <div className="space-y-6">
             {checkedWorks.map(wt => (
-              <UnitPriceTab key={wt} workType={wt} unitPrices={unitPrices} />
+              <UnitPriceTab key={wt} workType={wt} />
             ))}
           </div>
         )
       case 'priceCompare':
-        return <PriceCompareTab unitPrices={unitPrices} />
+        return <PriceCompareTab />
       default:
         return null
     }

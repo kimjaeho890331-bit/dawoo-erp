@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
 import type {
   CustomerInfo,
@@ -11,26 +11,13 @@ import type {
 } from '../estimateTypes'
 import { WORK_TYPE_LABELS, WORK_TYPE_ORDER } from '../estimateTypes'
 import { formatNumber } from '../estimateCalc'
+import { MEASUREMENT_GROUPS } from '../estimateData'
 
-// ── 실측 입력 필드 정의 ──
+// ── 15개 시 목록 (주소에서 자동 추출용) ──
 
-interface MeasurementField {
-  key: keyof Measurements
-  label: string
-  /** 이 필드가 관련된 공종 목록 — 해당 공종이 체크되었을 때만 활성화 */
-  relevantWorks: WorkType[]
-}
-
-const MEASUREMENT_FIELDS: MeasurementField[] = [
-  { key: 'roofW', label: '옥상 가로(m)', relevantWorks: ['waterproof', 'tile'] },
-  { key: 'roofL', label: '옥상 세로(m)', relevantWorks: ['waterproof', 'tile'] },
-  { key: 'roofV', label: '옥상 수직(m)', relevantWorks: ['waterproof'] },
-  { key: 'tileW', label: '기와 폭(m)', relevantWorks: ['tile'] },
-  { key: 'wallW', label: '외벽 가로(m)', relevantWorks: ['wallPaint', 'wallWaterRepel'] },
-  { key: 'wallL', label: '외벽 세로(m)', relevantWorks: ['wallPaint', 'wallWaterRepel'] },
-  { key: 'stairW', label: '계단 가로(m)', relevantWorks: ['stairPaint'] },
-  { key: 'stairL', label: '계단 세로(m)', relevantWorks: ['stairPaint'] },
-  { key: 'buildingH', label: '건물높이(m)', relevantWorks: ['wallPaint', 'wallWaterRepel', 'stairPaint'] },
+const CITIES = [
+  '수원', '성남', '안양', '부천', '광명', '시흥', '안산',
+  '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남',
 ]
 
 // ── 산출 면적 표시용 ──
@@ -72,6 +59,16 @@ const CUSTOMER_FIELDS: CustomerField[] = [
   { key: 'ownerPhone', label: '연락처', type: 'tel' },
 ]
 
+// ── 공종별 배지 색상 ──
+
+const WORK_TYPE_COLORS: Record<WorkType, string> = {
+  waterproof: 'bg-blue-100 text-blue-700',
+  tile: 'bg-orange-100 text-orange-700',
+  wallPaint: 'bg-green-100 text-green-700',
+  stairPaint: 'bg-purple-100 text-purple-700',
+  wallWaterRepel: 'bg-teal-100 text-teal-700',
+}
+
 // ── Props ──
 
 interface Props {
@@ -95,6 +92,23 @@ export default function CustomerInfoTab({
   costSummary,
   checkedWorks,
 }: Props) {
+  // ── 주소에서 시 이름 자동 추출 ──
+
+  useEffect(() => {
+    if (!customerInfo.roadAddress) return
+    // 이미 수동으로 설정된 경우 덮어쓰지 않음
+    if (customerInfo.cityName) return
+
+    const addr = customerInfo.roadAddress
+    for (const city of CITIES) {
+      // "수원시", "수원 시" 등 패턴 매칭
+      if (addr.includes(city)) {
+        onCustomerInfoChange({ ...customerInfo, cityName: city })
+        break
+      }
+    }
+  }, [customerInfo.roadAddress]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── 헬퍼 ──
 
   const setCustomerField = useCallback(
@@ -119,14 +133,17 @@ export default function CustomerInfoTab({
     [checkedWorks],
   )
 
-  // 활성화된 실측 필드만 필터
-  const activeMeasurementFields = MEASUREMENT_FIELDS.filter(f =>
-    isFieldRelevant(f.relevantWorks),
-  )
-
   // 활성화된 면적 표시만 필터
   const activeAreaDisplays = AREA_DISPLAYS.filter(d =>
     isFieldRelevant(d.relevantWorks),
+  )
+
+  // 활성화된 실측 그룹 필터
+  const activeMeasurementGroups = useMemo(
+    () => MEASUREMENT_GROUPS.filter(g =>
+      g.relatedWorkTypes.some(wt => checkedWorks.includes(wt)),
+    ),
+    [checkedWorks],
   )
 
   return (
@@ -191,7 +208,7 @@ export default function CustomerInfoTab({
         </div>
       </div>
 
-      {/* ── 실측 입력 섹션 ── */}
+      {/* ── 실측 입력 섹션 (그룹별) ── */}
       <div className="border border-border-primary rounded-[10px] p-5">
         <h3 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary mb-4">
           실측 치수
@@ -201,21 +218,50 @@ export default function CustomerInfoTab({
             공사종류를 선택하면 관련 실측 입력 항목이 표시됩니다.
           </p>
         ) : (
-          <div className="grid grid-cols-3 gap-x-6 gap-y-3">
-            {activeMeasurementFields.map(f => (
-              <div key={f.key} className="flex items-center gap-2">
-                <label className="w-[100px] text-[13px] font-medium text-txt-secondary shrink-0">
-                  {f.label}
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={measurements[f.key] || ''}
-                  onChange={e => setMeasureField(f.key, e.target.value)}
-                  placeholder="0"
-                  className="flex-1 h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-right bg-surface tabular-nums focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-                />
+          <div className="space-y-5">
+            {activeMeasurementGroups.map(group => (
+              <div key={group.label} className="border border-border-secondary rounded-lg p-4 bg-surface-secondary/50">
+                {/* 그룹 헤더 */}
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-[13px] font-semibold text-txt-primary">
+                    {group.label}
+                  </span>
+                  <span className="text-[11px] text-txt-quaternary">
+                    {group.description}
+                  </span>
+                  <div className="flex-1" />
+                  <div className="flex gap-1.5">
+                    {group.relatedWorkTypes
+                      .filter(wt => checkedWorks.includes(wt))
+                      .map(wt => (
+                        <span
+                          key={wt}
+                          className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${WORK_TYPE_COLORS[wt]}`}
+                        >
+                          {WORK_TYPE_LABELS[wt]}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                {/* 입력 필드 */}
+                <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+                  {group.fields.map(f => (
+                    <div key={f.key} className="flex items-center gap-2">
+                      <label className="w-[90px] text-[13px] font-medium text-txt-secondary shrink-0">
+                        {f.label} ({f.unit})
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={measurements[f.key as keyof Measurements] || ''}
+                        onChange={e => setMeasureField(f.key as keyof Measurements, e.target.value)}
+                        placeholder="0"
+                        className="flex-1 h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-right bg-surface tabular-nums focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

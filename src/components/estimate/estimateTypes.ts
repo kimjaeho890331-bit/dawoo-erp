@@ -92,6 +92,7 @@ export interface DetailRow {
   memo: string
   isManual: boolean      // 수기 입력 행 여부
   isWaste: boolean       // 폐기물 처리 행 (소계 분리)
+  areaRatio?: number | null  // 면적 비율 (0.3 = 30%, 1 = 100%, null = 고정수량)
 }
 
 // 원가계산서 집계 결과

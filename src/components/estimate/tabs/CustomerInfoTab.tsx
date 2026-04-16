@@ -49,7 +49,6 @@ interface CustomerField {
 
 const CUSTOMER_FIELDS: CustomerField[] = [
   { key: 'buildingName', label: '빌라명' },
-  { key: 'cityName', label: '시' },
   { key: 'roadAddress', label: '도로명주소', span: 2 },
   { key: 'dong', label: '동수', numberField: true },
   { key: 'unitCount', label: '세대수', numberField: true },

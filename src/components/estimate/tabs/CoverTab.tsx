@@ -86,12 +86,12 @@ export default function CoverTab({
           {/* ── 수신 / 공사명 ── */}
           <div className="mb-8 space-y-2 text-[14px] text-txt-primary">
             <div className="flex items-baseline gap-2">
-              <span className="font-medium min-w-[100px]">{buildingName}</span>
+              <span className="font-medium min-w-[100px]">{customerInfo.ownerName || buildingName}님</span>
               <span className="text-txt-secondary">귀하</span>
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-txt-tertiary min-w-[100px]">건설공사명:</span>
-              <span className="font-medium">{constructionDesc}</span>
+              <span className="font-medium">{buildingName} 소규모 주택개보수</span>
             </div>
           </div>
 

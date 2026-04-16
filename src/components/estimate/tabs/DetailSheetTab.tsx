@@ -144,6 +144,7 @@ function templateToRows(template: DetailTemplateRow[], area: number): DetailRow[
       memo: t.qtyNote || '',
       isManual: false,
       isWaste: t.isWaste,
+      areaRatio: t.areaRatio ?? null,
     }
     return calcDetailRow(row)
   })
@@ -236,10 +237,26 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
   const subtotal = useMemo(() => calcDetailSubtotal(rows), [rows])
   const wasteTotal = useMemo(() => calcWasteTotal(rows), [rows])
 
+  // areaRatio 변경 핸들러: 비율 변경 시 수량도 재계산
+  const updateAreaRatio = useCallback(
+    (rowId: string, newPercent: number) => {
+      const updated = rows.map(r => {
+        if (r.id !== rowId) return r
+        const newRatio = newPercent / 100
+        const newQty = Math.round(area * newRatio * 100) / 100
+        return { ...r, areaRatio: newRatio, quantity: newQty, spec: `${newPercent}%` }
+      })
+      recalcAndUpdate(updated)
+    },
+    [rows, area, recalcAndUpdate],
+  )
+
   // 테이블 행 렌더링
   const renderRow = (row: DetailRow, index: number) => {
     // 템플릿 행인 경우: name/spec/unit 읽기 전용
     const isTemplate = !row.isManual
+    // areaRatio가 있고 1이 아닌 경우 = 편집 가능한 비율 행
+    const hasEditableRatio = isTemplate && row.areaRatio != null && row.areaRatio !== 1 && row.areaRatio > 0
 
     return (
       <tr key={row.id}>
@@ -260,8 +277,29 @@ export default function DetailSheetTab({ workType, rows, onRowsChange, area }: P
           />
         )}
 
-        {/* 규격 - 템플릿은 읽기 전용 */}
-        {isTemplate ? (
+        {/* 규격 - areaRatio < 1 인 행은 편집 가능 % 입력 */}
+        {hasEditableRatio ? (
+          <td className="border border-border-primary px-0 py-0 w-[72px]">
+            <div className="flex items-center">
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="100"
+                className="w-full px-1.5 py-1 text-[12px] text-right outline-none bg-amber-50/50 tabular-nums focus:bg-amber-100/60"
+                value={Math.round((row.areaRatio ?? 0) * 100)}
+                onChange={e => {
+                  const val = parseInt(e.target.value, 10)
+                  if (!isNaN(val) && val >= 0 && val <= 100) {
+                    updateAreaRatio(row.id, val)
+                  }
+                }}
+                title="면적 비율 (%) - 수정 가능"
+              />
+              <span className="pr-1.5 text-[11px] text-txt-tertiary bg-amber-50/50">%</span>
+            </div>
+          </td>
+        ) : isTemplate ? (
           <td className="border border-border-primary px-1.5 py-1 text-[12px] bg-surface-secondary w-[72px]">
             {row.spec || '\u00A0'}
           </td>

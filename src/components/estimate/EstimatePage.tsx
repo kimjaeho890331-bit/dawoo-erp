@@ -353,7 +353,7 @@ export default function EstimatePage({ category, projectId }: Props) {
           </div>
         )
       case 'priceCompare':
-        return <PriceCompareTab />
+        return <PriceCompareTab checkedWorks={checkedWorks} />
       default:
         return null
     }
@@ -395,6 +395,12 @@ export default function EstimatePage({ category, projectId }: Props) {
             className="px-4 py-2 bg-accent text-white text-[13px] font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50 transition-colors"
           >
             {saving ? '저장 중...' : '저장'}
+          </button>
+          <button
+            onClick={() => alert('PDF 저장 기능은 준비 중입니다.')}
+            className="px-4 py-2 border border-border-primary text-[13px] font-medium rounded-lg hover:bg-surface-tertiary transition-colors text-txt-secondary"
+          >
+            PDF 저장
           </button>
         </div>
       </div>

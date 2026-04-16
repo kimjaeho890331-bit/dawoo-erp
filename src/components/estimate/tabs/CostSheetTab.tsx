@@ -256,9 +256,9 @@ export default function CostSheetTab({
   }
 
   return (
-    <div className={`flex gap-6 ${showSummaryTable ? '' : 'justify-center'}`}>
-      {/* 좌측: 원가계산서 */}
-      <div className={showSummaryTable ? 'flex-1 min-w-0' : 'w-full max-w-[700px]'}>
+    <div className="space-y-6">
+      {/* 원가계산서 */}
+      <div className="w-full">
         <h3 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-secondary mb-3">
           원가계산서
         </h3>
@@ -366,9 +366,16 @@ export default function CostSheetTab({
         </div>
       </div>
 
-      {/* 우측: 집계표 (2개 이상 공종 시 표시) */}
+      {/* 집계표 (2개 이상 공종 시 표시) */}
       {showSummaryTable && (
-        <div className="w-[480px] shrink-0">
+        <>
+        {/* 페이지 구분선 */}
+        <div className="flex items-center gap-3 py-2">
+          <div className="flex-1 border-t border-dashed border-border-secondary" />
+          <span className="text-[12px] font-medium text-txt-quaternary">--- 집계표 (별도 페이지) ---</span>
+          <div className="flex-1 border-t border-dashed border-border-secondary" />
+        </div>
+        <div className="w-full">
           <h3 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-secondary mb-3">
             집계표
           </h3>
@@ -454,6 +461,7 @@ export default function CostSheetTab({
             </div>
           </div>
         </div>
+        </>
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import type { WorkType } from '../estimateTypes'
 import { formatNumber } from '../estimateCalc'
 import { LABOR_PRICES, MATERIAL_PRICES } from '../estimateData'
 
@@ -65,9 +66,33 @@ const CAT_COLORS: Record<string, string> = {
   '공통': 'bg-gray-100 text-gray-600',
 }
 
+// ── 공종별 필요 노임 직종 매핑 ──
+const LABOR_BY_WORK_TYPE: Record<WorkType, string[]> = {
+  waterproof: ['방수공', '코킹공', '보통인부'],
+  tile: ['지붕잇기공', '건축목공', '보통인부'],
+  wallPaint: ['도장공', '방수공', '코킹공', '보통인부'],
+  stairPaint: ['도장공', '방수공', '코킹공', '보통인부'],
+  wallWaterRepel: ['도장공', '방수공', '코킹공', '보통인부'],
+}
+
+// ── 공종별 필요 재료 카테고리 매핑 ──
+const MATERIAL_CAT_BY_WORK_TYPE: Record<WorkType, string[]> = {
+  waterproof: ['방수', '공통'],
+  tile: ['기와', '공통'],
+  wallPaint: ['도장', '보수', '공통'],
+  stairPaint: ['도장', '보수'],
+  wallWaterRepel: ['발수', '보수', '공통'],
+}
+
+// ── Props ──
+
+interface Props {
+  checkedWorks?: WorkType[]
+}
+
 // ── 메인 컴포넌트 ──
 
-export default function PriceCompareTab() {
+export default function PriceCompareTab({ checkedWorks = [] }: Props) {
   const [labor, setLabor] = useState<LaborRow[]>([])
   const [material, setMaterial] = useState<MaterialRow[]>([])
   const [referenceDate, setReferenceDate] = useState('2025-07')
@@ -80,6 +105,30 @@ export default function PriceCompareTab() {
     setMaterial(loaded.material)
     setReferenceDate(loaded.referenceDate)
   }, [])
+
+  // ── 공종에 따른 필터링 ──
+  const filteredLabor = useMemo(() => {
+    if (checkedWorks.length === 0) return labor
+    const neededNames = new Set<string>()
+    for (const wt of checkedWorks) {
+      for (const name of LABOR_BY_WORK_TYPE[wt] || []) {
+        neededNames.add(name)
+      }
+    }
+    return labor.filter(r => neededNames.has(r.name))
+  }, [labor, checkedWorks])
+
+  const filteredMaterial = useMemo(() => {
+    if (checkedWorks.length === 0) return material
+    const neededCats = new Set<string>()
+    neededCats.add('공통') // 항상 포함
+    for (const wt of checkedWorks) {
+      for (const cat of MATERIAL_CAT_BY_WORK_TYPE[wt] || []) {
+        neededCats.add(cat)
+      }
+    }
+    return material.filter(r => neededCats.has(r.category))
+  }, [material, checkedWorks])
 
   const save = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ labor, material, referenceDate }))
@@ -140,7 +189,7 @@ export default function PriceCompareTab() {
               </tr>
             </thead>
             <tbody>
-              {labor.map(row => (
+              {filteredLabor.map(row => (
                 <tr key={row.id} className="hover:bg-surface-secondary/30">
                   <td className="border border-border-primary px-1 py-0.5">
                     <input value={row.name} onChange={e => updateLabor(row.id, 'name', e.target.value)}
@@ -179,7 +228,7 @@ export default function PriceCompareTab() {
               </tr>
             </thead>
             <tbody>
-              {material.map(row => {
+              {filteredMaterial.map(row => {
                 const catColor = CAT_COLORS[row.category] || 'bg-gray-100 text-gray-600'
                 return (
                   <tr key={row.id} className="hover:bg-surface-secondary/30">

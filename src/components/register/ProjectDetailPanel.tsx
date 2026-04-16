@@ -240,11 +240,6 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-primary">
           <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">
             {project.building_name || '(이름없음)'}
-            {project.water_work_type && (
-              <span className="ml-2 text-[12px] font-normal text-txt-tertiary">
-                ({project.water_work_type})
-              </span>
-            )}
           </h2>
           <div className="flex items-center gap-2">
             {hasChanges && (
@@ -343,7 +338,23 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
         {/* 상시 표시 영역 (항상 전체 표시) */}
         <div className="px-6 py-3 border-b border-border-tertiary bg-surface-secondary">
-          {/* 1행: 주소 */}
+          {/* 건물명 + 공사종류 */}
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-[16px] font-bold text-txt-primary">
+              {project.building_name || '(이름없음)'}
+            </h3>
+            {project.water_work_type && (
+              <span className={`px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${
+                project.water_work_type === '공용' ? 'bg-blue-500 text-white' :
+                project.water_work_type === '옥내' ? 'bg-emerald-500 text-white' :
+                project.water_work_type === '단독' ? 'bg-orange-500 text-white' :
+                'bg-gray-500 text-white'
+              }`}>
+                {project.water_work_type}
+              </span>
+            )}
+          </div>
+          {/* 주소 */}
           <div className="text-[12px] text-txt-secondary mb-1.5">{project.road_address || project.jibun_address || '-'}</div>
           {project.jibun_address && project.road_address && (
             <div className="text-[11px] text-txt-quaternary mb-1.5">{project.jibun_address}</div>
@@ -1138,19 +1149,15 @@ function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabPr
         </section>
 
         <section className="mt-5">
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공 사진 (A4 1장 6매)</h3>
-          <div className="space-y-4">
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공 사진</h3>
+          <div className="space-y-3">
             {['시공전', '시공중', '시공후'].map(type => (
               <div key={type}>
-                <p className="text-[11px] font-medium text-txt-tertiary mb-2">{type}</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {[1, 2].map(slot => (
-                    <FileDropZone key={`${type}-${slot}`} projectId={project.id} fileType={`${type}_${slot}`} accept="image/*" compact />
-                  ))}
-                </div>
+                <p className="text-[11px] font-medium text-txt-tertiary mb-1.5">{type}</p>
+                <FileDropZone projectId={project.id} fileType={type} accept="image/*" multiple compact />
               </div>
             ))}
-            <p className="text-[10px] text-txt-quaternary">시공전 2장 + 시공중 2장 + 시공후 2장 = A4 1장 기준 6매</p>
+            <p className="text-[10px] text-txt-quaternary">각 단계별 여러 장 업로드 가능</p>
           </div>
         </section>
 

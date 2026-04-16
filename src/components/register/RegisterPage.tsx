@@ -104,6 +104,8 @@ const PROGRESS_STEPS: ProjectStep[] = [
   '승인', '착공계', '공사', '완료서류제출', '입금',
 ]
 
+const STEP_LABELS_SHORT = ['문의','실측','견적','동의','신청','승인','착공','공사','완료','입금']
+
 const IN_PROGRESS_STEPS: ProjectStep[] = PROGRESS_STEPS.filter(s => s !== '입금')
 
 function matchesStatusFilter(step: string, filter: StatusFilter): boolean {
@@ -431,36 +433,35 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       </div>
 
       {/* 선택된 프로젝트 진행단계 미니바 */}
-      {selectedProject && selectedProject.status !== '취소' && (
-        <div className="mb-4 px-4 py-3 bg-surface border border-border-primary rounded-[10px] flex items-center gap-3">
-          <span className="text-[13px] font-semibold text-txt-primary shrink-0">
-            {selectedProject.building_name}
-          </span>
-          <div className="flex items-center gap-1 flex-1 overflow-x-auto">
-            {PROGRESS_STEPS.map((step, i) => {
-              const currentIdx = PROGRESS_STEPS.indexOf(selectedProject.status as ProjectStep)
-              const isActive = i <= currentIdx
-              const isCurrent = i === currentIdx
-              return (
-                <div key={step} className="flex items-center">
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-                    isCurrent
-                      ? 'bg-accent text-white'
-                      : isActive
-                        ? 'bg-accent-light text-accent'
-                        : 'bg-surface-secondary text-txt-quaternary'
-                  }`}>
-                    <span className="w-[14px] h-[14px] rounded-full flex items-center justify-center text-[9px] font-bold border border-current">
-                      {i + 1}
-                    </span>
-                    {step}
+      {selectedProject && (
+        <div className="mb-4 px-4 py-2.5 bg-surface border border-border-primary rounded-[10px]">
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-semibold text-txt-primary shrink-0 max-w-[200px] truncate">
+              {selectedProject.building_name}
+            </span>
+            <div className="flex items-center gap-0.5 flex-1 overflow-x-auto">
+              {PROGRESS_STEPS.map((step, i) => {
+                const currentIdx = PROGRESS_STEPS.indexOf(selectedProject.status as ProjectStep)
+                const isActive = i <= currentIdx
+                const isCurrent = i === currentIdx
+                return (
+                  <div key={step} className="flex items-center">
+                    <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${
+                      isCurrent
+                        ? 'bg-accent text-white'
+                        : isActive
+                          ? 'bg-accent/15 text-accent'
+                          : 'text-txt-quaternary'
+                    }`}>
+                      {STEP_LABELS_SHORT[i]}
+                    </div>
+                    {i < PROGRESS_STEPS.length - 1 && (
+                      <span className={`text-[8px] mx-0.5 ${isActive ? 'text-accent' : 'text-txt-quaternary'}`}>&rsaquo;</span>
+                    )}
                   </div>
-                  {i < PROGRESS_STEPS.length - 1 && (
-                    <div className={`w-2 h-px mx-0.5 ${isActive ? 'bg-accent' : 'bg-border-primary'}`} />
-                  )}
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
       )}

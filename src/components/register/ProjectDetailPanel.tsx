@@ -21,7 +21,7 @@ const STEP_LABELS_SHORT = [
   '승인', '착공', '공사', '완료', '입금',
 ]
 
-const TABS = ['기본정보', '1단계', '2단계', '3단계', '이력'] as const
+const TABS = ['기본정보', '접수', '승인(시공)', '완료', '이력'] as const
 type TabKey = (typeof TABS)[number]
 
 function getStepIndex(step: string): number {
@@ -56,9 +56,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       // 현재 단계에 맞는 탭 자동 선택
       const stepIdx = getStepIndex(project.status)
       if (stepIdx <= 0) setActiveTab('기본정보')
-      else if (stepIdx <= 4) setActiveTab('1단계')
-      else if (stepIdx <= 7) setActiveTab('2단계')
-      else if (stepIdx <= 9) setActiveTab('3단계')
+      else if (stepIdx <= 4) setActiveTab('접수')
+      else if (stepIdx <= 7) setActiveTab('승인(시공)')
+      else if (stepIdx <= 9) setActiveTab('완료')
       else setActiveTab('기본정보')
     }
   }, [project])
@@ -406,9 +406,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
-          {activeTab === '1단계' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
-          {activeTab === '2단계' && <TabStep2 project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} />}
-          {activeTab === '3단계' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
+          {activeTab === '접수' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
+          {activeTab === '승인(시공)' && <TabStep2 project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} />}
+          {activeTab === '완료' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>

@@ -26,6 +26,11 @@ import {
   formatNumber,
 } from './estimateCalc'
 import CustomerInfoTab from './tabs/CustomerInfoTab'
+import CoverTab from './tabs/CoverTab'
+import CostSheetTab from './tabs/CostSheetTab'
+import DetailSheetTab from './tabs/DetailSheetTab'
+import UnitPriceTab from './tabs/UnitPriceTab'
+import PriceCompareTab from './tabs/PriceCompareTab'
 
 // ── 탭 정의 ──
 
@@ -286,24 +291,64 @@ export default function EstimatePage({ category, projectId }: Props) {
           />
         )
       case 'cover':
-        return <PlaceholderTab label="표지/갑지" />
-      case 'costSheet':
-        return <PlaceholderTab label="원가계산서 + 집계표" />
-      case 'detail':
         return (
-          <PlaceholderTab
-            label="내역서"
-            extra={
-              checkedWorks.length === 0
-                ? '공사종류를 먼저 선택해 주세요.'
-                : `선택된 공종: ${checkedWorks.map(w => WORK_TYPE_LABELS[w]).join(', ')}`
-            }
+          <CoverTab
+            customerInfo={customerInfo}
+            costSummary={costSummary}
+            checkedWorks={checkedWorks}
           />
         )
+      case 'costSheet':
+        return (
+          <CostSheetTab
+            costSummary={costSummary}
+            costRates={costRates}
+            onCostRatesChange={setCostRates}
+            checkedWorks={checkedWorks}
+            detailRows={detailRows}
+          />
+        )
+      case 'detail':
+        if (checkedWorks.length === 0) {
+          return <PlaceholderTab label="내역서" extra="공사종류를 먼저 선택해 주세요." />
+        }
+        return (
+          <div className="space-y-6">
+            {checkedWorks.map(wt => (
+              <div key={wt}>
+                <h3 className="text-[14px] font-semibold text-txt-primary mb-2">
+                  {WORK_TYPE_LABELS[wt]} 내역서
+                </h3>
+                <DetailSheetTab
+                  workType={wt}
+                  rows={detailRows[wt] || []}
+                  onRowsChange={(rows) => setDetailRows(prev => ({ ...prev, [wt]: rows }))}
+                  area={(() => {
+                    switch (wt) {
+                      case 'waterproof': return areas.roof_floor + areas.roof_vertical
+                      case 'tile': return areas.tile
+                      case 'wallPaint': case 'wallWaterRepel': return areas.wall
+                      case 'stairPaint': return areas.stair
+                    }
+                  })()}
+                />
+              </div>
+            ))}
+          </div>
+        )
       case 'unitPrice':
-        return <PlaceholderTab label="일위대가" />
+        if (checkedWorks.length === 0) {
+          return <PlaceholderTab label="일위대가" extra="공사종류를 먼저 선택해 주세요." />
+        }
+        return (
+          <div className="space-y-6">
+            {checkedWorks.map(wt => (
+              <UnitPriceTab key={wt} workType={wt} unitPrices={unitPrices} />
+            ))}
+          </div>
+        )
       case 'priceCompare':
-        return <PlaceholderTab label="단가대비표" />
+        return <PriceCompareTab unitPrices={unitPrices} />
       default:
         return null
     }

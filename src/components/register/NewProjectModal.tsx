@@ -708,7 +708,12 @@ function ModalField({
 
 // 전유면적 세대별 그룹핑 표시
 function AreaGroupDisplay({ units }: { units: UnitInfo[] }) {
-  if (units.length === 0) return null
+  // 전유부 데이터가 없으면 (대단지 아파트 등 API 한도 초과)
+  if (units.length === 0) return (
+    <div className="mt-2 pt-2 border-t border-border-tertiary">
+      <p className="text-[10px] text-txt-quaternary">전유면적 데이터 없음 (대단지 건물은 조회 불가)</p>
+    </div>
+  )
   const privateUnits = units.filter(u => u.exposPubuseGbCdNm === '전유')
   if (privateUnits.length === 0) return null
 

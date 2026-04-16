@@ -432,43 +432,43 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         </div>
       </div>
 
-      {/* 진행 프로세스 가이드 — 오른쪽 상단 고정 */}
-      <div className="flex justify-end mb-3">
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-surface border border-border-primary rounded-lg">
+      {/* 상태 필터 탭 + 진행 프로세스 가이드 */}
+      <div className="flex items-end justify-between mb-4 border-b border-border-primary">
+        <div className="flex gap-1">
+          {STATUS_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={`px-4 py-2 text-[13px] font-medium transition-colors ${
+                statusFilter === tab.key
+                  ? 'border-b-[1.5px] border-accent text-accent'
+                  : 'border-b-[1.5px] border-transparent text-txt-tertiary hover:text-txt-secondary'
+              }`}
+            >
+              {tab.label}
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[11px] ${
+                statusFilter === tab.key ? 'bg-accent-light text-accent' : 'bg-surface-secondary text-txt-tertiary'
+              }`}>
+                {statusCounts[tab.key]}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 px-2 py-1.5 mb-1">
           {PROGRESS_STEPS.map((step, i) => {
             const colors = ['bg-slate-400','bg-sky-500','bg-indigo-500','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
             return (
               <div key={step} className="flex items-center gap-0.5">
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${colors[i]}`}>{i+1}</span>
-                <span className="text-[10px] text-txt-secondary">{STEP_LABELS_SHORT[i]}</span>
-                {i < PROGRESS_STEPS.length - 1 && <span className="text-[9px] text-txt-quaternary mx-0.5">›</span>}
+                <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold text-white ${colors[i]}`}>{i+1}</span>
+                <span className="text-[9px] text-txt-tertiary">{STEP_LABELS_SHORT[i]}</span>
+                {i < PROGRESS_STEPS.length - 1 && <span className="text-[8px] text-txt-quaternary mx-0.5">›</span>}
               </div>
             )
           })}
         </div>
       </div>
 
-      {/* 상태 필터 탭 */}
-      <div className="flex gap-1 mb-4 border-b border-border-primary">
-        {STATUS_TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setStatusFilter(tab.key)}
-            className={`px-4 py-2 text-[13px] font-medium transition-colors ${
-              statusFilter === tab.key
-                ? 'border-b-[1.5px] border-accent text-accent'
-                : 'border-b-[1.5px] border-transparent text-txt-tertiary hover:text-txt-secondary'
-            }`}
-          >
-            {tab.label}
-            <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[11px] ${
-              statusFilter === tab.key ? 'bg-accent-light text-accent' : 'bg-surface-secondary text-txt-tertiary'
-            }`}>
-              {statusCounts[tab.key]}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* (상태 필터 탭은 위에서 프로세스 가이드와 함께 렌더됨) */}
 
       {/* 지역 필터 (프로젝트 주소에서 자동 추출) */}
       {(() => {

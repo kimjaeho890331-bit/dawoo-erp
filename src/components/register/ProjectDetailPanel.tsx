@@ -367,33 +367,37 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
             <InfoField label="담당자" value={project.staff?.name || '-'} />
           </div>
-          {/* 상담내역 인라인 편집 */}
-          <div className="mb-2">
-            <span className="text-[11px] text-txt-tertiary">상담내역</span>
-            {editingMemo ? (
-              <textarea
-                autoFocus
-                rows={2}
-                value={(getVal('note') as string) ?? ''}
-                onChange={e => updateField('note', e.target.value || null)}
-                onBlur={() => setEditingMemo(false)}
-                className="w-full mt-0.5 px-2 py-1 border border-accent rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-light"
-              />
-            ) : (
-              <p
-                onClick={() => setEditingMemo(true)}
-                className="text-[13px] text-txt-secondary cursor-pointer hover:bg-surface-tertiary rounded px-1 py-0.5 -mx-1 transition-colors truncate"
-                title="클릭하여 수정"
-              >
-                {(getVal('note') as string) || '-'}
-              </p>
+          {/* 상담내역 + 세입자 연락처 (같은 줄) */}
+          <div className="flex items-start gap-4 mb-2">
+            <div className="flex-1">
+              <span className="text-[11px] text-txt-tertiary">상담내역</span>
+              {editingMemo ? (
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={(getVal('note') as string) ?? ''}
+                  onChange={e => updateField('note', e.target.value || null)}
+                  onBlur={() => setEditingMemo(false)}
+                  className="w-full mt-0.5 px-2 py-1 border border-accent rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-light"
+                />
+              ) : (
+                <p
+                  onClick={() => setEditingMemo(true)}
+                  className="text-[13px] text-txt-secondary cursor-pointer hover:bg-surface-tertiary rounded px-1 py-0.5 -mx-1 transition-colors truncate"
+                  title="클릭하여 수정"
+                >
+                  {(getVal('note') as string) || '-'}
+                </p>
+              )}
+            </div>
+            {project.tenant_phone && (
+              <div className="shrink-0">
+                <span className="text-[11px] text-txt-tertiary">세입자</span>
+                <p className="text-[13px] text-txt-secondary">{project.tenant_phone}</p>
+              </div>
             )}
           </div>
-          {project.tenant_phone && (
-            <div className="text-[12px] text-txt-secondary mb-1">
-              <span className="text-txt-tertiary">세입자: </span>{project.tenant_phone}
-            </div>
-          )}
+          {/* 세입자 연락처는 위에서 상담내역 옆에 표시 */}
           {/* 금액 5개 */}
           <div className="grid grid-cols-5 gap-2 pt-2 border-t border-surface-tertiary">
             <MiniStat label="총공사비" value={project.total_cost} />
@@ -771,46 +775,7 @@ function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) 
         )}
       </section>
 
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider">소유주/세입자</h3>
-          <button
-            onClick={fetchOwners}
-            disabled={ownerLoading}
-            className="px-2.5 py-1 text-[10px] font-medium text-accent border border-accent/30 rounded-md hover:bg-accent/5 transition-colors disabled:opacity-50"
-          >
-            {ownerLoading ? '조회 중...' : '건축물대장 소유자 조회'}
-          </button>
-        </div>
-
-        {/* 소유자 조회 결과 */}
-        {owners.length > 0 && (
-          <div className="mb-3 p-3 bg-surface-secondary rounded-lg border border-border-tertiary">
-            <p className="text-[10px] font-medium text-txt-tertiary mb-2">건축물대장 소유자 ({owners.length}명)</p>
-            <div className="space-y-1.5">
-              {owners.map((o, i) => (
-                <div key={i} className="flex items-center justify-between text-[12px]">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-txt-primary">{o.name}</span>
-                    <span className="text-txt-tertiary">({o.ownerType})</span>
-                    {o.registNo && <span className="text-txt-quaternary text-[11px]">{o.registNo}</span>}
-                  </div>
-                  {o.share && <span className="text-[11px] text-txt-tertiary">지분 {o.share}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {ownerError && (
-          <p className="mb-3 text-[11px] text-[#dc2626]">{ownerError}</p>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput label="소유주" value={getVal('owner_name') as string} onChange={v => onChange('owner_name', v || null)} />
-          <FormInput label="소유주 연락처" type="tel" value={getVal('owner_phone') as string} onChange={v => onChange('owner_phone', formatPhone(v) || null)} />
-          <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
-        </div>
-      </section>
+      {/* 소유주/세입자 섹션 제거 — 고정영역에서 표시, 기본정보는 표제부/전유부만 */}
     </div>
   )
 }
@@ -911,6 +876,7 @@ function TabStep1({ project, category, getVal, onChange }: TabProps & { category
         )}
         {category === '수도' && (
           <div className="grid grid-cols-2 gap-3 mt-3">
+            <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
             <FormInput label="세대 비밀번호" placeholder="예: 1234#" value={getVal('unit_password') as string} onChange={v => onChange('unit_password', v || null)} />
           </div>
         )}

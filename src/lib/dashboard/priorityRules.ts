@@ -178,7 +178,7 @@ export function ruleSurveyTimeMissing(projects: ProjectLite[]): BriefingItem[] {
 // 진행 중인데 updated_at 3일 이상 전
 // ============================================
 export function ruleApplicationStale(projects: ProjectLite[]): BriefingItem[] {
-  const ACTIVE = new Set(['실사', '견적전달', '동의서', '신청서제출'])
+  const ACTIVE = new Set(['실측', '견적전달', '동의서', '신청서제출'])
   return projects
     .filter(p => ACTIVE.has(p.status))
     .filter(p => daysAgo(p.updated_at) >= 3)
@@ -280,7 +280,7 @@ export function ruleStageUpgradeable(projects: ProjectLite[]): BriefingItem[] {
   for (const p of projects) {
     let canUpgrade = false
     let nextStage = ''
-    if (p.status === '실사' && p.survey_date) {
+    if (p.status === '실측' && p.survey_date) {
       canUpgrade = true; nextStage = '견적전달'
     } else if (p.status === '동의서' && p.consent_time) {
       canUpgrade = true; nextStage = '신청서제출'

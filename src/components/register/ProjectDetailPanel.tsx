@@ -12,12 +12,12 @@ import StepTransition from '@/components/register/StepTransition'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
 const PROGRESS_STEPS: ProjectStep[] = [
-  '문의', '실사', '견적전달', '동의서', '신청서제출',
+  '문의', '실측', '견적전달', '동의서', '신청서제출',
   '승인', '착공계', '공사', '완료서류제출', '입금',
 ]
 
 const STEP_LABELS_SHORT = [
-  '문의', '실사', '견적', '동의', '신청',
+  '문의', '실측', '견적', '동의', '신청',
   '승인', '착공', '공사', '완료', '입금',
 ]
 

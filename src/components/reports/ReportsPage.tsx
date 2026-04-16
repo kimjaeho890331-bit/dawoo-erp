@@ -24,7 +24,7 @@ interface SiteLog { id: string; site_id: string | null; log_date: string; conten
 interface Template { id: string; name: string; updated_at: string | null }
 interface Site { id: string; name: string; status: string | null }
 
-const ACTIVE = ['문의', '실사', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출']
+const ACTIVE = ['문의', '실측', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출']
 const DONE = ['입금', '완료']
 
 type AlertLevel = 'urgent' | 'caution' | 'normal'

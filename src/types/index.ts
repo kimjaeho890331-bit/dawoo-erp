@@ -6,7 +6,7 @@
 // --- 프로젝트 상태 (AI 내부 10단계) ---
 export const PROJECT_STATUSES = [
   '문의',
-  '실사',
+  '실측',
   '견적전달',
   '동의서',
   '신청서제출',
@@ -22,7 +22,7 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 // 화면 4단계 매핑
 export const STATUS_STAGE_MAP: Record<ProjectStatus, number> = {
   '문의': 1,
-  '실사': 1,
+  '실측': 1,
   '견적전달': 1,
   '동의서': 1,
   '신청서제출': 1,

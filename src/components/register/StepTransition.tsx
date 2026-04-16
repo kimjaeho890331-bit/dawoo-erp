@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
 const PROGRESS_STEPS: ProjectStep[] = [
-  '문의', '실사', '견적전달', '동의서', '신청서제출',
+  '문의', '실측', '견적전달', '동의서', '신청서제출',
   '승인', '착공계', '공사', '완료서류제출', '입금',
 ]
 
@@ -18,14 +18,14 @@ interface ValidationRule {
 
 // 단계 전환 시 필수 입력 검증 규칙
 const TRANSITION_RULES: Record<string, ValidationRule[]> = {
-  '문의->실사': [
+  '문의->실측': [
     { field: 'building_name', label: '빌라명', check: p => !!p.building_name },
     { field: 'road_address', label: '주소', check: p => !!p.road_address },
     { field: 'owner_name', label: '소유주', check: p => !!p.owner_name },
     { field: 'owner_phone', label: '연락처', check: p => !!p.owner_phone },
     { field: 'note', label: '상담내역', check: p => !!p.note },
   ],
-  '실사->견적전달': [
+  '실측->견적전달': [
     { field: 'survey_date', label: '실측일', check: p => !!p.survey_date },
     { field: 'survey_staff', label: '실측 담당자', check: p => !!p.survey_staff },
   ],

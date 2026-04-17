@@ -55,6 +55,31 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - 검색 결과를 표 형태로 간결하게 보여주기
 - 상태그룹: 접수(문의~신청서제출), 승인(승인~공사), 완료(완료서류제출+입금), 취소
 
+## 접수 수정
+- "소유주 변경", "연락처 수정" → search_projects로 먼저 찾고 → update_project로 수정
+- 반드시 검색 → 확인 → 수정 순서
+
+## 단계 변경
+- "실측 완료", "견적 전달" → search_projects로 찾고 → update_status
+- 변경 후 status_logs에 자동 기록됨
+
+## 캘린더
+- "일정 잡아줘" → manage_schedule(action=create)
+- "이번 주 일정" → manage_schedule(action=search, search_date_from/to)
+- 담당자 이름으로 staff_id 자동 매칭
+
+## 지출
+- "이번 달 노무비 얼마?" → manage_expense(action=summary, category=노무비)
+- "지출 등록해줘" → manage_expense(action=create)
+
+## 현장/거래처
+- "진행중 현장" → search_sites(status=active)
+- "방수 업체 찾아줘" → search_vendors(keyword=방수, vendor_type=협력업체)
+
+## 복합 명령 처리
+- "삼성빌리지 실측 완료하고 내일 견적 일정 잡아줘" → update_status + manage_schedule 순차 실행
+- 여러 도구를 연달아 사용하여 한 번에 처리
+
 ## 대화 규칙
 - 간결하고 핵심적으로 답변. 장황한 설명 금지.
 - 등록 완료 시 입력된 정보만 깔끔하게 요약.
@@ -138,6 +163,97 @@ const TOOLS = [
         city: { type: 'string', description: '도시 필터 (수원, 성남, 안양, 부천, 광명, 시흥, 안산, 군포, 의왕, 과천, 용인, 화성, 오산, 평택, 하남, 광주, 서산)' },
         category: { type: 'string', enum: ['소규모', '수도'], description: '카테고리 필터' },
         count_only: { type: 'boolean', description: '건수만 반환할지 여부. "몇건", "현황" 등 질문 시 true' },
+      },
+    },
+  },
+  // --- Phase A: 확장 도구 6개 ---
+  {
+    name: 'update_project',
+    description: '접수대장 프로젝트 정보를 수정합니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        project_id: { type: 'string', description: '수정할 프로젝트 ID (search_projects로 먼저 조회)' },
+        building_name: { type: 'string', description: '빌라명 변경' },
+        owner_name: { type: 'string', description: '소유주명 변경' },
+        owner_phone: { type: 'string', description: '소유주 연락처 변경' },
+        tenant_phone: { type: 'string', description: '세입자 연락처' },
+        note: { type: 'string', description: '상담내역/메모 변경' },
+        staff_id: { type: 'string', description: '담당자 ID 변경' },
+      },
+      required: ['project_id'],
+    },
+  },
+  {
+    name: 'update_status',
+    description: '접수대장 프로젝트의 단계(상태)를 변경합니다. 변경 이력이 자동 기록됩니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        project_id: { type: 'string', description: '프로젝트 ID' },
+        new_status: { type: 'string', enum: ['문의', '실측', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출', '입금', '취소', '문의(예약)'], description: '변경할 상태' },
+        note: { type: 'string', description: '변경 사유 (선택)' },
+      },
+      required: ['project_id', 'new_status'],
+    },
+  },
+  {
+    name: 'manage_schedule',
+    description: '캘린더 일정을 등록/조회/수정/삭제합니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        action: { type: 'string', enum: ['create', 'search', 'update', 'delete'], description: '작업 종류' },
+        schedule_id: { type: 'string', description: '수정/삭제 시 일정 ID' },
+        title: { type: 'string', description: '일정 제목 (예: 권선동 실측)' },
+        start_date: { type: 'string', description: '시작일 YYYY-MM-DD' },
+        end_date: { type: 'string', description: '종료일 YYYY-MM-DD (미입력 시 시작일과 동일)' },
+        start_time: { type: 'string', description: '시간 HH:MM (예: 10:00)' },
+        staff_name: { type: 'string', description: '담당자 이름 (예: 김재호)' },
+        schedule_type: { type: 'string', enum: ['project', 'personal', 'promo'], description: '일정 유형' },
+        search_keyword: { type: 'string', description: '조회 시 검색 키워드' },
+        search_staff: { type: 'string', description: '조회 시 담당자 이름' },
+        search_date_from: { type: 'string', description: '조회 시작일' },
+        search_date_to: { type: 'string', description: '조회 종료일' },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'search_sites',
+    description: '현장관리 정보를 조회합니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keyword: { type: 'string', description: '현장명 검색' },
+        status: { type: 'string', enum: ['active', 'completed', 'all'], description: '상태 필터' },
+      },
+    },
+  },
+  {
+    name: 'manage_expense',
+    description: '지출결의서를 등록/조회/집계합니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        action: { type: 'string', enum: ['create', 'search', 'summary'], description: '작업 종류' },
+        category: { type: 'string', enum: ['노무비', '업체지출', '기타경비'], description: '분류' },
+        title: { type: 'string', description: '지출 내용' },
+        amount: { type: 'number', description: '금액' },
+        expense_date: { type: 'string', description: '날짜 YYYY-MM-DD' },
+        month: { type: 'string', description: '집계 시 월 YYYY-MM' },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'search_vendors',
+    description: '거래처(협력업체, 일용직)를 검색합니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keyword: { type: 'string', description: '이름/업종/연락처 검색' },
+        vendor_type: { type: 'string', enum: ['협력업체', '일용직'], description: '거래처 유형' },
       },
     },
   },
@@ -419,6 +535,135 @@ async function searchProjects(input: Record<string, unknown>): Promise<string> {
   }
 }
 
+// --- Phase A: 확장 도구 실행 함수들 ---
+
+async function updateProject(input: Record<string, unknown>): Promise<string> {
+  const { project_id, ...updates } = input as Record<string, string | undefined>
+  if (!project_id) return JSON.stringify({ error: 'project_id 필수' })
+  const payload: Record<string, unknown> = {}
+  if (updates.building_name) payload.building_name = updates.building_name
+  if (updates.owner_name) payload.owner_name = updates.owner_name
+  if (updates.owner_phone) payload.owner_phone = updates.owner_phone
+  if (updates.tenant_phone) payload.tenant_phone = updates.tenant_phone
+  if (updates.note) payload.note = updates.note
+  if (updates.staff_id) payload.staff_id = updates.staff_id
+  if (Object.keys(payload).length === 0) return JSON.stringify({ error: '변경할 항목이 없습니다' })
+  const { error } = await supabaseAdmin.from('projects').update(payload).eq('id', project_id)
+  if (error) return JSON.stringify({ error: error.message })
+  return JSON.stringify({ success: true, updated: Object.keys(payload) })
+}
+
+async function updateStatus(input: Record<string, unknown>): Promise<string> {
+  const { project_id, new_status, note } = input as Record<string, string | undefined>
+  if (!project_id || !new_status) return JSON.stringify({ error: 'project_id, new_status 필수' })
+  const { data: prev } = await supabaseAdmin.from('projects').select('status, building_name').eq('id', project_id).single()
+  if (!prev) return JSON.stringify({ error: '프로젝트를 찾을 수 없습니다' })
+  const { error } = await supabaseAdmin.from('projects').update({ status: new_status }).eq('id', project_id)
+  if (error) return JSON.stringify({ error: error.message })
+  await supabaseAdmin.from('status_logs').insert({ project_id, from_status: prev.status, to_status: new_status, note: note || 'AI 비서 변경' })
+  return JSON.stringify({ success: true, building: prev.building_name, from: prev.status, to: new_status })
+}
+
+async function manageSchedule(input: Record<string, unknown>): Promise<string> {
+  const { action } = input as Record<string, string | undefined>
+  if (action === 'create') {
+    const { title, start_date, end_date, start_time, staff_name, schedule_type } = input as Record<string, string | undefined>
+    if (!title || !start_date) return JSON.stringify({ error: 'title, start_date 필수' })
+    let staffId = null
+    if (staff_name) {
+      const { data: s } = await supabaseAdmin.from('staff').select('id').ilike('name', `%${staff_name}%`).limit(1).single()
+      if (s) staffId = s.id
+    }
+    const { data, error } = await supabaseAdmin.from('schedules').insert({
+      title, start_date, end_date: end_date || start_date,
+      start_time: start_time || null, staff_id: staffId,
+      schedule_type: schedule_type || 'project', confirmed: false,
+      all_day: !start_time, color: '#3B82F6',
+    }).select('id, title, start_date')
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({ success: true, schedule: data?.[0] })
+  }
+  if (action === 'search') {
+    const { search_keyword, search_staff, search_date_from, search_date_to } = input as Record<string, string | undefined>
+    let q = supabaseAdmin.from('schedules').select('id, title, start_date, end_date, start_time, confirmed, staff:staff_id(name)').neq('schedule_type', 'site')
+    if (search_date_from) q = q.gte('start_date', search_date_from)
+    if (search_date_to) q = q.lte('start_date', search_date_to)
+    if (search_keyword) q = q.ilike('title', `%${search_keyword}%`)
+    if (search_staff) {
+      const { data: s } = await supabaseAdmin.from('staff').select('id').ilike('name', `%${search_staff}%`).limit(1).single()
+      if (s) q = q.eq('staff_id', s.id)
+    }
+    const { data, error } = await q.order('start_date').limit(20)
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({ total: data?.length || 0, schedules: data?.map((s: Record<string, unknown>) => ({ title: s.title, date: s.start_date, time: s.start_time, confirmed: s.confirmed, staff: (s.staff as Record<string, unknown>)?.name })) })
+  }
+  if (action === 'delete' && input.schedule_id) {
+    const { error } = await supabaseAdmin.from('schedules').delete().eq('id', input.schedule_id as string)
+    return error ? JSON.stringify({ error: error.message }) : JSON.stringify({ success: true })
+  }
+  return JSON.stringify({ error: '지원하지 않는 action' })
+}
+
+async function searchSites(input: Record<string, unknown>): Promise<string> {
+  const { keyword, status } = input as Record<string, string | undefined>
+  let q = supabaseAdmin.from('sites').select('id, name, address, status, start_date, end_date, budget, description')
+  if (keyword) q = q.ilike('name', `%${keyword}%`)
+  if (status === 'active') q = q.neq('status', 'completed')
+  if (status === 'completed') q = q.eq('status', 'completed')
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(20)
+  if (error) return JSON.stringify({ error: error.message })
+  return JSON.stringify({ total: data?.length || 0, sites: data })
+}
+
+async function manageExpense(input: Record<string, unknown>): Promise<string> {
+  const { action } = input as Record<string, string | undefined>
+  if (action === 'create') {
+    const { category, title, amount, expense_date } = input as Record<string, string | number | undefined>
+    if (!title || !amount) return JSON.stringify({ error: 'title, amount 필수' })
+    const { data, error } = await supabaseAdmin.from('expenses').insert({
+      category: category || '기타경비', title, amount: Number(amount),
+      expense_date: expense_date || new Date().toISOString().slice(0, 10),
+      status: '대기', approver: '관리자',
+    }).select('id, title, amount')
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({ success: true, expense: data?.[0] })
+  }
+  if (action === 'summary') {
+    const { month, category } = input as Record<string, string | undefined>
+    const targetMonth = month || new Date().toISOString().slice(0, 7)
+    let q = supabaseAdmin.from('expenses').select('category, amount, expense_date')
+      .gte('expense_date', `${targetMonth}-01`).lte('expense_date', `${targetMonth}-31`)
+    if (category) q = q.eq('category', category)
+    const { data, error } = await q
+    if (error) return JSON.stringify({ error: error.message })
+    const total = (data || []).reduce((s: number, e: Record<string, unknown>) => s + (Number(e.amount) || 0), 0)
+    const byCat: Record<string, number> = {}
+    ;(data || []).forEach((e: Record<string, unknown>) => { byCat[e.category as string] = (byCat[e.category as string] || 0) + (Number(e.amount) || 0) })
+    return JSON.stringify({ month: targetMonth, total, count: data?.length || 0, by_category: byCat })
+  }
+  if (action === 'search') {
+    const { category, month } = input as Record<string, string | undefined>
+    const targetMonth = month || new Date().toISOString().slice(0, 7)
+    let q = supabaseAdmin.from('expenses').select('id, title, amount, category, expense_date, status, staff:staff_id(name)')
+      .gte('expense_date', `${targetMonth}-01`).lte('expense_date', `${targetMonth}-31`)
+    if (category) q = q.eq('category', category)
+    const { data, error } = await q.order('expense_date', { ascending: false }).limit(30)
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({ total: data?.length || 0, expenses: data })
+  }
+  return JSON.stringify({ error: '지원하지 않는 action' })
+}
+
+async function searchVendors(input: Record<string, unknown>): Promise<string> {
+  const { keyword, vendor_type } = input as Record<string, string | undefined>
+  let q = supabaseAdmin.from('vendors').select('id, name, vendor_type, phone, specialty, representative, bank_name, account_number, business_number')
+  if (vendor_type) q = q.eq('vendor_type', vendor_type)
+  if (keyword) q = q.or(`name.ilike.%${keyword}%,specialty.ilike.%${keyword}%,phone.ilike.%${keyword}%`)
+  const { data, error } = await q.order('name').limit(20)
+  if (error) return JSON.stringify({ error: error.message })
+  return JSON.stringify({ total: data?.length || 0, vendors: data })
+}
+
 // --- 도구 실행 라우터 ---
 async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
@@ -432,6 +677,18 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return registerProject(input)
     case 'search_projects':
       return searchProjects(input)
+    case 'update_project':
+      return updateProject(input)
+    case 'update_status':
+      return updateStatus(input)
+    case 'manage_schedule':
+      return manageSchedule(input)
+    case 'search_sites':
+      return searchSites(input)
+    case 'manage_expense':
+      return manageExpense(input)
+    case 'search_vendors':
+      return searchVendors(input)
     default:
       return JSON.stringify({ error: `알 수 없는 도구: ${name}` })
   }

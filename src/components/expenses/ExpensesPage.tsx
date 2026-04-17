@@ -62,17 +62,17 @@ interface Anomaly {
   transactions: CardTransaction[]
 }
 
-const EXPENSE_CATS = ['식대', '교통비', '자재비', '현장경비', '사무용품', '기타'] as const
+const EXPENSE_CATS = ['노무비', '업체지출', '기타경비'] as const
 const FIXED_CATS = ['임대료', '보험료', '통신비', '차량유지', '급여', '세금', '구독료', '기타'] as const
-const CARD_CATS = ['식대', '주유', '자재', '사무용품', '접대', '교통', '편의점', '기타'] as const
+const CARD_CATS = ['노무비', '업체지출', '기타경비'] as const
 
 const CAT_COLOR: Record<string, string> = {
-  '식대': 'bg-orange-100 text-orange-700', '교통비': 'bg-blue-100 text-blue-700', '자재비': 'bg-green-100 text-green-700',
-  '현장경비': 'bg-purple-100 text-purple-700', '사무용품': 'bg-yellow-100 text-yellow-700',
+  '노무비': 'bg-blue-100 text-blue-700',
+  '업체지출': 'bg-emerald-100 text-emerald-700',
+  '기타경비': 'bg-amber-100 text-amber-700',
   '임대료': 'bg-red-100 text-red-700', '보험료': 'bg-teal-100 text-teal-700', '통신비': 'bg-cyan-100 text-cyan-700',
   '차량유지': 'bg-indigo-100 text-indigo-700', '급여': 'bg-emerald-100 text-emerald-700', '세금': 'bg-rose-100 text-rose-700',
-  '구독료': 'bg-violet-100 text-violet-700', '주유': 'bg-amber-100 text-amber-700', '자재': 'bg-green-100 text-green-700',
-  '접대': 'bg-pink-100 text-pink-700', '교통': 'bg-blue-100 text-blue-700', '편의점': 'bg-lime-100 text-lime-700',
+  '구독료': 'bg-violet-100 text-violet-700',
   '기타': 'bg-surface-secondary text-txt-secondary',
 }
 

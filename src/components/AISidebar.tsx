@@ -133,7 +133,7 @@ export default function AISidebar() {
       {/* Panel */}
       {open && (
         <div
-          className="fixed right-0 top-0 w-[400px] h-screen bg-surface border-l border-border-primary flex flex-col z-40"
+          className="fixed right-0 top-0 w-full md:w-[400px] h-screen bg-surface border-l border-border-primary flex flex-col z-40"
           style={{ boxShadow: '-4px 0 20px rgba(0,0,0,0.06)' }}
         >
           {/* Header */}

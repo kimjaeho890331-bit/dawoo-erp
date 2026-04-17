@@ -434,7 +434,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       </div>
 
       {/* 상태 필터 탭 + 진행 프로세스 가이드 */}
-      <div className="flex items-end justify-between mb-4 border-b border-border-primary">
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-4 border-b border-border-primary">
         <div className="flex gap-1">
           {STATUS_TABS.map(tab => (
             <button
@@ -455,7 +455,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1 px-2 py-1.5 mb-1">
+        <div className="hidden md:flex items-center gap-1 px-2 py-1.5 mb-1">
           {PROGRESS_STEPS.map((step, i) => {
             const colors = ['bg-slate-400','bg-sky-500','bg-indigo-500','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
             return (
@@ -502,7 +502,48 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         )
       })()}
 
-      {/* 테이블 */}
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-2">
+        {loading ? (
+          <div className="px-4 py-16 text-center text-txt-tertiary">불러오는 중...</div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="px-4 py-16 text-center text-txt-tertiary">등록된 프로젝트가 없습니다</div>
+        ) : (
+          filteredProjects.map(project => (
+            <div
+              key={project.id}
+              onClick={() => setSelectedProjectId(project.id)}
+              className={`bg-surface border rounded-lg p-3 cursor-pointer transition ${
+                selectedProjectId === project.id ? 'border-accent bg-accent-light' : 'border-border-primary'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[13px] font-medium text-txt-primary truncate flex-1">{project.building_name || '-'}</span>
+                <span className={`badge ml-2 ${getStepBadgeColor(project.status)}`}>{project.status}</span>
+              </div>
+              <div className="text-[11px] text-txt-secondary truncate">{project.road_address || '-'}</div>
+              <div className="flex items-center gap-2 mt-1.5">
+                {project.staff?.name && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold text-white" style={{ backgroundColor: project.staff.color || '#94a3b8' }}>
+                    {project.staff.name}
+                  </span>
+                )}
+                {category === '수도' && project.water_work_type && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                    project.water_work_type === '공용' ? 'bg-blue-100 text-blue-700' :
+                    project.water_work_type === '옥내' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-orange-100 text-orange-700'
+                  }`}>{project.water_work_type}</span>
+                )}
+                <span className="text-[10px] text-txt-tertiary truncate">{project.note || ''}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block">
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
@@ -601,6 +642,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             </tbody>
           </table>
         </div>
+      </div>
       </div>
 
       {/* 하단 요약 */}

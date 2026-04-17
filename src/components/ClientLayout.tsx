@@ -1,17 +1,17 @@
 'use client'
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Sidebar from "@/components/Sidebar"
 import AISidebar from "@/components/AISidebar"
 import { AuthProvider, useAuth } from "@/components/AuthProvider"
+import { Menu } from 'lucide-react'
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth()
   const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  // 로그인 페이지는 사이드바/인증 로딩 없이 바로 렌더
-  if (pathname === '/login') {
-    return <>{children}</>
-  }
+  if (pathname === '/login') return <>{children}</>
 
   if (loading) {
     return (
@@ -23,9 +23,19 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Sidebar />
-      <main className="ml-[240px] min-h-screen bg-page px-8 py-6">
-        {children}
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <main className="md:ml-[240px] min-h-screen bg-page">
+        {/* Mobile top bar */}
+        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-surface border-b border-border-primary sticky top-0 z-20">
+          <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-tertiary">
+            <Menu size={20} className="text-txt-secondary" />
+          </button>
+          <span className="text-[14px] font-semibold text-txt-primary">DAWOO ERP</span>
+          <div className="w-9" /> {/* spacer */}
+        </div>
+        <div className="px-4 py-4 md:px-8 md:py-6">
+          {children}
+        </div>
       </main>
       <AISidebar />
     </>

@@ -293,7 +293,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     <>
       <div className="fixed inset-0 bg-black/30 z-30" onClick={onClose} />
 
-      <div className="fixed right-0 top-0 h-full w-[600px] bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.12)] z-40 flex flex-col animate-slide-in overflow-hidden">
+      <div className="fixed right-0 top-0 h-full w-full md:w-[600px] bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.12)] z-40 flex flex-col animate-slide-in overflow-hidden">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-primary">
           <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">

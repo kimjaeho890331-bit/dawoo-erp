@@ -67,97 +67,129 @@ function SvgIcon({ d, className }: { d: string; className?: string }) {
   )
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
 
   const isActive = (path: string) => pathname === path || pathname?.startsWith(path + '/')
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-[240px]'} h-screen bg-sidebar text-txt-inverse flex flex-col transition-all duration-200 fixed left-0 top-0 z-30`}>
-      {/* 로고 */}
-      <div className="h-14 px-4 flex items-center justify-between border-b border-white/[0.08]">
-        {!collapsed && (
-          <span className="text-[15px] font-semibold tracking-[-0.3px] text-white">DAWOO ERP</span>
-        )}
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div className="md:hidden fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      )}
+
+      <aside className={`
+        fixed top-0 left-0 h-full z-50
+        transition-transform duration-200 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0
+        ${collapsed ? 'w-16' : 'w-[240px]'}
+        bg-sidebar text-txt-inverse flex flex-col
+      `}>
+        {/* Mobile close button */}
         <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="w-7 h-7 flex items-center justify-center rounded-md text-txt-quaternary hover:text-white hover:bg-sidebar-hover transition-colors"
+          onClick={onClose}
+          className="md:hidden absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/60 z-10"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            {collapsed
-              ? <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              : <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-            }
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-      </div>
 
-      {/* 대시보드 */}
-      <Link
-        href="/dashboard"
-        className={`flex items-center gap-3 mx-2 mt-2 px-3 py-2 rounded-lg text-[13px] transition-colors ${
-          isActive('/dashboard')
-            ? 'bg-sidebar-hover text-white'
-            : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
-        }`}
-      >
-        <SvgIcon d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        {!collapsed && <span>대시보드</span>}
-      </Link>
-
-      {/* 메뉴 그룹 */}
-      <nav className="flex-1 overflow-y-auto mt-1 px-2">
-        {menuGroups.map((group) => (
-          <div key={group.name} className="mt-4 first:mt-2">
-            {!collapsed && (
-              <div className="px-3 mb-1 text-[11px] font-medium text-txt-quaternary uppercase tracking-[0.5px]">
-                {group.name}
-              </div>
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = isActive(item.path)
-                return (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors relative ${
-                      active
-                        ? 'bg-sidebar-hover text-white'
-                        : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
-                    }`}
-                  >
-                    {active && (
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-accent rounded-l" />
-                    )}
-                    <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-white' : ''}`} />
-                    {!collapsed && <span className={active ? 'font-medium' : ''}>{item.name}</span>}
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* 하단 */}
-      <div className="border-t border-white/[0.08] px-2 py-2 space-y-0.5">
-        {bottomItems.map(item => (
-          <Link
-            key={item.path}
-            href={item.path}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
-              isActive(item.path)
-                ? 'bg-sidebar-hover text-white'
-                : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
-            }`}
+        {/* 로고 */}
+        <div className="h-14 px-4 flex items-center justify-between border-b border-white/[0.08]">
+          {!collapsed && (
+            <span className="text-[15px] font-semibold tracking-[-0.3px] text-white">DAWOO ERP</span>
+          )}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="hidden md:flex w-7 h-7 items-center justify-center rounded-md text-txt-quaternary hover:text-white hover:bg-sidebar-hover transition-colors"
           >
-            <SvgIcon d={item.icon} />
-            {!collapsed && <span>{item.name}</span>}
-          </Link>
-        ))}
-      </div>
-    </aside>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              {collapsed
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              }
+            </svg>
+          </button>
+        </div>
+
+        {/* 대시보드 */}
+        <Link
+          href="/dashboard"
+          onClick={onClose}
+          className={`flex items-center gap-3 mx-2 mt-2 px-3 py-2 rounded-lg text-[13px] transition-colors ${
+            isActive('/dashboard')
+              ? 'bg-sidebar-hover text-white'
+              : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
+          }`}
+        >
+          <SvgIcon d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          {!collapsed && <span>대시보드</span>}
+        </Link>
+
+        {/* 메뉴 그룹 */}
+        <nav className="flex-1 overflow-y-auto mt-1 px-2">
+          {menuGroups.map((group) => (
+            <div key={group.name} className="mt-4 first:mt-2">
+              {!collapsed && (
+                <div className="px-3 mb-1 text-[11px] font-medium text-txt-quaternary uppercase tracking-[0.5px]">
+                  {group.name}
+                </div>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active = isActive(item.path)
+                  return (
+                    <Link
+                      key={item.path}
+                      href={item.path}
+                      onClick={onClose}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors relative ${
+                        active
+                          ? 'bg-sidebar-hover text-white'
+                          : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
+                      }`}
+                    >
+                      {active && (
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-accent rounded-l" />
+                      )}
+                      <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-white' : ''}`} />
+                      {!collapsed && <span className={active ? 'font-medium' : ''}>{item.name}</span>}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* 하단 */}
+        <div className="border-t border-white/[0.08] px-2 py-2 space-y-0.5">
+          {bottomItems.map(item => (
+            <Link
+              key={item.path}
+              href={item.path}
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
+                isActive(item.path)
+                  ? 'bg-sidebar-hover text-white'
+                  : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
+              }`}
+            >
+              <SvgIcon d={item.icon} />
+              {!collapsed && <span>{item.name}</span>}
+            </Link>
+          ))}
+        </div>
+      </aside>
+    </>
   )
 }

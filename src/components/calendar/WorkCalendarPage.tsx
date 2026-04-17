@@ -701,7 +701,7 @@ function TodaySection({
             오늘 예정된 일정이 없습니다
           </div>
         ) : (
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
           {sortedStaff.filter(s => (staffScheduleMap[s.id]?.length || 0) > 0).map(staff => {
             const color = staffColorMap[staff.id] || '#999'
             const count = staffScheduleMap[staff.id]?.length || 0

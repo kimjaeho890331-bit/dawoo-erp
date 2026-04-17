@@ -266,3 +266,10 @@ table tbody tr:hover {
   background: #e0e7ff;
   color: #3730a3;
 }
+
+/* Mobile touch optimization */
+@media (max-width: 768px) {
+  .input-field, input[type="text"], input[type="date"], input[type="number"], input[type="tel"], input[type="email"], select, textarea {
+    font-size: 16px !important; /* Prevent iOS zoom on focus */
+  }
+}

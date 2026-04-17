@@ -5,8 +5,20 @@
 import crypto from 'crypto'
 
 const GOOGLE_SERVICE_EMAIL = process.env.GOOGLE_SERVICE_EMAIL || ''
-const GOOGLE_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n')
 const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || ''
+
+// Private Key 파싱: Vercel 환경변수의 다양한 포맷 대응
+function parsePrivateKey(): string {
+  let key = process.env.GOOGLE_PRIVATE_KEY || ''
+  // 앞뒤 따옴표 제거
+  key = key.replace(/^["']|["']$/g, '')
+  // 리터럴 \n → 실제 줄바꿈
+  key = key.replace(/\\n/g, '\n')
+  // 혹시 \\n (이중 이스케이프)
+  key = key.replace(/\\\\n/g, '\n')
+  return key
+}
+const GOOGLE_PRIVATE_KEY = parsePrivateKey()
 
 // --- JWT 생성 + Access Token 발급 ---
 let cachedToken: { token: string; expires: number } | null = null
@@ -169,8 +181,14 @@ export async function ensureSiteFolder(siteName: string): Promise<string> {
 }
 
 /** 드라이브 연결 테스트 */
-export async function testConnection(): Promise<{ success: boolean; rootFolderName?: string; error?: string }> {
+export async function testConnection(): Promise<{ success: boolean; rootFolderName?: string; error?: string; debug?: string }> {
   try {
+    if (!GOOGLE_SERVICE_EMAIL) return { success: false, error: 'GOOGLE_SERVICE_EMAIL 환경변수 없음' }
+    if (!GOOGLE_PRIVATE_KEY || !GOOGLE_PRIVATE_KEY.includes('BEGIN PRIVATE KEY')) {
+      return { success: false, error: 'GOOGLE_PRIVATE_KEY 환경변수 없음 또는 형식 오류', debug: `key_length=${GOOGLE_PRIVATE_KEY.length}, starts=${GOOGLE_PRIVATE_KEY.substring(0, 30)}` }
+    }
+    if (!GOOGLE_DRIVE_FOLDER_ID) return { success: false, error: 'GOOGLE_DRIVE_FOLDER_ID 환경변수 없음' }
+
     const token = await getAccessToken()
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${GOOGLE_DRIVE_FOLDER_ID}?fields=id,name`, {
       headers: { Authorization: `Bearer ${token}` },

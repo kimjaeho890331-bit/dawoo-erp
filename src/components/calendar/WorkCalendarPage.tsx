@@ -1290,14 +1290,40 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               const userMemo = parts[1] || ''
               return (
                 <>
-                  {constructionInfo && (
-                    <div>
-                      <span className="text-xs text-txt-tertiary block mb-1">시공 정보</span>
-                      <div className="text-[12px] text-txt-secondary whitespace-pre-wrap leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
-                        {constructionInfo}
+                  {constructionInfo && (() => {
+                    // 주소 추출
+                    const addrMatch = constructionInfo.match(/주소:\s*(.+)/m)
+                    const address = addrMatch?.[1]?.trim()
+                    return (
+                      <div>
+                        <span className="text-xs text-txt-tertiary block mb-1">시공 정보</span>
+                        <div className="text-[12px] text-txt-secondary leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
+                          {constructionInfo.split('\n').map((line, i) => {
+                            if (line.startsWith('주소:') && address) {
+                              return (
+                                <div key={i} className="flex items-start gap-1 flex-wrap">
+                                  <span>주소: {address}</span>
+                                  <span className="inline-flex gap-1 md:hidden">
+                                    <button
+                                      onClick={() => navigator.clipboard.writeText(address)}
+                                      className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent"
+                                    >복사</button>
+                                    <a
+                                      href={`https://map.kakao.com/link/search/${encodeURIComponent(address)}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[10px] px-1.5 py-0.5 bg-[#FEE500] rounded text-[#3C1E1E] font-medium"
+                                    >지도</a>
+                                  </span>
+                                </div>
+                              )
+                            }
+                            return <div key={i}>{line}</div>
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                   {userMemo && (
                     <div>
                       <span className="text-xs text-txt-tertiary block mb-1">메모</span>

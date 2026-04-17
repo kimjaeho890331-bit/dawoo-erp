@@ -1121,6 +1121,16 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
   const [startHour, setStartHour] = useState(schedule?.start_time?.split(':')[0] || '')
   const [startMinute, setStartMinute] = useState(schedule?.start_time?.split(':')[1] || '')
 
+  // project_id가 있으면 프로젝트 주소 가져오기 (내비 버튼용)
+  const [projectAddress, setProjectAddress] = useState<string | null>(null)
+  useEffect(() => {
+    if (!schedule?.project_id) return
+    supabase.from('projects').select('road_address, jibun_address').eq('id', schedule.project_id).single()
+      .then(({ data }) => {
+        if (data) setProjectAddress(data.road_address || data.jibun_address || null)
+      })
+  }, [schedule?.project_id])
+
   // 종료일 체크 해제 시 endDate = startDate 동기화
   useEffect(() => {
     if (!hasEndDate) setEndDate(startDate)
@@ -1237,12 +1247,23 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
 
           {/* Body */}
           <div className="p-5 space-y-4">
-            {/* 제목 (큰 글씨) */}
+            {/* 제목 + 내비 버튼 */}
             <div className="flex items-start gap-2">
               {viewTime && (
                 <span className="text-[14px] font-medium text-txt-secondary mt-[1px] shrink-0">{viewTime}</span>
               )}
-              <h2 className="text-[16px] font-bold text-txt-primary leading-snug break-words">{title}</h2>
+              <h2 className="text-[16px] font-bold text-txt-primary leading-snug break-words flex-1">{title}</h2>
+              {projectAddress && (
+                <a
+                  href={`kakaomap://route?ep=${encodeURIComponent(projectAddress)}&by=CAR`}
+                  onClick={() => setTimeout(() => window.open(`https://map.kakao.com/link/to/${encodeURIComponent(projectAddress)}`, '_blank'), 500)}
+                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 bg-[#3B5998] rounded-lg text-white text-[11px] font-medium hover:bg-[#2d4a8a] transition-colors"
+                  title={projectAddress}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                  내비
+                </a>
+              )}
             </div>
 
             {/* 담당자 + 완료 */}
@@ -1290,50 +1311,14 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               const userMemo = parts[1] || ''
               return (
                 <>
-                  {constructionInfo && (() => {
-                    // 주소 추출
-                    const addrMatch = constructionInfo.match(/주소:\s*(.+)/m)
-                    const address = addrMatch?.[1]?.trim()
-                    return (
-                      <div>
-                        <span className="text-xs text-txt-tertiary block mb-1">시공 정보</span>
-                        <div className="text-[12px] text-txt-secondary leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
-                          {constructionInfo.split('\n').map((line, i) => {
-                            if (line.startsWith('주소:') && address) {
-                              return (
-                                <div key={i} className="flex items-start gap-1 flex-wrap">
-                                  <span>주소: {address}</span>
-                                  <span className="inline-flex gap-1">
-                                    <button
-                                      onClick={() => navigator.clipboard.writeText(address)}
-                                      className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent"
-                                    >복사</button>
-                                    <a
-                                      href={`https://map.kakao.com/link/search/${encodeURIComponent(address)}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-[10px] px-1.5 py-0.5 bg-[#FEE500] rounded text-[#3C1E1E] font-medium"
-                                    >지도</a>
-                                    <a
-                                      href={`kakaomap://route?ep=${encodeURIComponent(address)}&by=CAR`}
-                                      onClick={(e) => {
-                                        // 모바일 앱이 없으면 웹으로 fallback
-                                        setTimeout(() => {
-                                          window.open(`https://map.kakao.com/link/to/${encodeURIComponent(address)}`, '_blank')
-                                        }, 500)
-                                      }}
-                                      className="text-[10px] px-1.5 py-0.5 bg-[#3B5998] rounded text-white font-medium"
-                                    >내비</a>
-                                  </span>
-                                </div>
-                              )
-                            }
-                            return <div key={i}>{line}</div>
-                          })}
-                        </div>
+                  {constructionInfo && (
+                    <div>
+                      <span className="text-xs text-txt-tertiary block mb-1">시공 정보</span>
+                      <div className="text-[12px] text-txt-secondary leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5 whitespace-pre-wrap">
+                        {constructionInfo}
                       </div>
-                    )
-                  })()}
+                    </div>
+                  )}
                   {userMemo && (
                     <div>
                       <span className="text-xs text-txt-tertiary block mb-1">메모</span>
@@ -1346,33 +1331,12 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               )
             })()}
 
-            {/* 일반 일정 메모 — 주소 자동 감지 + 지도/내비 버튼 */}
+            {/* 일반 일정 메모 */}
             {!schedule?.project_id && memo && (
               <div>
                 <span className="text-xs text-txt-tertiary block mb-1">메모</span>
-                <div className="text-[13px] text-txt-primary leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
-                  {memo.split('\n').map((line, i) => {
-                    // 주소 패턴 감지: "경기도/서울/인천..." 또는 "XX구 XX동" 패턴
-                    const addrMatch = line.match(/(경기도?\s*.+(?:시|구|읍|면).+(?:로|길|동)\s*[\d\-]+(?:\s*\(.+\))?)/)
-                    if (addrMatch) {
-                      const addr = addrMatch[1].trim()
-                      return (
-                        <div key={i} className="flex items-start gap-1 flex-wrap">
-                          <span>{line}</span>
-                          <span className="inline-flex gap-1 shrink-0">
-                            <button onClick={() => navigator.clipboard.writeText(addr)}
-                              className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent">복사</button>
-                            <a href={`https://map.kakao.com/link/search/${encodeURIComponent(addr)}`} target="_blank" rel="noreferrer"
-                              className="text-[10px] px-1.5 py-0.5 bg-[#FEE500] rounded text-[#3C1E1E] font-medium">지도</a>
-                            <a href={`kakaomap://route?ep=${encodeURIComponent(addr)}&by=CAR`}
-                              onClick={() => setTimeout(() => window.open(`https://map.kakao.com/link/to/${encodeURIComponent(addr)}`, '_blank'), 500)}
-                              className="text-[10px] px-1.5 py-0.5 bg-[#3B5998] rounded text-white font-medium">내비</a>
-                          </span>
-                        </div>
-                      )
-                    }
-                    return <div key={i}>{line}</div>
-                  })}
+                <div className="text-[13px] text-txt-primary whitespace-pre-wrap leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
+                  {memo}
                 </div>
               </div>
             )}

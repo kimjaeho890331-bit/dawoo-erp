@@ -1303,7 +1303,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                               return (
                                 <div key={i} className="flex items-start gap-1 flex-wrap">
                                   <span>주소: {address}</span>
-                                  <span className="inline-flex gap-1 md:hidden">
+                                  <span className="inline-flex gap-1">
                                     <button
                                       onClick={() => navigator.clipboard.writeText(address)}
                                       className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent"
@@ -1314,6 +1314,16 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                                       rel="noreferrer"
                                       className="text-[10px] px-1.5 py-0.5 bg-[#FEE500] rounded text-[#3C1E1E] font-medium"
                                     >지도</a>
+                                    <a
+                                      href={`kakaomap://route?ep=${encodeURIComponent(address)}&by=CAR`}
+                                      onClick={(e) => {
+                                        // 모바일 앱이 없으면 웹으로 fallback
+                                        setTimeout(() => {
+                                          window.open(`https://map.kakao.com/link/to/${encodeURIComponent(address)}`, '_blank')
+                                        }, 500)
+                                      }}
+                                      className="text-[10px] px-1.5 py-0.5 bg-[#3B5998] rounded text-white font-medium"
+                                    >내비</a>
                                   </span>
                                 </div>
                               )

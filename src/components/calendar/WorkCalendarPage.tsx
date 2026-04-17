@@ -1346,12 +1346,33 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               )
             })()}
 
-            {/* 일반 일정 메모 (project_id 없을 때) */}
+            {/* 일반 일정 메모 — 주소 자동 감지 + 지도/내비 버튼 */}
             {!schedule?.project_id && memo && (
               <div>
                 <span className="text-xs text-txt-tertiary block mb-1">메모</span>
-                <div className="text-[13px] text-txt-primary whitespace-pre-wrap leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
-                  {memo}
+                <div className="text-[13px] text-txt-primary leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
+                  {memo.split('\n').map((line, i) => {
+                    // 주소 패턴 감지: "경기도/서울/인천..." 또는 "XX구 XX동" 패턴
+                    const addrMatch = line.match(/(경기도?\s*.+(?:시|구|읍|면).+(?:로|길|동)\s*[\d\-]+(?:\s*\(.+\))?)/)
+                    if (addrMatch) {
+                      const addr = addrMatch[1].trim()
+                      return (
+                        <div key={i} className="flex items-start gap-1 flex-wrap">
+                          <span>{line}</span>
+                          <span className="inline-flex gap-1 shrink-0">
+                            <button onClick={() => navigator.clipboard.writeText(addr)}
+                              className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent">복사</button>
+                            <a href={`https://map.kakao.com/link/search/${encodeURIComponent(addr)}`} target="_blank" rel="noreferrer"
+                              className="text-[10px] px-1.5 py-0.5 bg-[#FEE500] rounded text-[#3C1E1E] font-medium">지도</a>
+                            <a href={`kakaomap://route?ep=${encodeURIComponent(addr)}&by=CAR`}
+                              onClick={() => setTimeout(() => window.open(`https://map.kakao.com/link/to/${encodeURIComponent(addr)}`, '_blank'), 500)}
+                              className="text-[10px] px-1.5 py-0.5 bg-[#3B5998] rounded text-white font-medium">내비</a>
+                          </span>
+                        </div>
+                      )
+                    }
+                    return <div key={i}>{line}</div>
+                  })}
                 </div>
               </div>
             )}

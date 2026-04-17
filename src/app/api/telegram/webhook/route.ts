@@ -539,15 +539,15 @@ async function handleDepositMatch(
   if (deposit.name) {
     const { data: byOwner } = await supabaseAdmin
       .from('projects')
-      .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost')
+      .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost, collected')
       .ilike('owner_name', `%${deposit.name}%`)
-      .gt('outstanding', 0)
       .neq('status', '취소')
+      .neq('status', '입금')
       .limit(5)
 
     const { data: byPayer } = await supabaseAdmin
       .from('projects')
-      .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost')
+      .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost, collected')
       .ilike('payer_name', `%${deposit.name}%`)
       .gt('outstanding', 0)
       .neq('status', '취소')
@@ -594,22 +594,27 @@ async function handleDepositMatch(
     const additionalCost = (p as Record<string, unknown>).additional_cost as number || 0
     const waterType = (p as Record<string, unknown>).water_work_type as string || ''
 
-    // 입금 유형 추정
-    let depositType = ''
-    if (deposit.amount === selfPay) depositType = '자부담금'
-    else if (deposit.amount === citySupport) depositType = '시지원금'
-    else if (deposit.amount === additionalCost && additionalCost > 0) depositType = '추가공사금'
-    else if (deposit.amount < selfPay) depositType = '자부담 일부'
-    else depositType = '기타 입금'
+    // 입금 유형 추정 (자부담/시지원/추가공사비 대조)
+    const collected = (p as Record<string, unknown>).collected as number || 0
+    const depositTypes: string[] = []
+    if (selfPay > 0 && deposit.amount === selfPay) depositTypes.push('자부담금 일치')
+    if (citySupport > 0 && deposit.amount === citySupport) depositTypes.push('시지원금 일치')
+    if (additionalCost > 0 && deposit.amount === additionalCost) depositTypes.push('추가공사금 일치')
+    if (selfPay > 0 && deposit.amount < selfPay && depositTypes.length === 0) depositTypes.push('자부담 일부')
+    if (depositTypes.length === 0) depositTypes.push('기타 입금')
+    const depositType = depositTypes.join(' / ')
 
     const lines = [
       `*입금 감지*`,
       `${buildingName}${waterType ? ` (${waterType})` : ''}`,
       `소유주: ${p.owner_name || '-'}`,
-      ``,
-      `입금액: *${formatted}원* → ${depositType}`,
       `통장: ${deposit.account || '미확인'}`,
-      `미수금: ${(p.outstanding || 0).toLocaleString('ko-KR')}원 → ${((p.outstanding || 0) - deposit.amount).toLocaleString('ko-KR')}원`,
+      ``,
+      `입금액: *${formatted}원*`,
+      `유형: ${depositType}`,
+      ``,
+      `자부담: ${selfPay.toLocaleString('ko-KR')}원 / 시지원: ${citySupport.toLocaleString('ko-KR')}원${additionalCost > 0 ? ` / 추가: ${additionalCost.toLocaleString('ko-KR')}원` : ''}`,
+      `수금현황: ${collected.toLocaleString('ko-KR')}원 수금 / ${(p.outstanding || 0).toLocaleString('ko-KR')}원 미수`,
     ]
 
     // 여러 건 매칭 경고

@@ -122,13 +122,14 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       const payload = {
         project_id: project.id,
         staff_id: project.staff_id,
-        schedule_type: 'project' as const, // DB CHECK 제약: site/project/personal/promo/ai
+        schedule_type: 'project' as const,
         title,
         start_date: cleanDate,
         end_date: cleanDate,
+        start_time: timeVal || null,
         memo,
         confirmed: false,
-        all_day: true,
+        all_day: !timeVal,
       }
 
       if (existing && existing.length > 0) {
@@ -431,8 +432,24 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               수정
             </button>
           </div>
-          {/* 주소 (도로명만 표시, 지번은 기본정보 탭에서) */}
-          <div className="text-[12px] text-txt-secondary mb-1.5">{project.road_address || project.jibun_address || '-'}</div>
+          {/* 주소 + 카카오맵 */}
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[12px] text-txt-secondary flex-1">{project.road_address || project.jibun_address || '-'}</span>
+            {(project.road_address || project.jibun_address) && (
+              <div className="flex gap-1 shrink-0">
+                <button
+                  onClick={() => navigator.clipboard.writeText(project.road_address || project.jibun_address || '')}
+                  className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent"
+                >복사</button>
+                <a
+                  href={`https://map.kakao.com/link/search/${encodeURIComponent(project.road_address || project.jibun_address || '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] px-1.5 py-0.5 bg-[#FEE500] rounded text-[#3C1E1E] font-medium"
+                >지도</a>
+              </div>
+            )}
+          </div>
           {/* 2행: 소유주 / 연락처 / 담당자 */}
           <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
             <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />

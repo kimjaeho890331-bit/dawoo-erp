@@ -335,38 +335,53 @@ export default function ExpensesPage() {
             {filteredExpenses.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">등록된 결의서가 없습니다</div> : (
               <table className="w-full text-sm">
                 <thead><tr className="bg-surface-secondary border-b border-border-primary">
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">카테고리</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">거래처</th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장</th>
-                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">상태</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
-                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장/거래처</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
+                  <th className="px-3 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
+                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">상태</th>
+                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">결재자</th>
+                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">결재</th>
+                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
                 </tr></thead>
                 <tbody className="divide-y divide-surface-secondary">
                   {filteredExpenses.map(e => {
-                    const statusBadge = e.status === '승인'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : e.status === '반려'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-amber-100 text-amber-700'
+                    const st = e.status || '대기'
+                    const statusBadge = st === '승인' ? 'bg-emerald-100 text-emerald-700' : st === '반려' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    const siteOrVendor = vendorName(e.vendor_id ?? null) || siteName(e.site_id) || '-'
                     return (
                       <tr key={e.id} className="hover:bg-surface-tertiary">
-                        <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{e.expense_date}</td>
-                        <td className="px-4 py-2.5"><span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span></td>
-                        <td className="px-4 py-2.5 text-txt-primary text-[13px]">{e.title}{e.memo && <span className="text-txt-tertiary ml-1 text-[11px]">{e.memo}</span>}</td>
-                        <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{vendorName(e.vendor_id ?? null)  || '-'}</td>
-                        <td className="px-4 py-2.5 text-right font-medium text-txt-primary text-[13px] tabular-nums">{e.amount.toLocaleString()}원</td>
-                        <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{siteName(e.site_id)}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${statusBadge}`}>{e.status || '대기'}</span>
+                        <td className="px-3 py-2.5 text-txt-primary text-[13px] font-medium">{staffName(e.staff_id)}</td>
+                        <td className="px-3 py-2.5 text-txt-secondary text-[13px]">
+                          <div>{siteOrVendor}</div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{staffName(e.staff_id)}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <button onClick={() => openEdit(e)} className="text-[11px] px-2 py-1 text-txt-tertiary hover:text-accent-text hover:bg-blue-50 rounded">수정</button>
-                          <button onClick={() => handleDelete('expenses', e.id, e.title)} className="text-[11px] px-2 py-1 text-txt-quaternary hover:text-red-500 hover:bg-red-50 rounded">삭제</button>
+                        <td className="px-3 py-2.5 text-txt-primary text-[13px]">
+                          <div>{e.title}</div>
+                          {e.expense_date && <div className="text-[11px] text-txt-quaternary">{e.expense_date}</div>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-txt-primary text-[13px] tabular-nums">{e.amount.toLocaleString()}원</td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${statusBadge}`}>{st}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center text-txt-secondary text-[13px]">{e.approver || '관리자'}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          {st === '대기' ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={async () => { await supabase.from('expenses').update({ status: '승인' }).eq('id', e.id); loadData() }}
+                                className="text-[11px] px-2.5 py-1 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 font-medium">승인</button>
+                              <button onClick={async () => { await supabase.from('expenses').update({ status: '반려' }).eq('id', e.id); loadData() }}
+                                className="text-[11px] px-2.5 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 font-medium">반려</button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-txt-quaternary">{st === '승인' ? '승인됨' : '반려됨'}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => openEdit(e)} className="text-[11px] px-2 py-1 text-txt-tertiary hover:text-accent-text hover:bg-blue-50 rounded">수정</button>
+                            <button onClick={() => handleDelete('expenses', e.id, e.title)} className="text-[11px] px-2 py-1 text-txt-quaternary hover:text-red-500 hover:bg-red-50 rounded">삭제</button>
+                          </div>
                         </td>
                       </tr>
                     )

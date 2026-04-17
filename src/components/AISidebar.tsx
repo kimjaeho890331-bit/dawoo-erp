@@ -15,6 +15,7 @@ export default function AISidebar() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingImages, setPendingImages] = useState<string[]>([])
+  const [isDragging, setIsDragging] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -33,11 +34,10 @@ export default function AISidebar() {
     }
   }, [open])
 
-  // 이미지 파일 선택 핸들러
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
+  // 이미지 파일 처리 공통
+  const addImageFiles = (files: FileList | File[]) => {
     Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return
       if (file.size > 5 * 1024 * 1024) { setError('이미지 크기는 5MB 이하만 가능합니다'); return }
       const reader = new FileReader()
       reader.onload = () => {
@@ -46,7 +46,19 @@ export default function AISidebar() {
       }
       reader.readAsDataURL(file)
     })
+  }
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addImageFiles(e.target.files)
     e.target.value = ''
+  }
+
+  // 드래그앤드롭
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true) }
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false) }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setIsDragging(false)
+    if (e.dataTransfer.files.length > 0) addImageFiles(e.dataTransfer.files)
   }
 
   const send = async () => {
@@ -153,9 +165,21 @@ export default function AISidebar() {
       {/* Panel */}
       {open && (
         <div
-          className="fixed right-0 top-0 w-full md:w-[400px] h-screen bg-surface border-l border-border-primary flex flex-col z-40"
+          className={`fixed right-0 top-0 w-full md:w-[400px] h-screen bg-surface border-l border-border-primary flex flex-col z-40 ${isDragging ? 'ring-2 ring-accent ring-inset' : ''}`}
           style={{ boxShadow: '-4px 0 20px rgba(0,0,0,0.06)' }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
+          {/* 드래그 오버레이 */}
+          {isDragging && (
+            <div className="absolute inset-0 bg-accent/10 z-50 flex items-center justify-center pointer-events-none">
+              <div className="bg-surface rounded-xl px-6 py-4 shadow-lg border-2 border-dashed border-accent text-center">
+                <ImagePlus className="w-8 h-8 text-accent mx-auto mb-2" />
+                <p className="text-[13px] font-medium text-accent">사진을 놓으세요</p>
+              </div>
+            </div>
+          )}
           {/* Header */}
           <div className="h-14 px-5 flex items-center justify-between border-b border-border-primary">
             <div className="flex items-center gap-2">

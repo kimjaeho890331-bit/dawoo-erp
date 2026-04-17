@@ -225,7 +225,7 @@ export default function WorkCalendarPage() {
       {/* 타이틀 + 탭 */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-4">
-          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">업무 캘린더</h1>
+          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary hidden md:block">업무 캘린더</h1>
           <div className="flex bg-surface-secondary rounded-lg p-0.5">
             <button onClick={() => setActiveTab('calendar')}
               className={`px-4 py-1.5 text-sm rounded-md transition ${activeTab === 'calendar' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>캘린더</button>
@@ -241,6 +241,23 @@ export default function WorkCalendarPage() {
 
       {activeTab === 'calendar' ? (
         <>
+          {/* Mobile calendar view */}
+          <div className="md:hidden">
+            <MobileCalendarView
+              schedules={filtered}
+              staffList={staffList}
+              staffColorMap={staffColorMap}
+              month={month}
+              onMonthChange={setMonth}
+              loading={loading}
+              onScheduleClick={(s) => { setEditSchedule(s); setShowModal(true) }}
+              onAddSchedule={(date) => { setSelectedDate(date); setEditSchedule(null); setShowModal(true) }}
+              onOpenDailyLog={() => setShowDailyLog(true)}
+            />
+          </div>
+
+          {/* Desktop calendar view */}
+          <div className="hidden md:block">
           {/* 직원 필터 */}
           <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-3 mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
@@ -371,6 +388,7 @@ export default function WorkCalendarPage() {
             }}
             onOpenDailyLog={() => setShowDailyLog(true)}
           />
+          </div>
         </>
       ) : (
         /* 홍보현황 탭 */
@@ -592,6 +610,274 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ============================================================
+//  모바일 캘린더 뷰 (Notion 스타일)
+// ============================================================
+function MobileCalendarView({
+  schedules,
+  staffList,
+  staffColorMap,
+  month,
+  onMonthChange,
+  loading,
+  onScheduleClick,
+  onAddSchedule,
+  onOpenDailyLog,
+}: {
+  schedules: Schedule[]
+  staffList: Staff[]
+  staffColorMap: Record<string, string>
+  month: { year: number; month: number }
+  onMonthChange: (m: { year: number; month: number }) => void
+  loading: boolean
+  onScheduleClick: (s: Schedule) => void
+  onAddSchedule: (date: string) => void
+  onOpenDailyLog: () => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [selectedDate, setSelectedDate] = useState(today)
+
+  const daysInMonth = new Date(month.year, month.month + 1, 0).getDate()
+  const firstDow = new Date(month.year, month.month, 1).getDay()
+  const monthLabel = `${month.year}년 ${month.month + 1}월`
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토']
+
+  const prevMonth = () => onMonthChange(month.month === 0 ? { year: month.year - 1, month: 11 } : { year: month.year, month: month.month - 1 })
+  const nextMonth = () => onMonthChange(month.month === 11 ? { year: month.year + 1, month: 0 } : { year: month.year, month: month.month + 1 })
+  const goToday = () => {
+    const n = new Date()
+    onMonthChange({ year: n.getFullYear(), month: n.getMonth() })
+    setSelectedDate(n.toISOString().slice(0, 10))
+  }
+
+  // Build calendar grid weeks
+  const weeks = useMemo(() => {
+    const r: (number | null)[][] = []; let w: (number | null)[] = []
+    for (let i = 0; i < firstDow; i++) w.push(null)
+    for (let d = 1; d <= daysInMonth; d++) { w.push(d); if (w.length === 7) { r.push(w); w = [] } }
+    if (w.length) { while (w.length < 7) w.push(null); r.push(w) }
+    return r
+  }, [daysInMonth, firstDow])
+
+  // Map of dateString -> schedules for that date
+  const dateScheduleMap = useMemo(() => {
+    const map: Record<string, Schedule[]> = {}
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = ds(month.year, month.month, d)
+      map[dateStr] = schedules.filter(s => s.start_date <= dateStr && s.end_date >= dateStr)
+    }
+    return map
+  }, [schedules, month, daysInMonth])
+
+  // Schedules for the selected date
+  const selectedSchedules = useMemo(() => {
+    const list = dateScheduleMap[selectedDate] || []
+    return [...list].sort((a, b) => {
+      const aIsTime = a.start_date === a.end_date && !!a.start_time
+      const bIsTime = b.start_date === b.end_date && !!b.start_time
+      if (aIsTime && !bIsTime) return -1
+      if (!aIsTime && bIsTime) return 1
+      if (aIsTime && bIsTime) return (a.start_time || '').localeCompare(b.start_time || '')
+      return 0
+    })
+  }, [dateScheduleMap, selectedDate])
+
+  // Format selected date label
+  const selectedDateObj = new Date(selectedDate + 'T00:00:00')
+  const selectedDateLabel = `${selectedDateObj.getMonth() + 1}월 ${selectedDateObj.getDate()}일 (${dayNames[selectedDateObj.getDay()]})`
+
+  // Get staff name for a schedule
+  const getStaffName = (s: Schedule) => {
+    const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
+    const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean) as string[]
+    if (names.length === 0) return null
+    if (names.length === 1) return names[0]
+    return `${names[0]} 외${names.length - 1}`
+  }
+
+  // Get schedule time label
+  const getTimeLabel = (s: Schedule) => {
+    const isSameDay = s.start_date === s.end_date
+    if (isSameDay && s.start_time) return s.start_time
+    if (!isSameDay) return `~${s.end_date.slice(5).replace('-', '/')}`
+    return '종일'
+  }
+
+  // Get bar color for schedule
+  const getColor = (s: Schedule) => {
+    const isLeave = s.schedule_type === 'personal' && s.title.includes('연차')
+    if (isLeave) return '#EF4444'
+    if (s.schedule_type === 'promo') return '#F59E0B'
+    if (s.staff_id && staffColorMap[s.staff_id]) return staffColorMap[s.staff_id]
+    return TYPE_COLORS[s.schedule_type] || '#3B82F6'
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="text-[18px] font-semibold text-txt-primary tracking-[-0.3px]">
+        다우 업무 캘린더
+      </div>
+
+      {/* Month navigation */}
+      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&lsaquo;</button>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[15px] font-semibold text-txt-primary">{monthLabel}</h2>
+            <button onClick={goToday} className="px-2 py-1 text-[11px] border border-border-primary rounded-md hover:bg-surface-tertiary text-txt-secondary font-medium">오늘</button>
+          </div>
+          <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&rsaquo;</button>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12 text-txt-tertiary text-sm">불러오는 중...</div>
+        ) : (
+          <>
+            {/* Day names header */}
+            <div className="grid grid-cols-7 text-center border-t border-border-tertiary">
+              {dayNames.map((d, i) => (
+                <div key={d} className={`py-1.5 text-[11px] font-semibold ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-txt-tertiary'}`}>{d}</div>
+              ))}
+            </div>
+
+            {/* Calendar grid */}
+            <div className="px-1 pb-2">
+              {weeks.map((week, wi) => (
+                <div key={wi} className="grid grid-cols-7">
+                  {week.map((day, di) => {
+                    const dateStr = day ? ds(month.year, month.month, day) : ''
+                    const isToday = dateStr === today
+                    const isSelected = dateStr === selectedDate
+                    const daySchedules = day ? (dateScheduleMap[dateStr] || []) : []
+                    const dotCount = Math.min(daySchedules.length, 3)
+
+                    return (
+                      <button
+                        key={di}
+                        disabled={!day}
+                        onClick={() => { if (day) setSelectedDate(dateStr) }}
+                        className={`flex flex-col items-center justify-center py-1.5 ${day ? 'cursor-pointer' : ''}`}
+                      >
+                        {day ? (
+                          <>
+                            <span className={`flex items-center justify-center w-9 h-9 rounded-full text-[13px] font-medium transition-colors
+                              ${isToday ? 'bg-accent text-white' : isSelected ? 'bg-accent/10 text-accent' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-primary'}`}>
+                              {day}
+                            </span>
+                            <div className="flex items-center gap-[3px] h-[6px] mt-0.5">
+                              {dotCount > 0 && Array.from({ length: dotCount }).map((_, i) => {
+                                const sc = daySchedules[i]
+                                return (
+                                  <span
+                                    key={i}
+                                    className="w-[5px] h-[5px] rounded-full"
+                                    style={{ backgroundColor: sc ? getColor(sc) : '#CBD5E1' }}
+                                  />
+                                )
+                              })}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="w-9 h-9" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Selected date schedule list */}
+      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border-tertiary flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-accent" />
+            <h3 className="text-[14px] font-semibold text-txt-primary">{selectedDateLabel} 일정</h3>
+          </div>
+          <span className="text-[12px] text-txt-quaternary">{selectedSchedules.length}건</span>
+        </div>
+
+        <div className="divide-y divide-border-tertiary">
+          {selectedSchedules.length === 0 ? (
+            <div className="py-8 text-center text-[13px] text-txt-quaternary">
+              일정이 없습니다
+            </div>
+          ) : (
+            selectedSchedules.map(s => {
+              const isSameDay = s.start_date === s.end_date
+              const isTimeType = isSameDay && !!s.start_time
+              const isRangeType = !isSameDay
+              const staffName = getStaffName(s)
+              const color = getColor(s)
+              const typeLabel = TYPE_LABELS[s.schedule_type] || s.schedule_type
+
+              return (
+                <button
+                  key={s.id}
+                  className="w-full text-left px-4 py-3 hover:bg-surface-secondary/50 transition-colors active:bg-surface-secondary"
+                  onClick={() => onScheduleClick(s)}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Color indicator */}
+                    <span className="shrink-0 mt-1 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+
+                    <div className="flex-1 min-w-0">
+                      {/* Time + Title */}
+                      <div className="flex items-center gap-2">
+                        <span className={`shrink-0 text-[12px] tabular-nums ${isTimeType ? 'text-txt-primary font-medium' : 'text-txt-tertiary'}`}>
+                          {getTimeLabel(s)}
+                        </span>
+                        <span className="text-[13px] font-medium text-txt-primary truncate">{s.title}</span>
+                      </div>
+
+                      {/* Staff + Type */}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {staffName && <span className="text-[11px] text-txt-secondary">{staffName}</span>}
+                        {staffName && <span className="text-txt-quaternary">·</span>}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          s.schedule_type === 'project' ? 'bg-blue-50 text-blue-600' :
+                          s.schedule_type === 'promo' ? 'bg-yellow-50 text-yellow-700' :
+                          s.schedule_type === 'ai' ? 'bg-cyan-50 text-cyan-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {typeLabel}
+                        </span>
+                        {s.confirmed && (
+                          <span className="text-[10px] text-green-600 font-medium">&#10003;</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )
+            })
+          )}
+        </div>
+
+        {/* Add schedule + Daily log buttons */}
+        <div className="px-4 py-3 border-t border-border-tertiary flex gap-2">
+          <button
+            onClick={() => onAddSchedule(selectedDate)}
+            className="flex-1 py-2.5 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition active:scale-[0.98]"
+          >
+            + 일정 추가
+          </button>
+          <button
+            onClick={onOpenDailyLog}
+            className="px-4 py-2.5 text-[13px] font-medium border border-border-primary text-txt-secondary rounded-lg hover:bg-surface-tertiary transition active:scale-[0.98]"
+          >
+            업무일지
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

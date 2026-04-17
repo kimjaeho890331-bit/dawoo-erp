@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Pin, X } from 'lucide-react'
+import { Pin, X, ChevronDown, ListTodo, ClipboardList, Brain, StickyNote, Building2 } from 'lucide-react'
 import AIBriefingCard from './AIBriefingCard'
 import MyTodoCard, { type TodoItem } from './MyTodoCard'
 import AssignedTasksCard from './AssignedTasksCard'
@@ -215,13 +215,44 @@ export default function DashboardPage() {
   const currentStaffName = currentStaffId ? getStaffName(currentStaffId) : ''
   const greeting = currentStaffName ? `${currentStaffName}님` : '안녕하세요'
 
+  // 모바일 아코디언 상태
+  const [mobileOpen, setMobileOpen] = useState<Record<string, boolean>>({ todo: true })
+  const toggleMobile = (key: string) => setMobileOpen(p => ({ ...p, [key]: !p[key] }))
+
+  // --- 메모장 공통 JSX ---
+  const memoContent = (
+    <>
+      <div className="flex gap-1.5 mb-2 px-1">
+        <input value={newMemo} onChange={e => setNewMemo(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMemo()}
+          placeholder="메모 입력..." className="flex-1 text-[13px] border border-border-primary rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-accent focus:outline-none bg-surface text-txt-primary placeholder:text-txt-tertiary" />
+        <button onClick={addMemo} className="px-2.5 py-1.5 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shrink-0">추가</button>
+      </div>
+      {sortedMemos.length === 0 ? (
+        <div className="text-center py-6 text-txt-quaternary text-[13px]">메모 없음</div>
+      ) : (
+        sortedMemos.map(m => (
+          <div key={m.id} className={`flex items-start gap-1.5 px-2.5 py-2 rounded-lg group ${m.pinned ? 'bg-[#ffedd5]/30' : 'hover:bg-surface-tertiary'}`}>
+            <button onClick={() => togglePin(m.id)} className={`mt-0.5 shrink-0 ${m.pinned ? '' : 'opacity-0 group-hover:opacity-100'}`}>
+              <Pin size={16} className={m.pinned ? 'text-[#d97706]' : 'text-txt-quaternary'} />
+            </button>
+            <span className="text-[13px] text-txt-secondary flex-1 leading-snug">{m.content}</span>
+            <button onClick={() => deleteMemo(m.id)} className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 text-txt-quaternary hover:text-[#dc2626]">
+              <X size={14} />
+            </button>
+          </div>
+        ))
+      )}
+    </>
+  )
+
   return (
     <>
       {showFirstVisitModal && (
         <FirstVisitModal options={staffList} onSelect={handleFirstSelect} />
       )}
 
-      <div className="p-6 max-w-[1200px] mx-auto space-y-4 bg-page min-h-screen">
+      {/* ===== PC 레이아웃 (md 이상) — 기존 그대로 ===== */}
+      <div className="hidden md:block p-6 max-w-[1200px] mx-auto space-y-4 bg-page min-h-screen">
         {/* 헤더 */}
         <div className="bg-surface rounded-[10px] border border-border-primary px-6 py-5 border-l-4 border-l-accent">
           <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">{todayLabel}</h1>
@@ -230,71 +261,133 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* 메인 그리드: 사이드바 (2/5, 왼쪽) + AI 브리핑 (3/5, 오른쪽) */}
+        {/* 메인 그리드 */}
         <div className="grid grid-cols-5 gap-4 items-stretch min-h-[640px]">
-          {/* 왼쪽: 사이드바 (할 일/시킨 일/메모장 세로 스택, 균등 분배) */}
           <div className="col-span-2 flex flex-col gap-4">
-            <MyTodoCard
-              todos={todoItems}
-              staffSelected={!!currentStaffId}
-              tasksTableMissing={tasksTableMissing}
-              onCompleteTask={completeReceivedTask}
-            />
-            <AssignedTasksCard
-              tasks={myTasksAssigned}
-              staffList={staffList}
-              currentStaffId={currentStaffId}
-              staffSelected={!!currentStaffId}
-              tableMissing={tasksTableMissing}
-              onAdd={addAssignedTask}
-              onToggleDone={toggleAssignedDone}
-              onDelete={deleteAssignedTask}
-              getStaffName={getStaffName}
-            />
-
-            {/* 메모장 */}
+            <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} />
+            <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} getStaffName={getStaffName} />
             <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden flex flex-col flex-1 min-h-0">
               <div className="px-5 py-3.5 border-b border-border-tertiary">
                 <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">메모장</h2>
               </div>
-              <div className="px-4 py-3 flex-1 overflow-y-auto">
-                <div className="flex gap-1.5 mb-2 px-1">
-                  <input value={newMemo} onChange={e => setNewMemo(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMemo()}
-                    placeholder="메모 입력..." className="flex-1 text-[13px] border border-border-primary rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-accent focus:outline-none bg-surface text-txt-primary placeholder:text-txt-tertiary" />
-                  <button onClick={addMemo} className="px-2.5 py-1.5 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shrink-0">추가</button>
-                </div>
-                {sortedMemos.length === 0 ? (
-                  <div className="text-center py-6 text-txt-quaternary text-[13px]">메모 없음</div>
-                ) : (
-                  sortedMemos.map(m => (
-                    <div key={m.id} className={`flex items-start gap-1.5 px-2.5 py-2 rounded-lg group ${m.pinned ? 'bg-[#ffedd5]/30' : 'hover:bg-surface-tertiary'}`}>
-                      <button onClick={() => togglePin(m.id)} className={`mt-0.5 shrink-0 ${m.pinned ? '' : 'opacity-0 group-hover:opacity-100'}`}>
-                        <Pin size={16} className={m.pinned ? 'text-[#d97706]' : 'text-txt-quaternary'} />
-                      </button>
-                      <span className="text-[13px] text-txt-secondary flex-1 leading-snug">{m.content}</span>
-                      <button onClick={() => deleteMemo(m.id)} className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 text-txt-quaternary hover:text-[#dc2626]">
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
+              <div className="px-4 py-3 flex-1 overflow-y-auto">{memoContent}</div>
             </div>
           </div>
-
-          {/* 오른쪽: AI 브리핑 (col-span-3) */}
           <div className="col-span-3">
-            <AIBriefingCard
-              items={briefing?.items ?? []}
-              summary={briefing?.summary ?? ''}
-              loading={briefingLoading}
-            />
+            <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} loading={briefingLoading} />
           </div>
         </div>
-
-        {/* 통합 현장 스케줄 (간트 타임라인) */}
         <SitesTimeline />
       </div>
+
+      {/* ===== 모바일 레이아웃 (md 미만) — 아코디언 ===== */}
+      <div className="md:hidden px-4 py-4 space-y-2.5 bg-page min-h-screen">
+        {/* 헤더 */}
+        <div className="bg-surface rounded-xl border border-border-primary px-4 py-4 border-l-4 border-l-accent">
+          <h1 className="text-[18px] font-semibold tracking-[-0.3px] text-txt-primary">{todayLabel}</h1>
+          <p className="text-[12px] text-txt-secondary mt-0.5 line-clamp-2">
+            {greeting}, {briefing?.summary ?? '분석 준비 중...'}
+          </p>
+        </div>
+
+        {/* 내 할 일 */}
+        <MobileAccordion
+          title="내 할 일"
+          icon={<ListTodo size={16} />}
+          badge={todoItems.length}
+          open={!!mobileOpen.todo}
+          onToggle={() => toggleMobile('todo')}
+          accentColor="#3B82F6"
+        >
+          <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} />
+        </MobileAccordion>
+
+        {/* 시킨 일 */}
+        <MobileAccordion
+          title="시킨 일"
+          icon={<ClipboardList size={16} />}
+          badge={myTasksAssigned.length}
+          open={!!mobileOpen.assigned}
+          onToggle={() => toggleMobile('assigned')}
+          accentColor="#F59E0B"
+        >
+          <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} getStaffName={getStaffName} />
+        </MobileAccordion>
+
+        {/* AI 브리핑 */}
+        <MobileAccordion
+          title="AI 브리핑"
+          icon={<Brain size={16} />}
+          open={!!mobileOpen.briefing}
+          onToggle={() => toggleMobile('briefing')}
+          accentColor="#8B5CF6"
+        >
+          <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} loading={briefingLoading} />
+        </MobileAccordion>
+
+        {/* 메모장 */}
+        <MobileAccordion
+          title="메모장"
+          icon={<StickyNote size={16} />}
+          badge={memos.length}
+          open={!!mobileOpen.memo}
+          onToggle={() => toggleMobile('memo')}
+          accentColor="#10B981"
+        >
+          <div className="px-3 py-2">{memoContent}</div>
+        </MobileAccordion>
+
+        {/* 현장 스케줄 */}
+        <MobileAccordion
+          title="현장 스케줄"
+          icon={<Building2 size={16} />}
+          open={!!mobileOpen.sites}
+          onToggle={() => toggleMobile('sites')}
+          accentColor="#06B6D4"
+        >
+          <SitesTimeline />
+        </MobileAccordion>
+      </div>
     </>
+  )
+}
+
+// ===== 모바일 아코디언 컴포넌트 =====
+function MobileAccordion({ title, icon, badge, open, onToggle, accentColor, children }: {
+  title: string
+  icon: React.ReactNode
+  badge?: number
+  open: boolean
+  onToggle: () => void
+  accentColor: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="bg-surface rounded-xl border border-border-primary overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-2.5 px-4 py-3 active:bg-surface-secondary transition-colors"
+      >
+        <span className="shrink-0" style={{ color: accentColor }}>{icon}</span>
+        <span className="text-[14px] font-semibold text-txt-primary flex-1 text-left">{title}</span>
+        {badge !== undefined && badge > 0 && (
+          <span
+            className="text-[11px] font-bold text-white rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1.5"
+            style={{ backgroundColor: accentColor }}
+          >
+            {badge}
+          </span>
+        )}
+        <ChevronDown
+          size={16}
+          className={`text-txt-tertiary transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-border-tertiary">
+          {children}
+        </div>
+      )}
+    </div>
   )
 }

@@ -1168,7 +1168,7 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
                       }} placeholder="0" className={`${INPUT_CLS} text-right`} />
                     </div>
                     <div className="text-right">
-                      <label className="block text-[10px] text-txt-tertiary mb-0.5">합계</label>
+                      <label className="block text-[10px] text-txt-tertiary mb-0.5">결제 금액</label>
                       <div className="h-[36px] flex items-center justify-end text-[16px] font-bold text-blue-700 tabular-nums">
                         {workDates.length && dailyWage ? (workDates.length * parseInt(dailyWage)).toLocaleString() : '0'}원
                       </div>
@@ -1201,14 +1201,16 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
                 <input value={title} onChange={e => setTitle(e.target.value)} placeholder="예: 배관자재 납품" className={INPUT_CLS} />
               </div>
 
-              {/* 합계 금액 */}
-              <div>
-                <label className={LABEL_CLS}>합계 금액 (부가세 포함) *</label>
-                <input type="text" inputMode="numeric"
-                  value={amount ? formatMoney(amount) : ''} onChange={e => setAmount(String(parseMoney(e.target.value)))}
-                  placeholder="0"
-                  className={`${INPUT_CLS} text-right tabular-nums`} />
-              </div>
+              {/* 합계 금액 — 노무비는 근무계산에서 자동, 나머지만 직접 입력 */}
+              {category !== '노무비' && (
+                <div>
+                  <label className={LABEL_CLS}>합계 금액 (부가세 포함) *</label>
+                  <input type="text" inputMode="numeric"
+                    value={amount ? formatMoney(amount) : ''} onChange={e => setAmount(String(parseMoney(e.target.value)))}
+                    placeholder="0"
+                    className={`${INPUT_CLS} text-right tabular-nums`} />
+                </div>
+              )}
 
               {/* 첨부서류 */}
               <div>

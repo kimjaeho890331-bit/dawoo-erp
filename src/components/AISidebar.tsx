@@ -1,10 +1,11 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageCircle, Send, X, Trash2, Loader2 } from 'lucide-react'
+import { MessageCircle, Send, X, Trash2, Loader2, ImagePlus } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  images?: string[] // base64 이미지 데이터
 }
 
 export default function AISidebar() {
@@ -13,8 +14,10 @@ export default function AISidebar() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingImages, setPendingImages] = useState<string[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -30,15 +33,32 @@ export default function AISidebar() {
     }
   }, [open])
 
+  // 이미지 파일 선택 핸들러
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    Array.from(files).forEach(file => {
+      if (file.size > 5 * 1024 * 1024) { setError('이미지 크기는 5MB 이하만 가능합니다'); return }
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1]
+        setPendingImages(prev => [...prev, base64])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
+  }
+
   const send = async () => {
     const trimmed = input.trim()
-    if (!trimmed || isStreaming) return
+    if ((!trimmed && pendingImages.length === 0) || isStreaming) return
 
     setError(null)
-    const userMessage: Message = { role: 'user', content: trimmed }
+    const userMessage: Message = { role: 'user', content: trimmed || '(사진 첨부)', images: pendingImages.length > 0 ? [...pendingImages] : undefined }
     const updatedMessages = [...messages, userMessage]
     setMessages(updatedMessages)
     setInput('')
+    setPendingImages([])
     setIsStreaming(true)
 
     // Add empty assistant message for streaming
@@ -190,6 +210,13 @@ export default function AISidebar() {
                       : 'bg-surface-secondary text-txt-primary'
                   }`}
                 >
+                  {msg.images && msg.images.length > 0 && (
+                    <div className="flex gap-1 mb-1.5 flex-wrap">
+                      {msg.images.map((img, j) => (
+                        <img key={j} src={`data:image/jpeg;base64,${img}`} alt="" className="w-16 h-16 rounded-md object-cover" />
+                      ))}
+                    </div>
+                  )}
                   {msg.content}
                   {/* Typing cursor for streaming */}
                   {isStreaming &&
@@ -215,7 +242,30 @@ export default function AISidebar() {
 
           {/* Input */}
           <div className="px-4 py-3 border-t border-border-primary">
+            {/* 첨부 이미지 미리보기 */}
+            {pendingImages.length > 0 && (
+              <div className="flex gap-1.5 mb-2 flex-wrap">
+                {pendingImages.map((img, i) => (
+                  <div key={i} className="relative group">
+                    <img src={`data:image/jpeg;base64,${img}`} alt="" className="w-14 h-14 rounded-lg object-cover border border-border-primary" />
+                    <button
+                      onClick={() => setPendingImages(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2">
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isStreaming}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-border-primary text-txt-tertiary hover:text-accent hover:border-accent transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
+                title="사진 첨부"
+              >
+                <ImagePlus className="w-4 h-4" />
+              </button>
               <input
                 ref={inputRef}
                 type="text"
@@ -230,7 +280,7 @@ export default function AISidebar() {
               />
               <button
                 onClick={send}
-                disabled={isStreaming || !input.trim()}
+                disabled={isStreaming || (!input.trim() && pendingImages.length === 0)}
                 className="btn-primary px-3 py-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isStreaming ? (

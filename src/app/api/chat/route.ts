@@ -103,6 +103,12 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - 접수/일정 등록 시 관련 기억이 있으면 자동 참조하여 추천
 - "뭐 기억하고 있어?" → manage_memory(action=list)
 
+## 사진 저장
+- 사용자가 사진을 첨부하고 "삼성빌리지 시공전 사진 저장해줘" → save_photo_to_drive
+- photo_type: 실측/시공전/시공중/시공후
+- 자동으로 프로젝트 폴더/사진/[유형]/ 에 저장
+- 저장 완료 후 몇 장 저장됐는지 간결하게 응답
+
 ## 구글드라이브
 - "드라이브 연결 확인" → manage_drive(action=test)
 - "삼성빌리지 폴더 만들어줘" → manage_drive(action=create_project_folder, city_name, category, building_name)
@@ -340,6 +346,19 @@ const TOOLS = [
     },
   },
   // --- Phase C: 구글드라이브 도구 ---
+  {
+    name: 'save_photo_to_drive',
+    description: '첨부된 사진을 구글드라이브의 프로젝트 폴더에 저장합니다. 사진 유형: 실측/시공전/시공중/시공후',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        building_name: { type: 'string', description: '빌라명 (검색용)' },
+        photo_type: { type: 'string', enum: ['실측', '시공전', '시공중', '시공후'], description: '사진 유형' },
+        file_name: { type: 'string', description: '저장할 파일명 (기본: 자동생성)' },
+      },
+      required: ['building_name', 'photo_type'],
+    },
+  },
   {
     name: 'manage_drive',
     description: '구글드라이브에 폴더 생성, 파일 목록 조회, 연결 테스트를 수행합니다.',
@@ -942,6 +961,76 @@ async function manageMemory(input: Record<string, unknown>): Promise<string> {
   return JSON.stringify({ error: '지원하지 않는 action' })
 }
 
+// --- Phase C: 사진 드라이브 저장 ---
+// 현재 대화의 이미지를 임시 저장 (요청 단위)
+let _pendingImages: string[] = []
+
+function setPendingImages(images: string[]) { _pendingImages = images }
+
+async function savePhotoToDrive(input: Record<string, unknown>): Promise<string> {
+  const { building_name, photo_type, file_name } = input as Record<string, string | undefined>
+  if (!building_name || !photo_type) return JSON.stringify({ error: 'building_name, photo_type 필수' })
+
+  // 1. 프로젝트 찾기
+  const { data: projects } = await supabaseAdmin.from('projects')
+    .select('id, building_name, drive_folder_id, city_id, cities(name), work_types(work_categories(name))')
+    .ilike('building_name', `%${building_name}%`)
+    .limit(1)
+
+  if (!projects || projects.length === 0) return JSON.stringify({ error: `"${building_name}" 프로젝트를 찾을 수 없습니다` })
+  const project = projects[0] as Record<string, unknown>
+
+  // 2. 드라이브 폴더 확보
+  let projectFolderId = project.drive_folder_id as string | null
+  if (!projectFolderId) {
+    const cityName = ((project.cities as Record<string, unknown>)?.name as string) || '미지정'
+    const wc = (project.work_types as Record<string, unknown>)?.work_categories as Record<string, unknown> | null
+    const category = (wc?.name as string) === '수도' ? '수도' : '소규모'
+    try {
+      projectFolderId = await ensureProjectFolder(cityName, category as '소규모' | '수도', project.building_name as string)
+      const driveUrl = `https://drive.google.com/drive/folders/${projectFolderId}`
+      await supabaseAdmin.from('projects').update({ drive_folder_id: projectFolderId, drive_folder_url: driveUrl }).eq('id', project.id)
+    } catch (e) { return JSON.stringify({ error: `드라이브 폴더 생성 실패: ${e}` }) }
+  }
+
+  // 3. 사진 폴더 (사진/시공전, 사진/실측 등)
+  const { ensureFolderPath } = await import('@/lib/google-drive')
+  const photoFolderId = await ensureFolderPath(['사진', photo_type])
+    .catch(() => null)
+
+  // projectFolderId 하위에 사진/photo_type 폴더
+  const { findOrCreateFolder } = await import('@/lib/google-drive')
+  const photoDir = await findOrCreateFolder('사진', projectFolderId)
+  const typeDir = await findOrCreateFolder(photo_type, photoDir.id)
+
+  // 4. 이미지 저장
+  if (_pendingImages.length === 0) return JSON.stringify({ error: '첨부된 사진이 없습니다. 사진을 먼저 첨부해주세요.' })
+
+  const saved = []
+  for (let i = 0; i < _pendingImages.length; i++) {
+    const imgData = _pendingImages[i]
+    const buffer = Buffer.from(imgData, 'base64')
+    const timestamp = new Date().toISOString().slice(0, 10)
+    const name = file_name || `${project.building_name}_${photo_type}_${timestamp}_${i + 1}.jpg`
+    try {
+      const result = await uploadFile(name, buffer, 'image/jpeg', typeDir.id)
+      saved.push({ name, driveUrl: result.webViewLink })
+    } catch (e) {
+      saved.push({ name, error: String(e) })
+    }
+  }
+  _pendingImages = [] // 저장 후 초기화
+
+  return JSON.stringify({
+    success: true,
+    building: project.building_name,
+    photo_type,
+    folder: `사진/${photo_type}`,
+    saved_count: saved.filter(s => !('error' in s)).length,
+    files: saved,
+  })
+}
+
 // --- Phase C: 구글드라이브 함수 ---
 async function manageDrive(input: Record<string, unknown>): Promise<string> {
   const { action } = input as Record<string, string | undefined>
@@ -1007,6 +1096,8 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return manageMemory(input)
     case 'manage_drive':
       return manageDrive(input)
+    case 'save_photo_to_drive':
+      return savePhotoToDrive(input)
     default:
       return JSON.stringify({ error: `알 수 없는 도구: ${name}` })
   }
@@ -1103,35 +1194,52 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { messages, staffId, channel, nonStreaming } = body as {
-      messages: Array<{ role: string; content: string }>
+      messages: Array<{ role: string; content: string; images?: string[] }>
       staffId?: string
       channel?: 'web' | 'telegram'
       nonStreaming?: boolean
     }
     const recentMessages = (messages || []).slice(-20)
 
-    // 대화 저장: staffId가 있으면 마지막 user 메시지 저장
+    // 대화 저장
     if (staffId && channel && recentMessages.length > 0) {
       const lastMsg = recentMessages[recentMessages.length - 1]
       if (lastMsg.role === 'user') {
         try {
           await supabaseAdmin.from('chat_messages').insert({
-            staff_id: staffId,
-            role: 'user',
-            content: lastMsg.content,
-            channel,
+            staff_id: staffId, role: 'user', content: lastMsg.content, channel,
           })
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (_e) { /* graceful: 테이블 없으면 스킵 */ }
+        } catch { /* graceful */ }
       }
     }
 
-    // Claude API 메시지 형식으로 변환
+    // Claude API 메시지 형식으로 변환 (이미지 포함)
     const claudeMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }> =
-      recentMessages.map((msg: { role: string; content: string }) => ({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content,
-      }))
+      recentMessages.map((msg: { role: string; content: string; images?: string[] }) => {
+        if (msg.role === 'user' && msg.images && msg.images.length > 0) {
+          // 이미지 + 텍스트를 multimodal content로 변환
+          const contentBlocks: Array<Record<string, unknown>> = []
+          msg.images.forEach(img => {
+            contentBlocks.push({
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: img },
+            })
+          })
+          if (msg.content && msg.content !== '(사진 첨부)') {
+            contentBlocks.push({ type: 'text', text: msg.content })
+          } else {
+            contentBlocks.push({ type: 'text', text: '첨부된 사진을 확인해주세요.' })
+          }
+          return { role: 'user', content: contentBlocks }
+        }
+        return { role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content }
+      })
+
+    // 첨부 이미지를 save_photo_to_drive 도구용으로 보관
+    const lastUserMsg = recentMessages[recentMessages.length - 1]
+    if (lastUserMsg?.images && lastUserMsg.images.length > 0) {
+      setPendingImages(lastUserMsg.images)
+    }
 
     // non-streaming 모드 (텔레그램용): JSON 한 번에 반환
     if (nonStreaming) {

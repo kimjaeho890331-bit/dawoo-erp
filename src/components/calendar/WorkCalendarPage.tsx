@@ -1658,46 +1658,64 @@ function DailyLogModal({
 
           {/* Today / Tomorrow side by side */}
           <div className="grid grid-cols-2 gap-4">
-            {/* Left: Today */}
+            {/* Left: 오늘 한 일 — 시간순 나열 + 완료/미완료 표시 */}
             <div>
-              <h4 className="text-[12px] font-semibold text-txt-primary mb-2">오늘 한 일</h4>
-              {completed.length > 0 && (
-                <div className="mb-2">
-                  <p className="text-[10px] font-medium text-green-600 mb-1">완료 {completed.length}건</p>
-                  {completed.map(s => (
-                    <div key={s.id} className="text-[12px] text-txt-secondary py-0.5">
-                      {s.start_time && <span className="text-txt-tertiary tabular-nums mr-1">{s.start_time}</span>}
-                      {s.title}
+              <h4 className="text-[12px] font-semibold text-txt-primary mb-2">오늘 한 일 ({todaySchedules.length}건)</h4>
+              {todaySchedules.length > 0 ? (
+                <div className="space-y-1">
+                  {todaySchedules.map(s => (
+                    <div key={s.id} className="flex items-start gap-2 py-1">
+                      <button
+                        onClick={async () => {
+                          await supabase.from('schedules').update({ confirmed: !s.confirmed }).eq('id', s.id)
+                          // 새로고침 효과
+                          const idx = todaySchedules.indexOf(s)
+                          if (idx >= 0) todaySchedules[idx] = { ...s, confirmed: !s.confirmed }
+                          setMemo(m => m + '') // force re-render
+                        }}
+                        className={`shrink-0 w-5 h-5 mt-0.5 rounded border flex items-center justify-center transition ${
+                          s.confirmed
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : 'border-border-secondary hover:border-accent'
+                        }`}
+                      >
+                        {s.confirmed && <span className="text-[10px]">✓</span>}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-[12px] ${s.confirmed ? 'text-txt-tertiary line-through' : 'text-txt-primary'}`}>
+                          {s.title}
+                        </div>
+                        {s.start_time && (
+                          <span className="text-[10px] text-txt-quaternary tabular-nums">{s.start_time}</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
-              )}
-              {incomplete.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-medium text-[#e57e25] mb-1">미완료 {incomplete.length}건</p>
-                  {incomplete.map(s => (
-                    <div key={s.id} className="text-[12px] text-txt-secondary py-0.5">
-                      {s.start_time && <span className="text-txt-tertiary tabular-nums mr-1">{s.start_time}</span>}
-                      {s.title}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {todaySchedules.length === 0 && (
+              ) : (
                 <p className="text-[12px] text-txt-quaternary">일정 없음</p>
               )}
             </div>
 
-            {/* Right: Tomorrow */}
+            {/* Right: 내일 할 일 */}
             <div>
-              <h4 className="text-[12px] font-semibold text-txt-primary mb-2">내일 할 일</h4>
+              <h4 className="text-[12px] font-semibold text-txt-primary mb-2">내일 할 일 ({tomorrowSchedules.length}건)</h4>
               {tomorrowSchedules.length > 0 ? (
-                tomorrowSchedules.map(s => (
-                  <div key={s.id} className="text-[12px] text-txt-secondary py-0.5">
-                    {s.start_time && <span className="text-txt-tertiary tabular-nums mr-1">{s.start_time}</span>}
-                    {s.title}
-                  </div>
-                ))
+                <div className="space-y-1">
+                  {tomorrowSchedules.map(s => (
+                    <div key={s.id} className="flex items-start gap-2 py-1">
+                      <span className="shrink-0 w-5 h-5 mt-0.5 rounded border border-border-tertiary flex items-center justify-center">
+                        <span className="w-1.5 h-1.5 rounded-full bg-accent/40" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] text-txt-primary">{s.title}</div>
+                        {s.start_time && (
+                          <span className="text-[10px] text-txt-quaternary tabular-nums">{s.start_time}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <p className="text-[12px] text-txt-quaternary">일정 없음</p>
               )}

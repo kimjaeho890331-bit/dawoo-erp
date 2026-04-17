@@ -1438,23 +1438,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
             )}
           </div>
 
-          {/* 분류 */}
-          <div>
-            <label className="block text-xs font-medium text-txt-secondary mb-1">분류</label>
-            <select
-              value={scheduleType}
-              onChange={e => { setScheduleType(e.target.value); setUserTouchedType(true) }}
-              className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none"
-            >
-              <option value="personal">개인</option>
-              <option value="project">지원사업</option>
-              <option value="promo">홍보</option>
-              <option value="ai">AI제안</option>
-            </select>
-            {!userTouchedType && title.includes('홍보') && (
-              <p className="text-[10px] text-[#F59E0B] mt-1">제목에 &quot;홍보&quot;가 포함되어 자동으로 홍보 분류로 저장됩니다</p>
-            )}
-          </div>
+          {/* 분류: 자동 판별 (제목에 홍보 포함 시 promo, 기본 personal) */}
 
           {/* 메모 */}
           <div>

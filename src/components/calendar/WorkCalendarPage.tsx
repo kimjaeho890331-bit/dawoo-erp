@@ -113,6 +113,15 @@ export default function WorkCalendarPage() {
   }, [month, daysInMonth])
   useEffect(() => { loadData() }, [loadData])
 
+  // Realtime: schedules 변경 시 자동 갱신
+  useEffect(() => {
+    const channel = supabase
+      .channel('schedules-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => { loadData() })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [loadData])
+
   const prevMonth = () => setMonth(m => m.month === 0 ? { year: m.year - 1, month: 11 } : { year: m.year, month: m.month - 1 })
   const nextMonth = () => setMonth(m => m.month === 11 ? { year: m.year + 1, month: 0 } : { year: m.year, month: m.month + 1 })
   const goToday = () => { const n = new Date(); setMonth({ year: n.getFullYear(), month: n.getMonth() }) }

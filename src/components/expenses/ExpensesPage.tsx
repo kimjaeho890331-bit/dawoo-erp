@@ -225,6 +225,15 @@ export default function ExpensesPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Realtime: expenses 변경 시 자동 갱신
+  useEffect(() => {
+    const ch = supabase
+      .channel('expenses-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => { loadData() })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [loadData])
+
   const currentStaffId = typeof window !== 'undefined' ? localStorage.getItem('dawoo_current_staff_id') : null
   const currentStaffName = staffList.find(s => s.id === currentStaffId)?.name || ''
 

@@ -113,6 +113,16 @@ export default function SitesPage() {
 
   useEffect(() => { loadSites() }, [loadSites])
 
+  // Realtime: sites 변경 시 자동 갱신
+  useEffect(() => {
+    const ch = supabase
+      .channel('sites-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, () => { loadSites() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_tasks' }, () => { loadSites() })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [loadSites])
+
   const handleDelete = async (site: Site) => {
     if (!confirm(`"${site.name}" 현장을 삭제하시겠습니까?`)) return
     await supabase.from('sites').delete().eq('id', site.id)

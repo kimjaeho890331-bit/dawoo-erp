@@ -56,7 +56,7 @@ interface CardMapping {
 
 interface Staff { id: string; name: string; role?: string }
 interface Site { id: string; name: string }
-interface Vendor { id: string; name: string; vendor_type: string; phone: string | null }
+interface Vendor { id: string; name: string; vendor_type: string; phone: string | null; representative: string | null; business_number: string | null; bank_name: string | null; account_number: string | null; specialty: string | null }
 
 // 이상 탐지 규칙
 interface Anomaly {
@@ -211,7 +211,7 @@ export default function ExpensesPage() {
       supabase.from('card_mappings').select('*'),
       supabase.from('staff').select('id, name, role'),
       supabase.from('sites').select('id, name'),
-      supabase.from('vendors').select('id, name, vendor_type, phone').order('name'),
+      supabase.from('vendors').select('id, name, vendor_type, phone, representative, business_number, bank_name, account_number, specialty').order('name'),
     ])
     if (!expR.error) setExpenses(expR.data || [])
     if (!fixR.error) setFixedExpenses(fixR.data || [])
@@ -1011,7 +1011,22 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
           {/* === 지출결의서 폼 === */}
           {tab === 'expense' && (
             <>
-              {/* 작성자 + 결재자 */}
+              {/* 1행: 분류 */}
+              <div>
+                <label className={LABEL_CLS}>분류 *</label>
+                <div className="flex gap-2">
+                  {EXPENSE_CATS.map(c => (
+                    <button key={c} type="button" onClick={() => { setCategory(c); setVendorId('') }}
+                      className={`flex-1 h-[36px] rounded-lg text-[13px] font-medium transition-all ${
+                        category === c
+                          ? `${CAT_COLOR[c] || 'bg-accent text-white'} shadow-sm`
+                          : 'bg-surface-secondary text-txt-secondary border border-border-primary hover:border-accent'
+                      }`}>{c}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2행: 작성자 + 결재자 */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL_ACCENT_CLS}>작성자</label>
@@ -1027,19 +1042,7 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
                 </div>
               </div>
 
-              {/* 분류 + 날짜 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLS}>분류 *</label>
-                  <select value={category} onChange={e => { setCategory(e.target.value); setVendorId('') }} className={INPUT_CLS}>
-                    {EXPENSE_CATS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={LABEL_CLS}>날짜 *</label>
-                  <input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className={INPUT_CLS} />
-                </div>
-              </div>
+              {/* (분류는 상단 버튼으로 이동, 날짜는 현장 옆으로 이동) */}
 
               {/* 거래처 (분류에 따라 노출) */}
               {category !== '기타경비' && (
@@ -1053,16 +1056,54 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
                       <option key={v.id} value={v.id}>{v.name}{v.phone ? ` (${v.phone})` : ''}</option>
                     ))}
                   </select>
+
+                  {/* 거래처 상세 정보 */}
+                  {vendorId && (() => {
+                    const v = filteredVendors.find(x => x.id === vendorId)
+                    if (!v) return null
+                    return (
+                      <div className="mt-2 p-3 bg-surface-secondary rounded-lg text-[12px] space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-txt-primary">{v.name}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                            v.vendor_type === '협력업체' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                          }`}>{v.vendor_type}</span>
+                        </div>
+                        {v.business_number && (
+                          <div className="text-txt-secondary">사업자: {v.business_number}</div>
+                        )}
+                        <div className="grid grid-cols-2 gap-1">
+                          {v.representative && <div className="text-txt-secondary">담당: {v.representative}</div>}
+                          {v.phone && <div className="text-txt-secondary">연락처: {v.phone}</div>}
+                        </div>
+                        {(v.bank_name || v.account_number) && (
+                          <div className="pt-1.5 border-t border-border-tertiary">
+                            <div className="text-txt-tertiary">
+                              {v.bank_name && <span>{v.bank_name} </span>}
+                              {v.account_number && <span>{v.account_number}</span>}
+                              {v.representative && <span className="ml-1 text-txt-quaternary">({v.representative})</span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 
-              {/* 현장 */}
-              <div>
-                <label className={LABEL_CLS}>현장 (선택)</label>
-                <select value={siteId} onChange={e => setSiteId(e.target.value)} className={INPUT_CLS}>
-                  <option value="">현장 선택</option>
-                  {siteList.map((s: Site) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+              {/* 현장 + 날짜 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL_CLS}>현장 (선택)</label>
+                  <select value={siteId} onChange={e => setSiteId(e.target.value)} className={INPUT_CLS}>
+                    <option value="">현장 선택</option>
+                    {siteList.map((s: Site) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>작성일 *</label>
+                  <input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className={INPUT_CLS} />
+                </div>
               </div>
 
               {/* 지출 내용 */}

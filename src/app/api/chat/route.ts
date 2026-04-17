@@ -534,9 +534,24 @@ const STATUS_GROUP_MAP: Record<string, string[]> = {
 async function searchProjects(input: Record<string, unknown>): Promise<string> {
   const { keyword, status_group, city, category, count_only } = input as Record<string, string | boolean | undefined>
   try {
+    // 카테고리 필터: DB 레벨에서 work_type_id로 직접 필터
+    let categoryTypeIds: string[] | null = null
+    if (category) {
+      const { data: wtData } = await supabaseAdmin
+        .from('work_types')
+        .select('id, work_categories!inner(name)')
+        .eq('work_categories.name', category as string)
+      categoryTypeIds = wtData?.map((wt: Record<string, unknown>) => wt.id as string) || []
+    }
+
     let query = supabaseAdmin
       .from('projects')
       .select('id, building_name, owner_name, owner_phone, road_address, jibun_address, status, city_id, staff_id, note, cities(name), staff:staff_id(name), work_types(name, work_categories(name))')
+
+    // 카테고리 필터 (DB 레벨)
+    if (categoryTypeIds && categoryTypeIds.length > 0) {
+      query = query.in('work_type_id', categoryTypeIds)
+    }
 
     // 상태 그룹 필터
     if (status_group && STATUS_GROUP_MAP[status_group as string]) {
@@ -545,13 +560,8 @@ async function searchProjects(input: Record<string, unknown>): Promise<string> {
 
     // 도시 필터
     if (city) {
-      const { data: cityData } = await supabaseAdmin.from('cities').select('id').eq('name', `${city}시`).maybeSingle()
-      if (!cityData) {
-        const { data: cityData2 } = await supabaseAdmin.from('cities').select('id').ilike('name', `%${city}%`).maybeSingle()
-        if (cityData2) query = query.eq('city_id', cityData2.id)
-      } else {
-        query = query.eq('city_id', cityData.id)
-      }
+      const { data: cityData } = await supabaseAdmin.from('cities').select('id').ilike('name', `%${city}%`).maybeSingle()
+      if (cityData) query = query.eq('city_id', cityData.id)
     }
 
     // 키워드 검색
@@ -563,27 +573,23 @@ async function searchProjects(input: Record<string, unknown>): Promise<string> {
     const { data, error } = await query.order('created_at', { ascending: false }).limit(500)
     if (error) return JSON.stringify({ error: error.message })
 
-    // 카테고리 필터 (join 후)
-    let results = data || []
-    if (category) {
-      results = results.filter((p: Record<string, unknown>) => {
-        const wt = p.work_types as Record<string, unknown> | null
-        const wc = wt?.work_categories as Record<string, unknown> | null
-        return wc?.name === category
-      })
-    }
+    const results = data || []
 
     // 건수만 반환
     if (count_only) {
-      // 상태별 분포도 함께
+      // 상태별 + 도시별 분포
       const statusCounts: Record<string, number> = {}
+      const cityCounts: Record<string, number> = {}
       results.forEach((p: Record<string, unknown>) => {
         const s = (p.status as string) || '미지정'
         statusCounts[s] = (statusCounts[s] || 0) + 1
+        const c = ((p.cities as Record<string, unknown>)?.name as string) || '미지정'
+        cityCounts[c] = (cityCounts[c] || 0) + 1
       })
       return JSON.stringify({
         total: results.length,
         status_breakdown: statusCounts,
+        city_breakdown: cityCounts,
         filters: { city, category, status_group },
       })
     }

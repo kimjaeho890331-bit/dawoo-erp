@@ -939,7 +939,8 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
   const [vendorId, setVendorId] = useState(item?.vendor_id || '')
   const [vendorSearch, setVendorSearch] = useState('')
   const [showVendorDropdown, setShowVendorDropdown] = useState(false)
-  const [workDays, setWorkDays] = useState(item?.work_days?.toString() || '1')
+  const [workDates, setWorkDates] = useState<string[]>([])
+  const [newWorkDate, setNewWorkDate] = useState('')
   const [dailyWage, setDailyWage] = useState(item?.daily_wage?.toString() || '')
   const [approver, setApprover] = useState(item?.approver || '관리자')
   const [payDay, setPayDay] = useState(item?.pay_day?.toString() || '1')
@@ -1114,35 +1115,62 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
                 </div>
               )}
 
-              {/* 노무비: 근무일수 × 일당 = 금액 */}
+              {/* 노무비: 근무일 선택 + 일당 = 금액 */}
               {category === '노무비' && (
                 <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-200/50">
                   <label className="block text-[11px] font-medium text-blue-700 mb-2">근무 계산</label>
-                  <div className="grid grid-cols-3 gap-2 items-end">
-                    <div>
-                      <label className="block text-[10px] text-txt-tertiary mb-0.5">근무일수</label>
-                      <input type="number" value={workDays} onChange={e => {
-                        setWorkDays(e.target.value)
-                        if (e.target.value && dailyWage) setAmount(String(parseInt(e.target.value) * parseInt(dailyWage)))
-                      }} min="1" className={`${INPUT_CLS} text-center`} />
+
+                  {/* 근무일 태그 */}
+                  <div className="mb-2">
+                    <label className="block text-[10px] text-txt-tertiary mb-1">근무일 (날짜 추가)</label>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {workDates.sort().map(d => (
+                        <span key={d} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-[11px] font-medium">
+                          {d.slice(5).replace('-', '/')}
+                          <button type="button" onClick={() => {
+                            const next = workDates.filter(x => x !== d)
+                            setWorkDates(next)
+                            if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
+                          }} className="text-blue-400 hover:text-red-500 ml-0.5">×</button>
+                        </span>
+                      ))}
+                      {workDates.length === 0 && <span className="text-[11px] text-txt-quaternary">날짜를 추가하세요</span>}
                     </div>
+                    <div className="flex gap-2">
+                      <input type="date" value={newWorkDate} onChange={e => setNewWorkDate(e.target.value)}
+                        className={`${INPUT_CLS} flex-1`} />
+                      <button type="button" onClick={() => {
+                        if (newWorkDate && !workDates.includes(newWorkDate)) {
+                          const next = [...workDates, newWorkDate]
+                          setWorkDates(next)
+                          setNewWorkDate('')
+                          if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
+                        }
+                      }} className="px-3 h-[36px] bg-blue-600 text-white text-[12px] font-medium rounded-lg hover:bg-blue-700 shrink-0">
+                        추가
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 일당 + 합계 */}
+                  <div className="grid grid-cols-2 gap-2 items-end pt-2 border-t border-blue-200/50">
                     <div>
                       <label className="block text-[10px] text-txt-tertiary mb-0.5">일당 (원)</label>
                       <input type="text" value={dailyWage ? formatMoney(dailyWage) : ''} onChange={e => {
                         const raw = parseMoney(e.target.value).toString()
                         setDailyWage(raw)
-                        if (workDays && raw) setAmount(String(parseInt(workDays) * parseInt(raw)))
+                        if (workDates.length && raw) setAmount(String(workDates.length * parseInt(raw)))
                       }} placeholder="0" className={`${INPUT_CLS} text-right`} />
                     </div>
                     <div className="text-right">
                       <label className="block text-[10px] text-txt-tertiary mb-0.5">합계</label>
-                      <div className="h-[36px] flex items-center justify-end text-[14px] font-semibold text-blue-700 tabular-nums">
-                        {workDays && dailyWage ? (parseInt(workDays) * parseInt(dailyWage)).toLocaleString() : '0'}원
+                      <div className="h-[36px] flex items-center justify-end text-[16px] font-bold text-blue-700 tabular-nums">
+                        {workDates.length && dailyWage ? (workDates.length * parseInt(dailyWage)).toLocaleString() : '0'}원
                       </div>
                     </div>
                   </div>
                   <div className="text-[10px] text-blue-500 mt-1">
-                    {workDays}일 x {dailyWage ? parseInt(dailyWage).toLocaleString() : '0'}원 = {workDays && dailyWage ? (parseInt(workDays) * parseInt(dailyWage)).toLocaleString() : '0'}원
+                    {workDates.length}일 x {dailyWage ? parseInt(dailyWage).toLocaleString() : '0'}원 = {workDates.length && dailyWage ? (workDates.length * parseInt(dailyWage)).toLocaleString() : '0'}원
                   </div>
                 </div>
               )}

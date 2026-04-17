@@ -48,7 +48,12 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 
 ## 조회 기능
 - "현황", "몇 건", "알려줘" → search_projects로 DB 조회
+- "수원 소규모 승인 몇건?" → city="수원", category="소규모", status_group="승인", count_only=true
+- "수도공사는?" → 이전 대화 맥락에서 city 유지, category="수도"로 재조회
+- 건수 질문 → count_only=true로 집계. 상태별 분포도 함께 제공.
+- 목록 질문 → count_only=false로 상세 목록. 총 건수 + 상위 20건 반환.
 - 검색 결과를 표 형태로 간결하게 보여주기
+- 상태그룹: 접수(문의~신청서제출), 승인(승인~공사), 완료(완료서류제출+입금), 취소
 
 ## 대화 규칙
 - 간결하고 핵심적으로 답변. 장황한 설명 금지.
@@ -124,13 +129,15 @@ const TOOLS = [
   },
   {
     name: 'search_projects',
-    description: '접수대장에서 프로젝트를 검색합니다.',
+    description: '접수대장에서 프로젝트를 검색/집계합니다. 건수, 현황, 목록 조회 모두 가능.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        keyword: { type: 'string', description: '검색 키워드 (빌라명, 소유주 등)' },
-        status: { type: 'string', description: '상태 필터 (문의, 접수, 승인, 완료, 취소)' },
+        keyword: { type: 'string', description: '검색 키워드 (빌라명, 소유주, 주소 등)' },
+        status_group: { type: 'string', enum: ['진행중', '접수', '승인', '완료', '취소', '문의(예약)'], description: '상태 그룹 필터. 접수=문의~신청서제출, 승인=승인~공사, 완료=완료서류제출+입금' },
+        city: { type: 'string', description: '도시 필터 (수원, 성남, 안양, 부천, 광명, 시흥, 안산, 군포, 의왕, 과천, 용인, 화성, 오산, 평택, 하남, 광주, 서산)' },
         category: { type: 'string', enum: ['소규모', '수도'], description: '카테고리 필터' },
+        count_only: { type: 'boolean', description: '건수만 반환할지 여부. "몇건", "현황" 등 질문 시 true' },
       },
     },
   },
@@ -324,23 +331,49 @@ async function registerProject(input: Record<string, unknown>): Promise<string> 
   }
 }
 
+// 상태 그룹 → 실제 DB 상태값 매핑
+const STATUS_GROUP_MAP: Record<string, string[]> = {
+  '접수': ['문의', '실측', '견적전달', '동의서', '신청서제출'],
+  '승인': ['승인', '착공계', '공사'],
+  '완료': ['완료서류제출', '입금'],
+  '취소': ['취소'],
+  '문의(예약)': ['문의(예약)'],
+  '진행중': ['문의', '실측', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출'],
+}
+
 async function searchProjects(input: Record<string, unknown>): Promise<string> {
-  const { keyword, status, category } = input as Record<string, string | undefined>
+  const { keyword, status_group, city, category, count_only } = input as Record<string, string | boolean | undefined>
   try {
     let query = supabaseAdmin
       .from('projects')
-      .select('id, building_name, owner_name, owner_phone, road_address, status, note, work_types(name, work_categories(name))')
+      .select('id, building_name, owner_name, owner_phone, road_address, jibun_address, status, city_id, staff_id, note, cities(name), staff:staff_id(name), work_types(name, work_categories(name))')
 
-    if (status) query = query.eq('status', status)
-    if (keyword) {
-      const sanitized = (keyword as string).replace(/[%_\\]/g, '\\$&')
-      query = query.or(`building_name.ilike.%${sanitized}%,owner_name.ilike.%${sanitized}%,road_address.ilike.%${sanitized}%`)
+    // 상태 그룹 필터
+    if (status_group && STATUS_GROUP_MAP[status_group as string]) {
+      query = query.in('status', STATUS_GROUP_MAP[status_group as string])
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false }).limit(10)
+    // 도시 필터
+    if (city) {
+      const { data: cityData } = await supabaseAdmin.from('cities').select('id').eq('name', `${city}시`).maybeSingle()
+      if (!cityData) {
+        const { data: cityData2 } = await supabaseAdmin.from('cities').select('id').ilike('name', `%${city}%`).maybeSingle()
+        if (cityData2) query = query.eq('city_id', cityData2.id)
+      } else {
+        query = query.eq('city_id', cityData.id)
+      }
+    }
+
+    // 키워드 검색
+    if (keyword) {
+      const sanitized = (keyword as string).replace(/[%_\\]/g, '\\$&')
+      query = query.or(`building_name.ilike.%${sanitized}%,owner_name.ilike.%${sanitized}%,road_address.ilike.%${sanitized}%,jibun_address.ilike.%${sanitized}%`)
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(500)
     if (error) return JSON.stringify({ error: error.message })
 
-    // 카테고리 필터 (join 후 필터)
+    // 카테고리 필터 (join 후)
     let results = data || []
     if (category) {
       results = results.filter((p: Record<string, unknown>) => {
@@ -350,15 +383,37 @@ async function searchProjects(input: Record<string, unknown>): Promise<string> {
       })
     }
 
-    return JSON.stringify(
-      results.map((p: Record<string, unknown>) => ({
-        building_name: p.building_name,
-        owner_name: p.owner_name,
-        road_address: p.road_address,
-        status: p.status,
-        note: p.note,
-      }))
-    )
+    // 건수만 반환
+    if (count_only) {
+      // 상태별 분포도 함께
+      const statusCounts: Record<string, number> = {}
+      results.forEach((p: Record<string, unknown>) => {
+        const s = (p.status as string) || '미지정'
+        statusCounts[s] = (statusCounts[s] || 0) + 1
+      })
+      return JSON.stringify({
+        total: results.length,
+        status_breakdown: statusCounts,
+        filters: { city, category, status_group },
+      })
+    }
+
+    // 목록 반환 (최대 20건)
+    return JSON.stringify({
+      total: results.length,
+      projects: results.slice(0, 20).map((p: Record<string, unknown>) => {
+        const staff = p.staff as Record<string, unknown> | null
+        const cities = p.cities as Record<string, unknown> | null
+        return {
+          building_name: p.building_name,
+          owner_name: p.owner_name,
+          road_address: p.road_address || p.jibun_address,
+          status: p.status,
+          city: cities?.name || '',
+          staff: staff?.name || '',
+        }
+      }),
+    })
   } catch (err) {
     return JSON.stringify({ error: `조회 실패: ${err}` })
   }

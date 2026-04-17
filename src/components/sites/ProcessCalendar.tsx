@@ -174,7 +174,7 @@ export default function ProcessCalendar({
         site_id: siteId,
         title: dragTag.name,
         start_date: targetDate,
-        end_date: addDays(targetDate, 1),  // 최소 2일
+        end_date: targetDate,  // 1일 시작
         color: dragTag.color,
         confirmed: false,
       })
@@ -242,13 +242,11 @@ export default function ProcessCalendar({
       const targetDate = dateStr(month.year, month.month, day)
 
       if (st.edge === 'start') {
-        // 최소 2일 보장
-        if (targetDate <= s.end_date && daysBetween(targetDate, s.end_date) >= 2) {
+        if (targetDate <= s.end_date) {
           await supabase.from('schedules').update({ start_date: targetDate }).eq('id', s.id)
         }
       } else {
-        // 최소 2일 보장
-        if (targetDate >= s.start_date && daysBetween(s.start_date, targetDate) >= 2) {
+        if (targetDate >= s.start_date) {
           await supabase.from('schedules').update({ end_date: targetDate }).eq('id', s.id)
         }
       }

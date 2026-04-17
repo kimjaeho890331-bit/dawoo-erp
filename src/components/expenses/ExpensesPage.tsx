@@ -937,6 +937,10 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
   const [siteId, setSiteId] = useState(item?.site_id || '')
   const [staffId, setStaffId] = useState(item?.staff_id || '')
   const [vendorId, setVendorId] = useState(item?.vendor_id || '')
+  const [vendorSearch, setVendorSearch] = useState('')
+  const [showVendorDropdown, setShowVendorDropdown] = useState(false)
+  const [workDays, setWorkDays] = useState(item?.work_days?.toString() || '1')
+  const [dailyWage, setDailyWage] = useState(item?.daily_wage?.toString() || '')
   const [approver, setApprover] = useState(item?.approver || '관리자')
   const [payDay, setPayDay] = useState(item?.pay_day?.toString() || '1')
   const [autoPay, setAutoPay] = useState(item?.auto_pay ?? false)
@@ -1044,18 +1048,42 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
 
               {/* (분류는 상단 버튼으로 이동, 날짜는 현장 옆으로 이동) */}
 
-              {/* 거래처 (분류에 따라 노출) */}
+              {/* 거래처 검색 (분류에 따라 노출) */}
               {category !== '기타경비' && (
-                <div>
+                <div className="relative">
                   <label className={LABEL_CLS}>
-                    거래처 * {category === '노무비' ? '(일용직)' : '(협력업체)'}
+                    {category === '노무비' ? '노무자 *' : '거래처 *'}
                   </label>
-                  <select value={vendorId} onChange={e => setVendorId(e.target.value)} className={INPUT_CLS}>
-                    <option value="">거래처 선택</option>
-                    {filteredVendors.map(v => (
-                      <option key={v.id} value={v.id}>{v.name}{v.phone ? ` (${v.phone})` : ''}</option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    value={vendorSearch}
+                    onChange={e => { setVendorSearch(e.target.value); setShowVendorDropdown(true); if (!e.target.value) setVendorId('') }}
+                    onFocus={() => setShowVendorDropdown(true)}
+                    placeholder={category === '노무비' ? '이름 검색...' : '업체명 검색...'}
+                    className={INPUT_CLS}
+                  />
+                  {showVendorDropdown && vendorSearch && (() => {
+                    const results = filteredVendors.filter(v =>
+                      v.name.includes(vendorSearch) || (v.phone && v.phone.includes(vendorSearch))
+                    ).slice(0, 8)
+                    if (results.length === 0) return (
+                      <div className="absolute z-10 w-full mt-1 bg-surface border border-border-primary rounded-lg shadow-lg p-3 text-[12px] text-txt-quaternary">
+                        검색 결과 없음
+                      </div>
+                    )
+                    return (
+                      <div className="absolute z-10 w-full mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
+                        {results.map(v => (
+                          <button key={v.id} type="button"
+                            onClick={() => { setVendorId(v.id); setVendorSearch(v.name); setShowVendorDropdown(false) }}
+                            className="w-full text-left px-3 py-2 hover:bg-surface-secondary transition text-[12px] border-b border-border-tertiary last:border-0">
+                            <div className="font-medium text-txt-primary">{v.name}</div>
+                            <div className="text-txt-quaternary text-[11px]">{v.phone || ''} {v.specialty || ''}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })()}
 
                   {/* 거래처 상세 정보 */}
                   {vendorId && (() => {
@@ -1065,29 +1093,57 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
                       <div className="mt-2 p-3 bg-surface-secondary rounded-lg text-[12px] space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-txt-primary">{v.name}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                            v.vendor_type === '협력업체' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                          }`}>{v.vendor_type}</span>
+                          <button type="button" onClick={() => { setVendorId(''); setVendorSearch('') }}
+                            className="text-[10px] text-txt-quaternary hover:text-red-500">변경</button>
                         </div>
-                        {v.business_number && (
-                          <div className="text-txt-secondary">사업자: {v.business_number}</div>
-                        )}
+                        {v.business_number && <div className="text-txt-secondary">사업자: {v.business_number}</div>}
                         <div className="grid grid-cols-2 gap-1">
                           {v.representative && <div className="text-txt-secondary">담당: {v.representative}</div>}
                           {v.phone && <div className="text-txt-secondary">연락처: {v.phone}</div>}
                         </div>
                         {(v.bank_name || v.account_number) && (
-                          <div className="pt-1.5 border-t border-border-tertiary">
-                            <div className="text-txt-tertiary">
-                              {v.bank_name && <span>{v.bank_name} </span>}
-                              {v.account_number && <span>{v.account_number}</span>}
-                              {v.representative && <span className="ml-1 text-txt-quaternary">({v.representative})</span>}
-                            </div>
+                          <div className="pt-1.5 border-t border-border-tertiary text-txt-tertiary">
+                            {v.bank_name && <span>{v.bank_name} </span>}
+                            {v.account_number && <span>{v.account_number}</span>}
+                            {v.representative && <span className="ml-1 text-txt-quaternary">({v.representative})</span>}
                           </div>
                         )}
                       </div>
                     )
                   })()}
+                </div>
+              )}
+
+              {/* 노무비: 근무일수 × 일당 = 금액 */}
+              {category === '노무비' && (
+                <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-200/50">
+                  <label className="block text-[11px] font-medium text-blue-700 mb-2">근무 계산</label>
+                  <div className="grid grid-cols-3 gap-2 items-end">
+                    <div>
+                      <label className="block text-[10px] text-txt-tertiary mb-0.5">근무일수</label>
+                      <input type="number" value={workDays} onChange={e => {
+                        setWorkDays(e.target.value)
+                        if (e.target.value && dailyWage) setAmount(String(parseInt(e.target.value) * parseInt(dailyWage)))
+                      }} min="1" className={`${INPUT_CLS} text-center`} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-txt-tertiary mb-0.5">일당 (원)</label>
+                      <input type="text" value={dailyWage ? formatMoney(dailyWage) : ''} onChange={e => {
+                        const raw = parseMoney(e.target.value).toString()
+                        setDailyWage(raw)
+                        if (workDays && raw) setAmount(String(parseInt(workDays) * parseInt(raw)))
+                      }} placeholder="0" className={`${INPUT_CLS} text-right`} />
+                    </div>
+                    <div className="text-right">
+                      <label className="block text-[10px] text-txt-tertiary mb-0.5">합계</label>
+                      <div className="h-[36px] flex items-center justify-end text-[14px] font-semibold text-blue-700 tabular-nums">
+                        {workDays && dailyWage ? (parseInt(workDays) * parseInt(dailyWage)).toLocaleString() : '0'}원
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-blue-500 mt-1">
+                    {workDays}일 x {dailyWage ? parseInt(dailyWage).toLocaleString() : '0'}원 = {workDays && dailyWage ? (parseInt(workDays) * parseInt(dailyWage)).toLocaleString() : '0'}원
+                  </div>
                 </div>
               )}
 

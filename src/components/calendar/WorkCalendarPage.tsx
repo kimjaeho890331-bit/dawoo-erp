@@ -1283,8 +1283,35 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               }`}>{viewTypeLabel}</span>
             </div>
 
-            {/* 메모 */}
-            {memo && (
+            {/* 시공 정보 (project_id가 있고 메모에 시공 정보 포함) */}
+            {schedule?.project_id && memo && (() => {
+              const parts = memo.split('\n---\n')
+              const constructionInfo = parts[0] || ''
+              const userMemo = parts[1] || ''
+              return (
+                <>
+                  {constructionInfo && (
+                    <div>
+                      <span className="text-xs text-txt-tertiary block mb-1">시공 정보</span>
+                      <div className="text-[12px] text-txt-secondary whitespace-pre-wrap leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
+                        {constructionInfo}
+                      </div>
+                    </div>
+                  )}
+                  {userMemo && (
+                    <div>
+                      <span className="text-xs text-txt-tertiary block mb-1">메모</span>
+                      <div className="text-[13px] text-txt-primary whitespace-pre-wrap leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
+                        {userMemo}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            {/* 일반 일정 메모 (project_id 없을 때) */}
+            {!schedule?.project_id && memo && (
               <div>
                 <span className="text-xs text-txt-tertiary block mb-1">메모</span>
                 <div className="text-[13px] text-txt-primary whitespace-pre-wrap leading-relaxed bg-surface-secondary/50 rounded-lg px-3 py-2.5">
@@ -1292,29 +1319,27 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                 </div>
               </div>
             )}
-
-            {/* 시공 정보 (project_id가 있을 때) */}
-            {schedule?.project_id && schedule.memo && (
-              <div className="mt-3 pt-3 border-t border-border-tertiary">
-                <p className="text-[11px] font-semibold text-txt-tertiary mb-2">시공 정보</p>
-                <pre className="text-[12px] text-txt-secondary leading-relaxed whitespace-pre-wrap font-[inherit]">
-                  {schedule.memo}
-                </pre>
-              </div>
-            )}
-
-            {/* 시공 사진 안내 */}
-            {schedule?.project_id && (
-              <div className="mt-3 pt-3 border-t border-border-tertiary">
-                <p className="text-[11px] text-txt-quaternary">시공 사진은 접수대장 상세에서 확인하세요</p>
-              </div>
-            )}
           </div>
 
           {/* Footer */}
           <div className="px-5 py-3.5 border-t border-border-tertiary flex items-center justify-between bg-surface-secondary/50 rounded-b-[10px]">
-            <div>{onDelete && <button onClick={onDelete} className="px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded">삭제</button>}</div>
-            <div />
+            <div className="flex items-center gap-2">
+              {onDelete && <button onClick={onDelete} className="px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded">삭제</button>}
+            </div>
+            <button
+              onClick={async () => {
+                if (!schedule) return
+                await supabase.from('schedules').update({ confirmed: !confirmed }).eq('id', schedule.id)
+                onSave()
+              }}
+              className={`px-4 py-1.5 text-xs font-medium rounded-lg transition ${
+                confirmed
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-accent text-white hover:bg-accent-hover'
+              }`}
+            >
+              {confirmed ? '완료됨' : '완료 처리'}
+            </button>
           </div>
         </div>
       </div>

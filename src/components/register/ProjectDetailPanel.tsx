@@ -167,13 +167,26 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       const cleanConstDate = String(constDate).substring(0, 10)
       const cleanEndDate = String(endDate).substring(0, 10)
 
-      // upsert: project_id + title contains worker name
+      // upsert: project_id + schedule_type='project' + 시공 키워드로 찾기 (중복 방지)
       const { data: existingConst } = await supabase
         .from('schedules')
-        .select('id')
+        .select('id, memo')
         .eq('project_id', project.id)
-        .ilike('title', `%${worker}%`)
+        .eq('schedule_type', 'project')
+        .or(`title.ilike.%시공%,title.ilike.%수도%`)
+        .not('title', 'ilike', '%실측%')
+        .not('title', 'ilike', '%동의서%')
+        .not('title', 'ilike', '%신청서%')
+        .not('title', 'ilike', '%완료서류%')
+        .not('title', 'ilike', '%착공서류%')
         .limit(1)
+
+      // 기존 메모 보존 (사용자가 추가한 메모)
+      const existingMemo = existingConst?.[0]?.memo || ''
+      const userMemo = existingMemo.split('\n---\n')[1] || ''
+      const fullMemo = userMemo
+        ? memoLines.join('\n') + '\n---\n' + userMemo
+        : memoLines.join('\n')
 
       const constPayload = {
         project_id: project.id,
@@ -182,7 +195,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         title: constTitle,
         start_date: cleanConstDate,
         end_date: cleanEndDate,
-        memo: memoLines.join('\n'),
+        memo: fullMemo,
         confirmed: false,
         all_day: true,
       }

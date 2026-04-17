@@ -966,6 +966,11 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
     if (!title.trim() || !amount) return
     setSaving(true)
     if (tab === 'expense') {
+      // 노무비: 근무일 정보를 메모에 포함
+      const laborInfo = category === '노무비' && workDates.length > 0
+        ? `[근무일] ${workDates.sort().map(d => d.slice(5).replace('-','/')).join(', ')} (${workDates.length}일)\n[일당] ${dailyWage ? parseInt(dailyWage).toLocaleString() : '0'}원\n${memo ? '\n' + memo : ''}`
+        : memo || null
+
       const basePayload: Record<string, unknown> = {
         category,
         title: title.trim(),
@@ -974,7 +979,7 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
         site_id: siteId || null,
         staff_id: currentStaffId || staffId || null,
         receipt_url: null,
-        memo: memo || null,
+        memo: laborInfo,
         project_id: null,
       }
       // New fields (may not exist in DB yet, gracefully handled)
@@ -1136,20 +1141,20 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
                       ))}
                       {workDates.length === 0 && <span className="text-[11px] text-txt-quaternary">날짜를 추가하세요</span>}
                     </div>
-                    <div className="flex gap-2">
-                      <input type="date" value={newWorkDate} onChange={e => setNewWorkDate(e.target.value)}
-                        className={`${INPUT_CLS} flex-1`} />
-                      <button type="button" onClick={() => {
-                        if (newWorkDate && !workDates.includes(newWorkDate)) {
-                          const next = [...workDates, newWorkDate]
-                          setWorkDates(next)
-                          setNewWorkDate('')
-                          if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
-                        }
-                      }} className="px-3 h-[36px] bg-blue-600 text-white text-[12px] font-medium rounded-lg hover:bg-blue-700 shrink-0">
-                        추가
-                      </button>
-                    </div>
+                    <input type="date" value="" onChange={e => {
+                      const d = e.target.value
+                      if (d && !workDates.includes(d)) {
+                        const next = [...workDates, d]
+                        setWorkDates(next)
+                        if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
+                      } else if (d && workDates.includes(d)) {
+                        // 이미 있으면 제거 (토글)
+                        const next = workDates.filter(x => x !== d)
+                        setWorkDates(next)
+                        if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
+                      }
+                      e.target.value = ''
+                    }} className={INPUT_CLS} />
                   </div>
 
                   {/* 일당 + 합계 */}

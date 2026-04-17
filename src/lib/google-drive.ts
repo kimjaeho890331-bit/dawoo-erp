@@ -12,13 +12,21 @@ function parsePrivateKey(): string {
   let key = process.env.GOOGLE_PRIVATE_KEY || ''
   // 앞뒤 따옴표 제거
   key = key.replace(/^["']|["']$/g, '')
-  // 리터럴 \n → 실제 줄바꿈
-  key = key.replace(/\\n/g, '\n')
-  // 혹시 \\n (이중 이스케이프)
-  key = key.replace(/\\\\n/g, '\n')
+  // 방법1: split/join (가장 확실)
+  key = key.split('\\n').join('\n')
+  // 방법2: 혹시 JSON 이스케이프된 경우
+  if (!key.includes('\n') && key.includes('\\n')) {
+    try { key = JSON.parse(`"${key}"`) } catch { /* ignore */ }
+  }
   return key
 }
-const GOOGLE_PRIVATE_KEY = parsePrivateKey()
+
+// lazy init (환경변수 로딩 시점 문제 방지)
+let _privateKey: string | null = null
+function getPrivateKey(): string {
+  if (_privateKey === null) _privateKey = parsePrivateKey()
+  return _privateKey
+}
 
 // --- JWT 생성 + Access Token 발급 ---
 let cachedToken: { token: string; expires: number } | null = null
@@ -35,9 +43,10 @@ function createJWT(): string {
   })).toString('base64url')
 
   const signInput = `${header}.${payload}`
+  const key = getPrivateKey()
   const sign = crypto.createSign('RSA-SHA256')
   sign.update(signInput)
-  const signature = sign.sign(GOOGLE_PRIVATE_KEY, 'base64url')
+  const signature = sign.sign(key, 'base64url')
   return `${signInput}.${signature}`
 }
 
@@ -184,8 +193,9 @@ export async function ensureSiteFolder(siteName: string): Promise<string> {
 export async function testConnection(): Promise<{ success: boolean; rootFolderName?: string; error?: string; debug?: string }> {
   try {
     if (!GOOGLE_SERVICE_EMAIL) return { success: false, error: 'GOOGLE_SERVICE_EMAIL 환경변수 없음' }
-    if (!GOOGLE_PRIVATE_KEY || !GOOGLE_PRIVATE_KEY.includes('BEGIN PRIVATE KEY')) {
-      return { success: false, error: 'GOOGLE_PRIVATE_KEY 환경변수 없음 또는 형식 오류', debug: `key_length=${GOOGLE_PRIVATE_KEY.length}, starts=${GOOGLE_PRIVATE_KEY.substring(0, 30)}` }
+    const pk = getPrivateKey()
+    if (!pk || !pk.includes('BEGIN PRIVATE KEY')) {
+      return { success: false, error: 'GOOGLE_PRIVATE_KEY 형식 오류', debug: `key_length=${pk.length}, has_newline=${pk.includes('\n')}, starts=${pk.substring(0, 40)}` }
     }
     if (!GOOGLE_DRIVE_FOLDER_ID) return { success: false, error: 'GOOGLE_DRIVE_FOLDER_ID 환경변수 없음' }
 

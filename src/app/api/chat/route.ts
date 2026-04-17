@@ -87,6 +87,21 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - "삼성빌리지 실측 완료하고 내일 견적 일정 잡아줘" → update_status + manage_schedule 순차 실행
 - 여러 도구를 연달아 사용하여 한 번에 처리
 
+## 통계/보고서
+- "이번 달 실적" → get_dashboard_stats로 전체 현황 조회 후 요약
+- "보고서 만들어줘" → generate_report로 데이터 수집 → 서술형 보고서 작성
+- 보고서는 핵심 성과, 주요 변동, 주의사항을 포함하여 작성
+
+## 활동로그
+- "김재호 오늘 뭐 했어?" → get_activity_log(staff_name=김재호)
+- "오늘 누가 뭐 했어?" → get_activity_log(date=오늘)
+
+## AI 기억
+- 사용자가 "방수는 A업체 써", "수원 실측은 김재호가 가" 등 규칙/선호를 말하면
+  → manage_memory(action=save)로 저장하고 "기억했습니다" 응답
+- 접수/일정 등록 시 관련 기억이 있으면 자동 참조하여 추천
+- "뭐 기억하고 있어?" → manage_memory(action=list)
+
 ## 대화 규칙
 - 간결하고 핵심적으로 답변. 장황한 설명 금지.
 - 등록 완료 시 입력된 정보만 깔끔하게 요약.
@@ -264,6 +279,56 @@ const TOOLS = [
         keyword: { type: 'string', description: '이름/업종/연락처 검색' },
         vendor_type: { type: 'string', enum: ['협력업체', '일용직'], description: '거래처 유형' },
       },
+    },
+  },
+  // --- Phase B: 분석 + 학습 도구 4개 ---
+  {
+    name: 'get_dashboard_stats',
+    description: '이번 달 실적 통계를 요약합니다. 접수/완료/미수금/지출/현장 등 전체 현황.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        month: { type: 'string', description: '조회할 월 YYYY-MM (기본: 이번 달)' },
+      },
+    },
+  },
+  {
+    name: 'generate_report',
+    description: '일일/주간/월간 업무 보고서를 자동 생성합니다. DB 데이터를 수집하여 서술형 분석.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        type: { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: '보고서 유형' },
+        date: { type: 'string', description: '기준일 YYYY-MM-DD (기본: 오늘)' },
+      },
+      required: ['type'],
+    },
+  },
+  {
+    name: 'get_activity_log',
+    description: '직원 활동 로그를 조회합니다. 누가 뭘 했는지 확인.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        staff_name: { type: 'string', description: '직원 이름' },
+        date: { type: 'string', description: '조회할 날짜 YYYY-MM-DD' },
+        action: { type: 'string', description: '특정 행동 필터 (project_created, status_changed 등)' },
+      },
+    },
+  },
+  {
+    name: 'manage_memory',
+    description: 'AI 기억을 저장/조회합니다. 회사 규칙, 선호, 패턴을 학습.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        action: { type: 'string', enum: ['save', 'search', 'list'], description: '작업 종류' },
+        category: { type: 'string', enum: ['preference', 'rule', 'alias', 'pattern'], description: '기억 분류' },
+        key: { type: 'string', description: '기억 키 (예: 방수_업체, 수원_실측_담당)' },
+        value: { type: 'string', description: '기억 값 (예: A방수업체, 김재호)' },
+        search_keyword: { type: 'string', description: '검색 시 키워드' },
+      },
+      required: ['action'],
     },
   },
 ]
@@ -675,6 +740,159 @@ async function searchVendors(input: Record<string, unknown>): Promise<string> {
   return JSON.stringify({ total: data?.length || 0, vendors: data })
 }
 
+// --- Phase B: 분석 + 학습 함수들 ---
+
+async function getDashboardStats(input: Record<string, unknown>): Promise<string> {
+  const month = (input.month as string) || new Date().toISOString().slice(0, 7)
+  const monthStart = `${month}-01`
+  const monthEnd = `${month}-31`
+  try {
+    const [projRes, expRes, siteRes, schedRes, payRes] = await Promise.all([
+      supabaseAdmin.from('projects').select('status, total_cost, collected, outstanding, city_id, cities(name)').gte('created_at', monthStart).lte('created_at', `${monthEnd}T23:59:59`),
+      supabaseAdmin.from('expenses').select('amount, category, status').gte('expense_date', monthStart).lte('expense_date', monthEnd),
+      supabaseAdmin.from('sites').select('id, status'),
+      supabaseAdmin.from('schedules').select('id, confirmed, schedule_type').gte('start_date', monthStart).lte('start_date', monthEnd).neq('schedule_type', 'site'),
+      supabaseAdmin.from('payments').select('amount').gte('payment_date', monthStart).lte('payment_date', monthEnd),
+    ])
+    const projects = projRes.data || []
+    const expenses = expRes.data || []
+    const sites = siteRes.data || []
+    const schedules = schedRes.data || []
+    const payments = payRes.data || []
+
+    // 접수 현황
+    const statusCount: Record<string, number> = {}
+    projects.forEach((p: Record<string, unknown>) => { statusCount[p.status as string] = (statusCount[p.status as string] || 0) + 1 })
+
+    // 도시별
+    const cityCount: Record<string, number> = {}
+    projects.forEach((p: Record<string, unknown>) => { const c = (p.cities as Record<string, unknown>)?.name as string || '미지정'; cityCount[c] = (cityCount[c] || 0) + 1 })
+
+    // 지출
+    const expTotal = expenses.reduce((s: number, e: Record<string, unknown>) => s + (Number(e.amount) || 0), 0)
+    const expByCat: Record<string, number> = {}
+    expenses.forEach((e: Record<string, unknown>) => { expByCat[e.category as string] = (expByCat[e.category as string] || 0) + (Number(e.amount) || 0) })
+
+    // 미수금
+    const totalOutstanding = projects.reduce((s: number, p: Record<string, unknown>) => s + (Number(p.outstanding) || 0), 0)
+    const totalCollected = payments.reduce((s: number, p: Record<string, unknown>) => s + (Number(p.amount) || 0), 0)
+
+    return JSON.stringify({
+      month,
+      projects: { total: projects.length, by_status: statusCount, by_city: cityCount },
+      finance: { total_expense: expTotal, expense_by_category: expByCat, total_collected: totalCollected, total_outstanding: totalOutstanding },
+      sites: { total: sites.length, active: sites.filter((s: Record<string, unknown>) => s.status !== 'completed').length },
+      schedules: { total: schedules.length, completed: schedules.filter((s: Record<string, unknown>) => s.confirmed).length },
+    })
+  } catch (err) {
+    return JSON.stringify({ error: `통계 조회 실패: ${err}` })
+  }
+}
+
+async function generateReport(input: Record<string, unknown>): Promise<string> {
+  const reportType = input.type as string
+  const baseDate = (input.date as string) || new Date().toISOString().slice(0, 10)
+
+  let dateFrom: string, dateTo: string
+  if (reportType === 'daily') {
+    dateFrom = dateTo = baseDate
+  } else if (reportType === 'weekly') {
+    const d = new Date(baseDate); const dow = d.getDay()
+    const mon = new Date(d); mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1))
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+    dateFrom = mon.toISOString().slice(0, 10); dateTo = sun.toISOString().slice(0, 10)
+  } else {
+    dateFrom = baseDate.slice(0, 7) + '-01'; dateTo = baseDate.slice(0, 7) + '-31'
+  }
+
+  try {
+    const [projRes, logRes, schedRes, expRes] = await Promise.all([
+      supabaseAdmin.from('status_logs').select('from_status, to_status, note, created_at, projects(building_name)').gte('created_at', dateFrom).lte('created_at', `${dateTo}T23:59:59`).order('created_at', { ascending: false }).limit(50),
+      supabaseAdmin.from('activity_log').select('action, target_type, detail, staff:staff_id(name), created_at').gte('created_at', dateFrom).lte('created_at', `${dateTo}T23:59:59`).order('created_at', { ascending: false }).limit(50),
+      supabaseAdmin.from('schedules').select('title, start_date, confirmed, staff:staff_id(name)').gte('start_date', dateFrom).lte('start_date', dateTo).neq('schedule_type', 'site').order('start_date'),
+      supabaseAdmin.from('expenses').select('title, amount, category, expense_date').gte('expense_date', dateFrom).lte('expense_date', dateTo),
+    ])
+
+    return JSON.stringify({
+      report_type: reportType,
+      period: { from: dateFrom, to: dateTo },
+      status_changes: (projRes.data || []).map((l: Record<string, unknown>) => ({
+        building: (l.projects as Record<string, unknown>)?.building_name,
+        from: l.from_status, to: l.to_status, note: l.note,
+      })),
+      activities: (logRes.data || []).slice(0, 20).map((a: Record<string, unknown>) => ({
+        staff: (a.staff as Record<string, unknown>)?.name,
+        action: a.action, detail: a.detail,
+      })),
+      schedules: { total: schedRes.data?.length || 0, completed: schedRes.data?.filter((s: Record<string, unknown>) => s.confirmed).length || 0, items: schedRes.data?.slice(0, 10) },
+      expenses: { total_amount: (expRes.data || []).reduce((s: number, e: Record<string, unknown>) => s + (Number(e.amount) || 0), 0), count: expRes.data?.length || 0 },
+      instruction: 'AI는 이 데이터를 기반으로 서술형 보고서를 작성하세요. 핵심 성과, 주요 변동, 주의사항을 포함.',
+    })
+  } catch (err) {
+    return JSON.stringify({ error: `보고서 생성 실패: ${err}` })
+  }
+}
+
+async function getActivityLog(input: Record<string, unknown>): Promise<string> {
+  const { staff_name, date, action } = input as Record<string, string | undefined>
+  const targetDate = date || new Date().toISOString().slice(0, 10)
+  let q = supabaseAdmin.from('activity_log')
+    .select('action, target_type, detail, staff:staff_id(name), created_at')
+    .gte('created_at', targetDate)
+    .lte('created_at', `${targetDate}T23:59:59`)
+    .order('created_at', { ascending: false })
+    .limit(30)
+
+  if (staff_name) {
+    const { data: s } = await supabaseAdmin.from('staff').select('id').ilike('name', `%${staff_name}%`).limit(1).single()
+    if (s) q = q.eq('staff_id', s.id)
+  }
+  if (action) q = q.eq('action', action)
+
+  const { data, error } = await q
+  if (error) return JSON.stringify({ error: error.message })
+  return JSON.stringify({
+    date: targetDate, total: data?.length || 0,
+    activities: (data || []).map((a: Record<string, unknown>) => ({
+      staff: (a.staff as Record<string, unknown>)?.name,
+      action: a.action, target: a.target_type, detail: a.detail,
+      time: (a.created_at as string)?.slice(11, 16),
+    })),
+  })
+}
+
+async function manageMemory(input: Record<string, unknown>): Promise<string> {
+  const { action } = input as Record<string, string | undefined>
+  if (action === 'save') {
+    const { category, key, value } = input as Record<string, string | undefined>
+    if (!key || !value) return JSON.stringify({ error: 'key, value 필수' })
+    // upsert: 같은 key가 있으면 업데이트
+    const { data: existing } = await supabaseAdmin.from('ai_memory').select('id').eq('key', key).limit(1).single()
+    if (existing) {
+      await supabaseAdmin.from('ai_memory').update({ value, category: category || 'preference' }).eq('id', existing.id)
+      return JSON.stringify({ success: true, action: 'updated', key, value })
+    }
+    const { error } = await supabaseAdmin.from('ai_memory').insert({ category: category || 'preference', key, value, source: 'conversation' })
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({ success: true, action: 'saved', key, value })
+  }
+  if (action === 'search') {
+    const { search_keyword, category } = input as Record<string, string | undefined>
+    let q = supabaseAdmin.from('ai_memory').select('category, key, value, created_at')
+    if (search_keyword) q = q.or(`key.ilike.%${search_keyword}%,value.ilike.%${search_keyword}%`)
+    if (category) q = q.eq('category', category)
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(20)
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({ total: data?.length || 0, memories: data })
+  }
+  if (action === 'list') {
+    const { data, error } = await supabaseAdmin.from('ai_memory').select('category, key, value').order('category').order('key')
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({ total: data?.length || 0, memories: data })
+  }
+  return JSON.stringify({ error: '지원하지 않는 action' })
+}
+
 // --- 도구 실행 라우터 ---
 async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
@@ -700,6 +918,14 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return manageExpense(input)
     case 'search_vendors':
       return searchVendors(input)
+    case 'get_dashboard_stats':
+      return getDashboardStats(input)
+    case 'generate_report':
+      return generateReport(input)
+    case 'get_activity_log':
+      return getActivityLog(input)
+    case 'manage_memory':
+      return manageMemory(input)
     default:
       return JSON.stringify({ error: `알 수 없는 도구: ${name}` })
   }

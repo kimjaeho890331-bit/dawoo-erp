@@ -534,14 +534,15 @@ const STATUS_GROUP_MAP: Record<string, string[]> = {
 async function searchProjects(input: Record<string, unknown>): Promise<string> {
   const { keyword, status_group, city, category, count_only } = input as Record<string, string | boolean | undefined>
   try {
-    // 카테고리 필터: DB 레벨에서 work_type_id로 직접 필터
+    // 카테고리 필터: 확정된 work_type_id로 직접 필터 (ORM join 불안정 → 하드코딩)
+    const WATER_TYPE_IDS = ['01ca1009-8946-4346-9d20-1b34e30bf8a3', 'cfae03cc-0a9f-4809-a43a-ed05fd46207a']
     let categoryTypeIds: string[] | null = null
-    if (category) {
-      const { data: wtData } = await supabaseAdmin
-        .from('work_types')
-        .select('id, work_categories!inner(name)')
-        .eq('work_categories.name', category as string)
-      categoryTypeIds = wtData?.map((wt: Record<string, unknown>) => wt.id as string) || []
+    if (category === '수도') {
+      categoryTypeIds = WATER_TYPE_IDS
+    } else if (category === '소규모') {
+      // 소규모 = 수도가 아닌 모든 work_type
+      const { data: allWt } = await supabaseAdmin.from('work_types').select('id')
+      categoryTypeIds = (allWt || []).map((wt: Record<string, unknown>) => wt.id as string).filter(id => !WATER_TYPE_IDS.includes(id))
     }
 
     let query = supabaseAdmin

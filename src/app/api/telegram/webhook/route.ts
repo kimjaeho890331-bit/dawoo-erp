@@ -525,9 +525,14 @@ async function handleDepositMatch(
   text: string,
 ) {
   const deposit = parseDeposit(text)
-  if (!deposit) return // 금액 파싱 실패 → 무시
+  if (!deposit) {
+    console.log('[deposit] parseDeposit returned null for:', text.slice(0, 100))
+    return
+  }
 
-  // 이름으로 프로젝트 검색 (outstanding > 0)
+  console.log('[deposit] parsed:', JSON.stringify(deposit))
+
+  // 이름으로 프로젝트 검색
   let matchedProjects: Array<{
     id: string
     building_name: string | null
@@ -537,7 +542,7 @@ async function handleDepositMatch(
   }> = []
 
   if (deposit.name) {
-    const { data: byOwner } = await supabaseAdmin
+    const { data: byOwner, error: ownerErr } = await supabaseAdmin
       .from('projects')
       .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost, collected')
       .ilike('owner_name', `%${deposit.name}%`)
@@ -545,13 +550,17 @@ async function handleDepositMatch(
       .neq('status', '입금')
       .limit(5)
 
-    const { data: byPayer } = await supabaseAdmin
+    console.log('[deposit] byOwner:', byOwner?.length, 'err:', ownerErr?.message)
+
+    const { data: byPayer, error: payerErr } = await supabaseAdmin
       .from('projects')
       .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost, collected')
       .ilike('payer_name', `%${deposit.name}%`)
       .neq('status', '취소')
       .neq('status', '입금')
       .limit(5)
+
+    console.log('[deposit] byPayer:', byPayer?.length, 'err:', payerErr?.message)
 
     // 중복 제거
     const seen = new Set<string>()
@@ -580,7 +589,7 @@ async function handleDepositMatch(
   if (matchedProjects.length === 0) {
     await sendMessage(
       chatId,
-      `입금 ${deposit.amount.toLocaleString('ko-KR')}원 확인\n입금자: ${deposit.name || '미확인'}\n\n매칭되는 미수금 현장을 찾지 못했습니다.\n현장명을 알려주시면 수금 처리하겠습니다.`,
+      `입금 ${deposit.amount.toLocaleString('ko-KR')}원 확인\n입금자: ${deposit.name || '미확인'}\n통장: ${deposit.account || '미확인'}\n\n매칭되는 현장을 찾지 못했습니다.\n현장명을 알려주시면 수금 처리하겠습니다.`,
     )
     return
   }

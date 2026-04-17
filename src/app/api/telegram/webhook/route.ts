@@ -549,8 +549,8 @@ async function handleDepositMatch(
       .from('projects')
       .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost, collected')
       .ilike('payer_name', `%${deposit.name}%`)
-      .gt('outstanding', 0)
       .neq('status', '취소')
+      .neq('status', '입금')
       .limit(5)
 
     // 중복 제거

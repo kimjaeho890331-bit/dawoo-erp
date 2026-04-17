@@ -7,22 +7,19 @@ import { supabase } from '@/lib/supabase'
 // --- 타입 (11개 채널) ---
 interface Project {
   id: string; building_name: string | null; status: string; staff_id: string | null
-  total_cost: number; self_pay: number; city_support: number; collected: number; outstanding: number
-  survey_date: string | null; construction_date: string | null; completion_doc_date: string | null
-  payment_date: string | null; created_at: string; year: number | null
-  city_id: string | null; work_type_id: string | null; road_address: string | null
-  water_work_type: string | null; support_program: string | null
+  city_support: number; collected: number
+  completion_doc_date: string | null; payment_date: string | null; created_at: string
 }
-interface Staff { id: string; name: string; role: string; salary: number | null }
-interface Expense { id: string; category: string; amount: number; expense_date: string; site_id: string | null; staff_id: string | null; title: string }
-interface FixedExpense { id: string; title: string; category: string; amount: number }
-interface CardTxn { id: string; card_name: string; merchant: string; amount: number; category: string; transaction_date: string; staff_id: string | null; flagged: boolean }
-interface AsRecord { id: string; status: string; issue_type: string; cost: number; reported_date: string; resolved_date: string | null; site_name: string | null; assigned_vendor_id: string | null }
-interface LeaveReq { id: string; staff_id: string | null; leave_type: string; start_date: string; days: number; status: string }
-interface Schedule { id: string; title: string; staff_id: string | null; schedule_type: string | null; start_date: string; end_date: string | null }
-interface SiteLog { id: string; site_id: string | null; log_date: string; content: string | null; staff_id: string | null }
-interface Template { id: string; name: string; updated_at: string | null }
-interface Site { id: string; name: string; status: string | null }
+interface Staff { id: string; name: string; role: string }
+interface Expense { id: string; category: string; amount: number; expense_date: string; staff_id: string | null }
+interface FixedExpense { id: string; title: string; amount: number }
+interface CardTxn { merchant: string; amount: number; category: string; transaction_date: string; staff_id: string | null }
+interface AsRecord { id: string; status: string; issue_type: string; cost: number; reported_date: string; site_name: string | null }
+interface LeaveReq { id: string; staff_id: string | null; start_date: string; days: number; status: string }
+interface Schedule { staff_id: string | null; start_date: string }
+interface SiteLog { log_date: string }
+interface Template { updated_at: string | null }
+interface Site { id: string; status: string | null }
 
 const ACTIVE = ['문의', '실측', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출']
 const DONE = ['입금', '완료']
@@ -84,18 +81,51 @@ export default function ReportsPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+
+    // 날짜 범위 계산
+    const now = new Date()
+    const thisYear = now.getFullYear()
+    const yearStart = `${thisYear}-01-01`
+    // 이번 주 월요일 기준 (일요일 시작 주에서 7일 여유 포함)
+    const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - now.getDay() - 1)
+    const weekStart = weekAgo.toISOString().slice(0, 10)
+    // 현장일지: 오늘 + 이번 주만 사용 → 최근 14일로 제한
+    const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate() - 14)
+    const twoWeeksStart = twoWeeksAgo.toISOString().slice(0, 10)
+
     const results = await Promise.all([
-      supabase.from('projects').select('*'),
-      supabase.from('staff').select('*'),
-      supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
-      supabase.from('fixed_expenses').select('*'),
-      supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
-      supabase.from('as_records').select('*'),
-      supabase.from('leave_requests').select('*'),
-      supabase.from('schedules').select('*'),
-      supabase.from('site_logs').select('*'),
-      supabase.from('templates').select('*'),
-      supabase.from('sites').select('*'),
+      // 프로젝트: 필요 컬럼만 (status 전체 + payment_date 올해분 포함)
+      supabase.from('projects').select(
+        'id,building_name,status,staff_id,city_support,collected,completion_doc_date,payment_date,created_at'
+      ),
+      // 직원: id/name/role만 (salary 미사용)
+      supabase.from('staff').select('id,name,role'),
+      // 지출결의: 올해 데이터만 (월별 분석 + yearRevenue 계산)
+      supabase.from('expenses').select('id,category,amount,expense_date,staff_id')
+        .gte('expense_date', yearStart)
+        .order('expense_date', { ascending: false }),
+      // 고정지출: 소규모라 필터 없음
+      supabase.from('fixed_expenses').select('id,title,amount'),
+      // 카드 거래: 올해 데이터만 (월별 이상지출 분석)
+      supabase.from('card_transactions').select('merchant,amount,category,transaction_date,staff_id')
+        .gte('transaction_date', yearStart)
+        .order('transaction_date', { ascending: false }),
+      // A/S: 미완료 전체 + 이번 달 분석 필요 → 올해분만
+      supabase.from('as_records').select('id,status,issue_type,cost,reported_date,site_name')
+        .gte('reported_date', yearStart),
+      // 연차: 올해 승인+대기건만
+      supabase.from('leave_requests').select('id,staff_id,start_date,days,status')
+        .gte('start_date', yearStart),
+      // 스케줄: 이번 주 일정만 사용
+      supabase.from('schedules').select('staff_id,start_date')
+        .gte('start_date', weekStart),
+      // 현장일지: 오늘/이번 주만 사용 → 최근 14일
+      supabase.from('site_logs').select('log_date')
+        .gte('log_date', twoWeeksStart),
+      // 서류 템플릿: 유효기간 체크만 (300~400일 경과)
+      supabase.from('templates').select('updated_at'),
+      // 현장: id/status만 (name 미사용)
+      supabase.from('sites').select('id,status'),
     ])
     const safe = (r: { error: unknown; data: unknown }) => (!r.error && r.data) ? r.data as never[] : []
     setProjects(safe(results[0]))

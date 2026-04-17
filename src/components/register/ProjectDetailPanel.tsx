@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { Check, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { validateProjectData } from '@/lib/utils/validate'
-import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
-import FileDropZone from '@/components/common/FileDropZone'
-import PaymentTable from '@/components/register/PaymentTable'
 import StepTransition from '@/components/register/StepTransition'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
+
+import { InfoField } from './panels/panelHelpers'
+import TabBasicInfo from './panels/TabBasicInfo'
+import TabReception from './panels/TabReception'
+import TabConstruction from './panels/TabConstruction'
+import TabCompletion from './panels/TabCompletion'
 
 const PROGRESS_STEPS: ProjectStep[] = [
   '문의', '실측', '견적전달', '동의서', '신청서제출',
@@ -68,31 +70,6 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     setEditData(prev => ({ ...prev, [field]: value }))
     setHasChanges(true)
   }, [])
-
-  // 자동저장 (2초 debounce)
-  useEffect(() => {
-    if (!hasChanges || !project) return
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        const dataToSave = validateProjectData({ ...editData })
-        const { error } = await supabase
-          .from('projects')
-          .update(dataToSave)
-          .eq('id', project.id)
-        if (error) throw error
-        await syncSchedules(dataToSave)
-        setHasChanges(false)
-        setEditData({})
-        // DB에서 최신 데이터 다시 읽어오기
-        onRefresh?.()
-      } catch (err) {
-        console.error('자동저장 실패:', err)
-      }
-    }, 1000)
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editData])
 
   // 날짜 필드 → 캘린더 자동 동기화
   const SCHEDULE_MAP: Record<string, string> = {
@@ -217,6 +194,31 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       }
     }
   }
+
+  // 자동저장 (2초 debounce)
+  useEffect(() => {
+    if (!hasChanges || !project) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const dataToSave = validateProjectData({ ...editData })
+        const { error } = await supabase
+          .from('projects')
+          .update(dataToSave)
+          .eq('id', project.id)
+        if (error) throw error
+        await syncSchedules(dataToSave)
+        setHasChanges(false)
+        setEditData({})
+        // DB에서 최신 데이터 다시 읽어오기
+        onRefresh?.()
+      } catch (err) {
+        console.error('자동저장 실패:', err)
+      }
+    }, 1000)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData])
 
   const handleSave = async () => {
     if (!project || !hasChanges) return
@@ -485,9 +487,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
-          {activeTab === '접수' && <TabStep1 project={project} category={category} getVal={getVal} onChange={updateField} />}
-          {activeTab === '승인(시공)' && <TabStep2 project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} />}
-          {activeTab === '완료' && <TabStep34 project={project} getVal={getVal} onChange={updateField} />}
+          {activeTab === '접수' && <TabReception project={project} category={category} getVal={getVal} onChange={updateField} />}
+          {activeTab === '승인(시공)' && <TabConstruction project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} />}
+          {activeTab === '완료' && <TabCompletion project={project} getVal={getVal} onChange={updateField} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>
       </div>
@@ -540,16 +542,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   )
 }
 
-// --- 상시 표시 필드 (읽기 전용) ---
-function InfoField({ label, value, full }: { label: string; value: string; full?: boolean }) {
-  return (
-    <div className={full ? 'col-span-2' : ''}>
-      <span className="text-[11px] text-txt-tertiary">{label}</span>
-      <p className="text-[13px] text-txt-primary">{value}</p>
-    </div>
-  )
-}
-
+// --- MiniStat (금액 표시용, 이 파일 전용) ---
 function MiniStat({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
     <div className="text-center">
@@ -561,666 +554,6 @@ function MiniStat({ label, value, highlight }: { label: string; value: number; h
   )
 }
 
-// --- 편집 가능 폼 필드 (항상 편집 가능) ---
-function FormInput({ label, type = 'text', placeholder, value, onChange }: {
-  label: string; type?: string; placeholder?: string
-  value: string | number | null | undefined
-  onChange: (v: string) => void
-}) {
-  return (
-    <div>
-      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <input
-        type={type}
-        value={value ?? ''}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder || label}
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light hover:border-border-secondary transition-colors"
-      />
-    </div>
-  )
-}
-
-// --- 날짜+시간 분리 입력 (MM/DD 표시 + 24h 타이핑) ---
-function DateTimeInput({ label, value, onChange, timeValue, onTimeChange }: {
-  label: string
-  value: string | null | undefined
-  onChange: (v: string | null) => void
-  timeValue?: string | null
-  onTimeChange?: (v: string | null) => void
-}) {
-  const dateRef = useRef<HTMLInputElement>(null)
-  const dateVal = (value || '').substring(0, 10)
-  const hasTime = onTimeChange !== undefined
-
-  const displayDate = dateVal
-    ? `${parseInt(dateVal.substring(5, 7))}월 ${parseInt(dateVal.substring(8, 10))}일`
-    : ''
-
-  // DB에서 콜론 없이 저장된 시간값 보정
-  const formatTimeDisplay = (raw: string | null | undefined) => {
-    if (!raw) return ''
-    if (raw.includes(':')) return raw
-    const digits = raw.replace(/[^0-9]/g, '')
-    if (digits.length >= 3) return digits.substring(0, digits.length - 2) + ':' + digits.substring(digits.length - 2)
-    return raw
-  }
-
-  return (
-    <div>
-      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <div className={`grid gap-1.5 ${hasTime ? 'grid-cols-2' : 'grid-cols-1'}`}>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => dateRef.current?.showPicker?.()}
-            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-left hover:border-border-secondary transition-colors bg-white"
-          >
-            {displayDate || <span className="text-txt-quaternary">날짜</span>}
-          </button>
-          <input
-            ref={dateRef}
-            type="date"
-            value={dateVal}
-            onChange={e => onChange(e.target.value || null)}
-            className="absolute inset-0 opacity-0 pointer-events-none"
-            tabIndex={-1}
-          />
-        </div>
-        {hasTime && (
-          <input
-            type="text"
-            placeholder="14:00"
-            value={formatTimeDisplay(timeValue)}
-            onChange={e => {
-              let v = e.target.value.replace(/[^0-9]/g, '')
-              if (v.length > 4) v = v.substring(0, 4)
-              if (v.length >= 3) v = v.substring(0, 2) + ':' + v.substring(2)
-              onTimeChange!(v || null)
-            }}
-            maxLength={5}
-            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-          />
-        )}
-      </div>
-    </div>
-  )
-}
-
-// --- 직원 드롭다운 선택 ---
-function StaffSelect({ label, value, onChange }: {
-  label: string
-  value: string | null | undefined
-  onChange: (v: string | null) => void
-}) {
-  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
-
-  useEffect(() => {
-    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
-      setStaffList(data || [])
-    })
-  }, [])
-
-  return (
-    <div>
-      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-      <select
-        value={value ?? ''}
-        onChange={e => onChange(e.target.value || null)}
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light bg-white"
-      >
-        <option value="">선택</option>
-        {staffList.map(s => (
-          <option key={s.id} value={s.name}>{s.name}</option>
-        ))}
-      </select>
-    </div>
-  )
-}
-
-// --- API 필드 잠금 입력 ---
-function LockedFormInput({ label, type = 'text', placeholder, value, onChange, locked }: {
-  label: string; type?: string; placeholder?: string
-  value: string | number | null | undefined
-  onChange: (v: string) => void
-  locked?: boolean
-}) {
-  if (locked) {
-    return (
-      <div>
-        <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
-        <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] text-txt-secondary bg-surface-secondary">
-          {value ?? '-'}
-        </p>
-      </div>
-    )
-  }
-  return <FormInput label={label} type={type} placeholder={placeholder} value={value} onChange={onChange} />
-}
-
-// --- 탭별 Props ---
-interface TabProps {
-  project: DBProject
-  getVal: (field: keyof DBProject) => string | number | null | undefined | { id: string; name: string } | { name: string } | { name: string; work_categories?: { name: string } | null }
-  onChange: (field: string, value: string | number | null) => void
-  apiFieldsLocked?: boolean
-}
-
-// --- 소유자 타입 ---
-interface OwnerInfo {
-  name: string
-  registNo: string
-  ownerType: string
-  share: string
-  coOwnerCount: number
-  changeDate: string
-  dongNm: string
-  hoNm: string
-}
-
-// --- 탭 1: 기본정보 ---
-function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) {
-  const [bankImage, setBankImage] = useState<string | null>(null)
-  const [ocrLoading, setOcrLoading] = useState(false)
-  const [owners, setOwners] = useState<OwnerInfo[]>([])
-  const [ownerLoading, setOwnerLoading] = useState(false)
-  const [ownerError, setOwnerError] = useState('')
-
-  // 소유자 조회 (공공데이터포털 getBrOwnrInfo — 승인 대기중)
-  const fetchOwners = async () => {
-    const addr = project.road_address || project.jibun_address
-    if (!addr) { setOwnerError('주소가 없습니다'); return }
-
-    setOwnerLoading(true)
-    setOwnerError('')
-    setOwners([])
-    try {
-      // 주소 검색으로 코드 추출
-      const searchRes = await fetch(`/api/address/search?keyword=${encodeURIComponent(addr)}`)
-      const searchData = await searchRes.json()
-      const results = searchData?.results?.juso
-      if (!results || results.length === 0) {
-        setOwnerError('주소 코드를 찾을 수 없습니다')
-        return
-      }
-      const matched = results[0]
-      const params = new URLSearchParams({
-        sigunguCd: matched.admCd?.substring(0, 5) || '',
-        bjdongCd: matched.admCd?.substring(5, 10) || '',
-        bun: (matched.lnbrMnnm || '0').padStart(4, '0'),
-        ji: (matched.lnbrSlno || '0').padStart(4, '0'),
-      })
-
-      const ownerRes = await fetch(`/api/address/owner?${params.toString()}`)
-      const ownerData: OwnerInfo[] = await ownerRes.json()
-      if (Array.isArray(ownerData) && ownerData.length > 0) {
-        setOwners(ownerData)
-        if (!getVal('owner_name')) {
-          onChange('owner_name', ownerData[0].name)
-        }
-      } else {
-        setOwnerError('소유자 API 승인 대기중 (공공데이터포털)')
-      }
-    } catch (err) {
-      console.error('소유자 조회 실패:', err)
-      setOwnerError('소유자 조회에 실패했습니다')
-    } finally {
-      setOwnerLoading(false)
-    }
-  }
-
-  const handleBankImageUpload = async (file: File) => {
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string
-      setBankImage(dataUrl)
-
-      // Extract base64 data
-      const base64 = dataUrl.split(',')[1]
-      const mimeType = file.type || 'image/jpeg'
-
-      setOcrLoading(true)
-      try {
-        const res = await fetch('/api/ocr/bank', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, mimeType }),
-        })
-        const data = await res.json()
-        if (data.bank_name) onChange('bank_name', data.bank_name)
-        if (data.account_number) onChange('account_number', data.account_number)
-        if (data.account_holder) onChange('account_holder', data.account_holder)
-      } catch (err) {
-        console.error('OCR failed:', err)
-      } finally {
-        setOcrLoading(false)
-      }
-    }
-    reader.readAsDataURL(file)
-  }
-
-  return (
-    <div className="space-y-5">
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">건축물대장 (표제부)</h3>
-        <div className="space-y-3">
-          <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
-        </div>
-        <div className="grid grid-cols-3 gap-3 mt-3">
-          <LockedFormInput label="용도" value={getVal('building_use') as string} onChange={v => onChange('building_use', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="면적 (m2)" type="number" value={getVal('area') as number} onChange={v => onChange('area', Number(v) || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="사용승인일" type="date" value={getVal('approval_date') as string} onChange={v => onChange('approval_date', v || null)} locked={apiFieldsLocked} />
-        </div>
-      </section>
-
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">전유부</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <LockedFormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="전유면적 (m2)" type="number" value={getVal('exclusive_area') as number} onChange={v => onChange('exclusive_area', Number(v) || null)} locked={apiFieldsLocked} />
-          <LockedFormInput label="세대수" type="number" value={getVal('unit_count') as number} onChange={v => onChange('unit_count', Number(v) || null)} locked={apiFieldsLocked} />
-        </div>
-        {/* 전유면적 요약 표시 */}
-        {(getVal('exclusive_area') as number) > 0 && (getVal('unit_count') as number) > 0 && (
-          <div className="mt-3 p-2.5 bg-surface-tertiary rounded-lg text-[12px] text-txt-secondary">
-            <span className="text-txt-tertiary">면적 요약:</span>{' '}
-            <span className="font-medium text-txt-primary">{String(getVal('exclusive_area'))}m²</span>
-            {' x '}
-            <span className="font-medium text-txt-primary">{String(getVal('unit_count'))}세대</span>
-          </div>
-        )}
-      </section>
-
-      {/* 소유주/세입자 섹션 제거 — 고정영역에서 표시, 기본정보는 표제부/전유부만 */}
-    </div>
-  )
-}
-
-// 수도공사 기본 단가
-const DEFAULT_WATER_PRICES = {
-  전용: 8500,
-  공용: 4500,
-  공용_세대: 150000,
-}
-
-interface WaterPricing {
-  전용: number
-  공용: number
-  공용_세대: number
-}
-
-// --- 탭 2: 1단계 (실측~신청서) ---
-function TabStep1({ project, category, getVal, onChange }: TabProps & { category: '소규모' | '수도' }) {
-  const router = useRouter()
-  const urlCategory = category === '소규모' ? 'small' : 'water'
-  const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
-  const [pricingLoaded, setPricingLoaded] = useState(false)
-
-
-  const area = (getVal('exclusive_area') as number) || 0
-  const units = (getVal('unit_count') as number) || 0
-  const cityName = project.cities?.name || ''
-  const workTypeName = project.work_types?.name || ''
-  const currentTotal = (getVal('total_cost') as number) || 0
-
-  // 서류함 공문에서 단가 자동 로드
-  useEffect(() => {
-    if (!cityName) return
-    fetch(`/api/pricing?city=${encodeURIComponent(cityName)}&category=${encodeURIComponent(category === '소규모' ? '소규모' : '수도')}`)
-      .then(res => res.json())
-      .then(data => {
-        setPricing(data)
-        setPricingLoaded(true)
-      })
-      .catch(() => setPricingLoaded(true))
-  }, [cityName, category])
-
-  // 견적 자동기입 정지 — 재산출 버튼으로만 계산
-
-  // 수동 재산출
-  const handleRecalculate = () => {
-    if (!area) {
-      alert('전유면적 정보가 필요합니다.')
-      return
-    }
-    const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
-    const cost = isPublic
-      ? Math.round(area * pricing.공용 + units * pricing.공용_세대)
-      : Math.round(area * pricing.전용)
-    const vat = Math.round(cost * 0.1)
-    const grandTotal = cost + vat
-    onChange('total_cost', grandTotal)
-    onChange('city_support', Math.round(grandTotal * 0.8))
-    onChange('self_pay', grandTotal - Math.round(grandTotal * 0.8))
-  }
-
-  // 미리보기 계산
-  const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
-  const pricingType = isPublic ? '공용' : '전용'
-  const previewCost = area > 0
-    ? (isPublic ? Math.round(area * pricing.공용 + units * pricing.공용_세대) : Math.round(area * pricing.전용))
-    : 0
-  const previewVat = Math.round(previewCost * 0.1)
-  const previewTotal = previewCost + previewVat
-
-  const timelineSteps = [
-    { num: 1, label: '실측', color: 'bg-sky-500', textColor: 'text-sky-700' },
-    { num: 2, label: '견적', color: 'bg-indigo-500', textColor: 'text-indigo-700' },
-    { num: 3, label: '동의서', color: 'bg-violet-500', textColor: 'text-violet-700' },
-    { num: 4, label: '통장', color: 'bg-pink-500', textColor: 'text-pink-700' },
-    { num: 5, label: '신청서', color: 'bg-purple-500', textColor: 'text-purple-700' },
-  ]
-
-  return (
-    <div className="relative pl-10">
-      {/* 타임라인 세로 선 */}
-      <div className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-border-primary" />
-
-      {/* ① 실측 */}
-      <div className="relative pb-8">
-        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[0].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>1</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[0].textColor} mb-3`}>실측</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} timeValue={getVal('survey_time') as string} onTimeChange={v => onChange('survey_time', v)} />
-          <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
-        </div>
-        {category === '소규모' && (
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <FormInput label="접수일" type="date" value={getVal('receipt_date') as string} onChange={v => onChange('receipt_date', v || null)} />
-          </div>
-        )}
-        {category === '수도' && (
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
-            <FormInput label="세대 비밀번호" placeholder="예: 1234#" value={getVal('unit_password') as string} onChange={v => onChange('unit_password', v || null)} />
-          </div>
-        )}
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">실측사진</p>
-          <FileDropZone projectId={project.id} fileType="실측사진" accept="image/*" multiple compact />
-        </div>
-      </div>
-
-      {/* ② 견적 */}
-      <div className="relative pb-8">
-        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[1].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>2</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor} mb-3`}>견적</h3>
-        {/* 공문 기준 견적 산출 정보 */}
-        {area > 0 && (
-          <div className="mb-3 p-3 bg-[#eef2ff] rounded-lg border border-[#c7d2fe]">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-indigo-700">
-                공문 단가 기준 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
-              </p>
-              <button
-                onClick={handleRecalculate}
-                className="px-3 py-1 text-[11px] font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
-              >
-                재산출
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div>
-                <span className="text-txt-tertiary">전유면적:</span>
-                <span className="ml-1 font-medium text-txt-primary">{area}m²</span>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">세대수:</span>
-                <span className="ml-1 font-medium text-txt-primary">{units}세대</span>
-              </div>
-            </div>
-            <div className="mt-2 pt-2 border-t border-indigo-200 grid grid-cols-3 gap-2 text-[11px]">
-              <div>
-                <span className="text-txt-tertiary">총공사비</span>
-                <p className="font-semibold text-txt-primary">{previewTotal.toLocaleString()}원</p>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">시지원 80%</span>
-                <p className="font-semibold text-accent-text">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">자부담 20%</span>
-                <p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p>
-              </div>
-            </div>
-            <p className="mt-2 text-[9px] text-indigo-400">
-              적용 단가: {isPublic
-                ? `공용 ${pricing.공용.toLocaleString()}원/m² + ${pricing.공용_세대.toLocaleString()}원/세대`
-                : `전용 ${pricing.전용.toLocaleString()}원/m²`
-              }
-              {pricingLoaded && ' (서류함 공문 기준)'}
-            </p>
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput label="시지원금" value={formatMoney((getVal('city_support') as number) || 0)} onChange={v => {
-            const cs = parseMoney(v)
-            onChange('city_support', cs)
-            onChange('total_cost', cs + ((getVal('self_pay') as number) || 0) + ((getVal('additional_cost') as number) || 0))
-          }} placeholder="0" />
-          <FormInput label="자부담금" value={formatMoney((getVal('self_pay') as number) || 0)} onChange={v => {
-            const sp = parseMoney(v)
-            onChange('self_pay', sp)
-            onChange('total_cost', ((getVal('city_support') as number) || 0) + sp + ((getVal('additional_cost') as number) || 0))
-          }} placeholder="0" />
-          <FormInput label="추가공사금" value={formatMoney((getVal('additional_cost') as number) || 0)} onChange={v => {
-            const ac = parseMoney(v)
-            onChange('additional_cost', ac)
-            onChange('total_cost', ((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + ac)
-          }} placeholder="0" />
-          <div>
-            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">총공사비 (자동)</label>
-            <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] font-semibold text-txt-primary bg-surface-secondary tabular-nums">
-              {((getVal('total_cost') as number) || 0).toLocaleString()}원
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
-          className="mt-3 px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
-        >
-          견적서 열기
-        </button>
-      </div>
-
-      {/* ③ 동의서 */}
-      {project.water_work_type !== '옥내' && (
-      <div className="relative pb-8">
-        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[2].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>3</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[2].textColor} mb-3`}>동의서</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
-          <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />
-        </div>
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
-          <FileDropZone projectId={project.id} fileType="동의서" accept="image/*,application/pdf" compact />
-        </div>
-      </div>
-      )}
-
-      {/* ④ 통장 */}
-      <div className="relative pb-8">
-        <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-pink-500 text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
-        <h3 className="text-[13px] font-semibold text-pink-700 mb-3">통장</h3>
-        <div className="mb-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
-          <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <FormInput label="은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} placeholder="국민은행" />
-          <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
-          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
-        </div>
-      </div>
-
-      {/* ⑤ 신청서 */}
-      <div className="relative pb-4">
-        <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[4].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>{project.water_work_type === '옥내' ? 4 : 5}</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[4].textColor} mb-3`}>신청서</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
-          <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />
-        </div>
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">신청서 첨부</p>
-          <FileDropZone projectId={project.id} fileType="신청서" accept="image/*,application/pdf,.hwp" multiple compact />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// --- 시공업체 검색 자동완성 ---
-function VendorSearch({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
-  const [query, setQuery] = useState((value as string) || '')
-  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
-  const [showList, setShowList] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => { setQuery((value as string) || '') }, [value])
-
-  useEffect(() => {
-    if (!query.trim()) { setVendors([]); return }
-    supabase.from('vendors').select('id, name').ilike('name', `%${query}%`).limit(10)
-      .then(({ data }) => setVendors(data || []))
-  }, [query])
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setShowList(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  return (
-    <div ref={ref} className="relative">
-      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">시공업체</label>
-      <input
-        type="text"
-        value={query}
-        onChange={e => { setQuery(e.target.value); onChange(e.target.value || null); setShowList(true) }}
-        onFocus={() => query && setShowList(true)}
-        placeholder="업체명 검색"
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
-      />
-      {showList && vendors.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[150px] overflow-y-auto">
-          {vendors.map(v => (
-            <button key={v.id} onClick={() => { setQuery(v.name); onChange(v.name); setShowList(false) }}
-              className="w-full text-left px-3 py-2 text-[13px] hover:bg-surface-secondary transition-colors border-b border-border-tertiary last:border-b-0">
-              {v.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// --- 탭 3: 2단계 (승인 → 시공 분리) ---
-function TabStep2({ project, category, getVal, onChange, currentStepIdx }: TabProps & { category: '소규모' | '수도'; currentStepIdx: number }) {
-  const isBeforeApproval = currentStepIdx < 5 // '승인' 이전
-
-  return (
-    <div className="space-y-5">
-      {isBeforeApproval && (
-        <div className="p-3 bg-surface-secondary rounded-lg border border-border-tertiary text-center">
-          <p className="text-[12px] text-txt-tertiary">승인 후 입력 가능합니다. 수정 버튼을 눌러 미리 입력할 수 있습니다.</p>
-        </div>
-      )}
-
-      <div className={isBeforeApproval ? 'opacity-50' : ''}>
-        <section>
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">승인</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <DateTimeInput label="승인일" value={getVal('approval_received_date') as string} onChange={v => onChange('approval_received_date', v)} />
-          </div>
-          {category === '소규모' && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <DateTimeInput label="착공서류 제출일" value={getVal('construction_doc_date') as string} onChange={v => onChange('construction_doc_date', v)} timeValue={getVal('construction_doc_time') as string} onTimeChange={v => onChange('construction_doc_time', v)} />
-              <StaffSelect label="착공서류 제출자" value={getVal('construction_doc_submitter') as string} onChange={v => onChange('construction_doc_submitter', v)} />
-            </div>
-          )}
-        </section>
-
-        <section className="mt-5">
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <DateTimeInput label="시공일" value={getVal('construction_date') as string} onChange={v => onChange('construction_date', v)} timeValue={getVal('construction_time') as string} onTimeChange={v => onChange('construction_time', v)} />
-            <VendorSearch value={getVal('contractor') as string} onChange={v => onChange('contractor', v)} />
-            {category === '수도' && (
-              <FormInput label="직영 시공자" value={getVal('direct_worker') as string} onChange={v => onChange('direct_worker', v || null)} />
-            )}
-            <FormInput label="장비/일용직" value={getVal('equipment') as string} onChange={v => onChange('equipment', v || null)} />
-            <DateTimeInput label="공사완료일" value={getVal('construction_end_date') as string} onChange={v => onChange('construction_end_date', v)} />
-          </div>
-
-          {category === '소규모' && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <FormInput label="시공업체 (외부)" value={getVal('external_contractor') as string} onChange={v => onChange('external_contractor', v || null)} />
-              <FormInput label="기타 시공업체" value={getVal('other_contractor') as string} onChange={v => onChange('other_contractor', v || null)} />
-            </div>
-          )}
-        </section>
-
-        <section className="mt-5">
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공 사진</h3>
-          <div className="space-y-3">
-            {['시공전', '시공중', '시공후'].map(type => (
-              <div key={type}>
-                <p className="text-[11px] font-medium text-txt-tertiary mb-1.5">{type}</p>
-                <FileDropZone projectId={project.id} fileType={type} accept="image/*" multiple compact />
-              </div>
-            ))}
-            <p className="text-[10px] text-txt-quaternary">각 단계별 여러 장 업로드 가능</p>
-          </div>
-        </section>
-
-        {/* 수금 (1~3단계 공통) */}
-        <section className="mt-5">
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
-          <PaymentTable projectId={project.id} totalCost={project.total_cost || 0} additionalCost={project.additional_cost || 0} onOutstandingChange={() => {}} />
-        </section>
-      </div>
-    </div>
-  )
-}
-
-// --- 탭 4: 3~4단계 ---
-function TabStep34({ project, getVal, onChange }: TabProps) {
-  const handleOutstandingChange = useCallback((outstanding: number, collected: number) => {
-    // projects 테이블 업데이트는 PaymentTable 내에서 처리
-  }, [])
-
-  return (
-    <div className="space-y-5">
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">완료서류</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="완료서류 제출일" value={getVal('completion_doc_date') as string} onChange={v => onChange('completion_doc_date', v)} timeValue={getVal('completion_doc_time') as string} onTimeChange={v => onChange('completion_doc_time', v)} />
-          <StaffSelect label="제출자" value={getVal('completion_submitter') as string} onChange={v => onChange('completion_submitter', v)} />
-        </div>
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">완료보고서</p>
-          <FileDropZone projectId={project.id} fileType="완료보고서" accept="image/*,application/pdf" compact />
-        </div>
-      </section>
-
-      <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">수금</h3>
-        <PaymentTable
-          projectId={project.id}
-          totalCost={project.total_cost || 0}
-          additionalCost={project.additional_cost || 0}
-          onOutstandingChange={handleOutstandingChange}
-        />
-      </section>
-    </div>
-  )
-}
-
-// --- 탭 5: 서류/첨부 ---
 // --- 탭: 이력 ---
 function TabHistory({ projectId }: { projectId: string }) {
   const [logs, setLogs] = useState<{ from_status: string; to_status: string; note: string | null; created_at: string; staff_name: string | null }[]>([])

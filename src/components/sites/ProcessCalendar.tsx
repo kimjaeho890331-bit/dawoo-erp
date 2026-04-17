@@ -53,15 +53,24 @@ function addDays(dateString: string, days: number) {
   return d.toISOString().slice(0, 10)
 }
 
+interface Vendor {
+  id: string
+  name: string
+  vendor_type: string
+  phone: string | null
+}
+
 // --- 메인 ---
 export default function ProcessCalendar({
   siteId,
   schedules,
   onReload,
+  vendorList = [],
 }: {
   siteId: string
   schedules: Schedule[]
   onReload: () => void
+  vendorList?: Vendor[]
 }) {
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -423,7 +432,7 @@ export default function ProcessCalendar({
                           draggable={!stretching}
                           onDragStart={e => handleBarDragStart(e, s)}
                           onDoubleClick={() => { setEditSchedule(s); setShowScheduleModal(true) }}
-                          className={`absolute flex items-center rounded-md cursor-move group overflow-hidden transition-[width,left] ${isStretching ? 'duration-75' : 'duration-0'} ${
+                          className={`absolute flex items-center rounded-md cursor-move group/bar overflow-hidden transition-[width,left] ${isStretching ? 'duration-75' : 'duration-0'} ${
                             s.confirmed ? 'text-white shadow-sm' : 'bg-white shadow-sm'
                           }`}
                           style={{
@@ -440,10 +449,10 @@ export default function ProcessCalendar({
                           {/* 왼쪽 스트레치 핸들 */}
                           {bar.isStart && (
                             <div
-                              className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize z-10 flex items-center"
+                              className="absolute left-0 top-0 bottom-0 w-4 cursor-col-resize z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/20"
                               onMouseDown={e => handleStretchMouseDown(e, s.id, 'start')}
                             >
-                              <div className="w-0.5 h-2.5 bg-white/70 rounded-full ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <div className="w-1 h-3 rounded-full bg-white/80" />
                             </div>
                           )}
 
@@ -456,10 +465,10 @@ export default function ProcessCalendar({
                           {/* 오른쪽 스트레치 핸들 */}
                           {bar.isEnd && (
                             <div
-                              className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize z-10 flex items-center justify-end"
+                              className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/20"
                               onMouseDown={e => handleStretchMouseDown(e, s.id, 'end')}
                             >
-                              <div className="w-0.5 h-2.5 bg-white/70 rounded-full mr-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <div className="w-1 h-3 rounded-full bg-white/80" />
                             </div>
                           )}
                         </div>
@@ -488,6 +497,7 @@ export default function ProcessCalendar({
         <ScheduleModal
           siteId={siteId}
           schedule={editSchedule}
+          vendorList={vendorList}
           onClose={() => { setShowScheduleModal(false); setEditSchedule(null) }}
           onSave={() => { setShowScheduleModal(false); setEditSchedule(null); onReload() }}
           onDelete={() => handleDeleteSchedule(editSchedule.id)}
@@ -501,10 +511,11 @@ export default function ProcessCalendar({
 const MODAL_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316', '#1F2937', '#22C55E']
 
 function ScheduleModal({
-  siteId, schedule, onClose, onSave, onDelete,
+  siteId, schedule, vendorList = [], onClose, onSave, onDelete,
 }: {
   siteId: string
   schedule: Schedule
+  vendorList?: Vendor[]
   onClose: () => void
   onSave: () => void
   onDelete: () => void
@@ -518,6 +529,22 @@ function ScheduleModal({
   const [confirmed, setConfirmed] = useState(schedule.confirmed)
   const [color, setColor] = useState(schedule.color)
   const [saving, setSaving] = useState(false)
+  const [contractorSearch, setContractorSearch] = useState(schedule.contractor || '')
+  const [showContractorDropdown, setShowContractorDropdown] = useState(false)
+  const [workerSearch, setWorkerSearch] = useState(schedule.workers || '')
+  const [showWorkerDropdown, setShowWorkerDropdown] = useState(false)
+  const contractorRef = useRef<HTMLDivElement>(null)
+  const workerRef = useRef<HTMLDivElement>(null)
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (contractorRef.current && !contractorRef.current.contains(e.target as Node)) setShowContractorDropdown(false)
+      if (workerRef.current && !workerRef.current.contains(e.target as Node)) setShowWorkerDropdown(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   const handleSubmit = async () => {
     if (!title || !startDate || !endDate) return
@@ -553,13 +580,67 @@ function ScheduleModal({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="relative" ref={contractorRef}>
               <label className="block text-xs font-medium text-gray-600 mb-1">시공업체</label>
-              <input value={contractor} onChange={e => setContractor(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+              <input
+                value={contractorSearch}
+                onChange={e => { setContractorSearch(e.target.value); setContractor(e.target.value) }}
+                onFocus={() => setShowContractorDropdown(true)}
+                placeholder="업체명 검색..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+              />
+              {showContractorDropdown && contractorSearch && (
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                  {vendorList
+                    .filter(v => v.vendor_type === '협력업체' && v.name.includes(contractorSearch))
+                    .slice(0, 5)
+                    .map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => { setContractor(v.name); setContractorSearch(v.name); setShowContractorDropdown(false) }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between"
+                      >
+                        <span className="font-medium text-gray-800">{v.name}</span>
+                        {v.phone && <span className="text-xs text-gray-400 ml-2">{v.phone}</span>}
+                      </button>
+                    ))}
+                  {vendorList.filter(v => v.vendor_type === '협력업체' && v.name.includes(contractorSearch)).length === 0 && (
+                    <div className="px-3 py-2 text-xs text-gray-400">검색 결과 없음</div>
+                  )}
+                </div>
+              )}
             </div>
-            <div>
+            <div className="relative" ref={workerRef}>
               <label className="block text-xs font-medium text-gray-600 mb-1">투입 작업자</label>
-              <input value={workers} onChange={e => setWorkers(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+              <input
+                value={workerSearch}
+                onChange={e => { setWorkerSearch(e.target.value); setWorkers(e.target.value) }}
+                onFocus={() => setShowWorkerDropdown(true)}
+                placeholder="작업자 검색..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+              />
+              {showWorkerDropdown && workerSearch && (
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                  {vendorList
+                    .filter(v => v.vendor_type === '일용직' && v.name.includes(workerSearch))
+                    .slice(0, 5)
+                    .map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => { setWorkers(v.name); setWorkerSearch(v.name); setShowWorkerDropdown(false) }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between"
+                      >
+                        <span className="font-medium text-gray-800">{v.name}</span>
+                        {v.phone && <span className="text-xs text-gray-400 ml-2">{v.phone}</span>}
+                      </button>
+                    ))}
+                  {vendorList.filter(v => v.vendor_type === '일용직' && v.name.includes(workerSearch)).length === 0 && (
+                    <div className="px-3 py-2 text-xs text-gray-400">검색 결과 없음</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div>

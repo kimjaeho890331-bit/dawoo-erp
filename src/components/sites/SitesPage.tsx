@@ -340,6 +340,7 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 }) {
   const [activeTab, setActiveTab] = useState<SiteTabKey>('기본정보')
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [vendorList, setVendorList] = useState<{ id: string; name: string; vendor_type: string; phone: string | null }[]>([])
 
   const loadSchedules = useCallback(async () => {
     try {
@@ -354,6 +355,13 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 
   useEffect(() => { loadSchedules() }, [loadSchedules])
 
+  // 거래처 목록 로드 (공종 모달 검색용)
+  useEffect(() => {
+    supabase.from('vendors').select('id, name, vendor_type, phone').order('name').then(({ data }) => {
+      if (data) setVendorList(data as { id: string; name: string; vendor_type: string; phone: string | null }[])
+    })
+  }, [])
+
   return (
     <div className="bg-[#f1f3f5] p-5">
       {/* 수정/삭제 버튼 */}
@@ -363,7 +371,7 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
       </div>
 
       {/* 공정 캘린더 */}
-      <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} />
+      <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} vendorList={vendorList} />
 
       {/* 탭 */}
       <div className="flex border-b border-[#e5e7eb] mt-5 mb-4">

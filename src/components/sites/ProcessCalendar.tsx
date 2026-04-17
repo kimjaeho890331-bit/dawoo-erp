@@ -174,7 +174,7 @@ export default function ProcessCalendar({
         site_id: siteId,
         title: dragTag.name,
         start_date: targetDate,
-        end_date: addDays(targetDate, 1),
+        end_date: addDays(targetDate, 1),  // 최소 2일
         color: dragTag.color,
         confirmed: false,
       })
@@ -242,11 +242,13 @@ export default function ProcessCalendar({
       const targetDate = dateStr(month.year, month.month, day)
 
       if (st.edge === 'start') {
-        if (targetDate <= s.end_date) {
+        // 최소 2일 보장
+        if (targetDate <= s.end_date && daysBetween(targetDate, s.end_date) >= 2) {
           await supabase.from('schedules').update({ start_date: targetDate }).eq('id', s.id)
         }
       } else {
-        if (targetDate >= s.start_date) {
+        // 최소 2일 보장
+        if (targetDate >= s.start_date && daysBetween(s.start_date, targetDate) >= 2) {
           await supabase.from('schedules').update({ end_date: targetDate }).eq('id', s.id)
         }
       }
@@ -444,7 +446,7 @@ export default function ProcessCalendar({
                               ? { backgroundColor: s.color }
                               : { border: `1.5px dashed ${s.color}`, color: s.color }),
                           }}
-                          title={`${s.title}${s.contractor ? ` (${s.contractor})` : ''} ${bar.duration}일`}
+                          title={`${s.title}${s.contractor ? ` (${s.contractor})` : ''} ${bar.duration}일${s.workers ? ` / 작업자: ${s.workers}` : ''}`}
                         >
                           {/* 왼쪽 스트레치 핸들 */}
                           {bar.isStart && (
@@ -452,14 +454,14 @@ export default function ProcessCalendar({
                               className="absolute left-0 top-0 bottom-0 w-4 cursor-col-resize z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/20"
                               onMouseDown={e => handleStretchMouseDown(e, s.id, 'start')}
                             >
-                              <div className="w-1 h-3 rounded-full bg-white/80" />
+                              <div className="flex gap-px"><div className="w-[2px] h-3 rounded-full bg-white/70" /><div className="w-[2px] h-3 rounded-full bg-white/70" /></div>
                             </div>
                           )}
 
                           <span className="text-[10px] font-medium px-2 truncate w-full text-center leading-tight">
                             {s.title}
-                            {s.confirmed && s.contractor ? ` (${s.contractor})` : ''}
-                            <span className="opacity-70 ml-0.5">{bar.duration}d</span>
+                            {s.contractor ? ` (${s.contractor})` : ''}
+                            <span className="opacity-70 ml-0.5">{bar.duration}일</span>
                           </span>
 
                           {/* 오른쪽 스트레치 핸들 */}
@@ -468,7 +470,7 @@ export default function ProcessCalendar({
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/20"
                               onMouseDown={e => handleStretchMouseDown(e, s.id, 'end')}
                             >
-                              <div className="w-1 h-3 rounded-full bg-white/80" />
+                              <div className="flex gap-px"><div className="w-[2px] h-3 rounded-full bg-white/70" /><div className="w-[2px] h-3 rounded-full bg-white/70" /></div>
                             </div>
                           )}
                         </div>

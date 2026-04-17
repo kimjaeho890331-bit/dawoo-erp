@@ -57,9 +57,17 @@ function parseCategoryFromText(text: string): string {
 // ============================================
 // 입금 파싱 (금액 + 이름)
 // ============================================
-function parseDeposit(text: string): { amount: number; name: string | null } | null {
+function parseDeposit(text: string): { amount: number; name: string | null; account: string | null } | null {
   let amount: number | null = null
   let name: string | null = null
+  let account: string | null = null
+
+  // 통장 구분: 169*** = 법인(기업은행), 302*** = 개인(농협)
+  if (text.includes('169***') || (text.includes('기업') && !text.includes('기업체'))) {
+    account = '법인 (기업은행)'
+  } else if (text.includes('302-') || text.includes('302****') || text.includes('농협')) {
+    account = '개인 (농협)'
+  }
 
   // 날짜/시간/계좌번호 패턴 제거 (금액으로 오인 방지)
   const cleaned = text
@@ -106,7 +114,7 @@ function parseDeposit(text: string): { amount: number; name: string | null } | n
     }
   }
 
-  return { amount, name }
+  return { amount, name, account }
 }
 
 // ============================================
@@ -320,11 +328,26 @@ async function handleCallback(query: TelegramUpdate['callback_query']) {
       .maybeSingle()
 
     try {
-      // 입금 기록 INSERT
+      // 중복 방지: 같은 project + 같은 금액 + 오늘 날짜로 이미 처리됐는지
       const today = new Date().toISOString().slice(0, 10)
+      const { data: dup } = await supabaseAdmin
+        .from('payments')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('amount', amount)
+        .eq('payment_date', today)
+        .eq('note', '텔레그램 수금 처리')
+        .limit(1)
+
+      if (dup && dup.length > 0) {
+        await answerCallbackQuery(query.id, '이미 처리된 입금입니다')
+        return
+      }
+
+      // 입금 기록 INSERT
       await supabaseAdmin.from('payments').insert({
         project_id: projectId,
-        payment_type: '자부담착수금',
+        payment_type: '입금',
         amount,
         payment_date: today,
         payer_name: staff?.name || '텔레그램',
@@ -585,6 +608,7 @@ async function handleDepositMatch(
       `소유주: ${p.owner_name || '-'}`,
       ``,
       `입금액: *${formatted}원* → ${depositType}`,
+      `통장: ${deposit.account || '미확인'}`,
       `미수금: ${(p.outstanding || 0).toLocaleString('ko-KR')}원 → ${((p.outstanding || 0) - deposit.amount).toLocaleString('ko-KR')}원`,
     ]
 

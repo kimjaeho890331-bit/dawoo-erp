@@ -163,7 +163,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         setForm(prev => ({
           ...prev,
           staff_id: defaultStaffId,
-          city_id: citiesData[0]?.id || '',
+          city_id: '',  // 주소 검색 시 자동 매칭
           work_type_id: typesData[0]?.id || '',
         }))
       }
@@ -214,7 +214,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     setAddressKeyword('')
 
     // 주소 + 건물명 + 시 한번에 세팅
-    const cityNames = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남']
+    const cityNames = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남', '광주', '서산']
     const matchedCity = cityNames.find(c => addr.roadAddr.includes(c) || addr.jibunAddr.includes(c))
     const matchedCityData = matchedCity ? cities.find(c => c.name === matchedCity) : null
 

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/lib/auth'
+import { uploadFile } from '@/lib/google-drive'
 
 export const maxDuration = 30
 
@@ -68,7 +69,18 @@ export async function POST(request: NextRequest) {
       .from('documents')
       .getPublicUrl(data.path)
 
-    return Response.json({ url: urlData.publicUrl, path: data.path })
+    // 구글드라이브 동시 업로드 (drive_folder_id가 있으면)
+    const driveFolderId = formData.get('driveFolderId') as string | null
+    let driveFile = null
+    if (driveFolderId) {
+      try {
+        driveFile = await uploadFile(file.name, buffer, file.type, driveFolderId)
+      } catch (e) {
+        console.error('Drive upload error (non-fatal):', e)
+      }
+    }
+
+    return Response.json({ url: urlData.publicUrl, path: data.path, drive: driveFile })
   } catch (error) {
     console.error('Upload API error:', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

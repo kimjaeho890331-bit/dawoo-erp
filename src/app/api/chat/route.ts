@@ -540,7 +540,24 @@ async function registerProject(input: Record<string, unknown>): Promise<string> 
       .select('id, building_name, owner_name, status')
 
     if (error) return JSON.stringify({ error: `등록 실패: ${error.message}` })
-    return JSON.stringify({ success: true, project: data?.[0], city: matchedCity })
+
+    // 5. 구글드라이브 폴더 자동 생성
+    const projectId = data?.[0]?.id
+    let driveFolderInfo = null
+    if (projectId && matchedCity && category && building_name) {
+      try {
+        const folderId = await ensureProjectFolder(
+          matchedCity + '시',
+          category as '소규모' | '수도',
+          String(building_name)
+        )
+        const driveUrl = `https://drive.google.com/drive/folders/${folderId}`
+        await supabaseAdmin.from('projects').update({ drive_folder_id: folderId, drive_folder_url: driveUrl }).eq('id', projectId)
+        driveFolderInfo = { folderId, driveUrl }
+      } catch { /* 드라이브 실패해도 접수는 성공 */ }
+    }
+
+    return JSON.stringify({ success: true, project: data?.[0], city: matchedCity, drive: driveFolderInfo })
   } catch (err) {
     return JSON.stringify({ error: `등록 실패: ${err}` })
   }

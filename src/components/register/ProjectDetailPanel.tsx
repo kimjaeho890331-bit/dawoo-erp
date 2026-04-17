@@ -345,6 +345,17 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             >
               예약
             </button>
+            {(project as Record<string, unknown>).drive_folder_url && (
+              <a
+                href={(project as Record<string, unknown>).drive_folder_url as string}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 text-[11px] font-medium text-white bg-[#0F9D58] rounded-lg hover:bg-[#0b8043] transition-colors inline-flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M7.71 3.5L1.15 15l3.43 5.97L11 9.47 7.71 3.5zm8.58 0H8.29l6.56 11.5h8L16.29 3.5zM5.57 21h12.86l-3.43-6H2.14l3.43 6z"/></svg>
+                드라이브
+              </a>
+            )}
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors"

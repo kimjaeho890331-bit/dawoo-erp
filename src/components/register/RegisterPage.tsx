@@ -306,6 +306,20 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     loadCities()
   }, [loadProjects, loadCities])
 
+  // Supabase Realtime: projects 테이블 변경 실시간 구독
+  useEffect(() => {
+    const channel = supabase
+      .channel('projects-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projects' },
+        () => { loadProjects() }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [loadProjects])
+
   // 상태별 건수
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {

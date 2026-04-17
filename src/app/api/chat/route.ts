@@ -63,10 +63,17 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - "실측 완료", "견적 전달" → search_projects로 찾고 → update_status
 - 변경 후 status_logs에 자동 기록됨
 
-## 캘린더
+## 캘린더 비서
 - "일정 잡아줘" → manage_schedule(action=create)
 - "이번 주 일정" → manage_schedule(action=search, search_date_from/to)
 - 담당자 이름으로 staff_id 자동 매칭
+- "내일 뭐 있어?" → 내일 날짜로 일정 조회
+- "김재호 이번 주 일정" → staff + 날짜 조합 조회
+- "다음 주 월요일 오전 10시 권선동 실측" → 날짜 계산해서 등록
+- "오늘 일정 정리해줘" → 오늘 전체 일정 조회 + 요약
+- "이번 달 홍보 일정 몇 건?" → schedule_type=promo 필터
+- 일정 등록 시 시간 없으면 all_day=true, 있으면 start_time 포함
+- 복합: "삼성빌리지 실측 완료하고 내일 견적 일정 잡아줘" → update_status + manage_schedule
 
 ## 지출
 - "이번 달 노무비 얼마?" → manage_expense(action=summary, category=노무비)
@@ -215,6 +222,8 @@ const TOOLS = [
         search_staff: { type: 'string', description: '조회 시 담당자 이름' },
         search_date_from: { type: 'string', description: '조회 시작일' },
         search_date_to: { type: 'string', description: '조회 종료일' },
+        search_type: { type: 'string', enum: ['project', 'personal', 'promo'], description: '일정 유형 필터' },
+        memo: { type: 'string', description: '메모 (일정 등록 시)' },
       },
       required: ['action'],
     },
@@ -579,6 +588,7 @@ async function manageSchedule(input: Record<string, unknown>): Promise<string> {
       start_time: start_time || null, staff_id: staffId,
       schedule_type: schedule_type || 'project', confirmed: false,
       all_day: !start_time, color: '#3B82F6',
+      memo: (input.memo as string) || null,
     }).select('id, title, start_date')
     if (error) return JSON.stringify({ error: error.message })
     return JSON.stringify({ success: true, schedule: data?.[0] })
@@ -589,6 +599,7 @@ async function manageSchedule(input: Record<string, unknown>): Promise<string> {
     if (search_date_from) q = q.gte('start_date', search_date_from)
     if (search_date_to) q = q.lte('start_date', search_date_to)
     if (search_keyword) q = q.ilike('title', `%${search_keyword}%`)
+    if (input.search_type) q = q.eq('schedule_type', input.search_type as string)
     if (search_staff) {
       const { data: s } = await supabaseAdmin.from('staff').select('id').ilike('name', `%${search_staff}%`).limit(1).single()
       if (s) q = q.eq('staff_id', s.id)

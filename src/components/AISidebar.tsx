@@ -34,17 +34,38 @@ export default function AISidebar() {
     }
   }, [open])
 
+  // 이미지 압축 (canvas로 리사이즈 + JPEG 70% 품질)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 800 // 최대 800px
+        let w = img.width, h = img.height
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+          else { w = Math.round(w * MAX / h); h = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, w, h)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7)
+        resolve(dataUrl.split(',')[1])
+      }
+      img.onerror = reject
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
   // 이미지 파일 처리 공통
   const addImageFiles = (files: FileList | File[]) => {
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach(async file => {
       if (!file.type.startsWith('image/')) return
-      if (file.size > 5 * 1024 * 1024) { setError('이미지 크기는 5MB 이하만 가능합니다'); return }
-      const reader = new FileReader()
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1]
+      if (file.size > 10 * 1024 * 1024) { setError('이미지 크기는 10MB 이하만 가능합니다'); return }
+      try {
+        const base64 = await compressImage(file)
         setPendingImages(prev => [...prev, base64])
-      }
-      reader.readAsDataURL(file)
+      } catch { setError('이미지 처리 실패') }
     })
   }
 

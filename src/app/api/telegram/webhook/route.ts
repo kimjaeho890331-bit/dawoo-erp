@@ -61,29 +61,45 @@ function parseDeposit(text: string): { amount: number; name: string | null } | n
   let amount: number | null = null
   let name: string | null = null
 
-  // 금액 패턴: "150,000" / "₩150,000" / "15만원" / "15만" / "150000원"
-  const manPattern = /(\d+(?:\.\d+)?)\s*만\s*원?/
-  const manMatch = text.match(manPattern)
-  if (manMatch) {
-    amount = Math.round(parseFloat(manMatch[1]) * 10000)
+  // 날짜/시간/계좌번호 패턴 제거 (금액으로 오인 방지)
+  const cleaned = text
+    .replace(/\d{4}[\/\-\.]\d{2}[\/\-\.]\d{2}/g, '')  // 2026/04/16, 2026-04-16
+    .replace(/\d{2}:\d{2}/g, '')                        // 18:06
+    .replace(/\d{3}\*{2,}\d{4,}/g, '')                  // 169***52204018 (계좌)
+    .replace(/\d{3}-\d{4}-\d{4}/g, '')                  // 010-1234-5678 (전화)
+
+  // 금액 패턴: "입금 600,000원" 근처에서 찾기
+  const depositLineMatch = cleaned.match(/입금\s*(\d{1,3}(?:,\d{3})+|\d{4,})\s*원?/)
+  if (depositLineMatch) {
+    amount = parseInt(depositLineMatch[1].replace(/,/g, ''), 10)
   }
 
+  // 만원 패턴
   if (amount === null) {
-    const numPattern = /₩?\s*(\d{1,3}(?:,\d{3})+|\d{4,})\s*원?/
-    const numMatch = text.match(numPattern)
+    const manPattern = /(\d+(?:\.\d+)?)\s*만\s*원?/
+    const manMatch = cleaned.match(manPattern)
+    if (manMatch) {
+      amount = Math.round(parseFloat(manMatch[1]) * 10000)
+    }
+  }
+
+  // 일반 금액 패턴 (입금 키워드 없이)
+  if (amount === null) {
+    const numPattern = /₩?\s*(\d{1,3}(?:,\d{3})+)\s*원/
+    const numMatch = cleaned.match(numPattern)
     if (numMatch) {
       amount = parseInt(numMatch[1].replace(/,/g, ''), 10)
     }
   }
 
-  if (amount === null || amount <= 0) return null
+  if (amount === null || amount <= 0 || amount < 10000) return null  // 1만원 미만은 무시
 
   // 이름 패턴: 한글 2~4글자
   const namePattern = /([가-힣]{2,4})/g
   const nameMatches = text.match(namePattern)
   if (nameMatches) {
     // 키워드 제외
-    const excludeWords = ['입금', '수금', '착수금', '잔금', '추가', '공사', '시공전', '시공중', '시공후', '실측', '동의서', '만원']
+    const excludeWords = ['입금', '수금', '착수금', '잔금', '추가', '공사', '시공전', '시공중', '시공후', '실측', '동의서', '만원', '발신', '기업', '본점', '농협', '국민', '신한', '우리', '하나', '알림']
     const candidates = nameMatches.filter(n => !excludeWords.includes(n) && n.length >= 2 && n.length <= 4)
     if (candidates.length > 0) {
       name = candidates[0]
@@ -500,7 +516,7 @@ async function handleDepositMatch(
   if (deposit.name) {
     const { data: byOwner } = await supabaseAdmin
       .from('projects')
-      .select('id, building_name, owner_name, payer_name, outstanding')
+      .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost')
       .ilike('owner_name', `%${deposit.name}%`)
       .gt('outstanding', 0)
       .neq('status', '취소')
@@ -508,7 +524,7 @@ async function handleDepositMatch(
 
     const { data: byPayer } = await supabaseAdmin
       .from('projects')
-      .select('id, building_name, owner_name, payer_name, outstanding')
+      .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost')
       .ilike('payer_name', `%${deposit.name}%`)
       .gt('outstanding', 0)
       .neq('status', '취소')
@@ -530,7 +546,7 @@ async function handleDepositMatch(
     if (project) {
       const { data: full } = await supabaseAdmin
         .from('projects')
-        .select('id, building_name, owner_name, payer_name, outstanding')
+        .select('id, building_name, owner_name, payer_name, outstanding, self_pay, city_support, total_cost, water_work_type, additional_cost')
         .eq('id', project.id)
         .gt('outstanding', 0)
         .maybeSingle()
@@ -541,33 +557,54 @@ async function handleDepositMatch(
   if (matchedProjects.length === 0) {
     await sendMessage(
       chatId,
-      `입금 ${deposit.amount.toLocaleString('ko-KR')}원 감지했으나, 매칭되는 미수금 프로젝트를 찾지 못했습니다.`,
+      `입금 ${deposit.amount.toLocaleString('ko-KR')}원 확인\n입금자: ${deposit.name || '미확인'}\n\n매칭되는 미수금 현장을 찾지 못했습니다.\n현장명을 알려주시면 수금 처리하겠습니다.`,
     )
     return
   }
 
-  // 매칭된 프로젝트별 인라인 버튼
+  // 매칭된 프로젝트별 상세 분석 + 인라인 버튼
   for (const p of matchedProjects) {
-    const name = p.building_name || p.owner_name || '프로젝트'
+    const buildingName = p.building_name || '프로젝트'
     const formatted = deposit.amount.toLocaleString('ko-KR')
-    const outstandingFormatted = (p.outstanding || 0).toLocaleString('ko-KR')
+    const selfPay = (p as Record<string, unknown>).self_pay as number || 0
+    const citySupport = (p as Record<string, unknown>).city_support as number || 0
+    const additionalCost = (p as Record<string, unknown>).additional_cost as number || 0
+    const waterType = (p as Record<string, unknown>).water_work_type as string || ''
+
+    // 입금 유형 추정
+    let depositType = ''
+    if (deposit.amount === selfPay) depositType = '자부담금'
+    else if (deposit.amount === citySupport) depositType = '시지원금'
+    else if (deposit.amount === additionalCost && additionalCost > 0) depositType = '추가공사금'
+    else if (deposit.amount < selfPay) depositType = '자부담 일부'
+    else depositType = '기타 입금'
+
+    const lines = [
+      `*입금 감지*`,
+      `${buildingName}${waterType ? ` (${waterType})` : ''}`,
+      `소유주: ${p.owner_name || '-'}`,
+      ``,
+      `입금액: *${formatted}원* → ${depositType}`,
+      `미수금: ${(p.outstanding || 0).toLocaleString('ko-KR')}원 → ${((p.outstanding || 0) - deposit.amount).toLocaleString('ko-KR')}원`,
+    ]
+
+    // 여러 건 매칭 경고
+    if (matchedProjects.length > 1) {
+      lines.push(`\n⚠️ 동일 이름 ${matchedProjects.length}건 매칭 — 확인 후 처리`)
+    }
 
     const opts: SendMessageOptions = {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '수금 처리', callback_data: `deposit:${p.id}:${deposit.amount}` },
+            { text: `수금 처리 (${formatted}원)`, callback_data: `deposit:${p.id}:${deposit.amount}` },
             { text: '취소', callback_data: 'deposit:cancel' },
           ],
         ],
       },
     }
 
-    await sendMessage(
-      chatId,
-      `*입금 감지*\n${name} (${p.owner_name || ''})\n금액: ${formatted}원\n미수금: ${outstandingFormatted}원`,
-      opts,
-    )
+    await sendMessage(chatId, lines.join('\n'), opts)
   }
 }
 

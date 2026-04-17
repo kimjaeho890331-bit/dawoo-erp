@@ -22,6 +22,8 @@ export interface TelegramMessage {
   chat: { id: number; type: string }
   date: number
   text?: string
+  photo?: Array<{ file_id: string; file_unique_id: string; width: number; height: number; file_size?: number }>
+  caption?: string
 }
 
 export interface TelegramUpdate {
@@ -149,4 +151,44 @@ export async function getMe(): Promise<{ id: number; username: string; first_nam
 export function escapeMarkdown(text: string): string {
   // Basic MarkdownV1 safe (Telegram Markdown is lenient)
   return text.replace(/([_*`\[])/g, '\\$1')
+}
+
+/** 텔레그램 파일 정보 조회 */
+export async function getFile(fileId: string): Promise<{ file_path: string } | null> {
+  const token = getToken()
+  if (!token) return null
+  try {
+    const res = await fetch(`${API_BASE}${token}/getFile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId }),
+    })
+    const json = await res.json()
+    return json.ok ? json.result : null
+  } catch { return null }
+}
+
+/** 텔레그램 파일 다운로드 */
+export async function downloadFile(filePath: string): Promise<Buffer | null> {
+  const token = getToken()
+  if (!token) return null
+  try {
+    const res = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`)
+    if (!res.ok) return null
+    const arrayBuffer = await res.arrayBuffer()
+    return Buffer.from(arrayBuffer)
+  } catch { return null }
+}
+
+/** 콜백 쿼리 응답 */
+export async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
+  const token = getToken()
+  if (!token) return
+  try {
+    await fetch(`${API_BASE}${token}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+    })
+  } catch { /* ignore */ }
 }

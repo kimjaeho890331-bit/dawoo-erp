@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/telegram/bot'
-import { buildMorningBrief } from '@/lib/notifications/digest'
+import { buildMorningBrief, buildGroupBrief } from '@/lib/notifications/digest'
 
 export const maxDuration = 60
 
@@ -74,6 +74,19 @@ export async function GET(req: NextRequest) {
       }
     } catch (e) {
       errors.push(`${staff.name}: ${String(e)}`)
+    }
+  }
+
+  // 단톡방 전체 브리핑
+  const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID
+  if (groupChatId) {
+    try {
+      const groupMsg = await buildGroupBrief()
+      if (groupMsg) {
+        await sendMessage(groupChatId, groupMsg)
+      }
+    } catch (e) {
+      console.error('[cron/morning] group brief error:', e)
     }
   }
 

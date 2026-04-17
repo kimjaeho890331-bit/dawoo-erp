@@ -1,6 +1,14 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendMessage, type TelegramUpdate } from '@/lib/telegram/bot'
+import {
+  sendMessage,
+  getFile,
+  downloadFile,
+  answerCallbackQuery,
+  type TelegramUpdate,
+  type TelegramMessage,
+  type SendMessageOptions,
+} from '@/lib/telegram/bot'
 import {
   buildMorningBrief,
   buildAfternoonRemind,
@@ -14,8 +22,85 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
+// ============================================
+// 사진 임시 캐시 (그룹에서 사진 → 텍스트 따로 보낼 때)
+// ============================================
+interface PendingPhoto {
+  photos: Array<{ file_id: string; file_unique_id: string; width: number; height: number; file_size?: number }>[]
+  chatId: number
+  timestamp: number
+}
+const pendingPhotosCache = new Map<string, PendingPhoto>()
+
+// 5분 만료 정리
+function cleanExpiredPhotos() {
+  const now = Date.now()
+  for (const [key, val] of pendingPhotosCache) {
+    if (now - val.timestamp > 5 * 60 * 1000) {
+      pendingPhotosCache.delete(key)
+    }
+  }
+}
+
+// ============================================
+// 사진 카테고리 파싱
+// ============================================
+function parseCategoryFromText(text: string): string {
+  if (/시공\s*전/.test(text)) return 'before'
+  if (/시공\s*중/.test(text)) return 'during'
+  if (/시공\s*후/.test(text)) return 'after'
+  if (/실측/.test(text)) return 'survey'
+  if (/동의서/.test(text)) return 'consent'
+  return 'etc'
+}
+
+// ============================================
+// 입금 파싱 (금액 + 이름)
+// ============================================
+function parseDeposit(text: string): { amount: number; name: string | null } | null {
+  let amount: number | null = null
+  let name: string | null = null
+
+  // 금액 패턴: "150,000" / "₩150,000" / "15만원" / "15만" / "150000원"
+  const manPattern = /(\d+(?:\.\d+)?)\s*만\s*원?/
+  const manMatch = text.match(manPattern)
+  if (manMatch) {
+    amount = Math.round(parseFloat(manMatch[1]) * 10000)
+  }
+
+  if (amount === null) {
+    const numPattern = /₩?\s*(\d{1,3}(?:,\d{3})+|\d{4,})\s*원?/
+    const numMatch = text.match(numPattern)
+    if (numMatch) {
+      amount = parseInt(numMatch[1].replace(/,/g, ''), 10)
+    }
+  }
+
+  if (amount === null || amount <= 0) return null
+
+  // 이름 패턴: 한글 2~4글자
+  const namePattern = /([가-힣]{2,4})/g
+  const nameMatches = text.match(namePattern)
+  if (nameMatches) {
+    // 키워드 제외
+    const excludeWords = ['입금', '수금', '착수금', '잔금', '추가', '공사', '시공전', '시공중', '시공후', '실측', '동의서', '만원']
+    const candidates = nameMatches.filter(n => !excludeWords.includes(n) && n.length >= 2 && n.length <= 4)
+    if (candidates.length > 0) {
+      name = candidates[0]
+    }
+  }
+
+  return { amount, name }
+}
+
+// ============================================
+// 입금 키워드 감지
+// ============================================
+function hasDepositKeyword(text: string): boolean {
+  return /입금|수금|착수금|잔금|결제/.test(text)
+}
+
 // POST /api/telegram/webhook
-// Telegram이 우리 서버로 업데이트를 push 보냄
 export async function POST(req: NextRequest) {
   // 웹훅 보안 토큰 검증
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET
@@ -27,59 +112,475 @@ export async function POST(req: NextRequest) {
   }
 
   const update = (await req.json()) as TelegramUpdate
-  const message = update.message || update.edited_message
-  if (!message || !message.text) return Response.json({ ok: true })
-
-  const chatId = message.chat.id
-  const text = message.text.trim()
 
   try {
-    // 1. /start CODE — 초대 코드로 연결
-    if (text.startsWith('/start')) {
-      await handleStart(chatId, text)
+    // ── 1. 콜백 쿼리 (인라인 버튼 클릭) ──
+    if (update.callback_query) {
+      await handleCallback(update.callback_query)
       return Response.json({ ok: true })
     }
 
-    // 2. 텔레그램 연결된 staff 조회
-    const { data: staff } = await supabaseAdmin
-      .from('staff')
-      .select('id, name')
-      .eq('telegram_chat_id', String(chatId))
-      .maybeSingle()
+    // ── 2. 메시지 처리 ──
+    const message = update.message || update.edited_message
+    if (!message) return Response.json({ ok: true })
 
-    if (!staff) {
-      await sendMessage(
-        chatId,
-        '❌ 아직 연결되지 않은 계정입니다.\n\n관리자에게 초대 코드를 받아 `/start CODE` 형식으로 입력해주세요.',
-      )
-      return Response.json({ ok: true })
+    const chatType = message.chat.type || 'private'
+
+    if (chatType === 'private') {
+      // ── DM: 기존 로직 ──
+      await handlePrivateMessage(message)
+    } else if (chatType === 'group' || chatType === 'supergroup') {
+      // ── 그룹 메시지 ──
+      await handleGroupMessage(message)
     }
 
-    // 3. 슬래시 명령어 처리
-    if (text.startsWith('/')) {
-      await handleCommand(chatId, staff.id, text)
-      return Response.json({ ok: true })
-    }
-
-    // 4. 자유 텍스트 → Claude API 프록시
-    await handleFreeText(chatId, staff.id, text)
     return Response.json({ ok: true })
   } catch (e) {
     console.error('[telegram webhook] error:', e)
-    return Response.json({ ok: true })  // 200 반환해야 텔레그램이 재전송 안 함
+    return Response.json({ ok: true }) // 200 반환해야 텔레그램이 재전송 안 함
+  }
+}
+
+// ============================================
+// DM 메시지 (기존 로직 유지)
+// ============================================
+async function handlePrivateMessage(message: TelegramMessage) {
+  const chatId = message.chat.id
+  const text = (message.text || '').trim()
+
+  if (!text) return // DM에서 사진만 보내면 무시 (향후 확장 가능)
+
+  // 1. /start CODE
+  if (text.startsWith('/start')) {
+    await handleStart(chatId, text, message.from?.id)
+    return
+  }
+
+  // 2. 연결된 staff 조회
+  const { data: staff } = await supabaseAdmin
+    .from('staff')
+    .select('id, name')
+    .eq('telegram_chat_id', String(chatId))
+    .maybeSingle()
+
+  if (!staff) {
+    await sendMessage(
+      chatId,
+      '아직 연결되지 않은 계정입니다.\n\n관리자에게 초대 코드를 받아 `/start CODE` 형식으로 입력해주세요.',
+    )
+    return
+  }
+
+  // 3. 슬래시 명령어
+  if (text.startsWith('/')) {
+    await handleCommand(chatId, staff.id, text)
+    return
+  }
+
+  // 4. 자유 텍스트 → Claude
+  await handleFreeText(chatId, staff.id, text)
+}
+
+// ============================================
+// 그룹 메시지 처리
+// ============================================
+async function handleGroupMessage(message: TelegramMessage) {
+  const chatId = message.chat.id
+  const text = (message.text || message.caption || '').trim()
+  const fromId = message.from?.id
+
+  // /start CODE 처리 (그룹에서도 연결 가능)
+  if (message.text?.startsWith('/start')) {
+    await handleStart(chatId, message.text.trim(), fromId)
+    return
+  }
+
+  // 보낸 사람의 staff 조회 (telegram_user_id 기반)
+  let staff: { id: string; name: string } | null = null
+  if (fromId) {
+    const { data } = await supabaseAdmin
+      .from('staff')
+      .select('id, name')
+      .eq('telegram_user_id', String(fromId))
+      .maybeSingle()
+    staff = data
+  }
+
+  // staff 미확인 → 조용히 무시 (그룹에서 에러 메시지 안 보냄)
+  if (!staff) return
+
+  cleanExpiredPhotos()
+
+  const hasPhotos = message.photo && message.photo.length > 0
+
+  // ── 사진만 (캡션 없음) → 캐시에 대기 ──
+  if (hasPhotos && !text) {
+    const key = staff.id
+    const existing = pendingPhotosCache.get(key)
+    if (existing) {
+      existing.photos.push(message.photo!)
+      existing.timestamp = Date.now()
+    } else {
+      pendingPhotosCache.set(key, {
+        photos: [message.photo!],
+        chatId,
+        timestamp: Date.now(),
+      })
+    }
+    return
+  }
+
+  // ── 사진 + 캡션 → 바로 업로드 ──
+  if (hasPhotos && text) {
+    await handlePhotoUpload(chatId, staff, [message.photo!], text)
+    return
+  }
+
+  // ── 텍스트만 ──
+  if (text) {
+    // 대기 중인 사진이 있으면 결합
+    const pending = pendingPhotosCache.get(staff.id)
+    if (pending) {
+      pendingPhotosCache.delete(staff.id)
+      await handlePhotoUpload(chatId, staff, pending.photos, text)
+      return
+    }
+
+    // 입금 키워드 감지
+    if (hasDepositKeyword(text)) {
+      await handleDepositMatch(chatId, staff, text)
+      return
+    }
+
+    // @멘션 또는 /command → 일반 처리 (그룹에서 봇 명령어)
+    if (text.startsWith('/')) {
+      await handleCommand(chatId, staff.id, text)
+      return
+    }
+
+    // 그 외 그룹 메시지는 무시 (모든 대화에 반응하지 않음)
+  }
+}
+
+// ============================================
+// 콜백 쿼리 처리 (인라인 버튼 클릭)
+// ============================================
+async function handleCallback(query: TelegramUpdate['callback_query']) {
+  if (!query) return
+
+  const data = query.data || ''
+  const chatId = query.message?.chat.id
+
+  // deposit:cancel
+  if (data === 'deposit:cancel') {
+    await answerCallbackQuery(query.id, '취소되었습니다')
+    if (chatId) {
+      await sendMessage(chatId, '수금 처리가 취소되었습니다.')
+    }
+    return
+  }
+
+  // deposit:{projectId}:{amount}
+  if (data.startsWith('deposit:')) {
+    const parts = data.split(':')
+    if (parts.length < 3) {
+      await answerCallbackQuery(query.id, '잘못된 데이터')
+      return
+    }
+    const projectId = parts[1]
+    const amount = parseInt(parts[2], 10)
+
+    if (!projectId || isNaN(amount) || amount <= 0) {
+      await answerCallbackQuery(query.id, '잘못된 데이터')
+      return
+    }
+
+    // staff 조회
+    const fromId = query.from.id
+    const { data: staff } = await supabaseAdmin
+      .from('staff')
+      .select('id, name')
+      .eq('telegram_user_id', String(fromId))
+      .maybeSingle()
+
+    try {
+      // 입금 기록 INSERT
+      const today = new Date().toISOString().slice(0, 10)
+      await supabaseAdmin.from('payments').insert({
+        project_id: projectId,
+        payment_type: '자부담착수금',
+        amount,
+        payment_date: today,
+        payer_name: staff?.name || '텔레그램',
+        note: '텔레그램 수금 처리',
+      })
+
+      // 프로젝트 outstanding/collected 업데이트
+      const { data: project } = await supabaseAdmin
+        .from('projects')
+        .select('outstanding, collected, building_name, owner_name')
+        .eq('id', projectId)
+        .single()
+
+      if (project) {
+        const newOutstanding = Math.max(0, (project.outstanding || 0) - amount)
+        const newCollected = (project.collected || 0) + amount
+        await supabaseAdmin
+          .from('projects')
+          .update({ outstanding: newOutstanding, collected: newCollected })
+          .eq('id', projectId)
+
+        await answerCallbackQuery(query.id, '수금 처리 완료!')
+        if (chatId) {
+          const name = project.building_name || project.owner_name || '프로젝트'
+          const formatted = amount.toLocaleString('ko-KR')
+          await sendMessage(
+            chatId,
+            `*수금 처리 완료*\n${name}: ${formatted}원\n잔여 미수금: ${newOutstanding.toLocaleString('ko-KR')}원`,
+          )
+        }
+      } else {
+        await answerCallbackQuery(query.id, '프로젝트를 찾을 수 없습니다')
+      }
+    } catch (e) {
+      console.error('[telegram callback] deposit error:', e)
+      await answerCallbackQuery(query.id, '처리 중 오류 발생')
+    }
+    return
+  }
+
+  // 알 수 없는 콜백
+  await answerCallbackQuery(query.id)
+}
+
+// ============================================
+// 사진 업로드 처리
+// ============================================
+async function handlePhotoUpload(
+  chatId: number,
+  staff: { id: string; name: string },
+  photoArrays: Array<Array<{ file_id: string; file_unique_id: string; width: number; height: number; file_size?: number }>>,
+  text: string,
+) {
+  const category = parseCategoryFromText(text)
+
+  // 프로젝트 매칭: 텍스트에서 건물명/주소/소유자 검색
+  const project = await matchProjectFromText(text)
+
+  if (!project) {
+    await sendMessage(chatId, `사진을 받았지만 매칭되는 프로젝트를 찾지 못했습니다.\n건물명이나 소유자명을 포함해주세요.`)
+    return
+  }
+
+  let uploaded = 0
+  for (const photos of photoArrays) {
+    // 가장 큰 사진 (마지막 요소 = 최고 해상도)
+    const largest = photos[photos.length - 1]
+    if (!largest) continue
+
+    try {
+      const fileInfo = await getFile(largest.file_id)
+      if (!fileInfo?.file_path) continue
+
+      const buffer = await downloadFile(fileInfo.file_path)
+      if (!buffer) continue
+
+      // Supabase Storage에 업로드
+      const timestamp = Date.now()
+      const storagePath = `projects/${project.id}/${category}/${timestamp}.jpg`
+
+      const { error } = await supabaseAdmin.storage
+        .from('documents')
+        .upload(storagePath, buffer, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        })
+
+      if (!error) uploaded++
+    } catch (e) {
+      console.error('[telegram] photo upload error:', e)
+    }
+  }
+
+  if (uploaded > 0) {
+    const categoryNames: Record<string, string> = {
+      before: '시공전', during: '시공중', after: '시공후',
+      survey: '실측', consent: '동의서', etc: '기타',
+    }
+    await sendMessage(
+      chatId,
+      `*사진 ${uploaded}장 업로드 완료*\n` +
+      `프로젝트: ${project.building_name || project.owner_name || ''}\n` +
+      `분류: ${categoryNames[category] || category}`,
+    )
+  } else {
+    await sendMessage(chatId, '사진 업로드에 실패했습니다. 다시 시도해주세요.')
+  }
+}
+
+// ============================================
+// 텍스트에서 프로젝트 매칭
+// ============================================
+async function matchProjectFromText(text: string): Promise<{
+  id: string
+  building_name: string | null
+  owner_name: string | null
+  road_address: string | null
+} | null> {
+  // 텍스트에서 한글 키워드 추출 (2글자 이상)
+  const keywords = text.match(/[가-힣]{2,}/g)
+  if (!keywords || keywords.length === 0) return null
+
+  // 제외 키워드
+  const excludeWords = ['입금', '수금', '착수금', '잔금', '추가', '공사', '시공전', '시공중', '시공후', '실측', '동의서', '만원', '사진', '업로드']
+
+  const searchTerms = keywords.filter(k => !excludeWords.includes(k))
+  if (searchTerms.length === 0) return null
+
+  // 건물명으로 검색
+  for (const term of searchTerms) {
+    const { data } = await supabaseAdmin
+      .from('projects')
+      .select('id, building_name, owner_name, road_address')
+      .ilike('building_name', `%${term}%`)
+      .neq('status', '취소')
+      .limit(1)
+      .maybeSingle()
+    if (data) return data
+  }
+
+  // 소유자명으로 검색
+  for (const term of searchTerms) {
+    if (term.length < 2 || term.length > 4) continue
+    const { data } = await supabaseAdmin
+      .from('projects')
+      .select('id, building_name, owner_name, road_address')
+      .ilike('owner_name', `%${term}%`)
+      .neq('status', '취소')
+      .limit(1)
+      .maybeSingle()
+    if (data) return data
+  }
+
+  // 주소로 검색
+  for (const term of searchTerms) {
+    const { data } = await supabaseAdmin
+      .from('projects')
+      .select('id, building_name, owner_name, road_address')
+      .ilike('road_address', `%${term}%`)
+      .neq('status', '취소')
+      .limit(1)
+      .maybeSingle()
+    if (data) return data
+  }
+
+  return null
+}
+
+// ============================================
+// 입금 매칭
+// ============================================
+async function handleDepositMatch(
+  chatId: number,
+  staff: { id: string; name: string },
+  text: string,
+) {
+  const deposit = parseDeposit(text)
+  if (!deposit) return // 금액 파싱 실패 → 무시
+
+  // 이름으로 프로젝트 검색 (outstanding > 0)
+  let matchedProjects: Array<{
+    id: string
+    building_name: string | null
+    owner_name: string | null
+    payer_name: string | null
+    outstanding: number
+  }> = []
+
+  if (deposit.name) {
+    const { data: byOwner } = await supabaseAdmin
+      .from('projects')
+      .select('id, building_name, owner_name, payer_name, outstanding')
+      .ilike('owner_name', `%${deposit.name}%`)
+      .gt('outstanding', 0)
+      .neq('status', '취소')
+      .limit(5)
+
+    const { data: byPayer } = await supabaseAdmin
+      .from('projects')
+      .select('id, building_name, owner_name, payer_name, outstanding')
+      .ilike('payer_name', `%${deposit.name}%`)
+      .gt('outstanding', 0)
+      .neq('status', '취소')
+      .limit(5)
+
+    // 중복 제거
+    const seen = new Set<string>()
+    for (const p of [...(byOwner || []), ...(byPayer || [])]) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id)
+        matchedProjects.push(p)
+      }
+    }
+  }
+
+  if (matchedProjects.length === 0) {
+    // 이름 매칭 실패 → 텍스트에서 프로젝트 매칭 시도
+    const project = await matchProjectFromText(text)
+    if (project) {
+      const { data: full } = await supabaseAdmin
+        .from('projects')
+        .select('id, building_name, owner_name, payer_name, outstanding')
+        .eq('id', project.id)
+        .gt('outstanding', 0)
+        .maybeSingle()
+      if (full) matchedProjects = [full]
+    }
+  }
+
+  if (matchedProjects.length === 0) {
+    await sendMessage(
+      chatId,
+      `입금 ${deposit.amount.toLocaleString('ko-KR')}원 감지했으나, 매칭되는 미수금 프로젝트를 찾지 못했습니다.`,
+    )
+    return
+  }
+
+  // 매칭된 프로젝트별 인라인 버튼
+  for (const p of matchedProjects) {
+    const name = p.building_name || p.owner_name || '프로젝트'
+    const formatted = deposit.amount.toLocaleString('ko-KR')
+    const outstandingFormatted = (p.outstanding || 0).toLocaleString('ko-KR')
+
+    const opts: SendMessageOptions = {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '수금 처리', callback_data: `deposit:${p.id}:${deposit.amount}` },
+            { text: '취소', callback_data: 'deposit:cancel' },
+          ],
+        ],
+      },
+    }
+
+    await sendMessage(
+      chatId,
+      `*입금 감지*\n${name} (${p.owner_name || ''})\n금액: ${formatted}원\n미수금: ${outstandingFormatted}원`,
+      opts,
+    )
   }
 }
 
 // ============================================
 // /start CODE — 초대 코드 매칭
 // ============================================
-async function handleStart(chatId: number, text: string) {
+async function handleStart(chatId: number, text: string, fromUserId?: number) {
   const code = text.replace('/start', '').trim().toUpperCase()
 
   if (!code) {
     await sendMessage(
       chatId,
-      `👋 *다우건설 ERP 알리미*\n\n` +
+      `*다우건설 ERP 알리미*\n\n` +
       `연결하려면 관리자가 전달한 초대 코드를 입력하세요:\n` +
       `\`/start 코드\`\n\n` +
       `예: \`/start D8F2K1\``,
@@ -94,6 +595,13 @@ async function handleStart(chatId: number, text: string) {
     .eq('telegram_chat_id', String(chatId))
     .maybeSingle()
   if (existing) {
+    // telegram_user_id도 저장 (기존 연결에 누락된 경우)
+    if (fromUserId) {
+      await supabaseAdmin
+        .from('staff')
+        .update({ telegram_user_id: String(fromUserId) })
+        .eq('id', existing.id)
+    }
     await sendMessage(
       chatId,
       `이미 *${existing.name}*님으로 연결되어 있습니다.\n/help 입력하면 명령어 목록이 보입니다.`,
@@ -112,18 +620,18 @@ async function handleStart(chatId: number, text: string) {
   if (invErr || !invite) {
     await sendMessage(
       chatId,
-      `❌ 유효하지 않거나 이미 사용된 초대 코드입니다.\n\n관리자에게 새 코드를 요청해주세요.`,
+      `유효하지 않거나 이미 사용된 초대 코드입니다.\n\n관리자에게 새 코드를 요청해주세요.`,
     )
     return
   }
 
   // 만료 확인
   if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-    await sendMessage(chatId, `❌ 만료된 초대 코드입니다. 관리자에게 새 코드를 요청해주세요.`)
+    await sendMessage(chatId, `만료된 초대 코드입니다. 관리자에게 새 코드를 요청해주세요.`)
     return
   }
 
-  // staff 매칭: 이름으로 찾기 (없으면 초대 정보로 신규 생성)
+  // staff 매칭
   let staffId = invite.used_by_staff_id
   let staffName = invite.name
 
@@ -142,18 +650,22 @@ async function handleStart(chatId: number, text: string) {
   if (!staffId) {
     await sendMessage(
       chatId,
-      `❌ 초대 코드는 유효하나 매칭되는 직원 정보가 없습니다.\n관리자에게 문의해주세요.`,
+      `초대 코드는 유효하나 매칭되는 직원 정보가 없습니다.\n관리자에게 문의해주세요.`,
     )
     return
   }
 
-  // 텔레그램 연결 저장
+  // 텔레그램 연결 저장 (chat_id + user_id 모두 저장)
+  const updateFields: Record<string, string> = {
+    telegram_chat_id: String(chatId),
+    telegram_linked_at: new Date().toISOString(),
+  }
+  if (fromUserId) {
+    updateFields.telegram_user_id = String(fromUserId)
+  }
   await supabaseAdmin
     .from('staff')
-    .update({
-      telegram_chat_id: String(chatId),
-      telegram_linked_at: new Date().toISOString(),
-    })
+    .update(updateFields)
     .eq('id', staffId)
 
   await supabaseAdmin
@@ -166,7 +678,7 @@ async function handleStart(chatId: number, text: string) {
 
   await sendMessage(
     chatId,
-    `✅ *${staffName}님 연결 완료!*\n\n` +
+    `*${staffName}님 연결 완료!*\n\n` +
     `이제 ERP 알림을 여기로 받습니다.\n` +
     `/help 입력하면 명령어 목록이 보입니다.`,
   )
@@ -176,8 +688,8 @@ async function handleStart(chatId: number, text: string) {
 // 슬래시 명령 처리
 // ============================================
 async function handleCommand(chatId: number, staffId: string, text: string) {
-  const cmd = text.split(/\s+/)[0].toLowerCase()
-  const args = text.slice(cmd.length).trim()
+  const cmd = text.split(/\s+/)[0].toLowerCase().replace(/@\w+/, '') // @봇이름 제거
+  const args = text.slice(text.split(/\s+/)[0].length).trim()
 
   switch (cmd) {
     case '/help':
@@ -210,12 +722,12 @@ async function handleCommand(chatId: number, staffId: string, text: string) {
     case '/끄기':
     case '/off':
       await supabaseAdmin.from('staff').update({ notify_telegram: false }).eq('id', staffId)
-      await sendMessage(chatId, '🔕 알림이 일시 중단되었습니다. `/켜기`로 재개하세요.')
+      await sendMessage(chatId, '알림이 일시 중단되었습니다. `/켜기`로 재개하세요.')
       return
     case '/켜기':
     case '/on':
       await supabaseAdmin.from('staff').update({ notify_telegram: true }).eq('id', staffId)
-      await sendMessage(chatId, '🔔 알림이 재개되었습니다.')
+      await sendMessage(chatId, '알림이 재개되었습니다.')
       return
     default:
       await sendMessage(chatId, `알 수 없는 명령어입니다. /help 입력하면 명령어 목록이 보입니다.`)
@@ -223,13 +735,12 @@ async function handleCommand(chatId: number, staffId: string, text: string) {
 }
 
 // ============================================
-// 자유 텍스트 → Claude API 직접 호출 (간단 응답)
-// Tool use는 슬래시 명령에서 처리
+// 자유 텍스트 → Claude API
 // ============================================
 async function handleFreeText(chatId: number, staffId: string, text: string) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
-    await sendMessage(chatId, '😓 AI 키가 설정되지 않았습니다.')
+    await sendMessage(chatId, 'AI 키가 설정되지 않았습니다.')
     return
   }
 
@@ -243,7 +754,7 @@ async function handleFreeText(chatId: number, staffId: string, text: string) {
     })
   } catch { /* graceful */ }
 
-  // 2. 최근 대화 로드 (웹 + 텔레그램 통합)
+  // 2. 최근 대화 로드
   let history: Array<{ role: string; content: string }> = []
   try {
     const { data } = await supabaseAdmin
@@ -255,7 +766,7 @@ async function handleFreeText(chatId: number, staffId: string, text: string) {
     history = (data || []).reverse()
   } catch { /* graceful */ }
 
-  // 3. staff 정보 + 오늘 컨텍스트 수집 (Claude에게 힌트 제공)
+  // 3. staff 정보
   const { data: staff } = await supabaseAdmin
     .from('staff').select('name, role').eq('id', staffId).maybeSingle()
 
@@ -278,7 +789,7 @@ async function handleFreeText(chatId: number, staffId: string, text: string) {
 - 마감 → /마감 명령 안내
 - 자유 대화 → 여기서 직접 답변
 
-※ 실제 DB 조회/등록이 필요한 요청(예: "박과장에게 업무 지시")은 "아직 슬래시 명령에서만 지원됩니다"라고 안내.
+※ 실제 DB 조회/등록이 필요한 요청은 "아직 슬래시 명령에서만 지원됩니다"라고 안내.
 `
 
   try {
@@ -300,7 +811,7 @@ async function handleFreeText(chatId: number, staffId: string, text: string) {
     })
 
     if (!res.ok) {
-      await sendMessage(chatId, '😓 AI 응답 실패. 잠시 후 다시 시도해주세요.')
+      await sendMessage(chatId, 'AI 응답 실패. 잠시 후 다시 시도해주세요.')
       return
     }
     const json = await res.json()
@@ -320,26 +831,25 @@ async function handleFreeText(chatId: number, staffId: string, text: string) {
     await sendMessage(chatId, answer)
   } catch (e) {
     console.error('[telegram freeText] Claude error:', e)
-    await sendMessage(chatId, '😓 일시적 오류가 발생했습니다.')
+    await sendMessage(chatId, '일시적 오류가 발생했습니다.')
   }
 }
 
-const HELP_TEXT = `🤖 *다우건설 ERP 알리미 명령어*
+const HELP_TEXT = `*다우건설 ERP 알리미 명령어*
 
-📋 *조회*
-/오늘 — 오늘 일정·업무 요약
+*조회*
+/오늘 — 오늘 일정/업무 요약
 /이번주 — 이번 주 일정 미리보기
 /브리핑 — AI 긴급 체크
 /마감 — 오늘 마감 남은 것
 
-⚙️ *설정*
+*설정*
 /끄기 — 알림 일시 중단
 /켜기 — 알림 재개
 
-💬 *자유 대화*
+*자유 대화*
 궁금한 것을 자연어로 물어보세요.
 예: "오늘 내 일정 뭐야?"
 예: "신한빌라 상태 어때?"
-예: "박과장한테 견적서 작성 시켜줘"
 
 자동 알림은 매일 08:30, 15:00, 18:00에 전송됩니다.`

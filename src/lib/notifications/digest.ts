@@ -286,3 +286,47 @@ export async function buildScheduleImminent(scheduleId: string): Promise<{ staff
 export function buildSiteUrgent(siteName: string, issue: string, reporter: string): string {
   return `🚨 *현장 긴급: ${siteName}*\n\n${issue}\n\n— ${reporter}`
 }
+
+// ============================================
+// 6. 단톡방 전체 브리핑 (그룹용)
+// ============================================
+export async function buildGroupBrief(): Promise<string | null> {
+  const today = new Date()
+  const todayStr = today.toISOString().slice(0, 10)
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토']
+  const dayName = dayNames[today.getDay()]
+
+  const { data: staffList } = await supabaseAdmin
+    .from('staff')
+    .select('id, name')
+    .is('resign_date', null)
+    .order('name')
+
+  if (!staffList || staffList.length === 0) return null
+
+  const lines: string[] = [`*오늘 일정 브리핑* (${today.getMonth() + 1}/${today.getDate()} ${dayName})\n`]
+  let totalCount = 0
+
+  for (const s of staffList) {
+    const { data: schedules } = await supabaseAdmin
+      .from('schedules')
+      .select('title, start_time, schedule_type')
+      .lte('start_date', todayStr)
+      .gte('end_date', todayStr)
+      .or(`staff_id.eq.${s.id},staff_ids.cs.{${s.id}}`)
+      .order('start_time', { ascending: true, nullsFirst: false })
+
+    if (!schedules || schedules.length === 0) continue
+    totalCount += schedules.length
+
+    lines.push(`*${s.name}* (${schedules.length}건)`)
+    for (const sch of schedules) {
+      const time = sch.start_time || '종일'
+      lines.push(`  ${time} ${sch.title}`)
+    }
+    lines.push('')
+  }
+
+  if (totalCount === 0) return null
+  return lines.join('\n')
+}

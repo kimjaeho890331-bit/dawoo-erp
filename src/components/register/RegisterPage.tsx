@@ -415,7 +415,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     <div className="max-w-full bg-page min-h-screen">
       {/* 상단 헤더 */}
       <div className="flex items-center justify-between mb-2">
-        <h1>{category} 접수대장</h1>
+        <h1 className="text-[18px] md:text-[22px] font-semibold tracking-[-0.4px] text-txt-primary whitespace-nowrap">{category} 접수대장</h1>
         <div className="flex items-center gap-3">
           <input
             type="text"

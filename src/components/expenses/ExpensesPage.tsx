@@ -256,9 +256,9 @@ export default function ExpensesPage() {
   return (
     <div className="p-6 max-w-[1200px] mx-auto space-y-4">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-4">
-          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">지출관리</h1>
+          <h1 className="text-[18px] md:text-[22px] font-semibold tracking-[-0.4px] text-txt-primary whitespace-nowrap">지출관리</h1>
           <div className="flex bg-surface-secondary rounded-lg p-0.5">
             {[
               { key: 'expense' as Tab, label: '지출결의서' },

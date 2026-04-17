@@ -564,7 +564,7 @@ export default function DashboardPage() {
       )}
 
       <div className="min-h-screen bg-page">
-        <div className="max-w-[600px] mx-auto px-4 py-6 space-y-3">
+        <div className="max-w-[600px] md:max-w-[1200px] mx-auto px-4 py-6 space-y-3">
 
           {/* ===== 인사 헤더 ===== */}
           <div className="mb-2">

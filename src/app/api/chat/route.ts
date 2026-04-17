@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/lib/auth'
+import { ensureProjectFolder, ensureSiteFolder, uploadFile, listFiles, testConnection } from '@/lib/google-drive'
 
 export const maxDuration = 60
 
@@ -101,6 +102,13 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
   → manage_memory(action=save)로 저장하고 "기억했습니다" 응답
 - 접수/일정 등록 시 관련 기억이 있으면 자동 참조하여 추천
 - "뭐 기억하고 있어?" → manage_memory(action=list)
+
+## 구글드라이브
+- "드라이브 연결 확인" → manage_drive(action=test)
+- "삼성빌리지 폴더 만들어줘" → manage_drive(action=create_project_folder, city_name, category, building_name)
+- "현장 폴더 만들어줘" → manage_drive(action=create_site_folder, site_name)
+- 접수 등록 후 자동으로 프로젝트 폴더 생성 추천
+- 폴더 구조: 다우건설/지원사업/[시]/[소규모|수도]/[빌라명]/
 
 ## 대화 규칙
 - 간결하고 핵심적으로 답변. 장황한 설명 금지.
@@ -327,6 +335,23 @@ const TOOLS = [
         key: { type: 'string', description: '기억 키 (예: 방수_업체, 수원_실측_담당)' },
         value: { type: 'string', description: '기억 값 (예: A방수업체, 김재호)' },
         search_keyword: { type: 'string', description: '검색 시 키워드' },
+      },
+      required: ['action'],
+    },
+  },
+  // --- Phase C: 구글드라이브 도구 ---
+  {
+    name: 'manage_drive',
+    description: '구글드라이브에 폴더 생성, 파일 목록 조회, 연결 테스트를 수행합니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        action: { type: 'string', enum: ['test', 'create_project_folder', 'create_site_folder', 'list_files'], description: '작업 종류' },
+        city_name: { type: 'string', description: '도시명 (프로젝트 폴더 생성 시)' },
+        category: { type: 'string', enum: ['소규모', '수도'], description: '카테고리 (프로젝트 폴더 생성 시)' },
+        building_name: { type: 'string', description: '빌라명 (프로젝트 폴더 생성 시)' },
+        site_name: { type: 'string', description: '현장명 (현장 폴더 생성 시)' },
+        folder_id: { type: 'string', description: '파일 목록 조회 시 폴더 ID' },
       },
       required: ['action'],
     },
@@ -900,6 +925,36 @@ async function manageMemory(input: Record<string, unknown>): Promise<string> {
   return JSON.stringify({ error: '지원하지 않는 action' })
 }
 
+// --- Phase C: 구글드라이브 함수 ---
+async function manageDrive(input: Record<string, unknown>): Promise<string> {
+  const { action } = input as Record<string, string | undefined>
+  try {
+    if (action === 'test') {
+      const result = await testConnection()
+      return JSON.stringify(result)
+    }
+    if (action === 'create_project_folder') {
+      const { city_name, category, building_name } = input as Record<string, string | undefined>
+      if (!city_name || !category || !building_name) return JSON.stringify({ error: 'city_name, category, building_name 필수' })
+      const folderId = await ensureProjectFolder(city_name, category as '소규모' | '수도', building_name)
+      return JSON.stringify({ success: true, folderId, path: `지원사업/${city_name}/${category}/${building_name}` })
+    }
+    if (action === 'create_site_folder') {
+      const { site_name } = input as Record<string, string | undefined>
+      if (!site_name) return JSON.stringify({ error: 'site_name 필수' })
+      const folderId = await ensureSiteFolder(site_name)
+      return JSON.stringify({ success: true, folderId, path: `현장/${site_name}` })
+    }
+    if (action === 'list_files') {
+      const files = await listFiles((input.folder_id as string) || undefined)
+      return JSON.stringify({ total: files.length, files })
+    }
+    return JSON.stringify({ error: '지원하지 않는 action' })
+  } catch (err) {
+    return JSON.stringify({ error: `드라이브 오류: ${err}` })
+  }
+}
+
 // --- 도구 실행 라우터 ---
 async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
@@ -933,6 +988,8 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return getActivityLog(input)
     case 'manage_memory':
       return manageMemory(input)
+    case 'manage_drive':
+      return manageDrive(input)
     default:
       return JSON.stringify({ error: `알 수 없는 도구: ${name}` })
   }

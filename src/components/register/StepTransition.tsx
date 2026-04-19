@@ -139,7 +139,7 @@ export default function StepTransition({ project, onStepChange }: Props) {
             <button
               onClick={handleNext}
               disabled={changing}
-              className="flex items-center gap-0.5 px-3 py-1 text-[11px] font-medium text-white bg-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-50"
+              className="flex items-center gap-0.5 px-3 py-1 text-[11px] font-medium text-white bg-[#c96442] rounded-md hover:bg-[#b5573a] transition-colors disabled:opacity-50"
             >
               {changing ? '변경중...' : `${PROGRESS_STEPS[currentIdx + 1]}으로`} <ChevronRight size={12} />
             </button>
@@ -164,7 +164,7 @@ export default function StepTransition({ project, onStepChange }: Props) {
                   key={step}
                   onClick={() => handleManualChange(step)}
                   className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-surface-secondary transition-colors ${
-                    step === project.status ? 'text-accent font-medium' : 'text-txt-secondary'
+                    step === project.status ? 'text-[#c96442] font-medium' : 'text-txt-secondary'
                   }`}
                 >
                   {step}

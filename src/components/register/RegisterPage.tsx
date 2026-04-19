@@ -125,7 +125,7 @@ function getStepBadgeColor(step: string): string {
   switch (step) {
     case '문의': case '문의(예약)': return 'bg-slate-100 text-slate-600'
     case '실측': return 'bg-sky-100 text-sky-700'
-    case '견적전달': return 'bg-indigo-100 text-indigo-700'
+    case '견적전달': return 'bg-accent-light text-accent'
     case '동의서': return 'bg-violet-100 text-violet-700'
     case '신청서제출': return 'bg-purple-100 text-purple-700'
     case '승인': return 'bg-emerald-100 text-emerald-700'
@@ -493,7 +493,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
           <div className="bg-surface rounded-lg border border-border-primary p-2 mb-3" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
             <div className="flex items-center gap-1 px-2 py-1.5">
               {PROGRESS_STEPS.map((step, i) => {
-                const colors = ['bg-slate-400','bg-sky-500','bg-indigo-500','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
+                const colors = ['bg-slate-400','bg-sky-500','bg-[#c96442]','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
                 return (
                   <div key={step} className="flex items-center gap-0.5">
                     <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold text-white ${colors[i]}`}>{i+1}</span>
@@ -557,7 +557,10 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[13px] font-medium text-txt-primary truncate flex-1">{project.building_name || '-'}</span>
-                <span className={`badge ml-2 ${getStepBadgeColor(project.status)}`}>{project.status}</span>
+                <span className={`badge ml-2 ${getStepBadgeColor(project.status)}`}>
+                  <span className="inline-block w-[5px] h-[5px] rounded-full mr-1" style={{backgroundColor: 'currentColor', opacity: 0.7}} />
+                  {project.status}
+                </span>
               </div>
               <div className="text-[11px] text-txt-secondary truncate">{project.road_address || '-'}</div>
               <div className="flex items-center gap-2 mt-1.5">
@@ -661,6 +664,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                     </td>
                     <td className="px-3 py-1.5">
                       <span className={`badge ${getStepBadgeColor(project.status)}`}>
+                        <span className="inline-block w-[5px] h-[5px] rounded-full mr-1" style={{backgroundColor: 'currentColor', opacity: 0.7}} />
                         {project.status}
                       </span>
                       {project.outstanding > 0 && project.total_cost > 0 &&

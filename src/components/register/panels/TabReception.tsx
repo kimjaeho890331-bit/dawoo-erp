@@ -74,11 +74,11 @@ export default function TabReception({ project, category, getVal, onChange }: Ta
   const previewTotal = previewCost + previewVat
 
   const timelineSteps = [
-    { num: 1, label: '실측', color: 'bg-sky-500', textColor: 'text-sky-700' },
-    { num: 2, label: '견적', color: 'bg-indigo-500', textColor: 'text-indigo-700' },
-    { num: 3, label: '동의서', color: 'bg-violet-500', textColor: 'text-violet-700' },
-    { num: 4, label: '통장', color: 'bg-pink-500', textColor: 'text-pink-700' },
-    { num: 5, label: '신청서', color: 'bg-purple-500', textColor: 'text-purple-700' },
+    { num: 1, label: '실측', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
+    { num: 2, label: '견적', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
+    { num: 3, label: '동의서', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
+    { num: 4, label: '통장', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
+    { num: 5, label: '신청서', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
   ]
 
   return (
@@ -117,14 +117,14 @@ export default function TabReception({ project, category, getVal, onChange }: Ta
         <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor} mb-3`}>견적</h3>
         {/* 공문 기준 견적 산출 정보 */}
         {area > 0 && (
-          <div className="mb-3 p-3 bg-[#eef2ff] rounded-lg border border-[#c7d2fe]">
+          <div className="mb-3 p-3 bg-[#faf0eb] rounded-lg border border-[#e8d5cc]">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-indigo-700">
+              <p className="text-[11px] font-semibold text-[#c96442]">
                 공문 단가 기준 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
               </p>
               <button
                 onClick={handleRecalculate}
-                className="px-3 py-1 text-[11px] font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
+                className="px-3 py-1 text-[11px] font-medium text-white bg-[#c96442] rounded-md hover:bg-[#b55a3a] transition-colors"
               >
                 재산출
               </button>
@@ -139,21 +139,21 @@ export default function TabReception({ project, category, getVal, onChange }: Ta
                 <span className="ml-1 font-medium text-txt-primary">{units}세대</span>
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-indigo-200 grid grid-cols-3 gap-2 text-[11px]">
+            <div className="mt-2 pt-2 border-t border-[#e8d5cc] grid grid-cols-3 gap-2 text-[11px]">
               <div>
                 <span className="text-txt-tertiary">총공사비</span>
                 <p className="font-semibold text-txt-primary">{previewTotal.toLocaleString()}원</p>
               </div>
               <div>
                 <span className="text-txt-tertiary">시지원 80%</span>
-                <p className="font-semibold text-accent-text">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
+                <p className="font-semibold text-[#c96442]">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
               </div>
               <div>
                 <span className="text-txt-tertiary">자부담 20%</span>
                 <p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p>
               </div>
             </div>
-            <p className="mt-2 text-[9px] text-indigo-400">
+            <p className="mt-2 text-[9px] text-[#c96442]/60">
               적용 단가: {isPublic
                 ? `공용 ${pricing.공용.toLocaleString()}원/m² + ${pricing.공용_세대.toLocaleString()}원/세대`
                 : `전용 ${pricing.전용.toLocaleString()}원/m²`
@@ -187,7 +187,7 @@ export default function TabReception({ project, category, getVal, onChange }: Ta
         </div>
         <button
           onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
-          className="mt-3 px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
+          className="mt-3 px-4 py-2 text-[13px] font-medium bg-[#c96442] text-white rounded-lg hover:bg-[#b5573a] transition-colors"
         >
           견적서 열기
         </button>
@@ -211,8 +211,8 @@ export default function TabReception({ project, category, getVal, onChange }: Ta
 
       {/* 4 통장 */}
       <div className="relative pb-8">
-        <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-pink-500 text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
-        <h3 className="text-[13px] font-semibold text-pink-700 mb-3">통장</h3>
+        <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-[#c96442] text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
+        <h3 className="text-[13px] font-semibold text-[#c96442] mb-3">통장</h3>
         <div className="mb-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
           <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />

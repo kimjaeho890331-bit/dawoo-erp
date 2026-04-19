@@ -36,7 +36,7 @@ export function FormInput({ label, type = 'text', placeholder, value, onChange }
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder || label}
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light hover:border-border-secondary transition-colors"
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 hover:border-border-secondary transition-colors"
       />
     </div>
   )
@@ -100,7 +100,7 @@ export function DateTimeInput({ label, value, onChange, timeValue, onTimeChange 
               onTimeChange!(v || null)
             }}
             maxLength={5}
-            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10"
           />
         )}
       </div>
@@ -128,7 +128,7 @@ export function StaffSelect({ label, value, onChange }: {
       <select
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light bg-white"
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 bg-white"
       >
         <option value="">선택</option>
         {staffList.map(s => (

@@ -37,7 +37,7 @@ function VendorSearch({ value, onChange }: { value: string | null | undefined; o
         onChange={e => { setQuery(e.target.value); onChange(e.target.value || null); setShowList(true) }}
         onFocus={() => query && setShowList(true)}
         placeholder="업체명 검색"
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10"
       />
       {showList && vendors.length > 0 && (
         <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[150px] overflow-y-auto">

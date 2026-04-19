@@ -318,7 +318,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-[11px] font-medium text-white bg-[#c96442] rounded-lg hover:bg-[#b5573a] transition-colors disabled:opacity-50"
               >
                 {saving ? '저장 중...' : '저장'}
               </button>
@@ -327,15 +327,15 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               onClick={() => setApiFieldsLocked(prev => !prev)}
               className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-colors ${
                 apiFieldsLocked
-                  ? 'text-txt-tertiary border border-border-primary hover:bg-surface-tertiary'
-                  : 'text-accent border border-accent/30 bg-accent/5'
+                  ? 'bg-[#e8e6dc] text-[#4d4c48] border border-[#e8e6dc] hover:bg-[#dedad0]'
+                  : 'text-[#c96442] border border-[#c96442]/30 bg-[#c96442]/5'
               }`}
             >
               {apiFieldsLocked ? '수정' : '수정중'}
             </button>
             <button
               onClick={() => setShowStatusModal('취소')}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors"
+              className="px-3 py-1.5 text-[11px] font-medium text-[#b53333] border border-[#b53333]/30 rounded-lg hover:bg-[#b53333]/5 transition-colors"
             >
               취소
             </button>
@@ -358,7 +358,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             ) : null}
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-red-50 transition-colors"
+              className="px-3 py-1.5 text-[11px] font-medium text-[#b53333] border border-[#b53333]/30 rounded-lg hover:bg-[#b53333]/5 transition-colors"
             >
               삭제
             </button>
@@ -378,7 +378,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             <div className="absolute top-[11px] left-3 right-3 h-[2px] bg-[#f3f4f6]" />
             {/* 진행 라인 */}
             <div
-              className="absolute top-[11px] left-3 h-[2px] bg-accent transition-all"
+              className="absolute top-[11px] left-3 h-[2px] bg-[#c96442] transition-all"
               style={{ width: `${(currentStepIdx / (PROGRESS_STEPS.length - 1)) * 100}%` }}
             />
             {/* 단계 점 */}
@@ -391,9 +391,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
                     isSkippedStep
                       ? 'bg-surface text-txt-quaternary border-2 border-dashed border-[#d1d5db]'
                       : idx < currentStepIdx
-                      ? 'bg-accent text-white'
+                      ? 'bg-[#c96442] text-white'
                       : idx === currentStepIdx
-                      ? 'bg-accent text-white shadow-md shadow-accent/20'
+                      ? 'bg-[#c96442] text-white shadow-md shadow-[#c96442]/20'
                       : 'bg-surface text-txt-quaternary border-2 border-[#f3f4f6]'
                   }`}>
                     {isSkippedStep ? '-' : idx < currentStepIdx ? <Check size={12} className="text-white" /> : idx + 1}
@@ -402,7 +402,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
                     isSkippedStep
                       ? 'text-txt-quaternary line-through'
                       : idx === currentStepIdx
-                      ? 'text-accent font-medium'
+                      ? 'text-[#c96442] font-medium'
                       : idx < currentStepIdx
                       ? 'text-txt-secondary'
                       : 'text-txt-quaternary'
@@ -420,7 +420,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         <StepTransition project={project} onStepChange={() => onRefresh?.()} />
 
         {/* 상시 표시 영역 (항상 전체 표시) */}
-        <div className="px-6 py-3 border-b border-border-tertiary bg-surface-secondary">
+        <div className="px-6 py-3 border-b border-border-tertiary bg-[#f0eee6]">
           {/* 건물명 + 공사종류 */}
           <div className="flex items-center gap-2 mb-2">
             <h3 className="text-[16px] font-bold text-txt-primary">
@@ -438,7 +438,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             )}
             <button
               onClick={() => setActiveTab('기본정보')}
-              className="ml-auto text-[11px] text-txt-tertiary hover:text-accent transition-colors"
+              className="ml-auto text-[11px] text-[#c96442] hover:text-[#b5573a] transition-colors font-medium"
             >
               수정
             </button>
@@ -450,7 +450,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               <div className="flex gap-1 shrink-0">
                 <button
                   onClick={() => navigator.clipboard.writeText(project.road_address || project.jibun_address || '')}
-                  className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent"
+                  className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-[#c96442]"
                 >복사</button>
                 <a
                   href={`https://map.kakao.com/link/search/${encodeURIComponent(project.road_address || project.jibun_address || '')}`}
@@ -478,7 +478,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
                   value={(getVal('note') as string) ?? ''}
                   onChange={e => updateField('note', e.target.value || null)}
                   onBlur={() => setEditingMemo(false)}
-                  className="w-full mt-0.5 px-2 py-1 border border-accent rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent-light"
+                  className="w-full mt-0.5 px-2 py-1 border border-[#c96442] rounded-md text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-[#c96442]/10"
                 />
               ) : (
                 <p
@@ -516,7 +516,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-2.5 text-[11px] font-medium transition-colors ${
                 activeTab === tab
-                  ? 'border-b-[1.5px] border-accent text-accent-text'
+                  ? 'border-b-[1.5px] border-[#c96442] text-[#c96442]'
                   : 'border-b-[1.5px] border-transparent text-txt-tertiary hover:text-txt-secondary'
               }`}
             >
@@ -556,7 +556,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               placeholder="사유를 입력하세요"
               value={statusReason}
               onChange={e => setStatusReason(e.target.value)}
-              className="w-full px-3 py-2 border border-border-primary rounded-lg text-[13px] resize-none focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              className="w-full px-3 py-2 border border-border-primary rounded-lg text-[13px] resize-none focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10"
             />
             <div className="flex gap-2 mt-4">
               <button onClick={() => setShowStatusModal(null)} className="flex-1 px-4 py-2 text-[13px] text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">
@@ -630,7 +630,7 @@ function TabHistory({ projectId }: { projectId: string }) {
           {logs.map((item, idx) => (
             <div key={idx} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className="w-2 h-2 rounded-full bg-accent mt-1.5" />
+                <div className="w-2 h-2 rounded-full bg-[#c96442] mt-1.5" />
                 {idx < logs.length - 1 && <div className="w-0.5 flex-1 bg-surface-tertiary" />}
               </div>
               <div className="pb-4">

@@ -447,6 +447,26 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         </div>
       </div>
 
+      {/* 통계 카드 */}
+      <div className="grid grid-cols-4 gap-4 mb-5">
+        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+          <p className="text-xs text-txt-tertiary font-medium mb-1">진행중</p>
+          <p className="text-2xl font-bold tabular-nums">{statusCounts['진행중']}</p>
+        </div>
+        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+          <p className="text-xs text-txt-tertiary font-medium mb-1">완료</p>
+          <p className="text-2xl font-bold tabular-nums text-green-600">{statusCounts['완료']}</p>
+        </div>
+        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+          <p className="text-xs text-txt-tertiary font-medium mb-1">총공사비</p>
+          <p className="text-xl font-bold tabular-nums">{filteredProjects.reduce((s, p) => s + p.total_cost, 0).toLocaleString()}</p>
+        </div>
+        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+          <p className="text-xs text-txt-tertiary font-medium mb-1">미수금</p>
+          <p className="text-xl font-bold tabular-nums text-red-600">{filteredProjects.reduce((s, p) => s + p.outstanding, 0).toLocaleString()}</p>
+        </div>
+      </div>
+
       {/* 상태 필터 탭 + 진행 프로세스 가이드 */}
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-4 border-b border-border-primary">
         <div className="flex gap-1">
@@ -469,17 +489,21 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             </button>
           ))}
         </div>
-        <div className="hidden md:flex items-center gap-1 px-2 py-1.5 mb-1">
-          {PROGRESS_STEPS.map((step, i) => {
-            const colors = ['bg-slate-400','bg-sky-500','bg-indigo-500','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
-            return (
-              <div key={step} className="flex items-center gap-0.5">
-                <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold text-white ${colors[i]}`}>{i+1}</span>
-                <span className="text-[9px] text-txt-tertiary">{STEP_LABELS_SHORT[i]}</span>
-                {i < PROGRESS_STEPS.length - 1 && <span className="text-[8px] text-txt-quaternary mx-0.5">›</span>}
-              </div>
-            )
-          })}
+        <div className="hidden md:block">
+          <div className="bg-surface rounded-lg border border-border-primary p-2 mb-3" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+            <div className="flex items-center gap-1 px-2 py-1.5">
+              {PROGRESS_STEPS.map((step, i) => {
+                const colors = ['bg-slate-400','bg-sky-500','bg-indigo-500','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
+                return (
+                  <div key={step} className="flex items-center gap-0.5">
+                    <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold text-white ${colors[i]}`}>{i+1}</span>
+                    <span className="text-[9px] text-txt-tertiary">{STEP_LABELS_SHORT[i]}</span>
+                    {i < PROGRESS_STEPS.length - 1 && <span className="text-[8px] text-txt-quaternary mx-0.5">›</span>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -558,7 +582,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
       {/* Desktop table */}
       <div className="hidden md:block">
-      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>

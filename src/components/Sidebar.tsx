@@ -96,7 +96,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Mobile close button */}
         <button
           onClick={onClose}
-          className="md:hidden absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/60 z-10"
+          className="md:hidden absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[rgba(255,255,255,0.06)] text-[#87867f] hover:text-[#e8e6dc] z-10"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -106,11 +106,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* 로고 */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-white/[0.08]">
           {!collapsed && (
-            <span className="text-[15px] font-semibold tracking-[-0.3px] text-white">DAWOO ERP</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-[#c96442] flex items-center justify-center">
+                <span className="text-white text-[12px] font-bold">D</span>
+              </div>
+              <span className="text-[15px] font-semibold tracking-[-0.3px] text-[#e8e6dc]">DAWOO ERP</span>
+            </div>
+          )}
+          {collapsed && (
+            <div className="w-7 h-7 rounded-lg bg-[#c96442] flex items-center justify-center mx-auto">
+              <span className="text-white text-[12px] font-bold">D</span>
+            </div>
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden md:flex w-7 h-7 items-center justify-center rounded-md text-txt-quaternary hover:text-white hover:bg-sidebar-hover transition-colors"
+            className="hidden md:flex w-7 h-7 items-center justify-center rounded-md text-[#87867f] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)] transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               {collapsed
@@ -127,8 +137,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           onClick={onClose}
           className={`flex items-center gap-3 mx-2 mt-2 px-3 py-2 rounded-lg text-[13px] transition-colors ${
             isActive('/dashboard')
-              ? 'bg-sidebar-hover text-white'
-              : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
+              ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+              : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
           }`}
         >
           <SvgIcon d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -140,7 +150,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           {menuGroups.map((group) => (
             <div key={group.name} className="mt-4 first:mt-2">
               {!collapsed && (
-                <div className="px-3 mb-1 text-[11px] font-medium text-txt-quaternary uppercase tracking-[0.5px]">
+                <div className="px-3 mb-1 text-[11px] font-medium text-[#87867f] uppercase tracking-[0.5px]">
                   {group.name}
                 </div>
               )}
@@ -154,14 +164,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                       onClick={onClose}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors relative ${
                         active
-                          ? 'bg-sidebar-hover text-white'
-                          : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
+                          ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+                          : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
                       }`}
                     >
                       {active && (
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-accent rounded-l" />
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#c96442] rounded-l" />
                       )}
-                      <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-white' : ''}`} />
+                      <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-[#c96442]' : ''}`} />
                       {!collapsed && <span className={active ? 'font-medium' : ''}>{item.name}</span>}
                     </Link>
                   )
@@ -180,8 +190,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
                 isActive(item.path)
-                  ? 'bg-sidebar-hover text-white'
-                  : 'text-txt-quaternary hover:text-white hover:bg-sidebar-hover'
+                  ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+                  : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
               }`}
             >
               <SvgIcon d={item.icon} />

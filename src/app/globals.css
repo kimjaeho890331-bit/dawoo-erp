@@ -1,36 +1,37 @@
 @import "tailwindcss";
 
-/* ===== DAWOO ERP Design System ===== */
-/* Based on docs/DESIGN.md - Linear precision + FIELDON usability */
+/* ===== DAWOO ERP Design System — Anthropic Brand ===== */
+/* Based on Anthropic DESIGN.md — warm parchment palette, terracotta accent */
+/* rollback: git revert HEAD */
 
 @theme inline {
-  /* Background Surfaces */
-  --color-page: #f8f9fa;
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f1f3f5;
-  --color-surface-tertiary: #e9ecef;
-  --color-sidebar: #111827;
-  --color-sidebar-hover: #1f2937;
+  /* Background Surfaces — Anthropic Brand */
+  --color-page: #f5f4ed;              /* Parchment */
+  --color-surface: #faf9f5;           /* Ivory */
+  --color-surface-secondary: #f0eee6; /* Border Cream */
+  --color-surface-tertiary: #e8e6dc;  /* Warm Sand */
+  --color-sidebar: #141413;           /* Near Black */
+  --color-sidebar-hover: #30302e;     /* Dark Surface */
 
-  /* Text */
-  --color-txt-primary: #111827;
-  --color-txt-secondary: #4b5563;
-  --color-txt-tertiary: #9ca3af;
-  --color-txt-quaternary: #d1d5db;
-  --color-txt-inverse: #f9fafb;
+  /* Text — Anthropic Brand */
+  --color-txt-primary: #141413;       /* Near Black */
+  --color-txt-secondary: #5e5d59;     /* Olive Gray */
+  --color-txt-tertiary: #87867f;      /* Stone Gray */
+  --color-txt-quaternary: #b0aea5;    /* Warm Silver */
+  --color-txt-inverse: #faf9f5;       /* Ivory */
 
-  /* Accent / Interactive */
-  --color-accent: #5e6ad2;
-  --color-accent-hover: #4f56b3;
-  --color-accent-light: #e0e7ff;
-  --color-accent-text: #3730a3;
-  --color-link: #4f46e5;
+  /* Accent / Interactive — Anthropic Brand (Terracotta) */
+  --color-accent: #c96442;            /* Terracotta Brand */
+  --color-accent-hover: #b55536;
+  --color-accent-light: #faf0eb;
+  --color-accent-text: #c96442;       /* Terracotta Brand */
+  --color-link: #d97757;              /* Coral Accent */
 
   /* Status Colors */
-  --color-status-initial-bg: #f1f3f5;
-  --color-status-initial-text: #4b5563;
-  --color-status-docs-bg: #e0e7ff;
-  --color-status-docs-text: #3730a3;
+  --color-status-initial-bg: #f0eee6;
+  --color-status-initial-text: #5e5d59;
+  --color-status-docs-bg: #faf0eb;
+  --color-status-docs-text: #c96442;
   --color-status-approved-bg: #d1fae5;
   --color-status-approved-text: #065f46;
   --color-status-construction-bg: #ffedd5;
@@ -46,38 +47,38 @@
 
   /* Alert */
   --color-urgent-bg: #fee2e2;
-  --color-urgent-text: #dc2626;
+  --color-urgent-text: #b53333;       /* Error Crimson */
   --color-caution-bg: #fef3c7;
   --color-caution-text: #d97706;
   --color-normal-bg: #d1fae5;
   --color-normal-text: #16a34a;
 
   /* Danger / Destructive */
-  --color-danger: #dc2626;
-  --color-danger-hover: #b91c1c;
+  --color-danger: #b53333;            /* Error Crimson */
+  --color-danger-hover: #922929;
   --color-danger-bg: #fee2e2;
   --color-danger-border: #fecaca;
 
   /* Financial */
   --color-money-positive: #059669;
-  --color-money-negative: #dc2626;
-  --color-money-neutral: #111827;
+  --color-money-negative: #b53333;    /* Error Crimson */
+  --color-money-neutral: #141413;     /* Near Black */
 
-  /* Border */
-  --color-border-primary: #e5e7eb;
-  --color-border-secondary: #d1d5db;
-  --color-border-tertiary: #f3f4f6;
-  --color-border-accent: #5e6ad2;
+  /* Border — Anthropic Brand */
+  --color-border-primary: #e8e6dc;    /* Border Warm */
+  --color-border-secondary: #d1cfc5;  /* Ring Warm */
+  --color-border-tertiary: #f0eee6;   /* Border Cream */
+  --color-border-accent: #c96442;     /* Terracotta Brand */
 
   /* Fonts */
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
   --font-mono: 'Berkeley Mono', 'SF Mono', Consolas, monospace;
 }
 
-/* ===== Base Styles ===== */
+/* ===== Base Styles — Anthropic Brand ===== */
 body {
-  background: #f8f9fa;
-  color: #111827;
+  background: #f5f4ed;               /* Parchment */
+  color: #141413;                    /* Near Black */
   font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
   font-size: 13px;
   line-height: 1.6;
@@ -100,14 +101,14 @@ td[class*="text-right"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== Typography Hierarchy ===== */
+/* ===== Typography Hierarchy — Anthropic Brand ===== */
 /* Page Title: 22px / 600 / -0.4px */
 h1, .text-page-title {
   font-size: 22px;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.4px;
-  color: #111827;
+  color: #141413;                    /* Near Black */
 }
 
 /* Section Title: 16px / 600 / -0.2px */
@@ -126,13 +127,13 @@ h3, .text-card-title {
   letter-spacing: -0.1px;
 }
 
-/* Labels */
+/* Labels — Anthropic Brand */
 .text-label {
   font-size: 11px;
   font-weight: 500;
   line-height: 1.4;
   letter-spacing: 0.3px;
-  color: #9ca3af;
+  color: #87867f;                    /* Stone Gray */
 }
 
 /* Money display */
@@ -142,84 +143,92 @@ h3, .text-card-title {
   font-weight: 600;
 }
 
-/* ===== Component Base Styles ===== */
+/* ===== Component Base Styles — Anthropic Brand ===== */
 
 /* Cards */
 .card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 8px;
   padding: 16px 20px;
+  box-shadow: rgba(0,0,0,0.05) 0px 4px 24px;
+  transition: box-shadow 0.2s, border-color 0.2s;
 }
 .card:hover {
-  border-color: #d1d5db;
+  box-shadow: rgba(0,0,0,0.08) 0px 8px 32px;
+  border-color: var(--color-border-secondary);
 }
 
-/* Tables */
+/* Tables — Anthropic Brand */
 table th {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.3px;
-  color: #9ca3af;
-  background: #f1f3f5;
+  color: var(--color-txt-tertiary);
+  background: var(--color-surface-secondary);
 }
 table td {
   font-size: 13px;
+  color: var(--color-txt-primary);
 }
 table tbody tr {
   height: 44px;
+  transition: background 0.12s;
 }
 table tbody tr:hover {
-  background: #e9ecef;
+  background: var(--color-surface-secondary);
 }
 
-/* Input fields - minimal until focused */
+/* Input fields — Anthropic Brand (Focus Blue: #3898ec) */
 .input-field {
   height: 36px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-primary);
   border-radius: 8px;
   font-size: 13px;
   padding: 0 12px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .input-field:focus {
-  border-color: #5e6ad2;
-  box-shadow: 0 0 0 2px #e0e7ff;
+  border-color: #3898ec;             /* Anthropic Focus Blue — only cool color */
+  box-shadow: 0 0 0 2px rgba(56,152,236,0.15);
   outline: none;
 }
 
-/* Buttons */
+/* Buttons — Anthropic Brand */
 .btn-primary {
-  background: #5e6ad2;
-  color: white;
+  background: var(--color-accent);
+  color: #faf9f5;                    /* Ivory */
   padding: 8px 20px;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   min-height: 36px;
-  transition: background 0.15s;
+  box-shadow: #c96442 0px 0px 0px 0px, #c96442 0px 0px 0px 1px;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 .btn-primary:hover {
-  background: #4f56b3;
+  background: var(--color-accent-hover);
+  box-shadow: 0 2px 8px rgba(201,100,66,0.3);
 }
 .btn-secondary {
-  background: transparent;
-  border: 1px solid #e5e7eb;
-  color: #4b5563;
+  background: var(--color-surface-tertiary);
+  border: none;
+  color: #4d4c48;                    /* Charcoal Warm */
   padding: 8px 16px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
   min-height: 36px;
+  box-shadow: #e8e6dc 0px 0px 0px 0px, #d1cfc5 0px 0px 0px 1px;
+  transition: background 0.15s;
 }
 .btn-secondary:hover {
-  border-color: #d1d5db;
-  background: #f1f3f5;
+  background: var(--color-border-secondary);
 }
 .btn-danger {
-  background: #dc2626;
-  color: white;
+  background: #b53333;              /* Error Crimson */
+  color: #faf9f5;
   padding: 8px 20px;
   border-radius: 8px;
   font-size: 13px;
@@ -228,31 +237,31 @@ table tbody tr:hover {
   transition: background 0.15s;
 }
 .btn-danger:hover {
-  background: #b91c1c;
+  background: #922929;
 }
 
-/* Inline action buttons (table row actions) */
+/* Inline action buttons (table row actions) — Anthropic Brand */
 .btn-inline {
   font-size: 11px;
   padding: 4px 8px;
-  color: #9ca3af;
+  color: #87867f;                    /* Stone Gray */
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
 }
 .btn-inline:hover {
-  color: #3730a3;
-  background: #eff6ff;
+  color: #c96442;                    /* Terracotta Brand */
+  background: #faf0eb;              /* Accent Light */
 }
 .btn-inline-danger {
   font-size: 11px;
   padding: 4px 8px;
-  color: #d1d5db;
+  color: #b0aea5;                    /* Warm Silver */
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
 }
 .btn-inline-danger:hover {
-  color: #ef4444;
-  background: #fef2f2;
+  color: #b53333;                    /* Error Crimson */
+  background: #fee2e2;
 }
 
 /* Icon-only buttons (toolbar actions) */
@@ -272,10 +281,10 @@ table tbody tr:hover {
   background: var(--color-surface-tertiary);
 }
 
-/* Badge */
+/* Badge — Anthropic Brand (6px radius) */
 .badge {
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
@@ -287,7 +296,7 @@ table tbody tr:hover {
 .badge-approve { background: #d1fae5; color: #047857; }
 .badge-reject { background: #fee2e2; color: #b91c1c; }
 
-/* Scrollbar */
+/* Scrollbar — Anthropic Brand */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -296,17 +305,17 @@ table tbody tr:hover {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #d1cfc5;              /* Ring Warm */
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #b0aea5;              /* Warm Silver */
 }
 
-/* Textarea field */
+/* Textarea field — Anthropic Brand */
 .textarea-field {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-primary);
   border-radius: 8px;
   font-size: 13px;
   padding: 8px 12px;
@@ -314,40 +323,40 @@ table tbody tr:hover {
   resize: none;
 }
 .textarea-field:focus {
-  border-color: #5e6ad2;
-  box-shadow: 0 0 0 2px #e0e7ff;
+  border-color: #3898ec;             /* Anthropic Focus Blue */
+  box-shadow: 0 0 0 2px rgba(56,152,236,0.15);
   outline: none;
 }
 
-/* Labels */
+/* Labels — Anthropic Brand */
 .label-field {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #4b5563;
+  color: #5e5d59;                    /* Olive Gray */
   margin-bottom: 4px;
 }
 .label-required {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #4b5563;
+  color: #5e5d59;                    /* Olive Gray */
   margin-bottom: 4px;
 }
 
-/* Stat cards */
+/* Stat cards — Anthropic Brand */
 .stat-card {
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-primary);
   padding: 16px;
-  background: #ffffff;
+  background: var(--color-surface);
 }
 .stat-card-active {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: #faf0eb;              /* Accent Light */
+  border-color: #c96442;            /* Terracotta Brand */
 }
 
-/* Modal overlay */
+/* Modal overlay — Anthropic Brand */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -358,8 +367,8 @@ table tbody tr:hover {
   z-index: 50;
 }
 .modal-container {
-  background: #ffffff;
-  border-radius: 10px;
+  background: var(--color-surface);
+  border-radius: 8px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
   width: 100%;
   max-width: 28rem;
@@ -369,39 +378,39 @@ table tbody tr:hover {
 }
 .modal-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-border-tertiary);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .modal-title {
   font-weight: 600;
-  color: #111827;
+  color: #141413;                    /* Near Black */
 }
 .modal-body {
   padding: 20px;
 }
 .modal-footer {
   padding: 16px 20px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--color-border-tertiary);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
-/* Tabs */
+/* Tabs — Anthropic Brand */
 .tabs-container {
   display: flex;
   gap: 4px;
   margin-bottom: 20px;
   background: var(--color-surface-secondary);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 4px;
   width: fit-content;
 }
 .tab-item {
   padding: 8px 20px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
   color: var(--color-txt-secondary);
@@ -416,8 +425,8 @@ table tbody tr:hover {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-/* Selection highlight */
+/* Selection highlight — Anthropic Brand */
 ::selection {
-  background: #e0e7ff;
-  color: #3730a3;
+  background: #faf0eb;              /* Accent Light */
+  color: #c96442;                   /* Terracotta Brand */
 }

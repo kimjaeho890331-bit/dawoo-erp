@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>다우 ERP 디자인 미리보기</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+<style>
+  :root {
+    --page: #f8f9fa;
+    --surface: #ffffff;
+    --surface-sec: #f1f3f5;
+    --surface-ter: #e9ecef;
+    --accent: #5e6ad2;
+    --accent-hover: #4f56b3;
+    --accent-light: #e0e7ff;
+    --txt-pri: #111827;
+    --txt-sec: #4b5563;
+    --txt-ter: #9ca3af;
+    --txt-qua: #d1d5db;
+    --border-pri: #e5e7eb;
+    --border-sec: #d1d5db;
+    --border-ter: #f3f4f6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Pretendard Variable', sans-serif; background: var(--page); color: var(--txt-pri); }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+  h1.section-title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .section-desc { font-size: 14px; color: var(--txt-ter); margin-bottom: 32px; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 48px; }
+  @media (max-width: 768px) { .compare { grid-template-columns: 1fr; } }
+  .compare-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding: 4px 12px; border-radius: 4px; display: inline-block; }
+  .compare-label.before { background: #fee2e2; color: #dc2626; }
+  .compare-label.after { background: #d1fae5; color: #059669; }
+  .demo-box { background: var(--page); border-radius: 12px; padding: 20px; min-height: 200px; }
+
+  /* === BEFORE 스타일 === */
+  .card-before {
+    background: var(--surface);
+    border: 1px solid var(--border-pri);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+  }
+  .card-before .card-title { font-size: 14px; font-weight: 600; color: var(--txt-pri); }
+  .card-before .card-body { font-size: 13px; color: var(--txt-sec); margin-top: 8px; }
+
+  /* === AFTER 스타일 === */
+  .card-after {
+    background: var(--surface);
+    border: 1px solid var(--border-pri);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
+  }
+  .card-after:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    border-color: var(--border-sec);
+    transform: translateY(-1px);
+  }
+  .card-after .card-title { font-size: 14px; font-weight: 600; color: var(--txt-pri); }
+  .card-after .card-body { font-size: 13px; color: var(--txt-sec); margin-top: 8px; }
+
+  /* === 버튼 === */
+  .btn-before {
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    cursor: pointer;
+  }
+  .btn-after {
+    padding: 8px 20px; font-size: 13px; font-weight: 500;
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(94,106,210,0.3);
+    transition: all 0.2s;
+  }
+  .btn-after:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 4px 12px rgba(94,106,210,0.35);
+    transform: translateY(-1px);
+  }
+
+  /* === 로딩 === */
+  .loading-before { color: var(--txt-ter); font-size: 13px; text-align: center; padding: 40px; }
+  .skeleton-row {
+    height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-sec) 25%, var(--surface-ter) 50%, var(--surface-sec) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    margin-bottom: 12px;
+  }
+  .skeleton-row:nth-child(2) { width: 75%; }
+  .skeleton-row:nth-child(3) { width: 50%; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* === 빈 상태 === */
+  .empty-before { color: var(--txt-qua); font-size: 13px; text-align: center; padding: 48px; }
+  .empty-after {
+    text-align: center; padding: 48px;
+  }
+  .empty-after .icon {
+    width: 48px; height: 48px; border-radius: 50%; background: var(--accent-light);
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;
+  }
+  .empty-after .icon svg { width: 24px; height: 24px; color: var(--accent); }
+  .empty-after .title { font-size: 14px; font-weight: 600; color: var(--txt-pri); margin-bottom: 4px; }
+  .empty-after .desc { font-size: 12px; color: var(--txt-ter); margin-bottom: 16px; }
+  .empty-after .action {
+    padding: 6px 16px; font-size: 12px; font-weight: 500;
+    background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer;
+  }
+
+  /* === 테이블 === */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 500; color: var(--txt-ter); letter-spacing: 0.3px; background: var(--surface-sec); }
+  td { padding: 10px 12px; border-top: 1px solid var(--border-ter); color: var(--txt-sec); }
+  .table-after tr { transition: background 0.15s; }
+  .table-after tr:hover { background: #f8f9ff; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .badge-blue { background: #dbeafe; color: #1d4ed8; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+
+  /* === 입력 === */
+  .input-before {
+    width: 100%; height: 36px; border: 1px solid var(--border-pri); border-radius: 8px;
+    padding: 0 12px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  .input-after {
+    width: 100%; height: 36px; border: 1px solid var(--border-pri); border-radius: 8px;
+    padding: 0 12px; font-size: 13px; font-family: inherit; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-after:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(94,106,210,0.12);
+  }
+
+  /* === 페이지 진입 === */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .page-enter { animation: fadeInUp 0.4s ease-out; }
+
+  /* === 헤더 표준 === */
+  .page-header-before {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px;
+  }
+  .page-header-before h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; }
+
+  .page-header-after {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--surface); border-radius: 12px; border: 1px solid var(--border-pri);
+    padding: 16px 24px; margin-bottom: 16px;
+    border-left: 4px solid var(--accent);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .page-header-after h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; }
+  .page-header-after .subtitle { font-size: 12px; color: var(--txt-ter); margin-top: 2px; }
+
+  /* === 탭 통일 === */
+  .tabs-standard {
+    display: flex; gap: 4px; background: var(--surface-sec); border-radius: 8px; padding: 3px;
+    margin-bottom: 16px; width: fit-content;
+  }
+  .tabs-standard button {
+    padding: 6px 16px; font-size: 13px; border: none; border-radius: 6px;
+    cursor: pointer; font-weight: 500; font-family: inherit;
+    background: transparent; color: var(--txt-sec); transition: all 0.15s;
+  }
+  .tabs-standard button.active {
+    background: var(--surface); color: var(--txt-pri); box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  /* divider */
+  hr { border: none; border-top: 1px solid var(--border-ter); margin: 48px 0; }
+
+  /* typing animation */
+  .typing-dots { display: flex; gap: 4px; padding: 12px 16px; }
+  .typing-dots span {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--txt-ter);
+    animation: bounce 1.4s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-8px); } }
+
+  /* AI bubble */
+  .ai-bubble {
+    max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6;
+  }
+  .ai-bubble.user { background: var(--accent); color: white; margin-left: auto; }
+  .ai-bubble.bot-before { background: var(--surface-sec); color: var(--txt-pri); }
+  .ai-bubble.bot-after {
+    background: var(--surface-sec); color: var(--txt-pri);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border: 1px solid var(--border-ter);
+  }
+
+  .stat-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat-card {
+    padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border-pri); background: var(--surface);
+  }
+  .stat-card.enhanced {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s;
+  }
+  .stat-card.enhanced:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+  .stat-card .label { font-size: 11px; color: var(--txt-ter); }
+  .stat-card .value { font-size: 20px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat-card .sub { font-size: 11px; color: var(--txt-ter); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="container page-enter">
+
+<h1 class="section-title">다우 ERP 디자인 미리보기</h1>
+<p class="section-desc">실제 코드 변경 전, 개선 전/후 비교입니다. 마우스를 올려서 호버 효과도 확인하세요.</p>
+
+<!-- 1. 카드 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">1. 카드 & 컨테이너</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재</span>
+    <div class="demo-box">
+      <div class="card-before">
+        <div class="card-title">삼성빌리지 101동</div>
+        <div class="card-body">수원시 팔달구 수원천로 11-5 / 소규모 / 옥상방수</div>
+      </div>
+      <div class="card-before">
+        <div class="card-title">오류스카이빌 2동</div>
+        <div class="card-body">수원시 장안구 수일로 74-3 / 수도 / 옥내수도</div>
+      </div>
+      <div class="card-before">
+        <div class="card-title">진흥맨션</div>
+        <div class="card-body">수원시 팔달구 문정동큰길 32-14 / 소규모 / 방수</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후</span>
+    <div class="demo-box">
+      <div class="card-after">
+        <div class="card-title">삼성빌리지 101동</div>
+        <div class="card-body">수원시 팔달구 수원천로 11-5 / 소규모 / 옥상방수</div>
+      </div>
+      <div class="card-after">
+        <div class="card-title">오류스카이빌 2동</div>
+        <div class="card-body">수원시 장안구 수일로 74-3 / 수도 / 옥내수도</div>
+      </div>
+      <div class="card-after">
+        <div class="card-title">진흥맨션</div>
+        <div class="card-body">수원시 팔달구 문정동큰길 32-14 / 소규모 / 방수</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 2. 버튼 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">2. 버튼</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재</span>
+    <div class="demo-box" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button class="btn-before">+ 결의서 작성</button>
+      <button class="btn-before" style="background:transparent; color:var(--txt-sec); border:1px solid var(--border-pri);">취소</button>
+      <button class="btn-before" style="background:#dc2626;">삭제</button>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후</span>
+    <div class="demo-box" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button class="btn-after">+ 결의서 작성</button>
+      <button class="btn-after" style="background:transparent; color:var(--txt-sec); border:1px solid var(--border-pri); box-shadow:none;">취소</button>
+      <button class="btn-after" style="background:#dc2626; box-shadow:0 1px 3px rgba(220,38,38,0.3);">삭제</button>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 3. 로딩 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">3. 로딩 상태</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재</span>
+    <div class="demo-box">
+      <div class="card-before">
+        <div class="loading-before">불러오는 중...</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후</span>
+    <div class="demo-box">
+      <div class="card-after" style="padding:24px;">
+        <div class="skeleton-row" style="width:40%; height:12px;"></div>
+        <div class="skeleton-row" style="width:100%; height:40px; margin-bottom:16px;"></div>
+        <div class="skeleton-row" style="width:100%;"></div>
+        <div class="skeleton-row" style="width:75%;"></div>
+        <div class="skeleton-row" style="width:50%;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 4. 빈 상태 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">4. 빈 상태 (데이터 없음)</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재</span>
+    <div class="demo-box">
+      <div class="card-before">
+        <div class="empty-before">등록된 결의서가 없습니다</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후</span>
+    <div class="demo-box">
+      <div class="card-after">
+        <div class="empty-after">
+          <div class="icon"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg></div>
+          <div class="title">등록된 결의서가 없습니다</div>
+          <div class="desc">첫 번째 지출 결의서를 작성해보세요</div>
+          <button class="action">+ 결의서 작성</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 5. 테이블 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">5. 테이블 호버</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재</span>
+    <div class="demo-box">
+      <div class="card-before" style="padding:0; overflow:hidden;">
+        <table>
+          <thead><tr><th>담당</th><th>빌라명</th><th>연락처</th><th>상태</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge badge-blue">김재호</span></td><td>삼성빌리지 101동</td><td>010-3460-5570</td><td><span class="badge badge-green">승인</span></td></tr>
+            <tr><td><span class="badge badge-blue">김재호</span></td><td>오류스카이빌</td><td>010-9870-5801</td><td><span class="badge badge-amber">실측</span></td></tr>
+            <tr><td><span class="badge badge-blue">김재호</span></td><td>진흥맨션</td><td>010-2366-3802</td><td><span class="badge badge-red">취소</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후</span>
+    <div class="demo-box">
+      <div class="card-after" style="padding:0; overflow:hidden;">
+        <table class="table-after">
+          <thead><tr><th>담당</th><th>빌라명</th><th>연락처</th><th>상태</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge badge-blue">김재호</span></td><td>삼성빌리지 101동</td><td>010-3460-5570</td><td><span class="badge badge-green">승인</span></td></tr>
+            <tr><td><span class="badge badge-blue">김재호</span></td><td>오류스카이빌</td><td>010-9870-5801</td><td><span class="badge badge-amber">실측</span></td></tr>
+            <tr><td><span class="badge badge-blue">김재호</span></td><td>진흥맨션</td><td>010-2366-3802</td><td><span class="badge badge-red">취소</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 6. 통계 카드 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">6. 통계 카드</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재</span>
+    <div class="demo-box">
+      <div class="stat-cards">
+        <div class="stat-card"><div class="label">이번 달 지출</div><div class="value">2,450,000원</div><div class="sub">12건</div></div>
+        <div class="stat-card"><div class="label">월 고정지출</div><div class="value">0원</div><div class="sub">0건</div></div>
+        <div class="stat-card"><div class="label">카드사용</div><div class="value">0원</div><div class="sub">0건</div></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후</span>
+    <div class="demo-box">
+      <div class="stat-cards">
+        <div class="stat-card enhanced" style="border-left:3px solid var(--accent);"><div class="label">이번 달 지출</div><div class="value" style="color:var(--accent);">2,450,000원</div><div class="sub">12건</div></div>
+        <div class="stat-card enhanced"><div class="label">월 고정지출</div><div class="value">0원</div><div class="sub">0건</div></div>
+        <div class="stat-card enhanced"><div class="label">카드사용</div><div class="value">0원</div><div class="sub">0건</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 7. AI 비서 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">7. AI 비서 메시지</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재</span>
+    <div class="demo-box" style="max-width:360px;">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div class="ai-bubble user">수원 소규모 승인 몇건?</div>
+        <div class="ai-bubble bot-before">수원시 소규모 승인 건은 9건입니다.</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후</span>
+    <div class="demo-box" style="max-width:360px;">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div class="ai-bubble user">수원 소규모 승인 몇건?</div>
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+        <div class="ai-bubble bot-after">수원시 소규모 승인 건은 9건입니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 8. 페이지 헤더 통일 -->
+<h2 style="font-size:18px; font-weight:600; margin-bottom:16px;">8. 페이지 헤더 통일안</h2>
+<div class="compare">
+  <div>
+    <span class="compare-label before">현재 (페이지마다 다름)</span>
+    <div class="demo-box">
+      <div class="page-header-before">
+        <h2>지출관리</h2>
+        <button class="btn-before">+ 결의서 작성</button>
+      </div>
+      <div class="tabs-standard">
+        <button class="active">지출결의서</button>
+        <button>고정지출</button>
+        <button>카드분석</button>
+      </div>
+    </div>
+  </div>
+  <div>
+    <span class="compare-label after">개선 후 (통일 헤더)</span>
+    <div class="demo-box">
+      <div class="page-header-after">
+        <div>
+          <h2>지출관리</h2>
+          <div class="subtitle">이번 달 12건 / 총 2,450,000원</div>
+        </div>
+        <button class="btn-after">+ 결의서 작성</button>
+      </div>
+      <div class="tabs-standard">
+        <button class="active">지출결의서</button>
+        <button>고정지출</button>
+        <button>카드분석</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<div style="text-align:center; padding:32px; color:var(--txt-ter); font-size:13px;">
+  이 미리보기가 마음에 드시면 실제 코드에 적용합니다.<br>
+  변경되는 건 <strong>스타일(CSS)만</strong>이고, 기능과 레이아웃은 동일합니다.
+</div>
+
+</div>
+</body>
+</html>

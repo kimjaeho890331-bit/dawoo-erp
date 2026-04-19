@@ -260,8 +260,7 @@ export default function LeavePage() {
             <span className="text-xs px-[10px] py-[2px] bg-yellow-100 text-yellow-700 rounded-full font-medium">승인 대기 {pendingCount}건</span>
           )}
         </div>
-        <button onClick={openCreate}
-          className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">+ 연차 신청</button>
+        <button onClick={openCreate} className="btn-primary">+ 연차 신청</button>
       </div>
 
       {/* 직원별 현황 카드 */}
@@ -346,7 +345,7 @@ export default function LeavePage() {
                   </div>
                   <span className="text-sm text-txt-secondary flex-1 truncate">{r.reason || '-'}</span>
                   <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium shrink-0 ${STATUS_COLORS[r.status]}`}>{r.status}</span>
-                  {r.status === '승인' && <span className="shrink-0" title="캘린더 등록"><Calendar size={14} className="text-[#059669]" /></span>}
+                  {r.status === '승인' && <span className="shrink-0" title="캘린더 등록"><Calendar size={14} className="text-green-600" /></span>}
                   <div className="flex items-center gap-1 shrink-0">
                     {r.status === '대기' && (
                       <>
@@ -354,8 +353,8 @@ export default function LeavePage() {
                         <button onClick={() => handleReject(r.id)} className="text-[11px] px-2 py-1 bg-red-50 text-red-500 rounded hover:bg-red-100">반려</button>
                       </>
                     )}
-                    <button onClick={() => openEdit(r)} className="text-[11px] px-2 py-1 text-txt-tertiary hover:text-accent-text hover:bg-blue-50 rounded">수정</button>
-                    <button onClick={() => handleDelete(r.id)} className="text-[11px] px-2 py-1 text-txt-quaternary hover:text-red-500 hover:bg-red-50 rounded">삭제</button>
+                    <button onClick={() => openEdit(r)} className="btn-inline">수정</button>
+                    <button onClick={() => handleDelete(r.id)} className="btn-inline-danger">삭제</button>
                   </div>
                 </div>
               )
@@ -366,18 +365,18 @@ export default function LeavePage() {
 
       {/* 모달 */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowModal(false)}>
-          <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-border-tertiary flex items-center justify-between">
-              <h3 className="text-base font-semibold text-txt-primary">{editingId ? '연차 수정' : '연차 신청'}</h3>
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-container" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">{editingId ? '연차 수정' : '연차 신청'}</h3>
               <button onClick={() => setShowModal(false)} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="modal-body space-y-4">
               {/* 직원 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">직원</label>
+                <label className="label-field">직원</label>
                 <select value={formStaffId} onChange={e => setFormStaffId(e.target.value)}
-                  className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
+                  className="input-field w-full">
                   {staffList.map(s => {
                     const total = calcTotalLeave(s.join_date)
                     const remain = total - getUsed(s.id)
@@ -388,7 +387,7 @@ export default function LeavePage() {
 
               {/* 유형 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">유형</label>
+                <label className="label-field">유형</label>
                 <div className="flex flex-wrap gap-1.5">
                   {LEAVE_CATEGORIES.map(t => (
                     <button key={t} type="button" onClick={() => { setFormLeaveType(t); if (t !== '경조사') setFormSubtype('') }}
@@ -402,7 +401,7 @@ export default function LeavePage() {
               {/* 경조사 세부 유형 */}
               {formLeaveType === '경조사' && (
                 <div>
-                  <label className="block text-sm font-medium text-txt-secondary mb-1">경조사 유형</label>
+                  <label className="label-field">경조사 유형</label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {FAMILY_EVENT_TYPES.map(f => (
                       <button key={f.key} type="button" onClick={() => handleSubtypeChange(f.key)}
@@ -419,22 +418,22 @@ export default function LeavePage() {
               {/* 기간 */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-txt-secondary mb-1">시작일</label>
+                  <label className="label-field">시작일</label>
                   <input type="date" value={formStartDate}
                     onChange={e => { setFormStartDate(e.target.value); if (e.target.value > formEndDate) setFormEndDate(e.target.value) }}
-                    className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" />
+                    className="input-field w-full" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-txt-secondary mb-1">종료일</label>
+                  <label className="label-field">종료일</label>
                   <input type="date" value={formEndDate} onChange={e => setFormEndDate(e.target.value)} min={formStartDate}
-                    className="w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" />
+                    className="input-field w-full" />
                 </div>
               </div>
 
               {/* 유효성 검사 결과 */}
               {formValidation.error ? (
                 <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-600 font-medium flex items-center gap-2">
-                  <AlertTriangle size={14} className="text-[#dc2626]" /> {formValidation.error}
+                  <AlertTriangle size={14} className="text-red-600" /> {formValidation.error}
                 </div>
               ) : (
                 <div className="bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-700 tabular-nums">
@@ -450,21 +449,19 @@ export default function LeavePage() {
 
               {/* 사유 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">사유</label>
+                <label className="label-field">사유</label>
                 <textarea value={formReason} onChange={e => setFormReason(e.target.value)}
                   placeholder="사유를 입력하세요" rows={2}
-                  className="w-full bg-surface border border-border-primary rounded-lg px-3 py-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none resize-none" />
+                  className="input-field w-full h-auto py-2 resize-none" />
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-border-tertiary flex justify-end gap-2">
-              <button onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
+            <div className="modal-footer">
+              <button onClick={() => setShowModal(false)} className="btn-secondary">취소</button>
               <button onClick={handleSubmit} disabled={!formValidation.valid}
-                className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
-                  formValidation.valid
-                    ? 'bg-accent text-white hover:bg-accent-hover'
-                    : 'bg-surface-tertiary text-txt-tertiary cursor-not-allowed'
-                }`}>{editingId ? '수정' : '신청'}</button>
+                className={formValidation.valid
+                  ? 'btn-primary'
+                  : 'btn-primary opacity-40 cursor-not-allowed'
+                }>{editingId ? '수정' : '신청'}</button>
             </div>
           </div>
         </div>

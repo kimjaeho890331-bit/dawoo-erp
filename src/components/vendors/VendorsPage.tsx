@@ -82,10 +82,10 @@ function FileDropZone({ label, fileUrl, onUpload, onRemove }: {
 
   return (
     <div>
-      <label className="block text-sm font-medium text-txt-secondary mb-1">{label}</label>
+      <label className="label-field">{label}</label>
       {fileUrl ? (
         <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-[10px]">
-          <Check size={14} className="text-[#059669]" />
+          <Check size={14} className="text-green-600" />
           <span className="text-sm text-green-700 truncate flex-1">{fileName}</span>
           <a href={fileUrl} target="_blank" rel="noopener noreferrer"
             className="text-xs text-accent-text hover:underline shrink-0">보기</a>
@@ -98,7 +98,7 @@ function FileDropZone({ label, fileUrl, onUpload, onRemove }: {
           onDrop={handleDrop}
           onClick={() => inputRef.current?.click()}
           className={`flex flex-col items-center justify-center border-[1.5px] border-dashed rounded-[10px] px-6 py-6 cursor-pointer transition-colors ${
-            dragging ? 'border-accent bg-accent-light text-accent-text' : 'border-[#d1d5db] hover:border-accent hover:bg-accent-light hover:text-accent-text'
+            dragging ? 'border-accent bg-accent-light text-accent-text' : 'border-border-secondary hover:border-accent hover:bg-accent-light hover:text-accent-text'
           }`}>
           {uploading ? (
             <span className="text-sm text-txt-tertiary">업로드 중...</span>
@@ -224,21 +224,18 @@ export default function VendorsPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">거래처 DB</h1>
-        <button onClick={openCreateModal}
-          className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium text-sm">
+        <button onClick={openCreateModal} className="btn-primary">
           + {activeTab === '일용직' ? '일용직 등록' : '거래처 등록'}
         </button>
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-1 mb-5 bg-surface-secondary rounded-[10px] p-1 w-fit">
+      <div className="tabs-container">
         {TABS.map(tab => {
           const count = vendors.filter(v => v.vendor_type === tab.key).length
           return (
             <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearch('') }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === tab.key ? 'bg-surface text-accent-text shadow-sm' : 'text-txt-secondary hover:text-txt-primary'
-              }`}>
+              className={`tab-item ${activeTab === tab.key ? 'tab-active' : ''}`}>
               {tab.label}
               <span className={`ml-2 text-xs px-[10px] py-[2px] rounded-full font-medium ${
                 activeTab === tab.key ? 'bg-accent-light text-accent-text' : 'bg-surface-tertiary text-txt-secondary'
@@ -256,7 +253,7 @@ export default function VendorsPage() {
           </svg>
           <input type="text" placeholder={activeTab === '일용직' ? '이름, 분류 검색...' : '업체명, 분류, 담당자 검색...'}
             value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+            className="input-field w-full pl-10 pr-4" />
         </div>
       </div>
 
@@ -334,11 +331,11 @@ export default function VendorsPage() {
 
       {/* 모달 */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setModalOpen(false)}>
-          <div className="bg-surface rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}>
+          <div className="modal-container max-w-lg max-h-[90vh]" onClick={e => e.stopPropagation()}>
             {/* 헤더 */}
-            <div className="flex items-center justify-between p-5 border-b border-border-tertiary">
-              <h2 className="text-lg font-semibold text-txt-primary">
+            <div className="modal-header">
+              <h2 className="modal-title text-lg">
                 {editingVendor ? (isWorker ? '일용직 수정' : '거래처 수정') : (isWorker ? '일용직 등록' : '거래처 등록')}
               </h2>
               <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-surface-secondary">
@@ -349,10 +346,10 @@ export default function VendorsPage() {
             </div>
 
             {/* 바디 */}
-            <div className="p-5 space-y-4">
+            <div className="modal-body space-y-4">
               {/* 구분 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">구분</label>
+                <label className="label-field">구분</label>
                 <div className="flex gap-2">
                   {TABS.map(t => (
                     <button key={t.key} type="button" onClick={() => updateForm('vendor_type', t.key)}
@@ -365,20 +362,20 @@ export default function VendorsPage() {
 
               {/* 이름/업체명 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">
+                <label className="label-field">
                   {isWorker ? '이름' : '업체명'} <span className="text-red-500">*</span>
                 </label>
                 <input type="text" value={form.name} onChange={e => updateForm('name', e.target.value)}
                   placeholder={isWorker ? '이름을 입력하세요' : '업체명을 입력하세요'}
-                  className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                  className="input-field w-full" />
               </div>
 
               {/* 분류 (자유 입력) */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">분류</label>
+                <label className="label-field">분류</label>
                 <input type="text" value={form.category} onChange={e => updateForm('category', e.target.value)}
                   placeholder={isWorker ? '예: 미장, 타일, 철거' : '예: 전기, 설비, 도배'}
-                  className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                  className="input-field w-full" />
               </div>
 
               {/* 협력업체 전용 필드 */}
@@ -386,30 +383,30 @@ export default function VendorsPage() {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-txt-secondary mb-1">담당자</label>
+                      <label className="label-field">담당자</label>
                       <input type="text" value={form.contact_person} onChange={e => updateForm('contact_person', e.target.value)}
-                        placeholder="담당자명" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                        placeholder="담당자명" className="input-field w-full" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-txt-secondary mb-1">연락처</label>
+                      <label className="label-field">연락처</label>
                       <input type="tel" value={form.phone} onChange={e => updateForm('phone', e.target.value)}
-                        placeholder="010-0000-0000" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                        placeholder="010-0000-0000" className="input-field w-full" />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-txt-secondary mb-1">이메일</label>
+                    <label className="label-field">이메일</label>
                     <input type="email" value={form.email} onChange={e => updateForm('email', e.target.value)}
-                      placeholder="email@example.com" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                      placeholder="email@example.com" className="input-field w-full" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-txt-secondary mb-1">주소</label>
+                    <label className="label-field">주소</label>
                     <input type="text" value={form.address} onChange={e => updateForm('address', e.target.value)}
-                      placeholder="사업장 주소" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                      placeholder="사업장 주소" className="input-field w-full" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-txt-secondary mb-1">사업자번호</label>
+                    <label className="label-field">사업자번호</label>
                     <input type="text" value={form.business_number} onChange={e => updateForm('business_number', formatBusinessNumber(e.target.value))}
-                      placeholder="000-00-00000" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                      placeholder="000-00-00000" className="input-field w-full" />
                   </div>
                 </>
               )}
@@ -417,17 +414,17 @@ export default function VendorsPage() {
               {/* 일용직 전용 필드 */}
               {isWorker && (
                 <div>
-                  <label className="block text-sm font-medium text-txt-secondary mb-1">연락처</label>
+                  <label className="label-field">연락처</label>
                   <input type="tel" value={form.phone} onChange={e => updateForm('phone', e.target.value)}
-                    placeholder="010-0000-0000" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                    placeholder="010-0000-0000" className="input-field w-full" />
                 </div>
               )}
 
               {/* 계좌정보 (공통) */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">계좌정보</label>
+                <label className="label-field">계좌정보</label>
                 <input type="text" value={form.bank_info} onChange={e => updateForm('bank_info', e.target.value)}
-                  placeholder="은행명 계좌번호 예금주" className="w-full px-3 h-[36px] border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                  placeholder="은행명 계좌번호 예금주" className="input-field w-full" />
               </div>
 
               {/* 서류 업로드 */}
@@ -458,42 +455,40 @@ export default function VendorsPage() {
 
               {/* 별점 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">평가</label>
+                <label className="label-field">평가</label>
                 <StarRating value={form.rating} onChange={v => updateForm('rating', v)} />
               </div>
 
               {/* 메모 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">메모</label>
+                <label className="label-field">메모</label>
                 <textarea value={form.note} onChange={e => updateForm('note', e.target.value)} rows={2}
                   placeholder="특이사항, 주의사항 등"
-                  className="w-full px-3 py-2.5 border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light resize-none" />
+                  className="input-field w-full py-2.5 resize-none" />
               </div>
             </div>
 
             {/* 푸터 */}
-            <div className="flex items-center justify-between p-5 border-t border-border-tertiary">
+            <div className="modal-footer justify-between">
               <div>
                 {editingVendor && (
                   deleteConfirm === editingVendor.id ? (
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-red-600">정말 삭제?</span>
                       <button onClick={() => handleDelete(editingVendor.id)}
-                        className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700">삭제</button>
-                      <button onClick={() => setDeleteConfirm(null)}
-                        className="px-3 py-1.5 bg-surface-secondary text-txt-secondary text-sm rounded-lg hover:bg-surface-tertiary">취소</button>
+                        className="btn-danger">삭제</button>
+                      <button onClick={() => setDeleteConfirm(null)} className="btn-secondary">취소</button>
                     </div>
                   ) : (
                     <button onClick={() => setDeleteConfirm(editingVendor.id)}
-                      className="px-3 py-1.5 text-red-500 text-sm rounded-lg hover:bg-red-50">삭제</button>
+                      className="btn-inline-danger">삭제</button>
                   )
                 )}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-sm text-txt-secondary bg-surface-secondary rounded-lg hover:bg-surface-tertiary">취소</button>
+                <button onClick={() => setModalOpen(false)} className="btn-secondary">취소</button>
                 <button onClick={handleSave} disabled={!form.name.trim() || saving}
-                  className="px-4 py-2 text-sm text-white bg-accent rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium">
+                  className="btn-primary disabled:opacity-50">
                   {saving ? '저장 중...' : editingVendor ? '수정' : '등록'}
                 </button>
               </div>

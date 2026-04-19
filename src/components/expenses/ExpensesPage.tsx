@@ -17,9 +17,6 @@ interface Expense {
   receipt_url: string | null
   memo: string | null
   created_at: string
-  vendor_id?: string | null
-  approver?: string | null
-  status?: string | null
 }
 
 interface FixedExpense {
@@ -54,9 +51,8 @@ interface CardMapping {
   staff_id: string | null
 }
 
-interface Staff { id: string; name: string; role?: string }
+interface Staff { id: string; name: string }
 interface Site { id: string; name: string }
-interface Vendor { id: string; name: string; vendor_type: string; phone: string | null; representative: string | null; business_number: string | null; bank_name: string | null; account_number: string | null; specialty: string | null }
 
 // 이상 탐지 규칙
 interface Anomaly {
@@ -66,17 +62,17 @@ interface Anomaly {
   transactions: CardTransaction[]
 }
 
-const EXPENSE_CATS = ['노무비', '업체지출', '기타경비'] as const
+const EXPENSE_CATS = ['식대', '교통비', '자재비', '현장경비', '사무용품', '기타'] as const
 const FIXED_CATS = ['임대료', '보험료', '통신비', '차량유지', '급여', '세금', '구독료', '기타'] as const
-const CARD_CATS = ['노무비', '업체지출', '기타경비'] as const
+const CARD_CATS = ['식대', '주유', '자재', '사무용품', '접대', '교통', '편의점', '기타'] as const
 
 const CAT_COLOR: Record<string, string> = {
-  '노무비': 'bg-blue-100 text-blue-700',
-  '업체지출': 'bg-emerald-100 text-emerald-700',
-  '기타경비': 'bg-amber-100 text-amber-700',
+  '식대': 'bg-orange-100 text-orange-700', '교통비': 'bg-blue-100 text-blue-700', '자재비': 'bg-green-100 text-green-700',
+  '현장경비': 'bg-purple-100 text-purple-700', '사무용품': 'bg-yellow-100 text-yellow-700',
   '임대료': 'bg-red-100 text-red-700', '보험료': 'bg-teal-100 text-teal-700', '통신비': 'bg-cyan-100 text-cyan-700',
   '차량유지': 'bg-indigo-100 text-indigo-700', '급여': 'bg-emerald-100 text-emerald-700', '세금': 'bg-rose-100 text-rose-700',
-  '구독료': 'bg-violet-100 text-violet-700',
+  '구독료': 'bg-violet-100 text-violet-700', '주유': 'bg-amber-100 text-amber-700', '자재': 'bg-green-100 text-green-700',
+  '접대': 'bg-pink-100 text-pink-700', '교통': 'bg-blue-100 text-blue-700', '편의점': 'bg-lime-100 text-lime-700',
   '기타': 'bg-surface-secondary text-txt-secondary',
 }
 
@@ -195,7 +191,6 @@ export default function ExpensesPage() {
   const [cardMappings, setCardMappings] = useState<CardMapping[]>([])
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [siteList, setSiteList] = useState<Site[]>([])
-  const [vendorList, setVendorList] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editItem, setEditItem] = useState<any>(null)
@@ -204,14 +199,13 @@ export default function ExpensesPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [expR, fixR, cardR, mapR, stfR, sitR, venR] = await Promise.all([
+    const [expR, fixR, cardR, mapR, stfR, sitR] = await Promise.all([
       supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
       supabase.from('fixed_expenses').select('*').order('pay_day'),
       supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
       supabase.from('card_mappings').select('*'),
-      supabase.from('staff').select('id, name, role'),
+      supabase.from('staff').select('id, name'),
       supabase.from('sites').select('id, name'),
-      supabase.from('vendors').select('id, name, vendor_type, phone, representative, business_number, bank_name, account_number, specialty').order('name'),
     ])
     if (!expR.error) setExpenses(expR.data || [])
     if (!fixR.error) setFixedExpenses(fixR.data || [])
@@ -219,27 +213,13 @@ export default function ExpensesPage() {
     if (!mapR.error) setCardMappings(mapR.data || [])
     if (!stfR.error) setStaffList(stfR.data || [])
     if (!sitR.error) setSiteList(sitR.data || [])
-    if (!venR.error) setVendorList(venR.data || [])
     setLoading(false)
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Realtime: expenses 변경 시 자동 갱신
-  useEffect(() => {
-    const ch = supabase
-      .channel('expenses-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => { loadData() })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [loadData])
-
-  const currentStaffId = typeof window !== 'undefined' ? localStorage.getItem('dawoo_current_staff_id') : null
-  const currentStaffName = staffList.find(s => s.id === currentStaffId)?.name || ''
-
   const staffName = (id: string | null) => !id ? '-' : staffList.find(s => s.id === id)?.name || '-'
   const siteName = (id: string | null) => !id ? '-' : siteList.find(s => s.id === id)?.name || '-'
-  const vendorName = (id: string | null) => !id ? '' : vendorList.find(v => v.id === id)?.name || ''
   const getCardStaff = (cardName: string) => {
     const m = cardMappings.find(cm => cm.card_name === cardName)
     return m?.staff_id ? staffName(m.staff_id) : null
@@ -276,9 +256,9 @@ export default function ExpensesPage() {
   return (
     <div className="p-6 max-w-[1200px] mx-auto space-y-4">
       {/* 헤더 */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-[18px] md:text-[22px] font-semibold tracking-[-0.4px] text-txt-primary whitespace-nowrap">지출관리</h1>
+          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">지출관리</h1>
           <div className="flex bg-surface-secondary rounded-lg p-0.5">
             {[
               { key: 'expense' as Tab, label: '지출결의서' },
@@ -297,7 +277,7 @@ export default function ExpensesPage() {
         </div>
         {tab !== 'card' && (
           <button onClick={openCreate}
-            className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
+            className="btn-primary">
             + {tab === 'expense' ? '결의서 작성' : '고정지출 등록'}
           </button>
         )}
@@ -305,17 +285,17 @@ export default function ExpensesPage() {
 
       {/* 요약 */}
       <div className="grid grid-cols-3 gap-4">
-        <div className={`rounded-[10px] border p-4 ${tab === 'expense' ? 'bg-blue-50 border-blue-200' : 'bg-surface border-border-primary'}`}>
+        <div className={`stat-card ${tab === 'expense' ? 'stat-card-active' : ''}`}>
           <p className="text-xs text-txt-secondary">이번 달 지출결의</p>
           <p className="text-xl font-semibold text-txt-primary tabular-nums">{monthStats.expTotal.toLocaleString()}원</p>
           <p className="text-xs text-txt-tertiary tabular-nums">{monthStats.expCount}건</p>
         </div>
-        <div className={`rounded-[10px] border p-4 ${tab === 'fixed' ? 'bg-blue-50 border-blue-200' : 'bg-surface border-border-primary'}`}>
+        <div className={`stat-card ${tab === 'fixed' ? 'stat-card-active' : ''}`}>
           <p className="text-xs text-txt-secondary">월 고정지출</p>
           <p className="text-xl font-semibold text-txt-primary tabular-nums">{monthStats.fixTotal.toLocaleString()}원</p>
           <p className="text-xs text-txt-tertiary tabular-nums">{monthStats.fixCount}건</p>
         </div>
-        <div className={`rounded-[10px] border p-4 ${tab === 'card' ? 'bg-blue-50 border-blue-200' : 'bg-surface border-border-primary'}`}>
+        <div className={`stat-card ${tab === 'card' ? 'stat-card-active' : ''}`}>
           <p className="text-xs text-txt-secondary">이번 달 카드사용</p>
           <p className="text-xl font-semibold text-txt-primary tabular-nums">{monthStats.cardTotal.toLocaleString()}원</p>
           <p className="text-xs text-txt-tertiary tabular-nums">{monthStats.cardCount}건</p>
@@ -335,57 +315,29 @@ export default function ExpensesPage() {
             {filteredExpenses.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">등록된 결의서가 없습니다</div> : (
               <table className="w-full text-sm">
                 <thead><tr className="bg-surface-secondary border-b border-border-primary">
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장/거래처</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
-                  <th className="px-3 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
-                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">상태</th>
-                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">결재자</th>
-                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">결재</th>
-                  <th className="px-3 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">카테고리</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
+                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
                 </tr></thead>
                 <tbody className="divide-y divide-surface-secondary">
-                  {filteredExpenses.map(e => {
-                    const st = e.status || '대기'
-                    const statusBadge = st === '승인' ? 'bg-emerald-100 text-emerald-700' : st === '반려' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                    const siteOrVendor = vendorName(e.vendor_id ?? null) || siteName(e.site_id) || '-'
-                    return (
-                      <tr key={e.id} className="hover:bg-surface-tertiary">
-                        <td className="px-3 py-2.5 text-txt-primary text-[13px] font-medium">{staffName(e.staff_id)}</td>
-                        <td className="px-3 py-2.5 text-txt-secondary text-[13px]">
-                          <div>{siteOrVendor}</div>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-txt-primary text-[13px]">
-                          <div>{e.title}</div>
-                          {e.expense_date && <div className="text-[11px] text-txt-quaternary">{e.expense_date}</div>}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-semibold text-txt-primary text-[13px] tabular-nums">{e.amount.toLocaleString()}원</td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${statusBadge}`}>{st}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-txt-secondary text-[13px]">{e.approver || '관리자'}</td>
-                        <td className="px-3 py-2.5 text-center">
-                          {st === '대기' ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <button onClick={async () => { await supabase.from('expenses').update({ status: '승인' }).eq('id', e.id); loadData() }}
-                                className="text-[11px] px-2.5 py-1 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 font-medium">승인</button>
-                              <button onClick={async () => { await supabase.from('expenses').update({ status: '반려' }).eq('id', e.id); loadData() }}
-                                className="text-[11px] px-2.5 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 font-medium">반려</button>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-txt-quaternary">{st === '승인' ? '승인됨' : '반려됨'}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => openEdit(e)} className="text-[11px] px-2 py-1 text-txt-tertiary hover:text-accent-text hover:bg-blue-50 rounded">수정</button>
-                            <button onClick={() => handleDelete('expenses', e.id, e.title)} className="text-[11px] px-2 py-1 text-txt-quaternary hover:text-red-500 hover:bg-red-50 rounded">삭제</button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {filteredExpenses.map(e => (
+                    <tr key={e.id} className="hover:bg-surface-tertiary">
+                      <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{e.expense_date}</td>
+                      <td className="px-4 py-2.5"><span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span></td>
+                      <td className="px-4 py-2.5 text-txt-primary text-[13px]">{e.title}{e.memo && <span className="text-txt-tertiary ml-1 text-[11px]">{e.memo}</span>}</td>
+                      <td className="px-4 py-2.5 text-right font-medium text-txt-primary text-[13px] tabular-nums">{e.amount.toLocaleString()}원</td>
+                      <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{siteName(e.site_id)}</td>
+                      <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{staffName(e.staff_id)}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <button onClick={() => openEdit(e)} className="btn-inline">수정</button>
+                        <button onClick={() => handleDelete('expenses', e.id, e.title)} className="btn-inline-danger">삭제</button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}
@@ -410,8 +362,8 @@ export default function ExpensesPage() {
                   </div>
                   <span className="text-sm font-semibold text-txt-primary tabular-nums">{f.amount.toLocaleString()}원</span>
                   <div className="flex gap-1 shrink-0">
-                    <button onClick={() => openEdit(f)} className="text-[11px] px-2 py-1 text-txt-tertiary hover:text-accent-text hover:bg-blue-50 rounded">수정</button>
-                    <button onClick={() => handleDelete('fixed_expenses', f.id, f.title)} className="text-[11px] px-2 py-1 text-txt-quaternary hover:text-red-500 hover:bg-red-50 rounded">삭제</button>
+                    <button onClick={() => openEdit(f)} className="btn-inline">수정</button>
+                    <button onClick={() => handleDelete('fixed_expenses', f.id, f.title)} className="btn-inline-danger">삭제</button>
                   </div>
                 </div>
               ))}
@@ -446,8 +398,7 @@ export default function ExpensesPage() {
 
       {/* 모달 */}
       {showModal && (
-        <UnifiedModal tab={tab} item={editItem} staffList={staffList} siteList={siteList} vendorList={vendorList}
-          currentStaffId={currentStaffId} currentStaffName={currentStaffName}
+        <UnifiedModal tab={tab} item={editItem} staffList={staffList} siteList={siteList}
           onClose={() => { setShowModal(false); setEditItem(null) }}
           onSaved={() => { setShowModal(false); setEditItem(null); loadData() }} />
       )}
@@ -756,9 +707,9 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
             </h3>
             <div className="flex gap-2">
               <button onClick={() => setCsvPreview(null)}
-                className="px-3 py-1.5 text-xs text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
+                className="btn-secondary text-xs">취소</button>
               <button onClick={handleCsvConfirm} disabled={csvSaving}
-                className="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium">
+                className="btn-primary text-xs disabled:opacity-50">
                 {csvSaving ? '저장 중...' : `${csvPreview.length}건 등록`}
               </button>
             </div>
@@ -826,17 +777,17 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
               <div className="mt-3 pt-3 border-t border-border-tertiary space-y-2">
                 <div className="grid grid-cols-3 gap-1.5">
                   <input value={newCardName} onChange={e => setNewCardName(e.target.value)} placeholder="카드명"
-                    className="text-xs h-[36px] bg-surface border border-border-primary rounded-lg px-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" />
+                    className="input-field text-xs" />
                   <input value={newCardLast4} onChange={e => setNewCardLast4(e.target.value)} placeholder="끝4자리"
-                    className="text-xs h-[36px] bg-surface border border-border-primary rounded-lg px-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" />
+                    className="input-field text-xs" />
                   <select value={newCardStaff} onChange={e => setNewCardStaff(e.target.value)}
-                    className="text-xs h-[36px] bg-surface border border-border-primary rounded-lg px-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none">
+                    className="input-field text-xs">
                     <option value="">담당자</option>
                     {staffList.map((s: Staff) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <button onClick={addMapping} disabled={!newCardName.trim()}
-                  className="w-full py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50">추가</button>
+                  className="btn-primary w-full text-xs disabled:opacity-50">추가</button>
               </div>
             )}
           </div>
@@ -932,8 +883,8 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
                     <td className="px-4 py-2.5"><span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[c.category] || CAT_COLOR['기타']}`}>{c.category}</span></td>
                     <td className="px-4 py-2.5 text-right font-medium text-txt-primary text-[13px] tabular-nums">{c.amount.toLocaleString()}원</td>
                     <td className="px-4 py-2.5 text-center">
-                      <button onClick={() => openEdit(c)} className="text-[11px] px-2 py-1 text-txt-tertiary hover:text-accent-text hover:bg-blue-50 rounded">수정</button>
-                      <button onClick={() => handleDelete('card_transactions', c.id, c.merchant)} className="text-[11px] px-2 py-1 text-txt-quaternary hover:text-red-500 hover:bg-red-50 rounded">삭제</button>
+                      <button onClick={() => openEdit(c)} className="btn-inline">수정</button>
+                      <button onClick={() => handleDelete('card_transactions', c.id, c.merchant)} className="btn-inline-danger">삭제</button>
                     </td>
                   </tr>
                 )
@@ -947,10 +898,8 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
 }
 
 // ===== 통합 모달 =====
-function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaffId, currentStaffName, onClose, onSaved }: {
-  tab: Tab; item: any; staffList: Staff[]; siteList: Site[]; vendorList: Vendor[];
-  currentStaffId: string | null; currentStaffName: string;
-  onClose: () => void; onSaved: () => void
+function UnifiedModal({ tab, item, staffList, siteList, onClose, onSaved }: {
+  tab: Tab; item: any; staffList: Staff[]; siteList: Site[]; onClose: () => void; onSaved: () => void
 }) {
   const isEdit = !!item
   const [title, setTitle] = useState(item?.title || item?.merchant || '')
@@ -960,13 +909,6 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
   const [expDate, setExpDate] = useState(item?.expense_date || new Date().toISOString().slice(0, 10))
   const [siteId, setSiteId] = useState(item?.site_id || '')
   const [staffId, setStaffId] = useState(item?.staff_id || '')
-  const [vendorId, setVendorId] = useState(item?.vendor_id || '')
-  const [vendorSearch, setVendorSearch] = useState('')
-  const [showVendorDropdown, setShowVendorDropdown] = useState(false)
-  const [workDates, setWorkDates] = useState<string[]>([])
-  const [newWorkDate, setNewWorkDate] = useState('')
-  const [dailyWage, setDailyWage] = useState(item?.daily_wage?.toString() || '')
-  const [approver, setApprover] = useState(item?.approver || '관리자')
   const [payDay, setPayDay] = useState(item?.pay_day?.toString() || '1')
   const [autoPay, setAutoPay] = useState(item?.auto_pay ?? false)
   const [saving, setSaving] = useState(false)
@@ -974,53 +916,13 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
   const cats = tab === 'expense' ? EXPENSE_CATS : FIXED_CATS
   if (!category && cats.length) setTimeout(() => setCategory(cats[0]), 0)
 
-  // 분류별 거래처 필터
-  const filteredVendors = useMemo(() => {
-    if (category === '노무비') return vendorList.filter(v => v.vendor_type === '일용직')
-    if (category === '업체지출') return vendorList.filter(v => v.vendor_type === '협력업체')
-    return []
-  }, [category, vendorList])
-
-  // 결재자 후보 (대표/이사)
-  const approverList = useMemo(() => {
-    return staffList.filter(s => s.role === '대표' || s.role === '이사')
-  }, [staffList])
-
   const handleSave = async () => {
     if (!title.trim() || !amount) return
     setSaving(true)
     if (tab === 'expense') {
-      // 노무비: 근무일 정보를 메모에 포함
-      const laborInfo = category === '노무비' && workDates.length > 0
-        ? `[근무일] ${workDates.sort().map(d => d.slice(5).replace('-','/')).join(', ')} (${workDates.length}일)\n[일당] ${dailyWage ? parseInt(dailyWage).toLocaleString() : '0'}원\n${memo ? '\n' + memo : ''}`
-        : memo || null
-
-      const basePayload: Record<string, unknown> = {
-        category,
-        title: title.trim(),
-        amount: parseInt(amount),
-        expense_date: expDate,
-        site_id: siteId || null,
-        staff_id: currentStaffId || staffId || null,
-        receipt_url: null,
-        memo: laborInfo,
-        project_id: null,
-      }
-      // New fields (may not exist in DB yet, gracefully handled)
-      try {
-        const extPayload = {
-          ...basePayload,
-          vendor_id: vendorId || null,
-          approver: approver || '관리자',
-          status: '대기',
-        }
-        if (isEdit) await supabase.from('expenses').update(extPayload).eq('id', item.id)
-        else await supabase.from('expenses').insert(extPayload)
-      } catch {
-        // Fallback: save without new columns if DB doesn't have them
-        if (isEdit) await supabase.from('expenses').update(basePayload).eq('id', item.id)
-        else await supabase.from('expenses').insert(basePayload)
-      }
+      const p = { category, title: title.trim(), amount: parseInt(amount), expense_date: expDate, site_id: siteId || null, staff_id: staffId || null, receipt_url: null, memo: memo || null, project_id: null }
+      if (isEdit) await supabase.from('expenses').update(p).eq('id', item.id)
+      else await supabase.from('expenses').insert(p)
     } else if (tab === 'fixed') {
       const p = { category, title: title.trim(), amount: parseInt(amount), pay_day: parseInt(payDay) || 1, auto_pay: autoPay, memo: memo || null }
       if (isEdit) await supabase.from('fixed_expenses').update(p).eq('id', item.id)
@@ -1029,276 +931,86 @@ function UnifiedModal({ tab, item, staffList, siteList, vendorList, currentStaff
     setSaving(false); onSaved()
   }
 
-  const INPUT_CLS = 'w-full h-[36px] bg-surface border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none'
-  const LABEL_CLS = 'block text-[11px] font-medium text-txt-tertiary mb-1'
-  const LABEL_ACCENT_CLS = 'block text-[11px] font-medium text-accent mb-1'
-
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-border-tertiary flex items-center justify-between">
-          <h3 className="font-semibold text-txt-primary">{isEdit ? '수정' : tab === 'expense' ? '지출 등록' : '고정지출 등록'}</h3>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">{isEdit ? '수정' : tab === 'expense' ? '결의서 작성' : '고정지출 등록'}</h3>
           <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
         </div>
-        <div className="p-5 space-y-4">
-
-          {/* === 지출결의서 폼 === */}
-          {tab === 'expense' && (
-            <>
-              {/* 1행: 분류 */}
+        <div className="modal-body space-y-4">
+          <div>
+            <label className="label-field">카테고리</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {cats.map(c => (
+                <button key={c} type="button" onClick={() => setCategory(c)}
+                  className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${category === c ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="label-required">내용 *</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="지출 내용"
+              className="input-field w-full" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label-required">금액 *</label>
+              <input type="text" inputMode="numeric" value={amount ? formatMoney(amount) : ''} onChange={e => setAmount(String(parseMoney(e.target.value)))} placeholder="0"
+                className="input-field w-full text-right tabular-nums" />
+            </div>
+            {tab === 'fixed' ? (
               <div>
-                <label className={LABEL_CLS}>분류 *</label>
-                <div className="flex gap-2">
-                  {EXPENSE_CATS.map(c => (
-                    <button key={c} type="button" onClick={() => { setCategory(c); setVendorId('') }}
-                      className={`flex-1 h-[36px] rounded-lg text-[13px] font-medium transition-all ${
-                        category === c
-                          ? `${CAT_COLOR[c] || 'bg-accent text-white'} shadow-sm`
-                          : 'bg-surface-secondary text-txt-secondary border border-border-primary hover:border-accent'
-                      }`}>{c}</button>
-                  ))}
-                </div>
+                <label className="label-field">매월 납부일</label>
+                <input type="number" value={payDay} onChange={e => setPayDay(e.target.value)} min="1" max="31"
+                  className="input-field w-full" />
               </div>
-
-              {/* 2행: 작성자 + 결재자 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_ACCENT_CLS}>작성자</label>
-                  <input value={currentStaffName || '미지정'} readOnly
-                    className={`${INPUT_CLS} bg-surface-secondary text-txt-secondary cursor-default`} />
-                </div>
-                <div>
-                  <label className={LABEL_ACCENT_CLS}>결재자</label>
-                  <select value={approver} onChange={e => setApprover(e.target.value)} className={INPUT_CLS}>
-                    <option value="관리자">관리자</option>
-                    {approverList.map(s => <option key={s.id} value={s.name}>{s.name} ({s.role})</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* (분류는 상단 버튼으로 이동, 날짜는 현장 옆으로 이동) */}
-
-              {/* 거래처 검색 (분류에 따라 노출) */}
-              {category !== '기타경비' && (
-                <div className="relative">
-                  <label className={LABEL_CLS}>
-                    {category === '노무비' ? '노무자 *' : '거래처 *'}
-                  </label>
-                  <input
-                    type="text"
-                    value={vendorSearch}
-                    onChange={e => { setVendorSearch(e.target.value); setShowVendorDropdown(true); if (!e.target.value) setVendorId('') }}
-                    onFocus={() => setShowVendorDropdown(true)}
-                    placeholder={category === '노무비' ? '이름 검색...' : '업체명 검색...'}
-                    className={INPUT_CLS}
-                  />
-                  {showVendorDropdown && vendorSearch && (() => {
-                    const results = filteredVendors.filter(v =>
-                      v.name.includes(vendorSearch) || (v.phone && v.phone.includes(vendorSearch))
-                    ).slice(0, 8)
-                    if (results.length === 0) return (
-                      <div className="absolute z-10 w-full mt-1 bg-surface border border-border-primary rounded-lg shadow-lg p-3 text-[12px] text-txt-quaternary">
-                        검색 결과 없음
-                      </div>
-                    )
-                    return (
-                      <div className="absolute z-10 w-full mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
-                        {results.map(v => (
-                          <button key={v.id} type="button"
-                            onClick={() => { setVendorId(v.id); setVendorSearch(v.name); setShowVendorDropdown(false) }}
-                            className="w-full text-left px-3 py-2 hover:bg-surface-secondary transition text-[12px] border-b border-border-tertiary last:border-0">
-                            <div className="font-medium text-txt-primary">{v.name}</div>
-                            <div className="text-txt-quaternary text-[11px]">{v.phone || ''} {v.specialty || ''}</div>
-                          </button>
-                        ))}
-                      </div>
-                    )
-                  })()}
-
-                  {/* 거래처 상세 정보 */}
-                  {vendorId && (() => {
-                    const v = filteredVendors.find(x => x.id === vendorId)
-                    if (!v) return null
-                    return (
-                      <div className="mt-2 p-3 bg-surface-secondary rounded-lg text-[12px] space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-txt-primary">{v.name}</span>
-                          <button type="button" onClick={() => { setVendorId(''); setVendorSearch('') }}
-                            className="text-[10px] text-txt-quaternary hover:text-red-500">변경</button>
-                        </div>
-                        {v.business_number && <div className="text-txt-secondary">사업자: {v.business_number}</div>}
-                        <div className="grid grid-cols-2 gap-1">
-                          {v.representative && <div className="text-txt-secondary">담당: {v.representative}</div>}
-                          {v.phone && <div className="text-txt-secondary">연락처: {v.phone}</div>}
-                        </div>
-                        {(v.bank_name || v.account_number) && (
-                          <div className="pt-1.5 border-t border-border-tertiary text-txt-tertiary">
-                            {v.bank_name && <span>{v.bank_name} </span>}
-                            {v.account_number && <span>{v.account_number}</span>}
-                            {v.representative && <span className="ml-1 text-txt-quaternary">({v.representative})</span>}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
-                </div>
-              )}
-
-              {/* 노무비: 근무일 선택 + 일당 = 금액 */}
-              {category === '노무비' && (
-                <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-200/50">
-                  <label className="block text-[11px] font-medium text-blue-700 mb-2">근무 계산</label>
-
-                  {/* 근무일 태그 */}
-                  <div className="mb-2">
-                    <label className="block text-[10px] text-txt-tertiary mb-1">근무일 (날짜 추가)</label>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {workDates.sort().map(d => (
-                        <span key={d} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-[11px] font-medium">
-                          {d.slice(5).replace('-', '/')}
-                          <button type="button" onClick={() => {
-                            const next = workDates.filter(x => x !== d)
-                            setWorkDates(next)
-                            if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
-                          }} className="text-blue-400 hover:text-red-500 ml-0.5">×</button>
-                        </span>
-                      ))}
-                      {workDates.length === 0 && <span className="text-[11px] text-txt-quaternary">날짜를 추가하세요</span>}
-                    </div>
-                    <input type="date" value="" onChange={e => {
-                      const d = e.target.value
-                      if (d && !workDates.includes(d)) {
-                        const next = [...workDates, d]
-                        setWorkDates(next)
-                        if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
-                      } else if (d && workDates.includes(d)) {
-                        // 이미 있으면 제거 (토글)
-                        const next = workDates.filter(x => x !== d)
-                        setWorkDates(next)
-                        if (dailyWage) setAmount(String(next.length * parseInt(dailyWage)))
-                      }
-                      e.target.value = ''
-                    }} className={INPUT_CLS} />
-                  </div>
-
-                  {/* 일당 + 합계 */}
-                  <div className="grid grid-cols-2 gap-2 items-end pt-2 border-t border-blue-200/50">
-                    <div>
-                      <label className="block text-[10px] text-txt-tertiary mb-0.5">일당 (원)</label>
-                      <input type="text" value={dailyWage ? formatMoney(dailyWage) : ''} onChange={e => {
-                        const raw = parseMoney(e.target.value).toString()
-                        setDailyWage(raw)
-                        if (workDates.length && raw) setAmount(String(workDates.length * parseInt(raw)))
-                      }} placeholder="0" className={`${INPUT_CLS} text-right`} />
-                    </div>
-                    <div className="text-right">
-                      <label className="block text-[10px] text-txt-tertiary mb-0.5">결제 금액</label>
-                      <div className="h-[36px] flex items-center justify-end text-[16px] font-bold text-blue-700 tabular-nums">
-                        {workDates.length && dailyWage ? (workDates.length * parseInt(dailyWage)).toLocaleString() : '0'}원
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-[10px] text-blue-500 mt-1">
-                    {workDates.length}일 x {dailyWage ? parseInt(dailyWage).toLocaleString() : '0'}원 = {workDates.length && dailyWage ? (workDates.length * parseInt(dailyWage)).toLocaleString() : '0'}원
-                  </div>
-                </div>
-              )}
-
-              {/* 현장 + 날짜 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLS}>현장 (선택)</label>
-                  <select value={siteId} onChange={e => setSiteId(e.target.value)} className={INPUT_CLS}>
-                    <option value="">현장 선택</option>
-                    {siteList.map((s: Site) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={LABEL_CLS}>작성일 *</label>
-                  <input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className={INPUT_CLS} />
-                </div>
-              </div>
-
-              {/* 지출 내용 */}
+            ) : (
               <div>
-                <label className={LABEL_CLS}>지출 내용 *</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="예: 배관자재 납품" className={INPUT_CLS} />
+                <label className="label-field">지출일</label>
+                <input type="date" value={expDate}
+                  onChange={e => setExpDate(e.target.value)}
+                  className="input-field w-full" />
               </div>
-
-              {/* 합계 금액 — 노무비는 근무계산에서 자동, 나머지만 직접 입력 */}
-              {category !== '노무비' && (
-                <div>
-                  <label className={LABEL_CLS}>합계 금액 (부가세 포함) *</label>
-                  <input type="text" inputMode="numeric"
-                    value={amount ? formatMoney(amount) : ''} onChange={e => setAmount(String(parseMoney(e.target.value)))}
-                    placeholder="0"
-                    className={`${INPUT_CLS} text-right tabular-nums`} />
-                </div>
-              )}
-
-              {/* 첨부서류 */}
-              <div>
-                <label className={LABEL_CLS}>첨부서류 (세금계산서, 거래명세서 등)</label>
-                <div className="border-2 border-dashed border-border-primary rounded-lg p-6 text-center cursor-pointer hover:border-accent transition">
-                  <Upload size={20} className="mx-auto mb-2 text-txt-quaternary" />
-                  <p className="text-[12px] text-txt-tertiary">파일을 드래그하거나 클릭하여 첨부</p>
-                  <p className="text-[10px] text-txt-quaternary mt-1">최대 10MB / 5개</p>
-                </div>
-              </div>
-
-              {/* 비고 */}
-              <div>
-                <label className={LABEL_CLS}>비고</label>
-                <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} placeholder="메모"
-                  className="w-full bg-surface border border-border-primary rounded-lg px-3 py-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none resize-none" />
-              </div>
-            </>
-          )}
-
-          {/* === 고정지출 폼 (기존 유지) === */}
+            )}
+          </div>
           {tab === 'fixed' && (
-            <>
-              <div>
-                <label className={LABEL_CLS}>카테고리</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {FIXED_CATS.map(c => (
-                    <button key={c} type="button" onClick={() => setCategory(c)}
-                      className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${category === c ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className={LABEL_CLS}>내용 *</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="지출 내용" className={INPUT_CLS} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLS}>금액 *</label>
-                  <input type="text" inputMode="numeric" value={amount ? formatMoney(amount) : ''} onChange={e => setAmount(String(parseMoney(e.target.value)))} placeholder="0"
-                    className={`${INPUT_CLS} text-right tabular-nums`} />
-                </div>
-                <div>
-                  <label className={LABEL_CLS}>매월 납부일</label>
-                  <input type="number" value={payDay} onChange={e => setPayDay(e.target.value)} min="1" max="31" className={INPUT_CLS} />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={autoPay} onChange={e => setAutoPay(e.target.checked)} className="w-4 h-4 rounded border-border-secondary text-accent" />
-                <span className="text-sm text-txt-secondary">자동이체</span>
-              </label>
-              <div>
-                <label className={LABEL_CLS}>메모</label>
-                <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} placeholder="메모"
-                  className="w-full bg-surface border border-border-primary rounded-lg px-3 py-2 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none resize-none" />
-              </div>
-            </>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={autoPay} onChange={e => setAutoPay(e.target.checked)} className="w-4 h-4 rounded border-border-secondary text-accent" />
+              <span className="text-sm text-txt-secondary">자동이체</span>
+            </label>
           )}
+          {tab === 'expense' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label-field">현장</label>
+                <select value={siteId} onChange={e => setSiteId(e.target.value)}
+                  className="input-field w-full">
+                  <option value="">선택 안함</option>
+                  {siteList.map((s: Site) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label-field">작성자</label>
+                <select value={staffId} onChange={e => setStaffId(e.target.value)}
+                  className="input-field w-full">
+                  <option value="">선택 안함</option>
+                  {staffList.map((s: Staff) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="label-field">메모</label>
+            <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} placeholder="메모"
+              className="textarea-field w-full" />
+          </div>
         </div>
-        <div className="px-5 py-4 border-t border-border-tertiary flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn-secondary">취소</button>
           <button onClick={handleSave} disabled={saving || !title.trim() || !amount}
-            className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium">
-            {saving ? '저장 중...' : isEdit ? '수정' : tab === 'expense' ? '승인 요청' : '등록'}
+            className="btn-primary disabled:opacity-50">
+            {saving ? '저장 중...' : isEdit ? '수정' : '등록'}
           </button>
         </div>
       </div>

@@ -84,11 +84,11 @@ type SiteTabKey = '기본정보' | '현장일지' | '지출' | '서류'
 const SITE_TABS: SiteTabKey[] = ['기본정보', '현장일지', '지출', '서류']
 
 const STATUS_COLOR: Record<string, string> = {
-  '계약': 'bg-[#e0e7ff] text-[#3730a3]',
-  '착공': 'bg-[#ffedd5] text-[#9a3412]',
-  '공사중': 'bg-[#ffedd5] text-[#9a3412]',
-  '준공서류': 'bg-[#fef9c3] text-[#854d0e]',
-  '정산완료': 'bg-[#d1fae5] text-[#065f46]',
+  '계약': 'bg-status-docs-bg text-status-docs-text',
+  '착공': 'bg-status-construction-bg text-status-construction-text',
+  '공사중': 'bg-status-construction-bg text-status-construction-text',
+  '준공서류': 'bg-status-reserve-bg text-status-reserve-text',
+  '정산완료': 'bg-status-done-bg text-status-done-text',
 }
 
 // --- 메인 ---
@@ -113,16 +113,6 @@ export default function SitesPage() {
 
   useEffect(() => { loadSites() }, [loadSites])
 
-  // Realtime: sites 변경 시 자동 갱신
-  useEffect(() => {
-    const ch = supabase
-      .channel('sites-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, () => { loadSites() })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_tasks' }, () => { loadSites() })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [loadSites])
-
   const handleDelete = async (site: Site) => {
     if (!confirm(`"${site.name}" 현장을 삭제하시겠습니까?`)) return
     await supabase.from('sites').delete().eq('id', site.id)
@@ -133,28 +123,28 @@ export default function SitesPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-[22px] font-semibold text-[#111827]">현장관리</h1>
-          <span className="text-[13px] text-[#9ca3af]">{sites.length}개 현장</span>
+          <h1 className="text-[22px] font-semibold text-txt-primary">현장관리</h1>
+          <span className="text-[13px] text-txt-tertiary">{sites.length}개 현장</span>
         </div>
         <button
           onClick={() => { setEditSite(null); setShowRegister(true) }}
-          className="px-4 py-2 text-[13px] font-medium bg-[#5e6ad2] text-white rounded-lg hover:bg-[#4f56b3] transition-colors"
+          className="btn-primary"
         >
           + 현장 등록
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-[#d1d5db]">불러오는 중...</div>
+        <div className="text-center py-20 text-txt-quaternary">불러오는 중...</div>
       ) : sites.length === 0 ? (
-        <div className="text-center py-20 text-[#d1d5db]">
+        <div className="text-center py-20 text-txt-quaternary">
           등록된 현장이 없습니다.<br />
           <span className="text-[11px]">{`'+ 현장 등록' 버튼으로 새 현장을 추가하세요.`}</span>
         </div>
       ) : (
         <div>
           {/* 헤더 라인 */}
-          <div className="flex items-center gap-4 px-5 py-2.5 bg-[#f1f3f5] rounded-t-[10px] border border-[#e5e7eb] text-[11px] font-medium text-[#9ca3af] uppercase tracking-wider">
+          <div className="flex items-center gap-4 px-5 py-2.5 bg-surface-secondary rounded-t-[10px] border border-border-primary text-[11px] font-medium text-txt-tertiary uppercase tracking-wider">
             <span className="w-4" />
             <span className="flex-1 min-w-0">현장명 / 주소</span>
             <span className="w-20 text-center">상태</span>
@@ -241,11 +231,11 @@ function SiteRegisterModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-[#ffffff] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-[560px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-[#e5e7eb] flex items-center justify-between">
-          <h3 className="text-[16px] font-semibold text-[#111827]">{isEdit ? '현장 수정' : '현장 등록'}</h3>
-          <button onClick={onClose} className="text-[#d1d5db] hover:text-[#4b5563] text-xl">&times;</button>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container w-[560px]" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title text-[16px]">{isEdit ? '현장 수정' : '현장 등록'}</h3>
+          <button onClick={onClose} className="text-txt-quaternary hover:text-txt-secondary text-xl">&times;</button>
         </div>
         <div className="p-6 space-y-4">
           <Field label="현장명 *" value={name} onChange={setName} placeholder="예: OO아파트 리모델링" />
@@ -264,21 +254,21 @@ function SiteRegisterModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">상태</label>
-              <select value={status} onChange={e => setStatus(e.target.value)} className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-3 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none">
+              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">상태</label>
+              <select value={status} onChange={e => setStatus(e.target.value)} className="input-field w-full">
                 {SITE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <Field label="예산 (원)" value={budget} onChange={setBudget} type="number" />
           </div>
           <div>
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">메모</label>
-            <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={3} className="w-full border border-[#e5e7eb] rounded-lg px-3 py-2 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none resize-none" />
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">메모</label>
+            <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={3} className="textarea-field w-full" />
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-[#e5e7eb] flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-[13px] border border-[#e5e7eb] text-[#4b5563] rounded-lg hover:bg-[#e9ecef] transition-colors">취소</button>
-          <button onClick={handleSubmit} disabled={saving || !name.trim()} className="px-4 py-2 text-[13px] bg-[#5e6ad2] text-white rounded-lg hover:bg-[#4f56b3] disabled:opacity-50 transition-colors">
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn-secondary">취소</button>
+          <button onClick={handleSubmit} disabled={saving || !name.trim()} className="btn-primary disabled:opacity-50">
             {saving ? '저장 중...' : isEdit ? '수정' : '등록'}
           </button>
         </div>
@@ -292,9 +282,9 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">{label}</label>
+      <label className="block text-[11px] font-medium text-txt-tertiary mb-1">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-3 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none" />
+        className="input-field w-full" />
     </div>
   )
 }
@@ -309,32 +299,32 @@ function SiteAccordion({
   onEdit: () => void; onDelete: () => void; onRefresh: () => void
 }) {
   return (
-    <div className={`border border-[#e5e7eb] border-t-0 first:border-t first:rounded-t-[10px] last:rounded-b-[10px] overflow-hidden ${expanded ? '' : ''}`}>
-      <button onClick={onToggle} className="w-full flex items-center gap-4 px-5 py-3.5 bg-[#ffffff] hover:bg-[#e9ecef] transition-colors text-left">
-        <span className={`transform transition-transform text-[#9ca3af] w-4 text-[11px] ${expanded ? 'rotate-90' : ''}`}>&#9654;</span>
+    <div className={`border border-border-primary border-t-0 first:border-t first:rounded-t-[10px] last:rounded-b-[10px] overflow-hidden ${expanded ? '' : ''}`}>
+      <button onClick={onToggle} className="w-full flex items-center gap-4 px-5 py-3.5 bg-surface hover:bg-surface-tertiary transition-colors text-left">
+        <span className={`transform transition-transform text-txt-tertiary w-4 text-[11px] ${expanded ? 'rotate-90' : ''}`}>&#9654;</span>
         <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-semibold text-[#111827] truncate">{site.name}</div>
-          <div className="text-[12px] text-[#4b5563] truncate">{site.address || '-'}</div>
+          <div className="text-[14px] font-semibold text-txt-primary truncate">{site.name}</div>
+          <div className="text-[12px] text-txt-secondary truncate">{site.address || '-'}</div>
         </div>
-        <span className={`w-20 text-center px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_COLOR[site.status] || 'bg-[#f1f3f5] text-[#4b5563]'}`}>
+        <span className={`w-20 text-center px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_COLOR[site.status] || 'bg-surface-secondary text-txt-secondary'}`}>
           {site.status}
         </span>
-        <span className="w-20 text-center text-[12px] text-[#4b5563] truncate">{site.site_manager || '-'}</span>
+        <span className="w-20 text-center text-[12px] text-txt-secondary truncate">{site.site_manager || '-'}</span>
         <div className="w-24 shrink-0">
-          <div className="flex items-center justify-between text-[11px] text-[#9ca3af] mb-0.5">
+          <div className="flex items-center justify-between text-[11px] text-txt-tertiary mb-0.5">
             <span>{site.progress}%</span>
           </div>
-          <div className="w-full h-[3px] bg-[#f3f4f6] rounded overflow-hidden">
-            <div className="h-full bg-[#5e6ad2] rounded transition-all" style={{ width: `${site.progress}%` }} />
+          <div className="w-full h-[3px] bg-border-tertiary rounded overflow-hidden">
+            <div className="h-full bg-accent rounded transition-all" style={{ width: `${site.progress}%` }} />
           </div>
         </div>
         <div className="w-28 text-right shrink-0">
-          <div className="text-[13px] font-semibold text-[#111827] tabular-nums">{site.budget.toLocaleString()}원</div>
+          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{site.budget.toLocaleString()}원</div>
         </div>
       </button>
 
       {expanded && (
-        <div className="border-t border-[#f3f4f6]">
+        <div className="border-t border-border-tertiary">
           <SiteDetail site={site} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} />
         </div>
       )}
@@ -350,7 +340,6 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 }) {
   const [activeTab, setActiveTab] = useState<SiteTabKey>('기본정보')
   const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [vendorList, setVendorList] = useState<{ id: string; name: string; vendor_type: string; phone: string | null }[]>([])
 
   const loadSchedules = useCallback(async () => {
     try {
@@ -365,34 +354,27 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 
   useEffect(() => { loadSchedules() }, [loadSchedules])
 
-  // 거래처 목록 로드 (공종 모달 검색용)
-  useEffect(() => {
-    supabase.from('vendors').select('id, name, vendor_type, phone').order('name').then(({ data }) => {
-      if (data) setVendorList(data as { id: string; name: string; vendor_type: string; phone: string | null }[])
-    })
-  }, [])
-
   return (
-    <div className="bg-[#f1f3f5] p-5">
+    <div className="bg-surface-secondary p-5">
       {/* 수정/삭제 버튼 */}
       <div className="flex justify-end gap-2 mb-3">
-        <button onClick={onEdit} className="px-3 py-1.5 text-[11px] border border-[#e5e7eb] text-[#4b5563] rounded-lg hover:bg-[#ffffff] transition-colors">수정</button>
-        <button onClick={onDelete} className="px-3 py-1.5 text-[11px] text-[#dc2626] border border-[#fecaca] rounded-lg hover:bg-[#fef2f2] transition-colors">삭제</button>
+        <button onClick={onEdit} className="btn-inline">수정</button>
+        <button onClick={onDelete} className="btn-inline-danger">삭제</button>
       </div>
 
       {/* 공정 캘린더 */}
-      <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} vendorList={vendorList} />
+      <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} />
 
       {/* 탭 */}
-      <div className="flex border-b border-[#e5e7eb] mt-5 mb-4">
+      <div className="flex border-b border-border-primary mt-5 mb-4">
         {SITE_TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${
               activeTab === tab
-                ? 'border-[#5e6ad2] text-[#5e6ad2]'
-                : 'border-transparent text-[#9ca3af] hover:text-[#4b5563]'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-txt-tertiary hover:text-txt-secondary'
             }`}
           >
             {tab}
@@ -400,7 +382,7 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
         ))}
       </div>
 
-      <div className="bg-[#ffffff] rounded-[10px] border border-[#e5e7eb] p-4">
+      <div className="bg-surface rounded-[10px] border border-border-primary p-4">
         {activeTab === '기본정보' && <TabBasicInfo site={site} onRefresh={onRefresh} />}
         {activeTab === '현장일지' && <TabSiteLogs siteId={site.id} />}
         {activeTab === '지출' && <TabExpenses siteId={site.id} />}
@@ -527,19 +509,19 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
 
   // 박스 필드 컴포넌트
   const Box = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="border border-[#e5e7eb] rounded-[10px] px-3 py-2 bg-[#ffffff] hover:border-[#5e6ad2]/40 focus-within:border-[#5e6ad2] focus-within:ring-2 focus-within:ring-[#5e6ad2]/10 transition-colors">
-      <div className="text-[10px] font-medium text-[#9ca3af] mb-0.5">{label}</div>
-      <div className="text-[13px] text-[#111827]">{children}</div>
+    <div className="border border-border-primary rounded-[10px] px-3 py-2 bg-surface hover:border-accent/40 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/10 transition-colors">
+      <div className="text-[10px] font-medium text-txt-tertiary mb-0.5">{label}</div>
+      <div className="text-[13px] text-txt-primary">{children}</div>
     </div>
   )
 
-  const inputCls = "w-full bg-transparent border-0 outline-none text-[13px] text-[#111827] placeholder:text-[#d1d5db] p-0"
+  const inputCls = "w-full bg-transparent border-0 outline-none text-[13px] text-txt-primary placeholder:text-txt-quaternary p-0"
 
   return (
     <div className="space-y-3">
       {/* 자동저장 상태 표시 */}
       <div className="flex justify-end h-4">
-        {savedAt && <span className="text-[10px] text-[#059669]">✓ 저장됨 ({savedAt})</span>}
+        {savedAt && <span className="text-[10px] text-money-positive">✓ 저장됨 ({savedAt})</span>}
       </div>
 
       {/* 1행: 현장명 | 진행 상황 | 계약 종류 */}
@@ -607,9 +589,9 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
         <Box label="공사금액 (원)">
           <input className={`${inputCls} tabular-nums`} value={formatMoney(form.budget)} onChange={e => u('budget', parseMoney(e.target.value))} placeholder="0" />
         </Box>
-        <div className="border border-[#e5e7eb] rounded-[10px] px-3 py-2 bg-[#f9fafb]">
-          <div className="text-[10px] font-medium text-[#9ca3af] mb-0.5">지출 (지출내역서 합계)</div>
-          <div className="text-[13px] text-[#111827] tabular-nums">{expenseTotal.toLocaleString()}원</div>
+        <div className="border border-border-primary rounded-[10px] px-3 py-2 bg-page">
+          <div className="text-[10px] font-medium text-txt-tertiary mb-0.5">지출 (지출내역서 합계)</div>
+          <div className="text-[13px] text-txt-primary tabular-nums">{expenseTotal.toLocaleString()}원</div>
         </div>
       </div>
 
@@ -645,7 +627,7 @@ function CompletionBadge({ score, max }: { score: number; max: number }) {
     <div className="inline-flex items-center gap-1 text-[10px] tabular-nums" title={`완성도 ${score}/${max}`}>
       <div className="flex gap-0.5">
         {dots.map((filled, i) => (
-          <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filled ? color : '#e5e7eb' }} />
+          <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filled ? color : 'var(--color-border-primary)' }} />
         ))}
       </div>
       <span className="font-medium" style={{ color }}>{score}/{max}</span>
@@ -685,8 +667,8 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[14px] font-semibold text-[#111827]">현장일지</h3>
-        <button onClick={() => { setEditLog(null); setShowForm(true) }} className="px-3 py-1.5 text-[11px] bg-[#5e6ad2] text-white rounded-lg hover:bg-[#4f56b3] transition-colors">+ 일지 작성</button>
+        <h3 className="text-[14px] font-semibold text-txt-primary">현장일지</h3>
+        <button onClick={() => { setEditLog(null); setShowForm(true) }} className="px-3 py-1.5 text-[11px] bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors">+ 일지 작성</button>
       </div>
 
       {showForm && (
@@ -696,22 +678,22 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
       )}
 
       {loading ? (
-        <div className="text-center py-8 text-[#d1d5db] text-[13px]">불러오는 중...</div>
+        <div className="text-center py-8 text-txt-quaternary text-[13px]">불러오는 중...</div>
       ) : logs.length === 0 ? (
-        <div className="text-center py-8 text-[#d1d5db] text-[13px]">작성된 일지가 없습니다.</div>
+        <div className="text-center py-8 text-txt-quaternary text-[13px]">작성된 일지가 없습니다.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[13px] border-collapse">
             <thead>
-              <tr className="bg-[#f1f3f5] border-b border-[#e5e7eb]">
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-24">날짜</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-24">날씨</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af]">금일작업 / 인력 / 자재</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-28">특이사항</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-28">익일계획</th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#9ca3af] w-14">사진</th>
-                <th className="px-3 py-2 text-center text-[11px] font-medium text-[#9ca3af] w-20">완성도</th>
-                <th className="px-3 py-2 text-center text-[11px] font-medium text-[#9ca3af] w-20">관리</th>
+              <tr className="bg-surface-secondary border-b border-border-primary">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-tertiary w-24">날짜</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-tertiary w-24">날씨</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-tertiary">금일작업 / 인력 / 자재</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-tertiary w-28">특이사항</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-tertiary w-28">익일계획</th>
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-txt-tertiary w-14">사진</th>
+                <th className="px-3 py-2 text-center text-[11px] font-medium text-txt-tertiary w-20">완성도</th>
+                <th className="px-3 py-2 text-center text-[11px] font-medium text-txt-tertiary w-20">관리</th>
               </tr>
             </thead>
             <tbody>
@@ -720,35 +702,35 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
                 const allImages = photos.map(p => ({ url: p.file_url, name: p.file_name || '' }))
                 const completion = calcLogCompletion(log)
                 return (
-                  <tr key={log.id} className="border-b border-[#f3f4f6] hover:bg-[#e9ecef]/50">
-                    <td className="px-3 py-2 text-[#111827] font-medium whitespace-nowrap">{log.log_date}</td>
-                    <td className="px-3 py-2 text-[#4b5563] text-[11px]">{log.weather || '-'}</td>
-                    <td className="px-3 py-2 text-[#4b5563] max-w-[300px]">
+                  <tr key={log.id} className="border-b border-border-tertiary hover:bg-surface-tertiary/50">
+                    <td className="px-3 py-2 text-txt-primary font-medium whitespace-nowrap">{log.log_date}</td>
+                    <td className="px-3 py-2 text-txt-secondary text-[11px]">{log.weather || '-'}</td>
+                    <td className="px-3 py-2 text-txt-secondary max-w-[300px]">
                       <div className="line-clamp-2 text-[13px]">{log.today_work || '-'}</div>
                       {(log.workers_detail || log.materials) && (
-                        <div className="mt-0.5 text-[10px] text-[#9ca3af] leading-tight">
+                        <div className="mt-0.5 text-[10px] text-txt-tertiary leading-tight">
                           {log.workers_detail && <span>👷 {log.workers_detail}</span>}
                           {log.workers_detail && log.materials && <span> · </span>}
                           {log.materials && <span>📦 {log.materials}</span>}
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-[#4b5563]">
+                    <td className="px-3 py-2 text-txt-secondary">
                       <div className="line-clamp-2 text-[11px]">{log.remarks || '-'}</div>
                     </td>
-                    <td className="px-3 py-2 text-[#4b5563]">
+                    <td className="px-3 py-2 text-txt-secondary">
                       <div className="line-clamp-2 text-[11px] whitespace-pre-wrap">{log.tomorrow_plan || '-'}</div>
                     </td>
                     <td className="px-3 py-2">
                       {allImages.length > 0 ? (
                         <button
                           onClick={() => { setViewerImages(allImages); setViewerIndex(0) }}
-                          className="text-[11px] text-[#5e6ad2] hover:text-[#4f56b3]"
+                          className="text-[11px] text-accent hover:text-accent-hover"
                         >
                           {allImages.length}장
                         </button>
                       ) : (
-                        <span className="text-[11px] text-[#d1d5db]">-</span>
+                        <span className="text-[11px] text-txt-quaternary">-</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
@@ -756,8 +738,8 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
                     </td>
                     <td className="px-3 py-2 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => { setEditLog(log); setShowForm(true) }} className="text-[11px] text-[#5e6ad2] hover:text-[#4f56b3]">수정</button>
-                        <button onClick={() => handleDelete(log.id)} className="text-[11px] text-[#dc2626] hover:text-[#dc2626]/80">삭제</button>
+                        <button onClick={() => { setEditLog(log); setShowForm(true) }} className="btn-inline">수정</button>
+                        <button onClick={() => handleDelete(log.id)} className="btn-inline-danger">삭제</button>
                       </div>
                     </td>
                   </tr>
@@ -893,8 +875,8 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
   const tomorrowLabel = `${tomorrow.getMonth() + 1}/${tomorrow.getDate()}`
 
   return (
-    <div className="mb-4 rounded-[10px] border border-[#e5e7eb] bg-[#ffffff] shadow-[0_20px_60px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 bg-[#5e6ad2] text-white">
+    <div className="mb-4 rounded-[10px] border border-border-primary bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 bg-accent text-white">
         <h4 className="text-[14px] font-semibold">{isEdit ? '일지 수정' : '일지 작성'}</h4>
         <button onClick={onClose} className="text-white/70 hover:text-white text-lg leading-none">&times;</button>
       </div>
@@ -903,87 +885,87 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
         {/* 1행: 날짜 + 날씨 + 온도 */}
         <div className="flex gap-3 items-start">
           <div className="w-36 shrink-0">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">날짜 *</label>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">날짜 *</label>
             <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
-              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+              className="input-field w-full" />
           </div>
           <div className="w-32 shrink-0">
-            <label className="flex items-center justify-between text-[11px] font-medium text-[#9ca3af] mb-1">
+            <label className="flex items-center justify-between text-[11px] font-medium text-txt-tertiary mb-1">
               <span>날씨</span>
               <button type="button" onClick={fetchWeather} disabled={weatherLoading}
-                className="text-[10px] text-[#5e6ad2] hover:text-[#4f56b3] disabled:text-[#d1d5db]">
+                className="text-[10px] text-accent hover:text-accent-hover disabled:text-txt-quaternary">
                 {weatherLoading ? '조회중...' : '🔄 자동'}
               </button>
             </label>
             <select value={weatherCond} onChange={e => setWeatherCond(e.target.value)}
-              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]">
+              className="input-field w-full">
               <option value="">선택</option>
               {WEATHER_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
             </select>
           </div>
           <div className="w-28 shrink-0">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">온도</label>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">온도</label>
             <input type="text" value={weatherTemp} onChange={e => setWeatherTemp(e.target.value)}
               placeholder="18°C"
-              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+              className="input-field w-full" />
           </div>
           <div className="flex-1">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">금일작업</label>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">금일작업</label>
             <input type="text" value={todayWork} onChange={e => setTodayWork(e.target.value)}
               placeholder="예) 2층 천장 목공 마감, 1층 화장실 방수 시공"
-              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+              className="input-field w-full" />
           </div>
         </div>
 
         {/* 2행: 투입 인력 + 자재 */}
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">투입 인력</label>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">투입 인력</label>
             <input type="text" value={workersDetail} onChange={e => setWorkersDetail(e.target.value)}
               placeholder="예) 목공 3명, 철근 2명, 미장 4명"
-              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+              className="input-field w-full" />
           </div>
           <div className="flex-1">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">자재 투입</label>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">자재 투입</label>
             <input type="text" value={materials} onChange={e => setMaterials(e.target.value)}
               placeholder="예) 시멘트 10포, 방수제 5통, 타일 20박스"
-              className="w-full h-[36px] border border-[#e5e7eb] rounded-lg px-2.5 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none bg-[#ffffff]" />
+              className="input-field w-full" />
           </div>
         </div>
 
         {/* 3행: 특이사항 + 익일계획 */}
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">특이사항</label>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">특이사항</label>
             <textarea value={remarks} onChange={e => setRemarks(e.target.value)} rows={2}
-              className="w-full border border-[#e5e7eb] rounded-lg px-2.5 py-2 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none resize-none bg-[#ffffff]" />
+              className="textarea-field w-full" />
           </div>
           <div className="flex-1">
-            <label className="block text-[11px] font-medium text-[#9ca3af] mb-1">
-              익일계획 <span className="text-[#5e6ad2]">({tomorrowLabel})</span>
-              <span className="text-[10px] text-[#9ca3af] font-normal ml-1">· 다음날 캘린더 자동 포함</span>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">
+              익일계획 <span className="text-accent">({tomorrowLabel})</span>
+              <span className="text-[10px] text-txt-tertiary font-normal ml-1">· 다음날 캘린더 자동 포함</span>
             </label>
             {tomorrowSchedules.length > 0 ? (
               <div className="mb-1.5 flex flex-wrap gap-1">
                 {tomorrowSchedules.map((ts, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#e0e7ff] text-[#3730a3] rounded-md text-[11px] font-medium">
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-light text-accent-text rounded-md text-[11px] font-medium">
                     {ts.title}{ts.contractor ? ` (${ts.contractor})` : ''}
                   </span>
                 ))}
               </div>
             ) : (
-              <div className="mb-1.5 text-[11px] text-[#d1d5db] italic">예정 공정 없음</div>
+              <div className="mb-1.5 text-[11px] text-txt-quaternary italic">예정 공정 없음</div>
             )}
             <textarea value={tomorrowPlan} onChange={e => setTomorrowPlan(e.target.value)} rows={1}
               placeholder="추가 메모 (선택)"
-              className="w-full border border-[#e5e7eb] rounded-lg px-2.5 py-2 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none resize-none bg-[#ffffff]" />
+              className="textarea-field w-full" />
           </div>
         </div>
 
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="px-4 py-2 text-[13px] border border-[#e5e7eb] text-[#4b5563] rounded-lg hover:bg-[#e9ecef] transition-colors">취소</button>
+          <button onClick={onClose} className="btn-secondary">취소</button>
           <button onClick={handleSubmit} disabled={saving || !logDate}
-            className="px-5 py-2 text-[13px] bg-[#5e6ad2] text-white rounded-lg hover:bg-[#4f56b3] disabled:opacity-50 font-medium transition-colors">
+            className="btn-primary disabled:opacity-50">
             {saving ? '저장 중...' : isEdit ? '수정' : '저장'}
           </button>
         </div>
@@ -997,7 +979,7 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
 // ===========================
 function TabExpenses({ siteId }: { siteId: string }) {
   return (
-    <div className="text-center py-8 text-[#d1d5db] text-[13px]">
+    <div className="text-center py-8 text-txt-quaternary text-[13px]">
       지출결의서 연동 예정<br />
       <span className="text-[11px]">(지출결의서 페이지에서 등록한 내역이 여기에 자동 표시됩니다)</span>
     </div>
@@ -1056,46 +1038,46 @@ function TabDocuments({ siteId }: { siteId: string }) {
 
   return (
     <div className="space-y-5">
-      <h3 className="text-[14px] font-semibold text-[#111827]">현장 서류</h3>
+      <h3 className="text-[14px] font-semibold text-txt-primary">현장 서류</h3>
       {DOC_STAGES.map(stage => (
         <div key={stage}>
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-[13px] font-medium text-[#4b5563]">{stage}</h4>
-            <button onClick={() => setShowAdd(showAdd === stage ? null : stage)} className="text-[11px] text-[#5e6ad2] hover:text-[#4f56b3]">+ 추가</button>
+            <h4 className="text-[13px] font-medium text-txt-secondary">{stage}</h4>
+            <button onClick={() => setShowAdd(showAdd === stage ? null : stage)} className="text-[11px] text-accent hover:text-accent-hover">+ 추가</button>
           </div>
           {showAdd === stage && (
             <div className="flex gap-2 mb-2">
               <input value={newDocName} onChange={e => setNewDocName(e.target.value)} placeholder="서류명"
-                className="flex-1 h-[36px] border border-[#e5e7eb] rounded-lg px-3 text-[13px] text-[#111827] focus:border-[#5e6ad2] focus:ring-2 focus:ring-[#5e6ad2]/20 focus:outline-none"
+                className="input-field flex-1"
                 onKeyDown={e => e.key === 'Enter' && handleAddDoc(stage)} />
-              <button onClick={() => handleAddDoc(stage)} className="px-3 py-1.5 text-[11px] bg-[#5e6ad2] text-white rounded-lg hover:bg-[#4f56b3] transition-colors">추가</button>
-              <button onClick={() => { setShowAdd(null); setNewDocName('') }} className="px-3 py-1.5 text-[11px] border border-[#e5e7eb] text-[#4b5563] rounded-lg hover:bg-[#e9ecef] transition-colors">취소</button>
+              <button onClick={() => handleAddDoc(stage)} className="px-3 py-1.5 text-[11px] bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors">추가</button>
+              <button onClick={() => { setShowAdd(null); setNewDocName('') }} className="px-3 py-1.5 text-[11px] border border-border-primary text-txt-secondary rounded-lg hover:bg-surface-tertiary transition-colors">취소</button>
             </div>
           )}
           <div className="grid grid-cols-3 gap-2">
             {grouped[stage].length === 0 ? (
-              <div className="col-span-3 text-[11px] text-[#d1d5db] py-2">등록된 서류 없음</div>
+              <div className="col-span-3 text-[11px] text-txt-quaternary py-2">등록된 서류 없음</div>
             ) : grouped[stage].map(doc => (
               <div key={doc.id} className={`border rounded-[10px] p-3 flex items-center justify-between ${
-                doc.status === 'done' ? 'border-[#a7f3d0] bg-[#d1fae5]/30'
-                  : doc.status === 'auto' ? 'border-[#c7d2fe] bg-[#e0e7ff]/30'
-                    : 'border-dashed border-[#e5e7eb]'
+                doc.status === 'done' ? 'border-normal-bg bg-status-done-bg/30'
+                  : doc.status === 'auto' ? 'border-accent-light bg-accent-light/30'
+                    : 'border-dashed border-border-primary'
               }`}>
                 <div className="flex items-center gap-2 min-w-0">
                   <button onClick={() => handleToggleStatus(doc)}
                     className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-[11px] ${
-                      doc.status === 'done' ? 'bg-[#065f46] border-[#065f46] text-white' : 'border-[#e5e7eb]'
+                      doc.status === 'done' ? 'bg-status-done-text border-status-done-text text-white' : 'border-border-primary'
                     }`}>
                     {doc.status === 'done' && '\u2713'}
                   </button>
-                  <span className="text-[13px] text-[#4b5563] truncate">{doc.doc_name}</span>
+                  <span className="text-[13px] text-txt-secondary truncate">{doc.doc_name}</span>
                   {doc.source_tag && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      doc.source_tag === 'AI생성' ? 'bg-[#e0e7ff] text-[#3730a3]' : 'bg-[#ffedd5] text-[#9a3412]'
+                      doc.source_tag === 'AI생성' ? 'bg-accent-light text-accent-text' : 'bg-status-construction-bg text-status-construction-text'
                     }`}>{doc.source_tag}</span>
                   )}
                 </div>
-                <button onClick={() => handleDeleteDoc(doc.id)} className="text-[11px] text-[#dc2626] hover:text-[#dc2626]/80 shrink-0 ml-1">삭제</button>
+                <button onClick={() => handleDeleteDoc(doc.id)} className="btn-inline-danger shrink-0 ml-1">삭제</button>
               </div>
             ))}
           </div>

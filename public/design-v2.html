@@ -3,533 +3,439 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>다우 ERP 디자인 v2 — TailAdmin 스타일</title>
+<title>다우 ERP 리디자인 — 접수대장 (정보 100% 유지)</title>
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
 <style>
-  :root {
-    --page: #f1f5f9;
-    --surface: #ffffff;
-    --surface-sec: #f8fafc;
-    --accent: #5e6ad2;
-    --accent-hover: #4f56b3;
-    --accent-light: #eef2ff;
-    --txt-pri: #1e293b;
-    --txt-sec: #64748b;
-    --txt-ter: #94a3b8;
-    --txt-qua: #cbd5e1;
-    --border: #e2e8f0;
-    --border-light: #f1f5f9;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
-    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
-    --radius: 12px;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Pretendard Variable', sans-serif; background: var(--page); color: var(--txt-pri); font-size: 14px; line-height: 1.5; }
+:root{--page:#f1f5f9;--surface:#fff;--surface-sec:#f8fafc;--accent:#5e6ad2;--accent-hover:#4f56b3;--accent-light:#eef2ff;--txt-pri:#1e293b;--txt-sec:#64748b;--txt-ter:#94a3b8;--txt-qua:#cbd5e1;--border:#e2e8f0;--border-light:#f1f5f9;--shadow-sm:0 1px 2px rgba(0,0,0,.05);--shadow-md:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -2px rgba(0,0,0,.05);--r:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Pretendard Variable',sans-serif;background:var(--page);color:var(--txt-pri);font-size:13px;line-height:1.5}
+.layout{display:flex;min-height:100vh}
 
-  /* Layout */
-  .layout { display: flex; min-height: 100vh; }
-  .sidebar {
-    width: 260px; background: #1e293b; color: #e2e8f0; padding: 0;
-    position: fixed; top: 0; left: 0; bottom: 0; z-index: 10;
-    display: flex; flex-direction: column;
-  }
-  .sidebar-logo { padding: 20px 24px; font-size: 17px; font-weight: 700; color: white; border-bottom: 1px solid rgba(255,255,255,0.08); }
-  .sidebar-group { padding: 16px 16px 4px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-  .sidebar-item {
-    display: flex; align-items: center; gap: 10px; padding: 9px 16px; margin: 1px 8px;
-    border-radius: 8px; font-size: 13px; color: #94a3b8; cursor: pointer; transition: all 0.15s;
-  }
-  .sidebar-item:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
-  .sidebar-item.active { background: rgba(94,106,210,0.15); color: white; font-weight: 500; }
-  .sidebar-item.active::before { content: ''; width: 3px; height: 20px; background: var(--accent); border-radius: 2px; margin-left: -8px; margin-right: 5px; }
-  .sidebar-icon { width: 18px; height: 18px; opacity: 0.6; }
+/* Sidebar */
+.sidebar{width:240px;background:#1e293b;color:#e2e8f0;position:fixed;top:0;left:0;bottom:0;z-index:10}
+.sidebar-logo{padding:16px 20px;font-size:15px;font-weight:700;color:#fff;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-group{padding:14px 16px 4px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+.sidebar-item{display:flex;align-items:center;gap:8px;padding:8px 16px;margin:1px 8px;border-radius:6px;font-size:13px;color:#94a3b8;cursor:pointer;transition:.15s}
+.sidebar-item:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
+.sidebar-item.active{background:rgba(94,106,210,.15);color:#fff;font-weight:500}
 
-  .main { margin-left: 260px; flex: 1; padding: 24px 28px; min-height: 100vh; }
+.main{margin-left:240px;flex:1;padding:24px}
 
-  /* Cards */
-  .card {
-    background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm);
-    border: 1px solid var(--border); overflow: hidden;
-  }
-  .card-header {
-    padding: 16px 20px; border-bottom: 1px solid var(--border-light);
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .card-title { font-size: 15px; font-weight: 600; color: var(--txt-pri); }
-  .card-body { padding: 20px; }
+/* Card */
+.card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-sm);border:1px solid var(--border);overflow:hidden}
 
-  /* Page Header */
-  .page-header {
-    margin-bottom: 24px;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .page-header h1 { font-size: 24px; font-weight: 700; color: var(--txt-pri); }
-  .page-header .breadcrumb { font-size: 13px; color: var(--txt-ter); margin-top: 2px; }
+/* Page Header */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-header h1{font-size:22px;font-weight:600;letter-spacing:-.4px}
 
-  /* Stat Cards */
-  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-  .stat-card {
-    background: var(--surface); border-radius: var(--radius); padding: 20px;
-    box-shadow: var(--shadow-sm); border: 1px solid var(--border);
-    transition: box-shadow 0.2s, transform 0.15s;
-  }
-  .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-  .stat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .stat-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-  .stat-change { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 99px; }
-  .stat-change.up { background: #dcfce7; color: #16a34a; }
-  .stat-change.down { background: #fee2e2; color: #dc2626; }
-  .stat-value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
-  .stat-label { font-size: 13px; color: var(--txt-sec); }
+/* Stat */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat-card{background:var(--surface);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow-sm);border:1px solid var(--border);transition:.2s}
+.stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.stat-value{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-bottom:2px}
+.stat-label{font-size:12px;color:var(--txt-sec)}
 
-  /* Tabs */
-  .tabs { display: flex; gap: 2px; margin-bottom: 20px; border-bottom: 2px solid var(--border-light); }
-  .tab {
-    padding: 10px 20px; font-size: 13px; font-weight: 500; color: var(--txt-sec);
-    cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s;
-  }
-  .tab:hover { color: var(--txt-pri); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-  .tab .count { background: var(--accent-light); color: var(--accent); padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; margin-left: 6px; }
+/* Status Tabs — 현재와 동일한 구조 */
+.status-tabs{display:flex;gap:0;margin-bottom:6px;border-bottom:2px solid var(--border-light)}
+.status-tab{padding:8px 14px;font-size:12px;font-weight:500;color:var(--txt-sec);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap}
+.status-tab:hover{color:var(--txt-pri)}
+.status-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.status-tab .cnt{font-size:11px;font-weight:600;margin-left:4px;color:var(--accent);background:var(--accent-light);padding:1px 6px;border-radius:99px}
 
-  /* Filter Pills */
-  .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-  .filter-pill {
-    padding: 6px 14px; font-size: 12px; font-weight: 500; border-radius: 99px;
-    border: 1px solid var(--border); color: var(--txt-sec); cursor: pointer; transition: all 0.15s;
-    background: var(--surface);
-  }
-  .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
-  .filter-pill.active { background: var(--accent); color: white; border-color: var(--accent); }
-  .filter-pill .pill-count { font-size: 10px; opacity: 0.7; margin-left: 3px; }
+/* Progress Guide — 현재와 동일 */
+.progress-guide{display:flex;align-items:center;gap:2px;padding:6px 0;margin-bottom:10px}
+.pg-step{display:flex;align-items:center;gap:2px}
+.pg-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff}
+.pg-label{font-size:9px;color:var(--txt-ter)}
+.pg-arrow{font-size:8px;color:var(--txt-qua);margin:0 1px}
 
-  /* Table */
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  th {
-    text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600;
-    color: var(--txt-sec); background: var(--surface-sec); border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-  }
-  td { padding: 14px 16px; font-size: 13px; color: var(--txt-pri); border-bottom: 1px solid var(--border-light); }
-  tr { transition: background 0.1s; }
-  tbody tr:hover { background: #f8fafc; }
-  tbody tr.selected { background: var(--accent-light); }
+/* City Filter — 현재와 동일 */
+.city-filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.city-pill{padding:4px 12px;font-size:11px;font-weight:500;border-radius:99px;border:1px solid var(--border);color:var(--txt-sec);cursor:pointer;transition:.15s;background:var(--surface)}
+.city-pill:hover{border-color:var(--accent);color:var(--accent)}
+.city-pill.active{background:var(--accent-light);color:var(--accent);border-color:var(--accent)}
+.city-pill .ct{font-size:10px;opacity:.6;margin-left:2px}
 
-  /* Badge */
-  .badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; white-space: nowrap;
-  }
-  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
-  .badge-blue { background: #dbeafe; color: #1d4ed8; }
-  .badge-blue .badge-dot { background: #3b82f6; }
-  .badge-green { background: #dcfce7; color: #15803d; }
-  .badge-green .badge-dot { background: #22c55e; }
-  .badge-amber { background: #fef3c7; color: #a16207; }
-  .badge-amber .badge-dot { background: #f59e0b; }
-  .badge-red { background: #fee2e2; color: #b91c1c; }
-  .badge-red .badge-dot { background: #ef4444; }
-  .badge-purple { background: #f3e8ff; color: #7e22ce; }
-  .badge-purple .badge-dot { background: #a855f7; }
-  .badge-slate { background: #f1f5f9; color: #475569; }
-  .badge-slate .badge-dot { background: #94a3b8; }
+/* Table */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 12px;font-size:11px;font-weight:500;color:var(--txt-sec);background:var(--surface-sec);border-bottom:1px solid var(--border);white-space:nowrap;letter-spacing:.3px}
+td{padding:8px 12px;font-size:12px;color:var(--txt-pri);border-bottom:1px solid var(--border-light)}
+tbody tr{transition:background .1s;cursor:pointer}
+tbody tr:hover{background:#f8fafc}
+tbody tr.selected{background:var(--accent-light)}
 
-  /* Staff Badge */
-  .staff-badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; color: white;
-  }
-  .staff-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.5); }
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;white-space:nowrap}
+.b-dot{width:5px;height:5px;border-radius:50%}
+.b-slate{background:#f1f5f9;color:#475569}.b-slate .b-dot{background:#94a3b8}
+.b-sky{background:#e0f2fe;color:#0369a1}.b-sky .b-dot{background:#38bdf8}
+.b-indigo{background:#e0e7ff;color:#4338ca}.b-indigo .b-dot{background:#818cf8}
+.b-violet{background:#ede9fe;color:#6d28d9}.b-violet .b-dot{background:#a78bfa}
+.b-purple{background:#f3e8ff;color:#7e22ce}.b-purple .b-dot{background:#c084fc}
+.b-emerald{background:#d1fae5;color:#065f46}.b-emerald .b-dot{background:#34d399}
+.b-teal{background:#ccfbf1;color:#0f766e}.b-teal .b-dot{background:#2dd4bf}
+.b-amber{background:#fef3c7;color:#92400e}.b-amber .b-dot{background:#fbbf24}
+.b-blue{background:#dbeafe;color:#1d4ed8}.b-blue .b-dot{background:#60a5fa}
+.b-green{background:#dcfce7;color:#166534}.b-green .b-dot{background:#4ade80}
+.b-red{background:#fee2e2;color:#b91c1c}.b-red .b-dot{background:#f87171}
 
-  /* Buttons */
-  .btn {
-    padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;
-    cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
-  }
-  .btn-primary { background: var(--accent); color: white; }
-  .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 2px 8px rgba(94,106,210,0.3); }
-  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--txt-sec); }
-  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
-  .btn-sm { padding: 5px 12px; font-size: 12px; }
-  .btn-inline { padding: 4px 8px; font-size: 11px; color: var(--txt-ter); background: none; border: none; cursor: pointer; border-radius: 4px; }
-  .btn-inline:hover { color: var(--accent); background: var(--accent-light); }
+.staff-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;color:#fff}
 
-  /* Search */
-  .search-box {
-    display: flex; align-items: center; gap: 8px; padding: 8px 14px;
-    border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
-    width: 280px; transition: border-color 0.15s;
-  }
-  .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,106,210,0.1); }
-  .search-box input { border: none; outline: none; font-size: 13px; flex: 1; background: transparent; color: var(--txt-pri); }
-  .search-box input::placeholder { color: var(--txt-qua); }
+.table-footer{padding:10px 14px;background:var(--surface-sec);border-top:1px solid var(--border);font-size:12px;color:var(--txt-sec);display:flex;justify-content:space-between}
+.table-footer strong{color:var(--txt-pri)}
 
-  /* Money */
-  .money { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .money-pos { color: #059669; }
-  .money-neg { color: #dc2626; }
+/* 버튼 */
+.btn{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:.15s;display:inline-flex;align-items:center;gap:5px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-sm{padding:4px 10px;font-size:11px;font-weight:500;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;transition:.15s;color:var(--txt-sec)}
+.btn-sm:hover{background:var(--surface-sec)}
 
-  /* Progress Bar */
-  .progress-bar { height: 6px; background: var(--border-light); border-radius: 99px; overflow: hidden; }
-  .progress-fill { height: 100%; border-radius: 99px; transition: width 0.3s; }
+/* 상세 패널 */
+.panel{position:fixed;right:0;top:0;width:580px;height:100vh;background:var(--surface);box-shadow:-8px 0 30px rgba(0,0,0,.08);z-index:20;display:flex;flex-direction:column;animation:slideIn .25s ease-out}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.panel-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-head h2{font-size:16px;font-weight:600;letter-spacing:-.2px}
 
-  /* Detail Panel */
-  .detail-panel {
-    position: fixed; right: 0; top: 0; width: 560px; height: 100vh;
-    background: var(--surface); box-shadow: -8px 0 30px rgba(0,0,0,0.08);
-    z-index: 20; display: flex; flex-direction: column;
-    animation: slideIn 0.25s ease-out;
-  }
-  @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-  .detail-header {
-    padding: 16px 24px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .detail-tabs { display: flex; border-bottom: 1px solid var(--border-light); padding: 0 24px; }
-  .detail-tab {
-    padding: 12px 16px; font-size: 13px; font-weight: 500; color: var(--txt-ter);
-    cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
-  }
-  .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-  .detail-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+/* 프로그레스바 */
+.prog-wrap{padding:14px 20px;border-bottom:1px solid var(--border-light)}
+.prog-bar{height:4px;background:var(--border-light);border-radius:99px;margin-bottom:6px}
+.prog-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+.prog-steps{display:flex;justify-content:space-between;font-size:9px;color:var(--txt-ter)}
+.prog-steps .current{color:var(--accent);font-weight:600}
 
-  /* Form Group */
-  .form-group { margin-bottom: 16px; }
-  .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--txt-sec); margin-bottom: 6px; }
-  .form-input {
-    width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--border);
-    border-radius: 8px; font-size: 13px; transition: all 0.15s; background: var(--surface);
-  }
-  .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,106,210,0.1); outline: none; }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* 상시 표시 영역 */
+.fixed-info{padding:14px 20px;border-bottom:1px solid var(--border-light);background:var(--surface-sec)}
+.fi-title{font-size:15px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.fi-addr{font-size:12px;color:var(--txt-sec);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.fi-addr-btn{font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer;border:none;font-weight:500}
+.fi-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;margin-bottom:8px}
+.fi-label{font-size:11px;color:var(--txt-ter)}
+.fi-value{font-size:13px;color:var(--txt-pri);font-weight:500}
+.fi-memo{margin-bottom:10px}
+.fi-memo-label{font-size:11px;color:var(--txt-ter)}
+.fi-memo-text{font-size:13px;color:var(--txt-sec);padding:2px 4px;border-radius:4px;cursor:pointer}
+.fi-memo-text:hover{background:var(--surface)}
+.fi-money{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding-top:10px;border-top:1px solid var(--border-light)}
+.fi-m-label{font-size:10px;color:var(--txt-ter)}
+.fi-m-value{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.fi-m-highlight{color:#dc2626}
 
-  /* Tooltip */
-  .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-light); }
-  .info-label { font-size: 13px; color: var(--txt-sec); }
-  .info-value { font-size: 13px; font-weight: 500; color: var(--txt-pri); }
+/* 패널 탭 */
+.panel-tabs{display:flex;border-bottom:1px solid var(--border-light);padding:0 20px}
+.panel-tab{padding:10px 12px;font-size:11px;font-weight:500;color:var(--txt-ter);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.panel-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
 
-  /* Responsive */
-  @media (max-width: 1200px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 768px) {
-    .sidebar { display: none; }
-    .main { margin-left: 0; padding: 16px; }
-    .stat-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .detail-panel { width: 100%; }
-    .page-header h1 { font-size: 20px; }
-  }
+/* 패널 바디 */
+.panel-body{flex:1;overflow-y:auto;padding:16px 20px}
+.section-num{width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.section-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-bottom:10px}
+.form-group{margin-bottom:10px}
+.form-label{display:block;font-size:11px;font-weight:500;color:var(--txt-sec);margin-bottom:4px}
+.form-input{width:100%;height:36px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);transition:.15s}
+.form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(94,106,210,.1);outline:none}
+select.form-input{appearance:auto}
 
-  /* Summary Footer */
-  .table-footer {
-    padding: 12px 16px; background: var(--surface-sec); border-top: 1px solid var(--border);
-    display: flex; justify-content: space-between; font-size: 12px; color: var(--txt-sec);
-  }
-  .table-footer strong { color: var(--txt-pri); font-weight: 600; }
+/* 스텝 전환 버튼 */
+.step-btn{width:100%;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;margin-bottom:14px;transition:.15s}
+.step-btn-next{background:var(--accent);color:#fff}
+.step-btn-next:hover{background:var(--accent-hover)}
+
+/* 드롭존 */
+.dropzone{border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;color:var(--txt-ter);font-size:12px;cursor:pointer;transition:.15s}
+.dropzone:hover{border-color:var(--accent);background:rgba(94,106,210,.02)}
+
+/* 케밥 */
+.kebab{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;color:var(--txt-ter);font-size:14px;border:none;background:none}
+.kebab:hover{background:var(--surface-sec);color:var(--txt-pri)}
 </style>
 </head>
 <body>
 <div class="layout">
-
-<!-- Sidebar -->
 <nav class="sidebar">
   <div class="sidebar-logo">DAWOO ERP</div>
   <div class="sidebar-group">지원사업</div>
-  <div class="sidebar-item active"><span>소규모 접수대장</span></div>
-  <div class="sidebar-item"><span>수도공사 접수대장</span></div>
+  <div class="sidebar-item active">소규모 접수대장</div>
+  <div class="sidebar-item">수도공사 접수대장</div>
   <div class="sidebar-group">현장</div>
-  <div class="sidebar-item"><span>현장관리</span></div>
+  <div class="sidebar-item">현장관리</div>
   <div class="sidebar-group">업무</div>
-  <div class="sidebar-item"><span>업무 캘린더</span></div>
-  <div class="sidebar-item"><span>지출결의서</span></div>
-  <div class="sidebar-item"><span>연차신청</span></div>
+  <div class="sidebar-item">업무 캘린더</div>
+  <div class="sidebar-item">지출결의서</div>
+  <div class="sidebar-item">연차신청</div>
   <div class="sidebar-group">데이터</div>
-  <div class="sidebar-item"><span>거래처 DB</span></div>
-  <div class="sidebar-item"><span>A/S 관리</span></div>
+  <div class="sidebar-item">거래처 DB</div>
+  <div class="sidebar-item">A/S 관리</div>
   <div class="sidebar-group">세무/회계</div>
-  <div class="sidebar-item"><span>회계달력</span></div>
+  <div class="sidebar-item">회계달력</div>
   <div class="sidebar-group">관리</div>
-  <div class="sidebar-item"><span>서류함</span></div>
-  <div class="sidebar-item"><span>직원관리</span></div>
+  <div class="sidebar-item">서류함</div>
+  <div class="sidebar-item">직원관리</div>
   <div class="sidebar-group">분석</div>
-  <div class="sidebar-item"><span>보고서</span></div>
-  <div class="sidebar-item"><span>KPI</span></div>
+  <div class="sidebar-item">보고서</div>
+  <div class="sidebar-item">KPI</div>
 </nav>
 
-<!-- Main -->
 <div class="main">
-
-  <!-- Page Header -->
+  <!-- 페이지 헤더 -->
   <div class="page-header">
-    <div>
-      <h1>소규모 접수대장</h1>
-      <div class="breadcrumb">지원사업 / 소규모 접수대장</div>
-    </div>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <div class="search-box">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--txt-qua)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <input placeholder="빌라명, 소유주, 주소 검색...">
+    <h1>소규모 접수대장</h1>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);width:260px">
+        <span style="color:var(--txt-qua)">🔍</span>
+        <input placeholder="빌라명, 소유주, 주소 검색..." style="border:none;outline:none;font-size:13px;flex:1;background:transparent">
       </div>
       <button class="btn btn-primary">+ 신규 접수</button>
     </div>
   </div>
 
-  <!-- Stat Cards -->
+  <!-- 통계 카드 -->
   <div class="stat-grid">
-    <div class="stat-card">
-      <div class="stat-top">
-        <div class="stat-icon" style="background:#eef2ff; color:var(--accent);">📋</div>
-        <span class="stat-change up">+12%</span>
-      </div>
-      <div class="stat-value">345</div>
-      <div class="stat-label">진행중</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-top">
-        <div class="stat-icon" style="background:#dcfce7; color:#16a34a;">✅</div>
-        <span class="stat-change up">+8건</span>
-      </div>
-      <div class="stat-value">5</div>
-      <div class="stat-label">완료</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-top">
-        <div class="stat-icon" style="background:#fef3c7; color:#d97706;">💰</div>
-      </div>
-      <div class="stat-value money">28,900,000</div>
-      <div class="stat-label">총공사비</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-top">
-        <div class="stat-icon" style="background:#fee2e2; color:#dc2626;">⚠️</div>
-      </div>
-      <div class="stat-value money money-neg">25,460,000</div>
-      <div class="stat-label">미수금</div>
-    </div>
+    <div class="stat-card"><div class="stat-value">345</div><div class="stat-label">진행중</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:#059669">5</div><div class="stat-label">완료</div></div>
+    <div class="stat-card"><div class="stat-value">28,900,000</div><div class="stat-label">총공사비</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:#dc2626">25,460,000</div><div class="stat-label">미수금</div></div>
   </div>
 
-  <!-- Tabs -->
-  <div class="tabs">
-    <div class="tab active">진행중 <span class="count">345</span></div>
-    <div class="tab">접수 <span class="count">334</span></div>
-    <div class="tab">승인 <span class="count">6</span></div>
-    <div class="tab">완료 <span class="count">5</span></div>
-    <div class="tab">취소 <span class="count">236</span></div>
-    <div class="tab">문의(예약) <span class="count">241</span></div>
-    <div class="tab">전체 <span class="count">664</span></div>
+  <!-- 상태 탭 (현재와 동일 7개) -->
+  <div class="status-tabs">
+    <div class="status-tab active">진행중 <span class="cnt">345</span></div>
+    <div class="status-tab">접수 <span class="cnt">334</span></div>
+    <div class="status-tab">승인 <span class="cnt">6</span></div>
+    <div class="status-tab">완료 <span class="cnt">5</span></div>
+    <div class="status-tab">취소 <span class="cnt">236</span></div>
+    <div class="status-tab">문의(예약) <span class="cnt">241</span></div>
+    <div class="status-tab">전체 <span class="cnt">664</span></div>
   </div>
 
-  <!-- City Filters -->
-  <div class="filters">
-    <div class="filter-pill active">수원 <span class="pill-count">120</span></div>
-    <div class="filter-pill">성남 <span class="pill-count">45</span></div>
-    <div class="filter-pill">안양 <span class="pill-count">38</span></div>
-    <div class="filter-pill">부천 <span class="pill-count">22</span></div>
-    <div class="filter-pill">광명 <span class="pill-count">15</span></div>
-    <div class="filter-pill">시흥 <span class="pill-count">18</span></div>
-    <div class="filter-pill">안산 <span class="pill-count">12</span></div>
-    <div class="filter-pill">군포 <span class="pill-count">8</span></div>
-    <div class="filter-pill">용인 <span class="pill-count">25</span></div>
-    <div class="filter-pill">화성 <span class="pill-count">32</span></div>
-    <div class="filter-pill">오산 <span class="pill-count">5</span></div>
-    <div class="filter-pill">평택 <span class="pill-count">9</span></div>
+  <!-- 프로그레스 가이드 (현재와 동일 10단계) -->
+  <div class="progress-guide">
+    <div class="pg-step"><div class="pg-dot" style="background:#94a3b8">1</div><span class="pg-label">문의</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#0ea5e9">2</div><span class="pg-label">실측</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#6366f1">3</div><span class="pg-label">견적</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#8b5cf6">4</div><span class="pg-label">동의</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#a855f7">5</div><span class="pg-label">신청</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#059669">6</div><span class="pg-label">승인</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#0d9488">7</div><span class="pg-label">착공</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#d97706">8</div><span class="pg-label">공사</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#2563eb">9</div><span class="pg-label">완료</span></div><span class="pg-arrow">›</span>
+    <div class="pg-step"><div class="pg-dot" style="background:#16a34a">10</div><span class="pg-label">입금</span></div>
   </div>
 
-  <!-- Table Card -->
+  <!-- 도시 필터 (현재와 동일) -->
+  <div class="city-filters">
+    <div class="city-pill active">수원 <span class="ct">120</span></div>
+    <div class="city-pill">성남 <span class="ct">45</span></div>
+    <div class="city-pill">안양 <span class="ct">38</span></div>
+    <div class="city-pill">부천 <span class="ct">22</span></div>
+    <div class="city-pill">광명 <span class="ct">15</span></div>
+    <div class="city-pill">시흥 <span class="ct">18</span></div>
+    <div class="city-pill">안산 <span class="ct">12</span></div>
+    <div class="city-pill">군포 <span class="ct">8</span></div>
+    <div class="city-pill">의왕 <span class="ct">3</span></div>
+    <div class="city-pill">과천 <span class="ct">2</span></div>
+    <div class="city-pill">용인 <span class="ct">25</span></div>
+    <div class="city-pill">화성 <span class="ct">32</span></div>
+    <div class="city-pill">오산 <span class="ct">5</span></div>
+    <div class="city-pill">평택 <span class="ct">9</span></div>
+    <div class="city-pill">하남 <span class="ct">4</span></div>
+  </div>
+
+  <!-- 테이블 (현재 컬럼 100% 동일: 담당/빌라명/호수/연락처/주소/지원사업/상담내역/단계) -->
   <div class="card">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>담당</th>
-            <th>빌라명</th>
-            <th>호수</th>
-            <th>연락처</th>
-            <th>주소</th>
-            <th>종류</th>
-            <th>상태</th>
-            <th>상담내역</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="selected">
-            <td><span class="staff-badge" style="background:#3b82f6"><span class="staff-dot"></span>김재호</span></td>
-            <td style="font-weight:600;">삼성빌리지101동</td>
-            <td>-</td>
-            <td>010-3460-5570</td>
-            <td style="color:var(--txt-sec)">수원천로 11-5</td>
-            <td><span class="badge badge-slate"><span class="badge-dot"></span>옥상방수</span></td>
-            <td><span class="badge badge-blue"><span class="badge-dot"></span>실측</span></td>
-            <td style="color:var(--txt-ter); font-size:12px;">녹물 방지 목적</td>
-          </tr>
-          <tr>
-            <td><span class="staff-badge" style="background:#3b82f6"><span class="staff-dot"></span>김재호</span></td>
-            <td style="font-weight:600;">산호하이츠빌라 나동</td>
-            <td>-</td>
-            <td>010-4985-1822</td>
-            <td style="color:var(--txt-sec)">장다리로196번길 7-7</td>
-            <td><span class="badge badge-slate"><span class="badge-dot"></span>옥상방수</span></td>
-            <td><span class="badge badge-green"><span class="badge-dot"></span>공사</span></td>
-            <td style="color:var(--txt-ter); font-size:12px;">녹물 방지 목적</td>
-          </tr>
-          <tr>
-            <td><span class="staff-badge" style="background:#3b82f6"><span class="staff-dot"></span>김재호</span></td>
-            <td style="font-weight:600;">오류스카이빌 2동</td>
-            <td>-</td>
-            <td>010-9870-5801</td>
-            <td style="color:var(--txt-sec)">장안구 수일로 74-3</td>
-            <td><span class="badge badge-slate"><span class="badge-dot"></span>옥내/외급관</span></td>
-            <td><span class="badge badge-green"><span class="badge-dot"></span>공사</span></td>
-            <td style="color:var(--txt-ter); font-size:12px;">녹물/유공관교체</td>
-          </tr>
-          <tr>
-            <td><span class="staff-badge" style="background:#3b82f6"><span class="staff-dot"></span>김재호</span></td>
-            <td style="font-weight:600;">진흥맨션</td>
-            <td>-</td>
-            <td>010-2366-3802</td>
-            <td style="color:var(--txt-sec)">문정동큰길 32-14 (문정동)</td>
-            <td><span class="badge badge-slate"><span class="badge-dot"></span>옥상방수</span></td>
-            <td><span class="badge badge-red"><span class="badge-dot"></span>취소</span></td>
-            <td style="color:var(--txt-ter); font-size:12px;"></td>
-          </tr>
-          <tr>
-            <td><span class="staff-badge" style="background:#3b82f6"><span class="staff-dot"></span>김재호</span></td>
-            <td style="font-weight:600;">다세대(우만동 593-7) 101호</td>
-            <td>-</td>
-            <td>010-9461-3690</td>
-            <td style="color:var(--txt-sec)">팔달구 세지로399번길 102-7</td>
-            <td><span class="badge badge-slate"><span class="badge-dot"></span>옥내</span></td>
-            <td><span class="badge badge-purple"><span class="badge-dot"></span>신청서</span></td>
-            <td style="color:var(--txt-ter); font-size:12px;">녹물 방지 목적</td>
-          </tr>
-          <tr>
-            <td><span class="staff-badge" style="background:#ec4899"><span class="staff-dot"></span>직원A</span></td>
-            <td style="font-weight:600;">다세대(우만동 593-7) 102호</td>
-            <td>-</td>
-            <td>010-9461-3690</td>
-            <td style="color:var(--txt-sec)">팔달구 세지로399번길 102-7</td>
-            <td><span class="badge badge-slate"><span class="badge-dot"></span>옥내</span></td>
-            <td><span class="badge badge-amber"><span class="badge-dot"></span>견적</span></td>
-            <td style="color:var(--txt-ter); font-size:12px;">녹물 방지 목적</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <table>
+      <thead><tr>
+        <th>담당</th><th>빌라명</th><th>호수</th><th>연락처</th><th>주소</th><th>지원사업</th><th>상담내역</th><th>단계</th><th style="width:28px"></th>
+      </tr></thead>
+      <tbody>
+        <tr class="selected">
+          <td><span class="staff-badge" style="background:#3b82f6">김재호</span></td>
+          <td style="font-weight:600">삼성빌리지101동</td>
+          <td style="color:var(--txt-sec)">-</td>
+          <td style="color:var(--txt-sec)">010-3460-5570</td>
+          <td style="color:var(--txt-sec)">수원천로 11-5</td>
+          <td><span class="badge b-slate"><span class="b-dot"></span>옥상방수</span></td>
+          <td style="color:var(--txt-ter);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">녹물 방지 목적</td>
+          <td><span class="badge b-sky"><span class="b-dot"></span>실측</span></td>
+          <td><button class="kebab">⋮</button></td>
+        </tr>
+        <tr>
+          <td><span class="staff-badge" style="background:#3b82f6">김재호</span></td>
+          <td style="font-weight:600">산호하이츠빌라 나동</td>
+          <td style="color:var(--txt-sec)">-</td>
+          <td style="color:var(--txt-sec)">010-4985-1822</td>
+          <td style="color:var(--txt-sec)">장다리로196번길 7-7</td>
+          <td><span class="badge b-slate"><span class="b-dot"></span>옥상방수</span></td>
+          <td style="color:var(--txt-ter)">녹물 방지 목적</td>
+          <td><span class="badge b-emerald"><span class="b-dot"></span>공사</span></td>
+          <td><button class="kebab">⋮</button></td>
+        </tr>
+        <tr>
+          <td><span class="staff-badge" style="background:#3b82f6">김재호</span></td>
+          <td style="font-weight:600">오류스카이빌 2동</td>
+          <td style="color:var(--txt-sec)">-</td>
+          <td style="color:var(--txt-sec)">010-9870-5801</td>
+          <td style="color:var(--txt-sec)">장안구 수일로 74-3</td>
+          <td><span class="badge b-slate"><span class="b-dot"></span>계량기 설치 목적</span></td>
+          <td style="color:var(--txt-ter)">녹물/유공관교체</td>
+          <td><span class="badge b-emerald"><span class="b-dot"></span>공사</span></td>
+          <td><button class="kebab">⋮</button></td>
+        </tr>
+        <tr>
+          <td><span class="staff-badge" style="background:#3b82f6">김재호</span></td>
+          <td style="font-weight:600">진흥맨션</td>
+          <td style="color:var(--txt-sec)">-</td>
+          <td style="color:var(--txt-sec)">010-2366-3802</td>
+          <td style="color:var(--txt-sec)">문정동큰길 32-14</td>
+          <td><span class="badge b-slate"><span class="b-dot"></span>옥상방수</span></td>
+          <td style="color:var(--txt-ter)"></td>
+          <td><span class="badge b-red"><span class="b-dot"></span>취소</span></td>
+          <td><button class="kebab">⋮</button></td>
+        </tr>
+        <tr>
+          <td><span class="staff-badge" style="background:#3b82f6">김재호</span></td>
+          <td style="font-weight:600">다세대(우만동 593-7) 101호</td>
+          <td style="color:var(--txt-sec)">-</td>
+          <td style="color:var(--txt-sec)">010-9461-3690</td>
+          <td style="color:var(--txt-sec)">세지로399번길 102-7</td>
+          <td><span class="badge b-slate"><span class="b-dot"></span>옥내</span></td>
+          <td style="color:var(--txt-ter)">녹물 방지 목적</td>
+          <td><span class="badge b-purple"><span class="b-dot"></span>신청서</span></td>
+          <td><button class="kebab">⋮</button></td>
+        </tr>
+        <tr>
+          <td><span class="staff-badge" style="background:#ec4899">직원A</span></td>
+          <td style="font-weight:600">다세대(우만동 593-7) 102호</td>
+          <td style="color:var(--txt-sec)">-</td>
+          <td style="color:var(--txt-sec)">010-9461-3690</td>
+          <td style="color:var(--txt-sec)">세지로399번길 102-7</td>
+          <td><span class="badge b-slate"><span class="b-dot"></span>옥내</span></td>
+          <td style="color:var(--txt-ter)">녹물 방지 목적</td>
+          <td><span class="badge b-indigo"><span class="b-dot"></span>견적</span></td>
+          <td><button class="kebab">⋮</button></td>
+        </tr>
+      </tbody>
+    </table>
     <div class="table-footer">
-      <span>총 <strong>6건</strong> / 총공사비 <strong>28,900,000원</strong> / 미수금 <strong class="money-neg">25,460,000원</strong></span>
-      <span>1 / 1 페이지</span>
+      <span>총 <strong>6건</strong> / 총공사비 <strong>28,900,000원</strong> / 미수금 <strong style="color:#dc2626">25,460,000원</strong></span>
     </div>
   </div>
-
 </div>
 
-<!-- Detail Panel (우측) -->
-<div class="detail-panel">
-  <div class="detail-header">
-    <div>
-      <div style="font-size:16px; font-weight:700;">삼성빌리지101동</div>
-      <div style="font-size:12px; color:var(--txt-sec); margin-top:2px;">수원천로 11-5</div>
-    </div>
-    <div style="display:flex; gap:6px; align-items:center;">
-      <button class="btn btn-sm btn-outline" style="color:var(--accent);">수정</button>
-      <button class="btn btn-sm btn-outline" style="color:#dc2626; border-color:#fecaca;">취소</button>
-      <button class="btn btn-sm btn-outline" style="color:#d97706; border-color:#fef3c7;">예약</button>
-      <button class="btn btn-sm" style="background:#0F9D58; color:white;">드라이브</button>
-      <button class="btn btn-sm btn-outline" style="font-size:16px; padding:4px 8px;">✕</button>
-    </div>
-  </div>
-
-  <!-- Progress -->
-  <div style="padding:16px 24px; border-bottom:1px solid var(--border-light);">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-      <span style="font-size:12px; color:var(--txt-sec);">진행 상태</span>
-      <span class="badge badge-blue"><span class="badge-dot"></span>실측</span>
-    </div>
-    <div class="progress-bar">
-      <div class="progress-fill" style="width:20%; background:var(--accent);"></div>
-    </div>
-    <div style="display:flex; justify-content:space-between; margin-top:6px; font-size:10px; color:var(--txt-ter);">
-      <span>문의</span><span>실측</span><span>견적</span><span>동의</span><span>신청</span><span>승인</span><span>착공</span><span>공사</span><span>완료</span><span>입금</span>
+<!-- 상세 패널 (현재 구조 100% 유지) -->
+<div class="panel">
+  <!-- 헤더: 빌라명 + 수정/취소/예약/드라이브/삭제/닫기 -->
+  <div class="panel-head">
+    <h2>삼성빌리지101동</h2>
+    <div style="display:flex;gap:4px;align-items:center">
+      <button class="btn-sm" style="color:var(--accent);border-color:rgba(94,106,210,.3)">수정</button>
+      <button class="btn-sm" style="color:#dc2626;border-color:#fecaca">취소</button>
+      <button class="btn-sm" style="color:#d97706;border-color:#fef3c7">예약</button>
+      <button class="btn-sm" style="background:#0F9D58;color:#fff;border:none">드라이브</button>
+      <button class="btn-sm" style="color:#dc2626;border-color:#fecaca">삭제</button>
+      <button class="btn-sm" style="font-size:14px;padding:2px 6px">✕</button>
     </div>
   </div>
 
-  <!-- Detail Tabs -->
-  <div class="detail-tabs">
-    <div class="detail-tab active">접수</div>
-    <div class="detail-tab">승인/시공</div>
-    <div class="detail-tab">완료</div>
-    <div class="detail-tab">이력</div>
-    <div class="detail-tab">기본정보</div>
+  <!-- 프로그레스바 -->
+  <div class="prog-wrap">
+    <div class="prog-bar"><div class="prog-fill" style="width:15%"></div></div>
+    <div class="prog-steps">
+      <span>문의</span><span class="current">실측</span><span>견적</span><span>동의</span><span>신청</span><span>승인</span><span>착공</span><span>공사</span><span>완료</span><span>입금</span>
+    </div>
   </div>
 
-  <!-- Detail Body -->
-  <div class="detail-body">
-    <!-- 기본 정보 -->
-    <div style="margin-bottom:20px;">
-      <div style="font-size:13px; font-weight:600; color:var(--txt-pri); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-        <span style="width:20px; height:20px; background:var(--accent); color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;">1</span>
-        실측
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">실측일</label>
-          <input type="date" class="form-input">
-        </div>
-        <div class="form-group">
-          <label class="form-label">담당자</label>
-          <select class="form-input"><option>선택</option><option>김재호</option></select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">접수일</label>
-        <input type="date" class="form-input" value="2026-02-05">
-      </div>
+  <!-- 실측으로 → 단계 전환 버튼 -->
+  <div style="padding:8px 20px">
+    <button class="step-btn step-btn-next">실측으로 ›</button>
+  </div>
+
+  <!-- 상시 표시 영역 (빌라명/주소/소유주/연락처/담당자/상담내역/금액 5개) -->
+  <div class="fixed-info">
+    <div class="fi-title">
+      삼성빌리지101동
+      <span style="padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#3b82f6;color:#fff">옥상방수</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--txt-ter);cursor:pointer">수정</span>
+    </div>
+    <div class="fi-addr">
+      수원천로 11-5
+      <button class="fi-addr-btn" style="background:var(--surface);border:1px solid var(--border);color:var(--txt-ter)">복사</button>
+      <button class="fi-addr-btn" style="background:#FEE500;color:#3C1E1E">지도</button>
+    </div>
+    <div class="fi-grid">
+      <div><div class="fi-label">소유주</div><div class="fi-value">-</div></div>
+      <div><div class="fi-label">연락처</div><div class="fi-value">010-3460-5570</div></div>
+      <div><div class="fi-label">담당자</div><div class="fi-value">-</div></div>
+    </div>
+    <div class="fi-memo">
+      <div class="fi-memo-label">상담내역</div>
+      <div class="fi-memo-text">녹물 방지 목적</div>
+    </div>
+    <div class="fi-money">
+      <div><div class="fi-m-label">총공사비</div><div class="fi-m-value">0</div></div>
+      <div><div class="fi-m-label">자부담금</div><div class="fi-m-value">0</div></div>
+      <div><div class="fi-m-label">시지원금</div><div class="fi-m-value">0</div></div>
+      <div><div class="fi-m-label">추가공사금</div><div class="fi-m-value">0</div></div>
+      <div><div class="fi-m-label">미수금</div><div class="fi-m-value fi-m-highlight">0</div></div>
+    </div>
+  </div>
+
+  <!-- 탭 (현재와 동일 5개) -->
+  <div class="panel-tabs">
+    <div class="panel-tab active">접수</div>
+    <div class="panel-tab">승인(시공)</div>
+    <div class="panel-tab">완료</div>
+    <div class="panel-tab">이력</div>
+    <div class="panel-tab">기본정보</div>
+  </div>
+
+  <!-- 접수 탭 내용 -->
+  <div class="panel-body">
+    <!-- 1. 실측 -->
+    <div class="section-title"><span class="section-num">1</span> 실측</div>
+    <div class="form-row-3">
+      <div><label class="form-label">실측일</label><input type="date" class="form-input"></div>
+      <div><label class="form-label">시간</label><input type="time" class="form-input" value="14:00"></div>
+      <div><label class="form-label">담당자</label><select class="form-input"><option>선택</option><option>김재호</option></select></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">접수일</label>
+      <input type="date" class="form-input" value="2026-02-05">
+    </div>
+    <div class="form-group">
+      <label class="form-label">실측사진</label>
+      <div class="dropzone">실측사진 파일을 드래그하거나 클릭<br><span style="font-size:10px">이미지 파일만 가능 5개</span></div>
     </div>
 
-    <!-- 소유주 정보 -->
-    <div style="margin-bottom:20px;">
-      <div style="font-size:13px; font-weight:600; margin-bottom:12px;">소유주 정보</div>
-      <div class="info-row">
-        <span class="info-label">소유주</span>
-        <span class="info-value">-</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">연락처</span>
-        <span class="info-value">010-3460-5570</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">세입자</span>
-        <span class="info-value">-</span>
+    <!-- 2. 견적 -->
+    <div class="section-title" style="margin-top:20px"><span class="section-num">2</span> 견적</div>
+    <div class="form-row">
+      <div><label class="form-label">시지원금</label><input class="form-input" value="0" style="text-align:right"></div>
+      <div><label class="form-label">자부담금</label><input class="form-input" value="0" style="text-align:right"></div>
+    </div>
+    <div class="form-row">
+      <div><label class="form-label">추가공사금</label><input class="form-input" value="0" style="text-align:right"></div>
+      <div>
+        <label class="form-label">총공사비 (자동)</label>
+        <div style="height:36px;display:flex;align-items:center;justify-content:flex-end;font-size:15px;font-weight:700;color:var(--accent)">0원</div>
       </div>
     </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center">견적서 열기</button>
 
-    <!-- 견적 -->
-    <div>
-      <div style="font-size:13px; font-weight:600; color:var(--txt-pri); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-        <span style="width:20px; height:20px; background:var(--accent); color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;">2</span>
-        견적
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">시지원금</label>
-          <input class="form-input" value="0" style="text-align:right;">
-        </div>
-        <div class="form-group">
-          <label class="form-label">자부담금</label>
-          <input class="form-input" value="0" style="text-align:right;">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">추가공사금</label>
-          <input class="form-input" value="0" style="text-align:right;">
-        </div>
-        <div class="form-group">
-          <label class="form-label">총공사비 (자동)</label>
-          <div style="height:38px; display:flex; align-items:center; justify-content:flex-end; font-size:15px; font-weight:700; color:var(--accent);">0원</div>
-        </div>
-      </div>
-      <button class="btn btn-primary" style="width:100%; justify-content:center; margin-top:8px;">견적서 열기</button>
+    <!-- 3. 동의서 -->
+    <div class="section-title" style="margin-top:20px"><span class="section-num">3</span> 동의서</div>
+    <div class="form-row-3">
+      <div><label class="form-label">동의서 회수일</label><input type="date" class="form-input"></div>
+      <div><label class="form-label">시간</label><input type="time" class="form-input"></div>
+      <div><label class="form-label">수령자</label><select class="form-input"><option>선택</option></select></div>
+    </div>
+
+    <!-- 4. 신청서 -->
+    <div class="section-title" style="margin-top:20px"><span class="section-num">4</span> 신청서</div>
+    <div class="form-group">
+      <label class="form-label">신청서 제출일</label>
+      <input type="date" class="form-input">
     </div>
   </div>
 </div>

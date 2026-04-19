@@ -840,7 +840,8 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
   const handleCopy = () => {
     if (!generatedCode) return
-    const msg = `[다우건설 ERP 초대]\n${name ? `${name}님, ` : ''}다우건설 ERP 직원 초대 코드입니다.\n\n초대 코드: ${generatedCode}\n\n아래 링크로 접속 후 코드를 입력해주세요.\nhttps://dawoo-erp.vercel.app/invite/${generatedCode}`
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://dawoo-erp-web.vercel.app'
+    const msg = `[다우건설 ERP 초대]\n${name ? `${name}님, ` : ''}다우건설 ERP 직원 초대 코드입니다.\n\n초대 코드: ${generatedCode}\n\n아래 링크로 접속 후 코드를 입력해주세요.\n${baseUrl}/invite/${generatedCode}`
     navigator.clipboard.writeText(msg)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)

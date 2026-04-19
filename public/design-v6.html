@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>다우 ERP v6 — 토스(Toss) 스타일</title>
+<!--
+  ============================================================
+  다우 ERP v6 — 접수대장 미리보기
+  ============================================================
+  디자인 참고: 토스(Toss) 디자인 시스템
+  - 브랜드 사이트: https://brand.toss.im/
+  - 브랜드 컬러: #0064FF (Toss Blue)
+  - 다크 사이드바: #191F28 (Toss Gray)
+  - 배경: #F2F4F6
+  - 카드: #FFFFFF
+  - 텍스트: #191F28 / #4E5968 / #8B95A1 / #B0B8C1
+  - 보더: #E5E8EB
+  - 라운드: 16px (카드), 12px (버튼), 8px (뱃지)
+  - 폰트: Pretendard
+  ============================================================
+-->
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+<style>
+/* ========================================
+   토스(Toss) 디자인 토큰
+   ======================================== */
+:root {
+  /* 브랜드 */
+  --toss-blue: #0064FF;
+  --toss-blue-hover: #0055D6;
+  --toss-blue-light: #E8F3FF;
+  --toss-blue-bg: #F0F6FF;
+
+  /* 그레이스케일 */
+  --gray-900: #191F28;
+  --gray-800: #333D4B;
+  --gray-700: #4E5968;
+  --gray-600: #6B7684;
+  --gray-500: #8B95A1;
+  --gray-400: #B0B8C1;
+  --gray-300: #D1D6DB;
+  --gray-200: #E5E8EB;
+  --gray-100: #F2F4F6;
+  --gray-50: #F9FAFB;
+  --white: #FFFFFF;
+
+  /* 시맨틱 */
+  --bg: #F2F4F6;
+  --surface: #FFFFFF;
+  --text-primary: #191F28;
+  --text-secondary: #4E5968;
+  --text-tertiary: #8B95A1;
+  --text-quaternary: #B0B8C1;
+  --border: #E5E8EB;
+  --border-light: #F2F4F6;
+
+  /* 상태 컬러 */
+  --green: #00C471;
+  --green-bg: #E8FAF0;
+  --green-text: #00894F;
+  --red: #F04452;
+  --red-bg: #FFF0F0;
+  --red-text: #D32F2F;
+  --amber: #FF9016;
+  --amber-bg: #FFF5E6;
+  --amber-text: #B86800;
+  --blue: #3182F6;
+  --blue-bg: #E8F3FF;
+  --blue-text: #0064FF;
+  --purple: #6B4EFF;
+  --purple-bg: #F0EEFF;
+  --purple-text: #5535D4;
+  --teal: #00B8D9;
+  --teal-bg: #E6F9FC;
+  --teal-text: #008DA6;
+  --indigo: #4C6EF5;
+  --indigo-bg: #EDF1FF;
+  --indigo-text: #3B5BDB;
+  --pink: #F06595;
+  --pink-bg: #FFF0F5;
+
+  /* 그림자 — 토스 스타일 (부드럽고 넓게) */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 8px 40px rgba(0, 0, 0, 0.08);
+
+  /* 사이드바 다크 */
+  --sidebar-bg: #191F28;
+  --sidebar-text: #B0B8C1;
+  --sidebar-text-hover: #FFFFFF;
+  --sidebar-active-bg: rgba(0, 100, 255, 0.15);
+  --sidebar-active-text: #4D9AFF;
+  --sidebar-group: #6B7684;
+  --sidebar-divider: rgba(255, 255, 255, 0.06);
+}
+
+/* ========================================
+   리셋 & 기본
+   ======================================== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.layout { display: flex; min-height: 100vh; }
+
+/* ========================================
+   사이드바 — 다크 (Toss 스타일)
+   ======================================== */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--sidebar-divider);
+}
+.sidebar-logo .logo-icon {
+  width: 32px; height: 32px;
+  background: var(--toss-blue);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--white);
+}
+.sidebar-logo .logo-text {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--white);
+  letter-spacing: -0.5px;
+}
+.s-group {
+  padding: 20px 20px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sidebar-group);
+  letter-spacing: 0.5px;
+}
+.s-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin: 1px 8px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+.s-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text-hover);
+}
+.s-item.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
+  font-weight: 600;
+}
+.s-icon {
+  width: 20px; height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.s-item.active .s-icon { opacity: 1; }
+.sidebar-bottom {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid var(--sidebar-divider);
+}
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+}
+.sidebar-user .user-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--toss-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--white);
+}
+.sidebar-user .user-info { display: flex; flex-direction: column; }
+.sidebar-user .user-name { font-size: 13px; font-weight: 600; color: var(--white); }
+.sidebar-user .user-role { font-size: 11px; color: var(--sidebar-group); }
+
+/* ========================================
+   메인 영역
+   ======================================== */
+.main {
+  margin-left: 240px;
+  flex: 1;
+  padding: 28px 32px;
+  min-width: 0;
+}
+
+/* ========================================
+   히어로 카드 — 제목 + 통계
+   ======================================== */
+.hero-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.hero-top h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+}
+.hero-top .sub {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+.hero-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* 통계 카드 4개 */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.hero-stat {
+  background: var(--gray-50);
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+}
+.hero-stat .val {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+}
+.hero-stat .val.green { color: var(--green); }
+.hero-stat .val.red { color: var(--red); }
+.hero-stat .lbl {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* ========================================
+   검색 박스 — 토스 스타일
+   ======================================== */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: 44px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  width: 260px;
+  transition: all 0.2s ease;
+}
+.search-box:focus-within {
+  border-color: var(--toss-blue);
+  box-shadow: 0 0 0 3px rgba(0, 100, 255, 0.1);
+}
+.search-box .search-icon {
+  color: var(--text-quaternary);
+  flex-shrink: 0;
+}
+.search-box input {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  flex: 1;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+.search-box input::placeholder { color: var(--text-quaternary); }
+
+/* ========================================
+   버튼 — 토스 스타일 (높이 48px, radius 12px)
+   ======================================== */
+.btn {
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--toss-blue);
+  color: var(--white);
+}
+.btn-primary:hover {
+  background: var(--toss-blue-hover);
+}
+.btn-outline {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text-secondary);
+  height: 40px;
+  font-size: 13px;
+  border-radius: 10px;
+  padding: 0 14px;
+}
+.btn-outline:hover {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+  height: auto;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+.btn-ghost:hover { background: var(--gray-100); }
+
+/* ========================================
+   상태 탭 — 세그먼트 컨트롤
+   ======================================== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.seg-tabs {
+  display: inline-flex;
+  background: var(--gray-100);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 2px;
+}
+.seg-tab {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+.seg-tab:hover { color: var(--text-secondary); }
+.seg-tab.active {
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+.seg-tab .cnt {
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 4px;
+  opacity: 0.5;
+}
+.seg-tab.active .cnt {
+  opacity: 1;
+  color: var(--toss-blue);
+}
+
+/* ========================================
+   프로그레스 가이드 — 10단계 연결선
+   ======================================== */
+.prog {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 0;
+}
+.prog-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+}
+.prog-step::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--gray-200);
+  z-index: 0;
+}
+.prog-step:last-child::after { display: none; }
+.prog-dot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--white);
+  position: relative;
+  z-index: 1;
+}
+.prog-txt {
+  font-size: 10px;
+  color: var(--text-quaternary);
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+/* ========================================
+   도시 필터 칩 — 토스 스타일 (둥근 라운드)
+   ======================================== */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.chip {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: var(--surface);
+}
+.chip:hover {
+  border-color: var(--toss-blue);
+  color: var(--toss-blue);
+}
+.chip.active {
+  background: var(--toss-blue);
+  color: var(--white);
+  border-color: var(--toss-blue);
+}
+.chip .ct {
+  font-size: 10px;
+  opacity: 0.6;
+  margin-left: 2px;
+}
+.chip.active .ct { opacity: 0.8; }
+
+/* ========================================
+   테이블 — 모던 라운드 카드
+   ======================================== */
+.tbl-card {
+  background: var(--surface);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+}
+tbody tr {
+  transition: background 0.1s ease;
+  cursor: pointer;
+}
+tbody tr:hover { background: var(--gray-50); }
+tbody tr.selected {
+  background: var(--toss-blue-bg);
+}
+tbody tr:last-child td { border-bottom: none; }
+
+/* ========================================
+   뱃지 — 토스 스타일 (부드러운 라운드)
+   ======================================== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; }
+.bg-slate { background: var(--gray-100); color: var(--gray-600); }
+.bg-slate .dot { background: var(--gray-400); }
+.bg-blue { background: var(--blue-bg); color: var(--blue-text); }
+.bg-blue .dot { background: var(--blue); }
+.bg-green { background: var(--green-bg); color: var(--green-text); }
+.bg-green .dot { background: var(--green); }
+.bg-amber { background: var(--amber-bg); color: var(--amber-text); }
+.bg-amber .dot { background: var(--amber); }
+.bg-red { background: var(--red-bg); color: var(--red-text); }
+.bg-red .dot { background: var(--red); }
+.bg-purple { background: var(--purple-bg); color: var(--purple-text); }
+.bg-purple .dot { background: var(--purple); }
+.bg-indigo { background: var(--indigo-bg); color: var(--indigo-text); }
+.bg-indigo .dot { background: var(--indigo); }
+.bg-teal { background: var(--teal-bg); color: var(--teal-text); }
+.bg-teal .dot { background: var(--teal); }
+
+/* 담당자 아바타 */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.avatar-circle {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--white);
+  flex-shrink: 0;
+}
+
+/* 테이블 푸터 */
+.tbl-foot {
+  padding: 12px 16px;
+  background: var(--gray-50);
+  font-size: 13px;
+  color: var(--text-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border);
+}
+.tbl-foot strong { color: var(--text-primary); }
+
+/* 케밥 메뉴 */
+.kebab {
+  width: 30px; height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-quaternary);
+  border: none;
+  background: none;
+  font-size: 18px;
+  transition: all 0.1s ease;
+}
+.kebab:hover {
+  background: var(--gray-100);
+  color: var(--text-secondary);
+}
+
+/* ========================================
+   상세 패널 (우측 슬라이드)
+   ======================================== */
+.panel {
+  position: fixed;
+  right: 0; top: 0;
+  width: 560px;
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.06);
+}
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* 패널 헤더 */
+.ph {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.ph-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.ph-row1 h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+}
+.ph-close {
+  width: 32px; height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  transition: all 0.15s;
+}
+.ph-close:hover { background: var(--gray-100); color: var(--text-primary); }
+.ph-row2 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ph-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.ph-btn:hover { background: var(--gray-100); }
+.ph-btn.edit { color: var(--toss-blue); }
+.ph-btn.cancel { color: var(--red); }
+.ph-btn.reserve { color: var(--amber); }
+.ph-btn.drive {
+  color: var(--white);
+  background: var(--green);
+  border-radius: 8px;
+}
+.ph-btn.drive:hover { background: #00B060; }
+.ph-btn.delete { color: var(--red); }
+
+/* 프로그레스바 */
+.pp {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-light);
+}
+.pp-bar {
+  height: 6px;
+  background: var(--gray-100);
+  border-radius: 99px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.pp-fill {
+  height: 100%;
+  background: var(--toss-blue);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+.pp-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-quaternary);
+  font-weight: 500;
+}
+.pp-labels .cur {
+  color: var(--toss-blue);
+  font-weight: 700;
+}
+
+/* 단계 전환 버튼 */
+.step-btn {
+  margin: 12px 24px;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--toss-blue);
+  color: var(--white);
+  width: calc(100% - 48px);
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.step-btn:hover { background: var(--toss-blue-hover); }
+
+/* ========================================
+   상시 표시 영역
+   ======================================== */
+.pf {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--gray-50);
+}
+.pf-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+.pf-addr {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf-addr .ab {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-tertiary);
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.pf-addr .ab:hover {
+  border-color: var(--toss-blue);
+  color: var(--toss-blue);
+}
+.pf-addr .map {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #FEE500;
+  color: #3C1E1E;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* 정보 그리드 */
+.pf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pf-grid .cell {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.pf-grid .cell .l {
+  font-size: 11px;
+  color: var(--text-quaternary);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.pf-grid .cell .v {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 상담내역 */
+.pf-memo { margin-bottom: 12px; }
+.pf-memo .l {
+  font-size: 11px;
+  color: var(--text-quaternary);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.pf-memo .v {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  line-height: 1.6;
+}
+
+/* 금액 그리드 */
+.pf-money {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.pf-money .cell {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.pf-money .cell .l {
+  font-size: 10px;
+  color: var(--text-quaternary);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.pf-money .cell .v {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.pf-money .neg { color: var(--red); }
+
+/* ========================================
+   패널 탭 — 토스 pill 스타일
+   ======================================== */
+.pt {
+  display: flex;
+  gap: 4px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-light);
+}
+.pt-item {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.12s;
+}
+.pt-item:hover {
+  background: var(--gray-100);
+  color: var(--text-secondary);
+}
+.pt-item.active {
+  background: var(--toss-blue-light);
+  color: var(--toss-blue);
+  font-weight: 600;
+}
+
+/* ========================================
+   패널 바디 — 폼 섹션
+   ======================================== */
+.pb {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.sec { margin-bottom: 24px; }
+.sec-t {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+.sec-n {
+  width: 22px; height: 22px;
+  background: var(--toss-blue);
+  color: var(--white);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.fr {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.fr3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.fg { margin-bottom: 10px; }
+.fl {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.fi {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.fi:focus {
+  border-color: var(--toss-blue);
+  box-shadow: 0 0 0 3px rgba(0, 100, 255, 0.1);
+  outline: none;
+}
+select.fi { appearance: auto; }
+
+/* 드롭존 */
+.dz {
+  border: 2px dashed var(--gray-300);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  color: var(--text-quaternary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dz:hover {
+  border-color: var(--toss-blue);
+  background: var(--toss-blue-bg);
+  color: var(--toss-blue);
+}
+
+/* ========================================
+   견적서 열기 버튼 (섹션 내)
+   ======================================== */
+.btn-estimate {
+  width: 100%;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--toss-blue);
+  color: var(--white);
+  transition: all 0.15s;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn-estimate:hover { background: var(--toss-blue-hover); }
+
+/* 총공사비 자동 표시 */
+.auto-total {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--toss-blue);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================
+   SVG 아이콘 (인라인)
+   ======================================== */
+.icon-svg {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ========================================
+     사이드바 (다크)
+     ======================================== -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">D</span>
+    <span class="logo-text">DAWOO ERP</span>
+  </div>
+
+  <div class="s-group">지원사업</div>
+  <div class="s-item active">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6m-6 4h6"/></svg></span>
+    소규모 접수대장
+  </div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg></span>
+    수도공사 접수대장
+  </div>
+
+  <div class="s-group">현장</div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M5 20V8l7-5 7 5v12"/><path d="M9 20v-5h6v5"/></svg></span>
+    현장관리
+  </div>
+
+  <div class="s-group">업무</div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+    업무 캘린더
+  </div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg></span>
+    지출결의서
+  </div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></span>
+    연차신청
+  </div>
+
+  <div class="s-group">데이터</div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10v11M20 10v11"/><path d="M8 14v3M12 14v3M16 14v3"/></svg></span>
+    거래처 DB
+  </div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></span>
+    A/S 관리
+  </div>
+
+  <div class="s-group">세무/회계</div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></span>
+    회계달력
+  </div>
+
+  <div class="s-group">관리</div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></span>
+    서류함
+  </div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></span>
+    직원관리
+  </div>
+
+  <div class="s-group">분석</div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>
+    보고서
+  </div>
+  <div class="s-item">
+    <span class="s-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>
+    KPI
+  </div>
+
+  <!-- 사이드바 하단: 사용자 -->
+  <div class="sidebar-bottom">
+    <div class="sidebar-user">
+      <div class="user-avatar">김</div>
+      <div class="user-info">
+        <span class="user-name">김재호</span>
+        <span class="user-role">대표</span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ========================================
+     메인 콘텐츠
+     ======================================== -->
+<div class="main">
+
+  <!-- 히어로 카드: 제목 + 통계 -->
+  <div class="hero-card">
+    <div class="hero-top">
+      <div>
+        <h1>소규모 접수대장</h1>
+        <div class="sub">지원사업 접수 현황 관리</div>
+      </div>
+      <div class="hero-actions">
+        <div class="search-box">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input placeholder="빌라명, 소유주, 주소...">
+        </div>
+        <button class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          신규 접수
+        </button>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="val">345</div>
+        <div class="lbl">진행중</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val green">5</div>
+        <div class="lbl">완료</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val">28,900,000</div>
+        <div class="lbl">총공사비</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val red">25,460,000</div>
+        <div class="lbl">미수금</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 상태 탭 -->
+  <div class="toolbar">
+    <div class="seg-tabs">
+      <button class="seg-tab active">진행중<span class="cnt">345</span></button>
+      <button class="seg-tab">접수<span class="cnt">334</span></button>
+      <button class="seg-tab">승인<span class="cnt">6</span></button>
+      <button class="seg-tab">완료<span class="cnt">5</span></button>
+      <button class="seg-tab">취소<span class="cnt">236</span></button>
+      <button class="seg-tab">문의(예약)<span class="cnt">241</span></button>
+      <button class="seg-tab">전체<span class="cnt">664</span></button>
+    </div>
+  </div>
+
+  <!-- 프로그레스 가이드 10단계 -->
+  <div class="prog">
+    <div class="prog-step"><div class="prog-dot" style="background:var(--gray-400)">1</div><span class="prog-txt">문의</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--blue)">2</div><span class="prog-txt">실측</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--indigo)">3</div><span class="prog-txt">견적</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--purple)">4</div><span class="prog-txt">동의</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:#9775FA">5</div><span class="prog-txt">신청</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--green)">6</div><span class="prog-txt">승인</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--teal)">7</div><span class="prog-txt">착공</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--amber)">8</div><span class="prog-txt">공사</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--blue)">9</div><span class="prog-txt">완료</span></div>
+    <div class="prog-step"><div class="prog-dot" style="background:var(--green)">10</div><span class="prog-txt">입금</span></div>
+  </div>
+
+  <!-- 도시 필터 15개 -->
+  <div class="chips">
+    <div class="chip active">수원<span class="ct"> 120</span></div>
+    <div class="chip">성남<span class="ct"> 45</span></div>
+    <div class="chip">안양<span class="ct"> 38</span></div>
+    <div class="chip">부천<span class="ct"> 22</span></div>
+    <div class="chip">광명<span class="ct"> 15</span></div>
+    <div class="chip">시흥<span class="ct"> 18</span></div>
+    <div class="chip">안산<span class="ct"> 12</span></div>
+    <div class="chip">군포<span class="ct"> 8</span></div>
+    <div class="chip">의왕<span class="ct"> 3</span></div>
+    <div class="chip">과천<span class="ct"> 2</span></div>
+    <div class="chip">용인<span class="ct"> 25</span></div>
+    <div class="chip">화성<span class="ct"> 32</span></div>
+    <div class="chip">오산<span class="ct"> 5</span></div>
+    <div class="chip">평택<span class="ct"> 9</span></div>
+    <div class="chip">하남<span class="ct"> 4</span></div>
+  </div>
+
+  <!-- 테이블 -->
+  <div class="tbl-card">
+    <table>
+      <thead>
+        <tr>
+          <th>담당</th>
+          <th>빌라명</th>
+          <th>호수</th>
+          <th>연락처</th>
+          <th>주소</th>
+          <th>지원사업</th>
+          <th>상담내역</th>
+          <th>단계</th>
+          <th style="width:40px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="selected">
+          <td><span class="avatar"><span class="avatar-circle" style="background:var(--toss-blue)">김</span>김재호</span></td>
+          <td style="font-weight:600">삼성빌리지101동</td>
+          <td style="color:var(--text-tertiary)">-</td>
+          <td style="color:var(--text-secondary)">010-3460-5570</td>
+          <td style="color:var(--text-secondary)">수원천로 11-5</td>
+          <td><span class="badge bg-slate"><span class="dot"></span>옥상방수</span></td>
+          <td style="color:var(--text-tertiary);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">녹물 방지 목적</td>
+          <td><span class="badge bg-blue"><span class="dot"></span>실측</span></td>
+          <td><button class="kebab"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></td>
+        </tr>
+        <tr>
+          <td><span class="avatar"><span class="avatar-circle" style="background:var(--toss-blue)">김</span>김재호</span></td>
+          <td style="font-weight:600">산호하이츠빌라 나동</td>
+          <td style="color:var(--text-tertiary)">-</td>
+          <td style="color:var(--text-secondary)">010-4985-1822</td>
+          <td style="color:var(--text-secondary)">장다리로196번길 7-7</td>
+          <td><span class="badge bg-slate"><span class="dot"></span>옥상방수</span></td>
+          <td style="color:var(--text-tertiary)">녹물 방지 목적</td>
+          <td><span class="badge bg-amber"><span class="dot"></span>공사</span></td>
+          <td><button class="kebab"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></td>
+        </tr>
+        <tr>
+          <td><span class="avatar"><span class="avatar-circle" style="background:var(--toss-blue)">김</span>김재호</span></td>
+          <td style="font-weight:600">오류스카이빌 2동</td>
+          <td style="color:var(--text-tertiary)">-</td>
+          <td style="color:var(--text-secondary)">010-9870-5801</td>
+          <td style="color:var(--text-secondary)">장안구 수일로 74-3</td>
+          <td><span class="badge bg-slate"><span class="dot"></span>옥내/외급관</span></td>
+          <td style="color:var(--text-tertiary)">녹물/유공관교체</td>
+          <td><span class="badge bg-amber"><span class="dot"></span>공사</span></td>
+          <td><button class="kebab"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></td>
+        </tr>
+        <tr>
+          <td><span class="avatar"><span class="avatar-circle" style="background:var(--toss-blue)">김</span>김재호</span></td>
+          <td style="font-weight:600">진흥맨션</td>
+          <td style="color:var(--text-tertiary)">-</td>
+          <td style="color:var(--text-secondary)">010-2366-3802</td>
+          <td style="color:var(--text-secondary)">문정동큰길 32-14</td>
+          <td><span class="badge bg-slate"><span class="dot"></span>옥상방수</span></td>
+          <td style="color:var(--text-tertiary)"></td>
+          <td><span class="badge bg-red"><span class="dot"></span>취소</span></td>
+          <td><button class="kebab"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></td>
+        </tr>
+        <tr>
+          <td><span class="avatar"><span class="avatar-circle" style="background:var(--toss-blue)">김</span>김재호</span></td>
+          <td style="font-weight:600">다세대(우만동) 101호</td>
+          <td style="color:var(--text-tertiary)">-</td>
+          <td style="color:var(--text-secondary)">010-9461-3690</td>
+          <td style="color:var(--text-secondary)">세지로399번길 102-7</td>
+          <td><span class="badge bg-slate"><span class="dot"></span>옥내</span></td>
+          <td style="color:var(--text-tertiary)">녹물 방지 목적</td>
+          <td><span class="badge bg-purple"><span class="dot"></span>신청서</span></td>
+          <td><button class="kebab"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></td>
+        </tr>
+        <tr>
+          <td><span class="avatar"><span class="avatar-circle" style="background:var(--pink)">직</span>직원A</span></td>
+          <td style="font-weight:600">다세대(우만동) 102호</td>
+          <td style="color:var(--text-tertiary)">-</td>
+          <td style="color:var(--text-secondary)">010-9461-3690</td>
+          <td style="color:var(--text-secondary)">세지로399번길 102-7</td>
+          <td><span class="badge bg-slate"><span class="dot"></span>옥내</span></td>
+          <td style="color:var(--text-tertiary)">녹물 방지 목적</td>
+          <td><span class="badge bg-indigo"><span class="dot"></span>견적</span></td>
+          <td><button class="kebab"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="tbl-foot">
+      <span>총 <strong>6건</strong> / 총공사비 <strong>28,900,000원</strong> / 미수금 <strong style="color:var(--red)">25,460,000원</strong></span>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================
+     상세 패널 (우측)
+     ======================================== -->
+<div class="panel">
+  <!-- 헤더 -->
+  <div class="ph">
+    <div class="ph-row1">
+      <h2>삼성빌리지101동</h2>
+      <button class="ph-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="ph-row2">
+      <button class="ph-btn edit">수정</button>
+      <button class="ph-btn cancel">취소</button>
+      <button class="ph-btn reserve">예약</button>
+      <button class="ph-btn drive">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:2px"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        드라이브
+      </button>
+      <button class="ph-btn delete">삭제</button>
+    </div>
+  </div>
+
+  <!-- 프로그레스바 -->
+  <div class="pp">
+    <div class="pp-bar"><div class="pp-fill" style="width:15%"></div></div>
+    <div class="pp-labels">
+      <span>문의</span>
+      <span class="cur">실측</span>
+      <span>견적</span>
+      <span>동의</span>
+      <span>신청</span>
+      <span>승인</span>
+      <span>착공</span>
+      <span>공사</span>
+      <span>완료</span>
+      <span>입금</span>
+    </div>
+  </div>
+
+  <!-- 단계 전환 버튼 -->
+  <button class="step-btn">
+    실측으로
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:4px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+  </button>
+
+  <!-- 상시 표시 영역 -->
+  <div class="pf">
+    <div class="pf-name">
+      삼성빌리지101동
+      <span class="badge bg-blue" style="font-size:11px">옥상방수</span>
+    </div>
+    <div class="pf-addr">
+      수원천로 11-5
+      <button class="ab">복사</button>
+      <button class="map">지도</button>
+    </div>
+    <div class="pf-grid">
+      <div class="cell"><div class="l">소유주</div><div class="v">-</div></div>
+      <div class="cell"><div class="l">연락처</div><div class="v">010-3460-5570</div></div>
+      <div class="cell"><div class="l">담당자</div><div class="v">김재호</div></div>
+    </div>
+    <div class="pf-memo">
+      <div class="l">상담내역</div>
+      <div class="v">녹물 방지 목적</div>
+    </div>
+    <div class="pf-money">
+      <div class="cell"><div class="l">총공사비</div><div class="v">0</div></div>
+      <div class="cell"><div class="l">자부담금</div><div class="v">0</div></div>
+      <div class="cell"><div class="l">시지원금</div><div class="v">0</div></div>
+      <div class="cell"><div class="l">추가공사금</div><div class="v">0</div></div>
+      <div class="cell"><div class="l">미수금</div><div class="v neg">0</div></div>
+    </div>
+  </div>
+
+  <!-- 탭 5개 -->
+  <div class="pt">
+    <div class="pt-item active">접수</div>
+    <div class="pt-item">승인(시공)</div>
+    <div class="pt-item">완료</div>
+    <div class="pt-item">이력</div>
+    <div class="pt-item">기본정보</div>
+  </div>
+
+  <!-- 접수탭 내용 -->
+  <div class="pb">
+    <!-- 1. 실측 -->
+    <div class="sec">
+      <div class="sec-t"><span class="sec-n">1</span>실측</div>
+      <div class="fr3">
+        <div class="fg"><label class="fl">실측일</label><input type="date" class="fi"></div>
+        <div class="fg"><label class="fl">시간</label><input type="time" class="fi" value="14:00"></div>
+        <div class="fg"><label class="fl">담당자</label><select class="fi"><option>선택</option><option selected>김재호</option></select></div>
+      </div>
+      <div class="fg"><label class="fl">접수일</label><input type="date" class="fi" value="2026-02-05"></div>
+      <div class="fg">
+        <label class="fl">실측사진</label>
+        <div class="dz">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 6px;display:block;color:var(--text-quaternary)"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          실측사진 드래그 또는 클릭하여 업로드 (이미지 최대 5개)
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 견적 -->
+    <div class="sec">
+      <div class="sec-t"><span class="sec-n">2</span>견적</div>
+      <div class="fr">
+        <div class="fg"><label class="fl">시지원금</label><input class="fi" value="0" style="text-align:right"></div>
+        <div class="fg"><label class="fl">자부담금</label><input class="fi" value="0" style="text-align:right"></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">추가공사금</label><input class="fi" value="0" style="text-align:right"></div>
+        <div class="fg"><label class="fl">총공사비 (자동)</label><div class="auto-total">0원</div></div>
+      </div>
+      <button class="btn-estimate">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+        견적서 열기
+      </button>
+    </div>
+
+    <!-- 3. 동의서 -->
+    <div class="sec">
+      <div class="sec-t"><span class="sec-n">3</span>동의서</div>
+      <div class="fr3">
+        <div class="fg"><label class="fl">동의서 회수일</label><input type="date" class="fi"></div>
+        <div class="fg"><label class="fl">시간</label><input type="time" class="fi"></div>
+        <div class="fg"><label class="fl">수령자</label><select class="fi"><option>선택</option><option>김재호</option></select></div>
+      </div>
+    </div>
+
+    <!-- 4. 신청서 -->
+    <div class="sec">
+      <div class="sec-t"><span class="sec-n">4</span>신청서</div>
+      <div class="fg"><label class="fl">신청서 제출일</label><input type="date" class="fi"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

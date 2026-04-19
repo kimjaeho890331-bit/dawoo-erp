@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>다우 ERP v8 — Linear 스타일</title>
+<!--
+  참고 브랜드: Linear (https://linear.app)
+  디자인 토큰 출처: Linear Design System (Light Mode)
+  - Brand Indigo: #5E6AD2
+  - Hover: #828FFF
+  - Light Bg: #F7F8F8
+  - Card: #FFFFFF / Border: #E6E6E6
+  - Text: #1B1B1F / #6B6F76 / #8A8F98 / #AFAFB5
+  - Radius: 2px(badge), 4px(small), 6px(button), 8px(card)
+  - Shadow Level 2: ring + subtle lift
+  - Typography: Inter + Pretendard, -0.3px tracking
+-->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>
+  /* ===== Reset ===== */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ===== Tokens ===== */
+  :root {
+    /* Brand */
+    --indigo: #5E6AD2;
+    --indigo-hover: #828FFF;
+    --indigo-light: #ECEEFB;
+    --indigo-subtle: #F4F5FC;
+
+    /* Surfaces */
+    --bg-page: #F7F8F8;
+    --bg-card: #FFFFFF;
+    --bg-sidebar: #F3F4F5;
+    --bg-table-header: #FAFAFA;
+    --bg-hover: #F3F4F5;
+    --bg-selected: #F0F1FC;
+
+    /* Borders */
+    --border: #E6E6E6;
+    --border-light: #EEEEEE;
+
+    /* Text */
+    --text-primary: #1B1B1F;
+    --text-secondary: #6B6F76;
+    --text-tertiary: #8A8F98;
+    --text-quaternary: #AFAFB5;
+
+    /* Status */
+    --status-green-bg: #E8F5E9;
+    --status-green-text: #2E7D32;
+    --status-blue-bg: #E3F2FD;
+    --status-blue-text: #1565C0;
+    --status-orange-bg: #FFF3E0;
+    --status-orange-text: #E65100;
+    --status-purple-bg: #F3E8FD;
+    --status-purple-text: #6A1B9A;
+    --status-red-bg: #FFEBEE;
+    --status-red-text: #C62828;
+    --status-yellow-bg: #FFF8E1;
+    --status-yellow-text: #F57F17;
+    --status-slate-bg: #F1F3F5;
+    --status-slate-text: #546E7A;
+    --status-indigo-bg: #E8EAF6;
+    --status-indigo-text: #283593;
+    --status-teal-bg: #E0F2F1;
+    --status-teal-text: #00695C;
+    --status-emerald-bg: #E8F5E9;
+    --status-emerald-text: #1B5E20;
+
+    /* Money */
+    --money-negative: #E53935;
+    --money-positive: #2E7D32;
+
+    /* Radius */
+    --r-badge: 2px;
+    --r-small: 4px;
+    --r-button: 6px;
+    --r-card: 8px;
+
+    /* Shadow Level 2 */
+    --shadow-card: 0 0 0 1px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
+    --shadow-panel: 0 0 0 1px rgba(0,0,0,0.06), 0 8px 32px rgba(0,0,0,0.08);
+    --shadow-dropdown: 0 0 0 1px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.1);
+
+    /* Font */
+    --font: 'Pretendard Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 510;
+    letter-spacing: -0.3px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ===== Layout ===== */
+  .app-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 220px;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    padding: 16px 12px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-logo {
+    font-size: 15px;
+    font-weight: 590;
+    letter-spacing: -0.4px;
+    color: var(--text-primary);
+    padding: 4px 8px 16px;
+  }
+
+  .sidebar-logo span {
+    color: var(--indigo);
+  }
+
+  .sidebar-section {
+    margin-bottom: 20px;
+  }
+
+  .sidebar-section-label {
+    font-size: 11px;
+    font-weight: 510;
+    color: var(--text-quaternary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 0 8px;
+    margin-bottom: 4px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--r-button);
+    font-size: 13px;
+    font-weight: 510;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+
+  .sidebar-item:hover {
+    background: rgba(0,0,0,0.04);
+    color: var(--text-primary);
+  }
+
+  .sidebar-item.active {
+    background: var(--bg-card);
+    color: var(--indigo);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  .sidebar-item svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+
+  .sidebar-item.active svg {
+    opacity: 1;
+    color: var(--indigo);
+  }
+
+  .sidebar-spacer {
+    flex: 1;
+  }
+
+  /* ===== Main Content ===== */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .main-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+  }
+
+  /* ===== Page Header ===== */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .page-title {
+    font-size: 20px;
+    font-weight: 590;
+    letter-spacing: -0.24px;
+    color: var(--text-primary);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .search-input {
+    width: 260px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-button);
+    font-size: 13px;
+    font-weight: 510;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+  }
+
+  .search-input::placeholder {
+    color: var(--text-quaternary);
+  }
+
+  .search-input:focus {
+    border-color: var(--indigo);
+    box-shadow: 0 0 0 3px rgba(94,106,210,0.1);
+  }
+
+  .btn-primary {
+    height: 32px;
+    padding: 0 14px;
+    background: var(--indigo);
+    color: #fff;
+    border: none;
+    border-radius: var(--r-button);
+    font-size: 13px;
+    font-weight: 510;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+  }
+
+  .btn-primary:hover {
+    background: var(--indigo-hover);
+  }
+
+  /* ===== Stat Cards ===== */
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-card);
+  }
+
+  .stat-card-label {
+    font-size: 12px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+  }
+
+  .stat-card-value {
+    font-size: 24px;
+    font-weight: 590;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-card-value.money {
+    font-size: 20px;
+  }
+
+  .stat-card-value.outstanding {
+    color: var(--money-negative);
+  }
+
+  /* ===== Status Tabs ===== */
+  .tabs-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .status-tabs {
+    display: flex;
+    gap: 0;
+  }
+
+  .status-tab {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+  }
+
+  .status-tab:hover {
+    color: var(--text-secondary);
+  }
+
+  .status-tab.active {
+    color: var(--indigo);
+    border-bottom-color: var(--indigo);
+  }
+
+  .tab-count {
+    font-size: 11px;
+    font-weight: 510;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--bg-hover);
+    color: var(--text-tertiary);
+  }
+
+  .status-tab.active .tab-count {
+    background: var(--indigo-light);
+    color: var(--indigo);
+  }
+
+  /* ===== Progress Guide ===== */
+  .progress-guide {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-bottom: 10px;
+  }
+
+  .progress-step {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .progress-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .progress-step-label {
+    font-size: 10px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+  }
+
+  .progress-arrow {
+    font-size: 9px;
+    color: var(--text-quaternary);
+    margin: 0 2px;
+  }
+
+  /* Step Colors */
+  .step-1 { background: #94A3B8; }
+  .step-2 { background: #38BDF8; }
+  .step-3 { background: #6366F1; }
+  .step-4 { background: #8B5CF6; }
+  .step-5 { background: #A855F7; }
+  .step-6 { background: #059669; }
+  .step-7 { background: #14B8A6; }
+  .step-8 { background: #F59E0B; }
+  .step-9 { background: #3B82F6; }
+  .step-10 { background: #22C55E; }
+
+  /* ===== City Filter ===== */
+  .city-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .city-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 510;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+  }
+
+  .city-tag:hover {
+    border-color: var(--indigo);
+    color: var(--indigo);
+  }
+
+  .city-tag.active {
+    background: var(--indigo-light);
+    border-color: var(--indigo);
+    color: var(--indigo);
+  }
+
+  .city-count {
+    font-size: 10px;
+    color: var(--text-quaternary);
+  }
+
+  .city-tag.active .city-count {
+    color: var(--indigo);
+  }
+
+  /* ===== Split Layout ===== */
+  .split-layout {
+    display: flex;
+    gap: 0;
+    min-height: 600px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+    background: var(--bg-card);
+    overflow: hidden;
+  }
+
+  .list-section {
+    flex: 0 0 55%;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-section {
+    flex: 0 0 45%;
+    min-width: 0;
+    border-left: 1px solid var(--border);
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* ===== Table ===== */
+  .table-wrapper {
+    background: var(--bg-card);
+    overflow: hidden;
+    flex: 1;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead th {
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    background: var(--bg-table-header);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+
+  tbody tr:hover {
+    background: var(--bg-hover);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr.selected {
+    background: var(--bg-selected);
+  }
+
+  .cell-staff {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 590;
+    color: #fff;
+  }
+
+  .cell-name {
+    font-weight: 590;
+    color: var(--text-primary);
+  }
+
+  .cell-secondary {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .cell-address {
+    color: var(--text-secondary);
+    font-size: 13px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cell-note {
+    color: var(--text-tertiary);
+    font-size: 13px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ===== Badges ===== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--r-badge);
+    font-size: 11px;
+    font-weight: 510;
+    letter-spacing: -0.1px;
+    white-space: nowrap;
+  }
+
+  .badge-inquiry { background: var(--status-slate-bg); color: var(--status-slate-text); }
+  .badge-survey { background: var(--status-blue-bg); color: var(--status-blue-text); }
+  .badge-estimate { background: var(--status-indigo-bg); color: var(--status-indigo-text); }
+  .badge-consent { background: var(--status-purple-bg); color: var(--status-purple-text); }
+  .badge-apply { background: #F3E8FD; color: #7B1FA2; }
+  .badge-approval { background: var(--status-emerald-bg); color: var(--status-emerald-text); }
+  .badge-start { background: var(--status-teal-bg); color: var(--status-teal-text); }
+  .badge-construction { background: var(--status-orange-bg); color: var(--status-orange-text); }
+  .badge-complete { background: var(--status-blue-bg); color: var(--status-blue-text); }
+  .badge-payment { background: var(--status-green-bg); color: var(--status-green-text); }
+  .badge-cancel { background: var(--status-red-bg); color: var(--status-red-text); }
+  .badge-reserved { background: var(--status-yellow-bg); color: var(--status-yellow-text); }
+
+  .badge-type {
+    background: var(--indigo-subtle);
+    color: var(--indigo);
+  }
+
+  .overdue-label {
+    font-size: 10px;
+    font-weight: 590;
+    color: var(--money-negative);
+    margin-left: 4px;
+  }
+
+  /* ===== Kebab Menu ===== */
+  .kebab-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-small);
+    border: none;
+    background: transparent;
+    color: var(--text-quaternary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .kebab-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+  }
+
+  /* ===== Table Footer ===== */
+  .table-footer {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    border-top: 1px solid var(--border-light);
+    background: var(--bg-table-header);
+    flex-shrink: 0;
+  }
+
+  .table-footer .money-val {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Detail Panel ===== */
+  .detail-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .detail-title {
+    font-size: 16px;
+    font-weight: 590;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+  }
+
+  .detail-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .detail-action-btn {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--r-small);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    font-size: 12px;
+    font-weight: 510;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .detail-action-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-quaternary);
+  }
+
+  .detail-action-btn.danger {
+    color: var(--money-negative);
+    border-color: transparent;
+  }
+
+  .detail-action-btn.danger:hover {
+    background: var(--status-red-bg);
+  }
+
+  .detail-close-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-small);
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+
+  .detail-close-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  /* ===== Detail Progress Bar ===== */
+  .detail-progress {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .progress-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 8px;
+  }
+
+  .progress-bar-step {
+    flex: 1;
+    height: 4px;
+    background: var(--border-light);
+    position: relative;
+  }
+
+  .progress-bar-step:first-child {
+    border-radius: 2px 0 0 2px;
+  }
+
+  .progress-bar-step:last-child {
+    border-radius: 0 2px 2px 0;
+  }
+
+  .progress-bar-step.filled {
+    background: var(--indigo);
+  }
+
+  .progress-bar-step.current {
+    background: var(--indigo-hover);
+  }
+
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .progress-label {
+    font-size: 9px;
+    font-weight: 510;
+    color: var(--text-quaternary);
+    text-align: center;
+    flex: 1;
+  }
+
+  .progress-label.filled {
+    color: var(--indigo);
+  }
+
+  .progress-label.current {
+    color: var(--indigo);
+    font-weight: 590;
+  }
+
+  .step-transition-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: var(--r-button);
+    border: 1px solid var(--indigo);
+    background: var(--indigo-subtle);
+    color: var(--indigo);
+    font-size: 12px;
+    font-weight: 510;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+    margin-top: 4px;
+  }
+
+  .step-transition-btn:hover {
+    background: var(--indigo-light);
+  }
+
+  /* ===== Detail Always-visible Info ===== */
+  .detail-info {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .info-item.full {
+    grid-column: 1 / -1;
+  }
+
+  .info-label {
+    font-size: 11px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    letter-spacing: 0.2px;
+  }
+
+  .info-value {
+    font-size: 13px;
+    font-weight: 510;
+    color: var(--text-primary);
+  }
+
+  .info-value.address {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .info-value .copy-btn,
+  .info-value .map-btn {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: var(--r-badge);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+  }
+
+  .info-value .copy-btn:hover,
+  .info-value .map-btn:hover {
+    border-color: var(--indigo);
+    color: var(--indigo);
+  }
+
+  .money-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .money-item {
+    text-align: center;
+    padding: 8px 4px;
+    background: var(--bg-page);
+    border-radius: var(--r-small);
+  }
+
+  .money-item-label {
+    font-size: 10px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    margin-bottom: 2px;
+  }
+
+  .money-item-value {
+    font-size: 14px;
+    font-weight: 590;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .money-item-value.negative {
+    color: var(--money-negative);
+  }
+
+  .money-item-value.positive {
+    color: var(--money-positive);
+  }
+
+  .note-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  /* ===== Detail Tabs ===== */
+  .detail-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-tab {
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    transition: all 0.15s;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+  }
+
+  .detail-tab:hover {
+    color: var(--text-secondary);
+  }
+
+  .detail-tab.active {
+    color: var(--indigo);
+    border-bottom-color: var(--indigo);
+  }
+
+  /* ===== Detail Tab Content ===== */
+  .detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  .form-section {
+    margin-bottom: 24px;
+  }
+
+  .form-section-title {
+    font-size: 13px;
+    font-weight: 590;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .form-section-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--indigo);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 590;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .form-row.two-col {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .form-label {
+    font-size: 11px;
+    font-weight: 510;
+    color: var(--text-tertiary);
+    letter-spacing: 0.1px;
+  }
+
+  .form-input {
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-small);
+    font-size: 13px;
+    font-weight: 510;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    outline: none;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+    transition: border-color 0.15s;
+  }
+
+  .form-input:focus {
+    border-color: var(--indigo);
+    box-shadow: 0 0 0 3px rgba(94,106,210,0.1);
+  }
+
+  .form-input::placeholder {
+    color: var(--text-quaternary);
+  }
+
+  .form-input[readonly] {
+    background: var(--bg-page);
+    color: var(--text-secondary);
+  }
+
+  /* ===== Estimate Link ===== */
+  .estimate-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--r-button);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    font-size: 12px;
+    font-weight: 510;
+    color: var(--indigo);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    font-family: var(--font);
+    letter-spacing: -0.3px;
+    margin-top: 4px;
+  }
+
+  .estimate-link:hover {
+    background: var(--indigo-subtle);
+    border-color: var(--indigo);
+  }
+
+  /* ===== Drop Zone ===== */
+  .drop-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--r-card);
+    padding: 20px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-weight: 510;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 8px;
+  }
+
+  .drop-zone:hover {
+    border-color: var(--indigo);
+    color: var(--indigo);
+    background: var(--indigo-subtle);
+  }
+
+  .drop-icon {
+    font-size: 20px;
+    margin-bottom: 4px;
+    opacity: 0.4;
+  }
+
+  /* ===== Divider ===== */
+  .section-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 16px 0;
+  }
+
+  /* ===== Utilities ===== */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-layout">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-logo"><span>DAWOO</span> ERP</div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">지원사업</div>
+      <a class="sidebar-item active" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        소규모 접수대장
+      </a>
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="10"/></svg>
+        수도 접수대장
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">현장</div>
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+        현장관리
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">업무</div>
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        캘린더
+      </a>
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        지출관리
+      </a>
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4m8-4v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>
+        연차관리
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">데이터</div>
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        거래처 DB
+      </a>
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+        A/S 관리
+      </a>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-section">
+      <a class="sidebar-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        설정
+      </a>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="main-content">
+    <div class="main-scroll">
+
+      <!-- Page Header -->
+      <div class="page-header">
+        <h1 class="page-title">소규모 접수대장</h1>
+        <div class="header-actions">
+          <input type="text" class="search-input" placeholder="빌라명, 소유주, 연락처 검색...">
+          <button class="btn-primary">+ 신규등록</button>
+        </div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-card-label">진행중</div>
+          <div class="stat-card-value">345</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">완료</div>
+          <div class="stat-card-value">5</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">총공사비</div>
+          <div class="stat-card-value money tabular-nums">28,900,000</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">미수금</div>
+          <div class="stat-card-value money outstanding tabular-nums">25,460,000</div>
+        </div>
+      </div>
+
+      <!-- Status Tabs + Progress Guide -->
+      <div class="tabs-row">
+        <div class="status-tabs">
+          <button class="status-tab active">진행중 <span class="tab-count">345</span></button>
+          <button class="status-tab">접수 <span class="tab-count">120</span></button>
+          <button class="status-tab">승인 <span class="tab-count">89</span></button>
+          <button class="status-tab">완료 <span class="tab-count">5</span></button>
+          <button class="status-tab">취소 <span class="tab-count">3</span></button>
+          <button class="status-tab">문의(예약) <span class="tab-count">12</span></button>
+          <button class="status-tab">전체 <span class="tab-count">350</span></button>
+        </div>
+        <div class="progress-guide">
+          <div class="progress-step"><span class="progress-dot step-1">1</span><span class="progress-step-label">문의</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-2">2</span><span class="progress-step-label">실측</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-3">3</span><span class="progress-step-label">견적</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-4">4</span><span class="progress-step-label">동의</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-5">5</span><span class="progress-step-label">신청</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-6">6</span><span class="progress-step-label">승인</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-7">7</span><span class="progress-step-label">착공</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-8">8</span><span class="progress-step-label">공사</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-9">9</span><span class="progress-step-label">완료</span></div><span class="progress-arrow">&#x203A;</span>
+          <div class="progress-step"><span class="progress-dot step-10">10</span><span class="progress-step-label">입금</span></div>
+        </div>
+      </div>
+
+      <!-- City Filters -->
+      <div class="city-filters">
+        <button class="city-tag active">수원 <span class="city-count">120</span></button>
+        <button class="city-tag">성남 <span class="city-count">45</span></button>
+        <button class="city-tag">안양 <span class="city-count">38</span></button>
+        <button class="city-tag">부천 <span class="city-count">22</span></button>
+        <button class="city-tag">광명 <span class="city-count">15</span></button>
+        <button class="city-tag">시흥 <span class="city-count">18</span></button>
+        <button class="city-tag">안산 <span class="city-count">12</span></button>
+        <button class="city-tag">군포 <span class="city-count">8</span></button>
+        <button class="city-tag">의왕 <span class="city-count">3</span></button>
+        <button class="city-tag">과천 <span class="city-count">2</span></button>
+        <button class="city-tag">용인 <span class="city-count">25</span></button>
+        <button class="city-tag">화성 <span class="city-count">32</span></button>
+        <button class="city-tag">오산 <span class="city-count">5</span></button>
+        <button class="city-tag">평택 <span class="city-count">9</span></button>
+        <button class="city-tag">하남 <span class="city-count">4</span></button>
+      </div>
+
+      <!-- Split: Table + Detail Panel -->
+      <div class="split-layout">
+
+        <!-- Left: Table -->
+        <div class="list-section">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>담당</th>
+                  <th>빌라명</th>
+                  <th>호수</th>
+                  <th>연락처</th>
+                  <th>주소</th>
+                  <th>지원사업</th>
+                  <th>상담내역</th>
+                  <th>단계</th>
+                  <th style="width:32px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="selected">
+                  <td><span class="cell-staff" style="background:#5E6AD2;">김재호</span></td>
+                  <td class="cell-name">삼성빌리지</td>
+                  <td class="cell-secondary">101동 301호</td>
+                  <td class="cell-secondary">010-1234-5678</td>
+                  <td class="cell-address">수원시 팔달구 인계동 123-4</td>
+                  <td><span class="badge badge-type">옥상방수</span></td>
+                  <td class="cell-note">실측 후 견적 전달 예정</td>
+                  <td><span class="badge badge-survey">실측</span></td>
+                  <td><button class="kebab-btn"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-staff" style="background:#5E6AD2;">김재호</span></td>
+                  <td class="cell-name">산호하이츠빌라</td>
+                  <td class="cell-secondary">나동 201호</td>
+                  <td class="cell-secondary">010-9876-5432</td>
+                  <td class="cell-address">성남시 분당구 야탑동 56-7</td>
+                  <td><span class="badge badge-type">새빛</span></td>
+                  <td class="cell-note">소유주 동의서 수령 대기</td>
+                  <td><span class="badge badge-consent">동의서</span></td>
+                  <td><button class="kebab-btn"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-staff" style="background:#5E6AD2;">김재호</span></td>
+                  <td class="cell-name">오류스카이빌</td>
+                  <td class="cell-secondary">2동 502호</td>
+                  <td class="cell-secondary">010-5555-1234</td>
+                  <td class="cell-address">부천시 오정구 오류동 89-2</td>
+                  <td><span class="badge badge-type">녹색</span></td>
+                  <td class="cell-note">승인 완료, 착공 준비</td>
+                  <td><span class="badge badge-approval">승인</span></td>
+                  <td><button class="kebab-btn"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-staff" style="background:#5E6AD2;">김재호</span></td>
+                  <td class="cell-name">진흥맨션</td>
+                  <td class="cell-secondary">103호</td>
+                  <td class="cell-secondary">010-3333-7890</td>
+                  <td class="cell-address">안양시 만안구 안양동 34-5</td>
+                  <td><span class="badge badge-type">공동주택</span></td>
+                  <td class="cell-note">공사 진행 중 (3층 방수)</td>
+                  <td>
+                    <span class="badge badge-construction">공사</span>
+                    <span class="overdue-label">미수금</span>
+                  </td>
+                  <td><button class="kebab-btn"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-staff" style="background:#5E6AD2;">김재호</span></td>
+                  <td class="cell-name">다세대</td>
+                  <td class="cell-secondary">101호</td>
+                  <td class="cell-secondary">010-7777-4567</td>
+                  <td class="cell-address">화성시 봉담읍 동화리 12-3</td>
+                  <td><span class="badge badge-type">개인</span></td>
+                  <td class="cell-note">완료서류 제출 예정</td>
+                  <td>
+                    <span class="badge badge-complete">완료서류제출</span>
+                    <span class="overdue-label">미수금</span>
+                  </td>
+                  <td><button class="kebab-btn"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-staff" style="background:#F59E0B;">직원A</span></td>
+                  <td class="cell-name">다세대</td>
+                  <td class="cell-secondary">102호</td>
+                  <td class="cell-secondary">010-8888-9012</td>
+                  <td class="cell-address">용인시 기흥구 구갈동 45-6</td>
+                  <td><span class="badge badge-type">옥상방수</span></td>
+                  <td class="cell-note">문의 접수, 실측 일정 조율</td>
+                  <td><span class="badge badge-inquiry">문의</span></td>
+                  <td><button class="kebab-btn"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Table Footer -->
+          <div class="table-footer">
+            총 6건 / 총공사비 <span class="money-val tabular-nums">28,900,000원</span> / 미수금 <span class="money-val tabular-nums" style="color:var(--money-negative)">25,460,000원</span>
+          </div>
+        </div><!-- /list-section -->
+
+        <!-- Right: Detail Panel -->
+        <div class="detail-section">
+          <!-- Header -->
+          <div class="detail-header">
+            <div class="detail-title-row">
+              <div class="detail-title">삼성빌리지 101동</div>
+              <div class="detail-actions">
+                <button class="detail-action-btn">수정</button>
+                <button class="detail-action-btn">취소</button>
+                <button class="detail-action-btn">예약</button>
+                <button class="detail-action-btn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                  드라이브
+                </button>
+                <button class="detail-action-btn danger">삭제</button>
+                <button class="detail-close-btn">&#x2715;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="detail-progress">
+            <div class="progress-bar-row">
+              <div class="progress-bar-step filled"></div>
+              <div class="progress-bar-step current"></div>
+              <div class="progress-bar-step"></div>
+              <div class="progress-bar-step"></div>
+              <div class="progress-bar-step"></div>
+              <div class="progress-bar-step"></div>
+              <div class="progress-bar-step"></div>
+              <div class="progress-bar-step"></div>
+              <div class="progress-bar-step"></div>
+              <div class="progress-bar-step"></div>
+            </div>
+            <div class="progress-labels">
+              <span class="progress-label filled">문의</span>
+              <span class="progress-label current">실측</span>
+              <span class="progress-label">견적</span>
+              <span class="progress-label">동의</span>
+              <span class="progress-label">신청</span>
+              <span class="progress-label">승인</span>
+              <span class="progress-label">착공</span>
+              <span class="progress-label">공사</span>
+              <span class="progress-label">완료</span>
+              <span class="progress-label">입금</span>
+            </div>
+            <button class="step-transition-btn">견적전달으로 &#x203A;</button>
+          </div>
+
+          <!-- Always-visible Info -->
+          <div class="detail-info">
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">빌라명 / 공사종류</span>
+                <span class="info-value">삼성빌리지 101동 &middot; <span class="badge badge-type" style="font-size:11px;">옥상방수</span></span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">담당자</span>
+                <span class="info-value"><span class="cell-staff" style="background:#5E6AD2; font-size:11px;">김재호</span></span>
+              </div>
+              <div class="info-item full">
+                <span class="info-label">주소</span>
+                <span class="info-value address">
+                  수원시 팔달구 인계동 123-4
+                  <button class="copy-btn">복사</button>
+                  <button class="map-btn">지도</button>
+                </span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">소유주</span>
+                <span class="info-value">홍길동</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">연락처</span>
+                <span class="info-value">010-1234-5678</span>
+              </div>
+              <div class="info-item full">
+                <span class="info-label">상담내역</span>
+                <span class="note-text">실측 후 견적 전달 예정. 3층 옥상 방수 상태 심각, 우기 전 시공 희망.</span>
+              </div>
+            </div>
+
+            <!-- Money Row -->
+            <div class="money-row">
+              <div class="money-item">
+                <div class="money-item-label">시지원금</div>
+                <div class="money-item-value tabular-nums positive">5,000,000</div>
+              </div>
+              <div class="money-item">
+                <div class="money-item-label">자부담금</div>
+                <div class="money-item-value tabular-nums">1,200,000</div>
+              </div>
+              <div class="money-item">
+                <div class="money-item-label">추가공사</div>
+                <div class="money-item-value tabular-nums">800,000</div>
+              </div>
+              <div class="money-item">
+                <div class="money-item-label">총공사비</div>
+                <div class="money-item-value tabular-nums">7,000,000</div>
+              </div>
+              <div class="money-item">
+                <div class="money-item-label">미수금</div>
+                <div class="money-item-value tabular-nums negative">5,460,000</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detail Tabs -->
+          <div class="detail-tabs">
+            <button class="detail-tab active">접수</button>
+            <button class="detail-tab">승인(시공)</button>
+            <button class="detail-tab">완료</button>
+            <button class="detail-tab">이력</button>
+            <button class="detail-tab">기본정보</button>
+          </div>
+
+          <!-- Detail Body (접수 Tab) -->
+          <div class="detail-body">
+
+            <!-- 1. 실측 -->
+            <div class="form-section">
+              <div class="form-section-title">
+                <span class="form-section-num">1</span>
+                실측
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label class="form-label">실측일</label>
+                  <input type="date" class="form-input" value="2026-04-20">
+                </div>
+                <div class="form-field">
+                  <label class="form-label">실측시간</label>
+                  <input type="time" class="form-input" value="14:00">
+                </div>
+                <div class="form-field">
+                  <label class="form-label">실측담당자</label>
+                  <input type="text" class="form-input" value="김재호" readonly>
+                </div>
+              </div>
+              <div class="form-row" style="grid-template-columns: 1fr;">
+                <div class="form-field">
+                  <label class="form-label">접수일</label>
+                  <input type="date" class="form-input" value="2026-04-15">
+                </div>
+              </div>
+              <div class="drop-zone">
+                <div class="drop-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:inline"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                </div>
+                실측 사진을 드래그하여 업로드
+              </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <!-- 2. 견적 -->
+            <div class="form-section">
+              <div class="form-section-title">
+                <span class="form-section-num">2</span>
+                견적
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label class="form-label">시지원금</label>
+                  <input type="text" class="form-input text-right tabular-nums" value="5,000,000">
+                </div>
+                <div class="form-field">
+                  <label class="form-label">자부담금</label>
+                  <input type="text" class="form-input text-right tabular-nums" value="1,200,000">
+                </div>
+                <div class="form-field">
+                  <label class="form-label">추가공사금</label>
+                  <input type="text" class="form-input text-right tabular-nums" value="800,000">
+                </div>
+              </div>
+              <div class="form-row" style="grid-template-columns: 1fr;">
+                <div class="form-field">
+                  <label class="form-label">총공사비 (자동계산)</label>
+                  <input type="text" class="form-input text-right tabular-nums" value="7,000,000" readonly>
+                </div>
+              </div>
+              <a href="#" class="estimate-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                견적서 열기
+              </a>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <!-- 3. 동의서 -->
+            <div class="form-section">
+              <div class="form-section-title">
+                <span class="form-section-num">3</span>
+                동의서
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label class="form-label">회수일</label>
+                  <input type="date" class="form-input" placeholder="YYYY-MM-DD">
+                </div>
+                <div class="form-field">
+                  <label class="form-label">회수시간</label>
+                  <input type="time" class="form-input">
+                </div>
+                <div class="form-field">
+                  <label class="form-label">수령자</label>
+                  <input type="text" class="form-input" placeholder="수령자 이름">
+                </div>
+              </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <!-- 4. 신청서 -->
+            <div class="form-section">
+              <div class="form-section-title">
+                <span class="form-section-num">4</span>
+                신청서
+              </div>
+              <div class="form-row two-col">
+                <div class="form-field">
+                  <label class="form-label">제출일</label>
+                  <input type="date" class="form-input" placeholder="YYYY-MM-DD">
+                </div>
+                <div class="form-field">
+                  <label class="form-label">제출자</label>
+                  <input type="text" class="form-input" placeholder="제출자 이름">
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /detail-body -->
+        </div><!-- /detail-section -->
+
+      </div><!-- /split-layout -->
+
+    </div><!-- /main-scroll -->
+  </main>
+
+</div><!-- /app-layout -->
+
+</body>
+</html>

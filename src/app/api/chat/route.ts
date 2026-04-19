@@ -1198,6 +1198,7 @@ export async function POST(request: NextRequest) {
       staffId?: string
       channel?: 'web' | 'telegram'
       nonStreaming?: boolean
+      pendingPhotos?: string[] // 고품질 원본 (드라이브 저장용)
     }
     const recentMessages = (messages || []).slice(-20)
 
@@ -1236,9 +1237,15 @@ export async function POST(request: NextRequest) {
       })
 
     // 첨부 이미지를 save_photo_to_drive 도구용으로 보관
-    const lastUserMsg = recentMessages[recentMessages.length - 1]
-    if (lastUserMsg?.images && lastUserMsg.images.length > 0) {
-      setPendingImages(lastUserMsg.images)
+    // 고품질 원본이 있으면 우선, 없으면 메시지의 이미지 사용
+    const { pendingPhotos } = body as { pendingPhotos?: string[] }
+    if (pendingPhotos && pendingPhotos.length > 0) {
+      setPendingImages(pendingPhotos)
+    } else {
+      const lastUserMsg = recentMessages[recentMessages.length - 1]
+      if (lastUserMsg?.images && lastUserMsg.images.length > 0) {
+        setPendingImages(lastUserMsg.images)
+      }
     }
 
     // non-streaming 모드 (텔레그램용): JSON 한 번에 반환

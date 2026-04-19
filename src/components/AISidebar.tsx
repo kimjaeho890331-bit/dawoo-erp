@@ -34,37 +34,44 @@ export default function AISidebar() {
     }
   }, [open])
 
-  // 이미지 압축 (canvas로 리사이즈 + JPEG 70% 품질)
-  const compressImage = (file: File): Promise<string> => {
+  // 이미지 압축 (Claude용 미리보기: 400px 작게 / 드라이브용: 1600px 고품질)
+  const compressImage = (file: File, maxSize: number, quality: number): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       img.onload = () => {
-        const MAX = 800 // 최대 800px
         let w = img.width, h = img.height
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX }
-          else { w = Math.round(w * MAX / h); h = MAX }
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize }
+          else { w = Math.round(w * maxSize / h); h = maxSize }
         }
         const canvas = document.createElement('canvas')
         canvas.width = w; canvas.height = h
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, w, h)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7)
-        resolve(dataUrl.split(',')[1])
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1])
       }
       img.onerror = reject
       img.src = URL.createObjectURL(file)
     })
   }
 
-  // 이미지 파일 처리 공통
+  // 이미지 파일 처리 — 미리보기용(작은) + 원본용(고품질) 분리
+  const [pendingFullImages, setPendingFullImages] = useState<string[]>([])
+
   const addImageFiles = (files: FileList | File[]) => {
-    Array.from(files).forEach(async file => {
-      if (!file.type.startsWith('image/')) return
-      if (file.size > 10 * 1024 * 1024) { setError('이미지 크기는 10MB 이하만 가능합니다'); return }
+    const fileArr = Array.from(files).filter(f => f.type.startsWith('image/'))
+    if (fileArr.length + pendingImages.length > 20) {
+      setError('사진은 최대 20장까지 가능합니다')
+      return
+    }
+    fileArr.forEach(async file => {
+      if (file.size > 15 * 1024 * 1024) { setError('이미지 크기는 15MB 이하만 가능합니다'); return }
       try {
-        const base64 = await compressImage(file)
-        setPendingImages(prev => [...prev, base64])
+        const [thumb, full] = await Promise.all([
+          compressImage(file, 400, 0.5),   // 미리보기용 (작게)
+          compressImage(file, 1600, 0.85), // 드라이브 저장용 (고품질)
+        ])
+        setPendingImages(prev => [...prev, thumb])
+        setPendingFullImages(prev => [...prev, full])
       } catch { setError('이미지 처리 실패') }
     })
   }
@@ -87,22 +94,43 @@ export default function AISidebar() {
     if ((!trimmed && pendingImages.length === 0) || isStreaming) return
 
     setError(null)
-    const userMessage: Message = { role: 'user', content: trimmed || '(사진 첨부)', images: pendingImages.length > 0 ? [...pendingImages] : undefined }
+    const hasPhotos = pendingImages.length > 0
+    const photoCount = pendingImages.length
+    // Claude에는 미리보기 1장만 보내고, 나머지는 별도 저장
+    const previewForClaude = hasPhotos ? [pendingImages[0]] : undefined
+    // 고품질 원본은 API에 별도 전달
+    const fullImagesForDrive = [...pendingFullImages]
+
+    const displayMsg = trimmed || (hasPhotos ? `(사진 ${photoCount}장 첨부)` : '')
+    const userMessage: Message = { role: 'user', content: displayMsg, images: hasPhotos ? [...pendingImages] : undefined }
     const updatedMessages = [...messages, userMessage]
     setMessages(updatedMessages)
     setInput('')
     setPendingImages([])
+    setPendingFullImages([])
     setIsStreaming(true)
 
     // Add empty assistant message for streaming
     setMessages(prev => [...prev, { role: 'assistant', content: '' }])
 
     try {
+      // Claude에는 최근 메시지 + 미리보기 1장만 전송 (크기 제한)
+      const apiMessages = updatedMessages.slice(-20).map(m => {
+        if (m === userMessage && hasPhotos) {
+          return { ...m, content: `${displayMsg} (사진 ${photoCount}장 첨부됨)`, images: previewForClaude }
+        }
+        // 이전 메시지의 images는 제거 (크기 절약)
+        const { images: _img, ...rest } = m
+        void _img
+        return rest
+      })
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: updatedMessages.slice(-20),
+          messages: apiMessages,
+          pendingPhotos: fullImagesForDrive.length > 0 ? fullImagesForDrive : undefined,
         }),
       })
 
@@ -294,7 +322,7 @@ export default function AISidebar() {
                   <div key={i} className="relative group">
                     <img src={`data:image/jpeg;base64,${img}`} alt="" className="w-14 h-14 rounded-lg object-cover border border-border-primary" />
                     <button
-                      onClick={() => setPendingImages(prev => prev.filter((_, j) => j !== i))}
+                      onClick={() => { setPendingImages(prev => prev.filter((_, j) => j !== i)); setPendingFullImages(prev => prev.filter((_, j) => j !== i)) }}
                       className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                     >×</button>
                   </div>

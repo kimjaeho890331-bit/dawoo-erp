@@ -23,11 +23,13 @@ export function InfoField({ label, value, full }: { label: string; value: string
 }
 
 // --- 편집 가능 폼 필드 (항상 편집 가능) ---
+// 입력값 여부에 따라 배경색 변경: 비어있음 = 흰색, 값 있음 = 연한 베이스(크림)
 export function FormInput({ label, type = 'text', placeholder, value, onChange }: {
   label: string; type?: string; placeholder?: string
   value: string | number | null | undefined
   onChange: (v: string) => void
 }) {
+  const hasValue = value !== null && value !== undefined && String(value).trim() !== ''
   return (
     <div>
       <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
@@ -36,7 +38,9 @@ export function FormInput({ label, type = 'text', placeholder, value, onChange }
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder || label}
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 hover:border-border-secondary transition-colors"
+        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 hover:border-border-secondary transition-colors ${
+          hasValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
+        }`}
       />
     </div>
   )
@@ -75,7 +79,9 @@ export function DateTimeInput({ label, value, onChange, timeValue, onTimeChange 
           <button
             type="button"
             onClick={() => dateRef.current?.showPicker?.()}
-            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-left hover:border-border-secondary transition-colors bg-white"
+            className={`w-full h-[36px] px-3 border rounded-lg text-[13px] text-left hover:border-border-secondary transition-colors ${
+              dateVal ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
+            }`}
           >
             {displayDate || <span className="text-txt-quaternary">날짜</span>}
           </button>
@@ -100,7 +106,9 @@ export function DateTimeInput({ label, value, onChange, timeValue, onTimeChange 
               onTimeChange!(v || null)
             }}
             maxLength={5}
-            className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] text-center focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10"
+            className={`w-full h-[36px] px-3 border rounded-lg text-[13px] text-center focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 ${
+              timeValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
+            }`}
           />
         )}
       </div>
@@ -115,6 +123,7 @@ export function StaffSelect({ label, value, onChange }: {
   onChange: (v: string | null) => void
 }) {
   const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+  const hasValue = value !== null && value !== undefined && value !== ''
 
   useEffect(() => {
     supabase.from('staff').select('id, name').order('name').then(({ data }) => {
@@ -128,7 +137,9 @@ export function StaffSelect({ label, value, onChange }: {
       <select
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 bg-white"
+        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 ${
+          hasValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
+        }`}
       >
         <option value="">선택</option>
         {staffList.map(s => (

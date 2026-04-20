@@ -114,7 +114,7 @@ function matchesStatusFilter(step: string, filter: StatusFilter): boolean {
     case '진행중': return IN_PROGRESS_STEPS.includes(step as ProjectStep) && step !== '문의(예약)'
     case '접수': return ['문의', '실측', '견적전달', '동의서', '신청서제출'].includes(step)
     case '승인': return ['승인', '착공계', '공사'].includes(step)
-    case '완료': return step === '완료서류제출'
+    case '완료': return step === '완료서류제출' || step === '입금'
     case '취소': return step === '취소'
     case '문의(예약)': return step === '문의(예약)'
     default: return true

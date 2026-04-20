@@ -109,6 +109,33 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - 자동으로 프로젝트 폴더/사진/[유형]/ 에 저장
 - 저장 완료 후 몇 장 저장됐는지 간결하게 응답
 
+## 입금 처리 [매우 중요]
+- 사용자가 "[Web발신]..." 같은 입금 문자를 붙여넣으면 반드시 이 순서로 처리:
+  1. match_deposit(deposit_text) 도구 호출 → 후보 목록 확인
+  2. 후보가 1개면 바로 record_deposit 호출
+  3. 후보가 여러 개면 목록(빌라명, 지역, 미수금) 보여주고 "몇 번 프로젝트인가요?" 질문
+  4. 사용자 선택 후 record_deposit(project_id, amount, payer_name, confirmer_name, payment_date)
+- confirmer_name은 반드시 현재 사용자 이름. 모르면 "AI확인"
+- record_deposit 결과 반환 시 아래 포맷으로 답변 (record_deposit가 반환한 값들을 채워넣기):
+
+"✅ 입금 등록 완료 (확인: [confirmer])" 한 줄
+빈 줄
+"🏢 [building_name]"
+"📍 [city] · [address]"
+"🔧 [category] · [support_program] ([water_work_type])"
+"💬 [note]"
+빈 줄
+"━━━━━━━━━━━━━━━━"
+"자부담금   [self_pay]원"
+"시지원금   [city_support]원"
+"추가공사금 [additional_cost]원"
+"총공사비   [total_cost]원"
+"━━━━━━━━━━━━━━━━"
+"수금액     [collected]원 ← +[deposit_amount]원"
+"미수금     [outstanding]원"
+
+모든 금액은 toLocaleString 적용하여 천 단위 콤마 표시.
+
 ## 구글드라이브
 - "드라이브 연결 확인" → manage_drive(action=test)
 - "삼성빌리지 폴더 만들어줘" → manage_drive(action=create_project_folder, city_name, category, building_name)
@@ -373,6 +400,32 @@ const TOOLS = [
         folder_id: { type: 'string', description: '파일 목록 조회 시 폴더 ID' },
       },
       required: ['action'],
+    },
+  },
+  {
+    name: 'match_deposit',
+    description: '입금 문자(예: [Web발신] 2026/04/17 입금 150,000원 김경숙)에서 금액/이름을 추출해 후보 프로젝트 목록을 반환합니다.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        deposit_text: { type: 'string', description: '입금 문자 원문' },
+      },
+      required: ['deposit_text'],
+    },
+  },
+  {
+    name: 'record_deposit',
+    description: '프로젝트에 입금을 기록합니다. 확인자(confirmer_name)는 반드시 현재 사용자 이름. 중복 방지 로직 포함.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        project_id: { type: 'string', description: '프로젝트 ID' },
+        amount: { type: 'number', description: '입금 금액 (원)' },
+        payer_name: { type: 'string', description: '입금자명' },
+        confirmer_name: { type: 'string', description: '확인한 직원 이름' },
+        payment_date: { type: 'string', description: '입금일 YYYY-MM-DD (기본: 오늘)' },
+      },
+      required: ['project_id', 'amount', 'confirmer_name'],
     },
   },
 ]
@@ -1061,6 +1114,126 @@ async function manageDrive(input: Record<string, unknown>): Promise<string> {
   }
 }
 
+// --- 입금 매칭 ---
+async function matchDeposit(input: Record<string, unknown>): Promise<string> {
+  const text = (input.deposit_text as string) || ''
+  // 금액 파싱 (예: "입금 2,250,000원" 또는 "2,250,000" 또는 "입금150,000원")
+  const amountMatch = text.match(/입금\s*([\d,]+)\s*원?/) || text.match(/([\d]{1,3}(?:,\d{3})+)\s*원/)
+  const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0
+  // 이름 파싱: 한글 2-4자 (금액/날짜/숫자 제외)
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  let payerName: string | null = null
+  for (const line of lines) {
+    // 순수 한글 2-4자 라인
+    if (/^[가-힣]{2,4}$/.test(line)) { payerName = line; break }
+    // 또는 라인 중 한글 이름 추출
+    const m = line.match(/\s([가-힣]{2,4})(?:\s|$)/)
+    if (m && !['입금', '출금', '이체', '발신', '본점'].includes(m[1])) { payerName = m[1]; break }
+  }
+
+  if (amount === 0) return JSON.stringify({ error: '금액을 찾을 수 없습니다' })
+
+  // 프로젝트 검색
+  let candidates: Record<string, unknown>[] = []
+  if (payerName) {
+    const { data: byOwner } = await supabaseAdmin
+      .from('projects')
+      .select('id, building_name, owner_name, payer_name, total_cost, collected, outstanding, status, cities(name), water_work_type')
+      .or(`owner_name.eq.${payerName},payer_name.eq.${payerName}`)
+      .limit(10)
+    candidates = byOwner || []
+  }
+  // 이름으로 못 찾으면 금액으로 미수금 매칭
+  if (candidates.length === 0) {
+    const { data: byAmount } = await supabaseAdmin
+      .from('projects')
+      .select('id, building_name, owner_name, payer_name, total_cost, collected, outstanding, status, cities(name), water_work_type')
+      .gte('outstanding', amount)
+      .order('outstanding', { ascending: true })
+      .limit(5)
+    candidates = byAmount || []
+  }
+
+  return JSON.stringify({
+    amount, payer_name: payerName,
+    candidates: candidates.map(c => ({
+      id: c.id,
+      building_name: c.building_name,
+      city: (c.cities as { name?: string } | null)?.name,
+      water_work_type: c.water_work_type,
+      owner_name: c.owner_name,
+      total_cost: c.total_cost,
+      collected: c.collected,
+      outstanding: c.outstanding,
+      status: c.status,
+    })),
+  })
+}
+
+// --- 입금 기록 ---
+async function recordDeposit(input: Record<string, unknown>): Promise<string> {
+  const { project_id, amount, payer_name, confirmer_name, payment_date } = input as Record<string, string | number | undefined>
+  if (!project_id || !amount || !confirmer_name) return JSON.stringify({ error: '필수 값 누락' })
+
+  const today = (payment_date as string) || new Date().toISOString().slice(0, 10)
+  const pid = project_id as string
+  const amt = Number(amount)
+
+  // 중복 체크
+  const { data: dup } = await supabaseAdmin
+    .from('payments')
+    .select('id')
+    .eq('project_id', pid)
+    .eq('amount', amt)
+    .eq('payment_date', today)
+    .limit(1)
+  if (dup && dup.length > 0) return JSON.stringify({ error: '이미 동일 입금이 등록되어 있습니다' })
+
+  // 입금 기록
+  await supabaseAdmin.from('payments').insert({
+    project_id: pid,
+    payment_type: '입금',
+    amount: amt,
+    payment_date: today,
+    payer_name: (payer_name as string) || (confirmer_name as string),
+    note: `AI비서 입금확인 by ${confirmer_name}`,
+  })
+
+  // 프로젝트 상세 + 수금/미수금 업데이트
+  const { data: project } = await supabaseAdmin.from('projects')
+    .select('building_name, owner_name, road_address, jibun_address, water_work_type, support_program, note, total_cost, collected, outstanding, self_pay, city_support, additional_cost, cities(name), work_types(name, work_categories(name))')
+    .eq('id', pid).single()
+
+  if (!project) return JSON.stringify({ error: '프로젝트 없음' })
+
+  const newOutstanding = Math.max(0, (project.outstanding || 0) - amt)
+  const newCollected = (project.collected || 0) + amt
+  await supabaseAdmin.from('projects').update({ outstanding: newOutstanding, collected: newCollected }).eq('id', pid)
+
+  const cityName = (project.cities as { name?: string } | null)?.name || '-'
+  const category = (project.work_types as { work_categories?: { name?: string } } | null)?.work_categories?.name || '-'
+  const workType = (project.work_types as { name?: string } | null)?.name || '-'
+
+  return JSON.stringify({
+    success: true,
+    confirmer: confirmer_name,
+    building_name: project.building_name,
+    city: cityName,
+    category,
+    support_program: project.support_program || workType,
+    water_work_type: project.water_work_type,
+    address: project.road_address || project.jibun_address,
+    note: project.note,
+    self_pay: project.self_pay,
+    city_support: project.city_support,
+    additional_cost: project.additional_cost,
+    total_cost: project.total_cost,
+    collected: newCollected,
+    outstanding: newOutstanding,
+    deposit_amount: amt,
+  })
+}
+
 // --- 도구 실행 라우터 ---
 async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
@@ -1098,6 +1271,10 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return manageDrive(input)
     case 'save_photo_to_drive':
       return savePhotoToDrive(input)
+    case 'match_deposit':
+      return matchDeposit(input)
+    case 'record_deposit':
+      return recordDeposit(input)
     default:
       return JSON.stringify({ error: `알 수 없는 도구: ${name}` })
   }

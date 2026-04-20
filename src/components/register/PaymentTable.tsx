@@ -47,6 +47,18 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
     loadPayments()
   }, [loadPayments])
 
+  // Realtime: 텔레그램/AI에서 입금 추가되면 즉시 반영
+  useEffect(() => {
+    const ch = supabase
+      .channel(`payments-${projectId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'payments',
+        filter: `project_id=eq.${projectId}`,
+      }, () => { loadPayments() })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [projectId, loadPayments])
+
   const collected = payments.reduce((sum, p) => sum + p.amount, 0)
   const outstanding = (totalCost + additionalCost) - collected
 
@@ -144,11 +156,18 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
                 </td>
               </tr>
             ) : (
-              payments.map(p => (
+              payments.map(p => {
+                // 확인자 추출 (note에 "by 이름" 포함된 경우)
+                const confirmerMatch = p.note?.match(/by ([^\s]+)/)
+                const confirmer = confirmerMatch ? confirmerMatch[1] : null
+                return (
                 <tr key={p.id} className="border-b border-border-tertiary group">
                   <td className="px-3 py-2 text-txt-secondary">{p.payment_type}</td>
                   <td className="px-3 py-2 text-txt-secondary">{p.payment_date || '-'}</td>
-                  <td className="px-3 py-2 text-txt-secondary">{p.payer_name || '-'}</td>
+                  <td className="px-3 py-2 text-txt-secondary">
+                    {p.payer_name || '-'}
+                    {confirmer && <span className="text-[10px] text-txt-quaternary ml-1">({confirmer} 확인)</span>}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums text-txt-primary font-medium">{p.amount.toLocaleString()}원</td>
                   <td className="px-2 py-2">
                     <button
@@ -159,7 +178,7 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
                     </button>
                   </td>
                 </tr>
-              ))
+              )})
             )}
 
             {/* 새 입금 입력 행 */}

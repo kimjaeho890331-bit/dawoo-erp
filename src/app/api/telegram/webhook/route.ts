@@ -350,14 +350,15 @@ async function handleCallback(query: TelegramUpdate['callback_query']) {
         return
       }
 
-      // 입금 기록 INSERT
+      // 입금 기록 INSERT — 확인자(버튼 누른 사람) 기록
+      const confirmerName = staff?.name || '알수없음'
       await supabaseAdmin.from('payments').insert({
         project_id: projectId,
         payment_type: '입금',
         amount,
         payment_date: today,
-        payer_name: staff?.name || '텔레그램',
-        note: '텔레그램 수금 처리',
+        payer_name: confirmerName, // 확인한 직원
+        note: `텔레그램 입금확인 by ${confirmerName}`,
       })
 
       // 프로젝트 상세 정보 조회 (cities, work_types 포함)
@@ -394,6 +395,7 @@ async function handleCallback(query: TelegramUpdate['callback_query']) {
 
           const msg = [
             `✅ *입금 등록 완료*`,
+            `확인: ${confirmerName}`,
             ``,
             `🏢 *${project.building_name || '(이름없음)'}*`,
             `📍 ${cityName} · ${addr}`,

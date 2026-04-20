@@ -193,7 +193,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       // 시간: 실측은 survey_time, 나머지는 해당 time 필드
       const timeField = field.replace('_date', '_time')
       const timeVal = (savedData[timeField] as string) || (editData as Record<string,unknown>)?.[timeField] as string || (project as unknown as Record<string,string>)[timeField] || ''
-      const title = `${timeVal ? timeVal + ' ' : ''}${project.building_name || '(이름없음)'} ${scheduleType}`
+      // title에는 시간 넣지 않음 (start_time 필드로 따로 저장 → 캘린더가 중복 표시 안 함)
+      const title = `${project.building_name || '(이름없음)'} ${scheduleType}`
       const addr = project.jibun_address || project.road_address || ''
       const ownerInfo = [project.owner_name, project.owner_phone].filter(Boolean).join(' · ')
       const memo = [addr, ownerInfo].filter(Boolean).join('\n')

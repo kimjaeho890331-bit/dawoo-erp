@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageCircle, Send, X, Trash2, Loader2 } from 'lucide-react'
+import { MessageCircle, Send, X, Trash2, Loader2, ClipboardList, Search, Banknote, Calendar, HardHat, Receipt, FileText, BarChart3 } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -30,8 +30,8 @@ export default function AISidebar() {
     }
   }, [open])
 
-  const send = async () => {
-    const trimmed = input.trim()
+  const send = async (directText?: string) => {
+    const trimmed = (directText || input).trim()
     if (!trimmed || isStreaming) return
 
     setError(null)
@@ -169,15 +169,34 @@ export default function AISidebar() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.length === 0 && !error && (
-              <div className="flex flex-col items-center justify-center h-full text-center px-6">
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center mb-3">
                   <MessageCircle className="w-5 h-5 text-accent" />
                 </div>
-                <p className="text-[13px] text-txt-secondary leading-relaxed">
+                <p className="text-[13px] text-txt-secondary leading-relaxed mb-4">
                   안녕하세요! 다우건설 AI 비서입니다.
-                  <br />
-                  접수 현황, 일정, 업무 관련 질문을 해주세요.
                 </p>
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  {[
+                    { icon: ClipboardList, label: '접수', text: '접수해줘', color: 'text-blue-500' },
+                    { icon: Search, label: '현황 조회', text: '현황 알려줘', color: 'text-emerald-500' },
+                    { icon: Banknote, label: '입금 처리', text: '입금 문자를 붙여넣어 주세요', color: 'text-amber-500' },
+                    { icon: Calendar, label: '일정', text: '이번 주 일정', color: 'text-violet-500' },
+                    { icon: HardHat, label: '현장', text: '진행중 현장', color: 'text-orange-500' },
+                    { icon: Receipt, label: '지출', text: '이번 달 지출', color: 'text-rose-500' },
+                    { icon: FileText, label: '보고서', text: '일일보고서 만들어줘', color: 'text-cyan-500' },
+                    { icon: BarChart3, label: '통계', text: '이번 달 실적', color: 'text-indigo-500' },
+                  ].map(({ icon: Icon, label, text, color }) => (
+                    <button
+                      key={label}
+                      onClick={() => send(text)}
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-surface-secondary hover:bg-accent/5 border border-border-primary text-left transition-colors cursor-pointer"
+                    >
+                      <Icon className={`w-4 h-4 ${color} shrink-0`} />
+                      <span className="text-[12px] text-txt-primary font-medium">{label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -225,14 +244,14 @@ export default function AISidebar() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) send()
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) send(undefined)
                 }}
                 placeholder="메시지 입력..."
                 className="input-field flex-1"
                 disabled={isStreaming}
               />
               <button
-                onClick={send}
+                onClick={() => send()}
                 disabled={isStreaming || !input.trim()}
                 className="btn-primary px-3 py-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >

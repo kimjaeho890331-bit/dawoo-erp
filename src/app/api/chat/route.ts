@@ -1121,19 +1121,18 @@ async function manageDrive(input: Record<string, unknown>): Promise<string> {
 // --- 입금 매칭 ---
 async function matchDeposit(input: Record<string, unknown>): Promise<string> {
   const text = (input.deposit_text as string) || ''
-  // 금액 파싱 (예: "입금 2,250,000원" 또는 "2,250,000" 또는 "입금150,000원")
+  // 금액 파싱
   const amountMatch = text.match(/입금\s*([\d,]+)\s*원?/) || text.match(/([\d]{1,3}(?:,\d{3})+)\s*원/)
   const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0
-  // 이름 파싱: 한글 2-4자 (금액/날짜/숫자 제외)
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-  let payerName: string | null = null
-  for (const line of lines) {
-    // 순수 한글 2-4자 라인
-    if (/^[가-힣]{2,4}$/.test(line)) { payerName = line; break }
-    // 또는 라인 중 한글 이름 추출
-    const m = line.match(/\s([가-힣]{2,4})(?:\s|$)/)
-    if (m && !['입금', '출금', '이체', '발신', '본점'].includes(m[1])) { payerName = m[1]; break }
-  }
+
+  // 이름 파싱: 전체 텍스트에서 한글 2-4자 모두 추출 → 제외 키워드 빼고 첫 번째
+  const EXCLUDE_WORDS = new Set([
+    '입금', '출금', '이체', '발신', '본점', '기업', '국민', '농협', '신한', '우리', '하나', '카카오', '토스', '새마을',
+    '수금', '지점', '계좌', '은행', '카드', '잔액', '잔고', '적요', '거래', '비고', '금액', '수수료', '발송', '송금', '수취',
+    '다우', '건설', '오전', '오후',
+  ])
+  const allMatches = Array.from(text.matchAll(/[가-힣]{2,4}/g)).map(m => m[0])
+  const payerName = allMatches.find(name => !EXCLUDE_WORDS.has(name)) || null
 
   if (amount === 0) return JSON.stringify({ error: '금액을 찾을 수 없습니다' })
 

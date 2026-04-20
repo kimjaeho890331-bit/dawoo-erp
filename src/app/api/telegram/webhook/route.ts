@@ -201,7 +201,13 @@ async function handlePrivateMessage(message: TelegramMessage) {
     return
   }
 
-  // 4. 자유 텍스트 → Claude
+  // 4. 입금 키워드 감지 → 자동 매칭 (인라인 버튼)
+  if (hasDepositKeyword(text)) {
+    await handleDepositMatch(chatId, staff, text)
+    return
+  }
+
+  // 5. 자유 텍스트 → Claude
   await handleFreeText(chatId, staff.id, text)
 }
 

@@ -64,7 +64,39 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       else if (stepIdx <= 7) setActiveTab('승인(시공)')
       else if (stepIdx <= 9) setActiveTab('완료')
       else setActiveTab('접수')
+
+      // 기존 날짜 기준으로 단계 자동 보정 (취소/예약 제외)
+      if (project.status !== '취소' && project.status !== '문의(예약)') {
+        const AUTO_MAP: Record<string, string> = {
+          survey_date: '실측',
+          consent_date: '동의서',
+          application_date: '신청서제출',
+          approval_received_date: '승인',
+          construction_date: '공사',
+          construction_end_date: '공사',
+          completion_doc_date: '완료서류제출',
+        }
+        const ORDER = ['문의', '실측', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출', '입금']
+        let target = project.status
+        const curIdx = ORDER.indexOf(project.status)
+        for (const [f, s] of Object.entries(AUTO_MAP)) {
+          if ((project as unknown as Record<string, unknown>)[f]) {
+            const si = ORDER.indexOf(s)
+            if (si > curIdx && si > ORDER.indexOf(target)) target = s
+          }
+        }
+        if (target !== project.status) {
+          ;(async () => {
+            await supabase.from('projects').update({ status: target }).eq('id', project.id)
+            await supabase.from('status_logs').insert({
+              project_id: project.id, from_status: project.status, to_status: target, note: '자동 보정',
+            })
+            onRefresh?.()
+          })()
+        }
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project])
 
   // 직원 목록 로드

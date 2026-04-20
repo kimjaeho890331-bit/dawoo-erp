@@ -81,6 +81,15 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     completion_doc_date: '완료서류제출',
   }
 
+  // 각 단계별 담당자 필드 매핑 (date 필드 → staff 필드)
+  const STEP_STAFF_MAP: Record<string, string> = {
+    survey_date: 'survey_staff',
+    consent_date: 'consent_submitter',
+    application_date: 'application_submitter',
+    construction_doc_date: 'construction_doc_submitter',
+    completion_doc_date: 'completion_submitter',
+  }
+
   const syncSchedules = async (savedData: Record<string, string | number | null>) => {
     if (!project) return
     const dateFields = Object.keys(savedData).filter(k => k in SCHEDULE_MAP)
@@ -96,6 +105,14 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     timeFieldsChanged.forEach(tf => {
       const df = tf.replace('_time', '_date')
       if (!dateFields.includes(df)) dateFields.push(df)
+    })
+
+    // 단계별 담당자 필드 변경 감지 (survey_staff, application_submitter 등)
+    Object.keys(savedData).forEach(k => {
+      const matchingDateField = Object.entries(STEP_STAFF_MAP).find(([, sf]) => sf === k)?.[0]
+      if (matchingDateField && !dateFields.includes(matchingDateField)) {
+        dateFields.push(matchingDateField)
+      }
     })
 
     // 담당자만 변경된 경우: 이 프로젝트의 모든 일정 staff_id 업데이트
@@ -142,9 +159,16 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       // DB date 타입에 맞게 날짜만 추출 (T14:00 제거)
       const cleanDate = dateVal.substring(0, 10)
 
+      // 단계별 담당자 우선: STEP_STAFF_MAP에 정의된 필드 → 없으면 project.staff_id
+      const stepStaffField = STEP_STAFF_MAP[field]
+      const stepStaffId = stepStaffField
+        ? ((savedData[stepStaffField] as string) || (editData as Record<string,unknown>)?.[stepStaffField] as string || (project as unknown as Record<string,string>)[stepStaffField])
+        : null
+      const finalStaffId = stepStaffId || (savedData.staff_id as string) || project.staff_id
+
       const payload = {
         project_id: project.id,
-        staff_id: (savedData.staff_id as string) || project.staff_id,
+        staff_id: finalStaffId,
         schedule_type: 'project' as const,
         title,
         start_date: cleanDate,

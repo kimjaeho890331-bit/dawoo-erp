@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { buildStaffColorMap } from '@/lib/staff-colors'
 
 // --- 타입 ---
 interface Schedule {
@@ -28,6 +29,7 @@ interface Staff {
   id: string
   name: string
   role: string
+  color?: string | null
 }
 
 interface PromoRecordRow {
@@ -49,9 +51,6 @@ interface CityPromoSummary {
   dongs: { dong: string; visitCount: number; lastVisit: string }[]
   daysSinceLastVisit: number
 }
-
-// 직원별 색상
-const STAFF_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EF4444', '#F97316']
 
 // 일정 색상
 const TYPE_COLORS: Record<string, string> = {
@@ -128,11 +127,8 @@ export default function WorkCalendarPage() {
 
   const toggleStaff = (id: string) => setActiveStaff(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  const staffColorMap = useMemo(() => {
-    const m: Record<string, string> = {}
-    staffList.forEach((s, i) => { m[s.id] = STAFF_COLORS[i % STAFF_COLORS.length] })
-    return m
-  }, [staffList])
+  // staff.color 우선, 미지정 시 id 해시로 fallback 팔레트 매핑
+  const staffColorMap = useMemo(() => buildStaffColorMap(staffList), [staffList])
 
   const filtered = useMemo(() =>
     schedules.filter(s => {
@@ -271,8 +267,8 @@ export default function WorkCalendarPage() {
           <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-3 mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-txt-secondary w-10 shrink-0">직원</span>
-              {staffList.map((s, i) => {
-                const c = STAFF_COLORS[i % STAFF_COLORS.length]
+              {staffList.map(s => {
+                const c = staffColorMap[s.id] || '#94a3b8'
                 const on = activeStaff.size === 0 || activeStaff.has(s.id)
                 return (
                   <button key={s.id} onClick={() => toggleStaff(s.id)}

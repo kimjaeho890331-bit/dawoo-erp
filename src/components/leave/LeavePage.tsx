@@ -5,6 +5,7 @@ import { ClipboardList, Calendar, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
+import { buildStaffColorMap } from '@/lib/staff-colors'
 
 interface LeaveRequest {
   id: string
@@ -26,6 +27,7 @@ interface Staff {
   name: string
   role: string
   join_date: string | null
+  color?: string | null
 }
 
 // --- 연차 기준 (근로기준법) ---
@@ -59,8 +61,6 @@ const STATUS_COLORS: Record<string, string> = {
   '반려': 'bg-red-100 text-red-700',
 }
 
-const STAFF_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EF4444', '#F97316']
-
 // 주말 포함 일수 계산
 function calcDays(start: string, end: string, type: string): number {
   if (type.includes('반차')) return 0.5
@@ -79,6 +79,7 @@ export default function LeavePage() {
   const { staff: currentStaff } = useAuth()
   const [requests, setRequests] = useState<LeaveRequest[]>([])
   const [staffList, setStaffList] = useState<Staff[]>([])
+  const staffColorMap = useMemo(() => buildStaffColorMap(staffList), [staffList])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -167,8 +168,7 @@ export default function LeavePage() {
 
   // 캘린더 연동
   const syncToCalendar = async (req: LeaveRequest) => {
-    const staffIdx = staffList.findIndex(s => s.id === req.staff_id)
-    const color = STAFF_COLORS[staffIdx % STAFF_COLORS.length] || '#EF4444'
+    const color = staffColorMap[req.staff_id] || '#EF4444'
     const typeLabel = req.leave_type === '경조사' && req.leave_subtype
       ? FAMILY_EVENT_TYPES.find(f => f.key === req.leave_subtype)?.label || req.leave_subtype
       : req.leave_type
@@ -265,12 +265,12 @@ export default function LeavePage() {
 
       {/* 직원별 현황 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {staffList.map((s, i) => {
+        {staffList.map(s => {
           const total = calcTotalLeave(s.join_date)
           const used = getUsed(s.id)
           const remain = total - used
           const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0
-          const color = STAFF_COLORS[i % STAFF_COLORS.length]
+          const color = staffColorMap[s.id] || '#94a3b8'
           return (
             <div key={s.id} className="bg-surface rounded-[10px] border border-border-primary p-3">
               <div className="flex items-center gap-2 mb-2">
@@ -320,8 +320,7 @@ export default function LeavePage() {
         ) : (
           <div className="divide-y divide-surface-secondary">
             {filtered.map(r => {
-              const staffIdx = staffList.findIndex(s => s.id === r.staff_id)
-              const color = STAFF_COLORS[staffIdx % STAFF_COLORS.length] || '#3B82F6'
+              const color = staffColorMap[r.staff_id] || '#3B82F6'
               const dateStr = r.start_date === r.end_date ? formatDate(r.start_date) : `${formatDate(r.start_date)} ~ ${formatDate(r.end_date)}`
               const subtypeLabel = r.leave_type === '경조사' && r.leave_subtype
                 ? FAMILY_EVENT_TYPES.find(f => f.key === r.leave_subtype)?.label || r.leave_subtype

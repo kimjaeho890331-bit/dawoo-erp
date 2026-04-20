@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { formatPhone, formatMoney } from '@/lib/utils/format'
 import { generateInviteCode } from '@/lib/staff/inviteCode'
+import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex } from '@/lib/staff-colors'
 
 interface Staff {
   id: string
@@ -555,16 +556,20 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
   const [color, setColor] = useState(item?.color || '#5e6ad2')
   const [saving, setSaving] = useState(false)
 
-  const PRESET_COLORS = [
-    // 1행: 파랑~보라 계열
-    '#3B82F6', '#6366F1', '#5e6ad2', '#8B5CF6', '#A855F7', '#D946EF',
-    // 2행: 핑크~빨강 계열
-    '#EC4899', '#F43F5E', '#EF4444', '#F97316', '#F59E0B', '#EAB308',
-    // 3행: 초록~청록 계열
-    '#22C55E', '#10B981', '#14B8A6', '#06B6D4', '#0EA5E9', '#0284C7',
-    // 4행: 어두운 톤
-    '#475569', '#64748B', '#78716C', '#92400E', '#166534', '#1E3A5F',
-  ]
+  const PRESET_COLORS = STAFF_COLOR_PALETTE // 공통 팔레트 (src/lib/staff-colors.ts)
+  const [hexInput, setHexInput] = useState(item?.color || '#5e6ad2')
+
+  // 색상 변경 시 hex 입력도 동기화
+  const handleColorChange = (v: string) => {
+    setColor(v)
+    setHexInput(v)
+  }
+  // hex 입력 → 유효하면 color 적용
+  const handleHexInputChange = (v: string) => {
+    setHexInput(v)
+    const trimmed = v.trim()
+    if (isValidHex(trimmed)) setColor(normalizeHex(trimmed))
+  }
 
   const formatSalary = (v: string) => formatMoney(v)
 
@@ -683,17 +688,34 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
             </div>
             <div className="mt-3">
               <label className={labelCls}>캘린더 색깔</label>
-              <div className="grid grid-cols-6 gap-1.5 mt-1">
+              {/* 현재 선택된 색상 프리뷰 */}
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-full border border-border-primary" style={{ backgroundColor: color }} />
+                <span className="text-[12px] font-mono text-txt-secondary tabular-nums">{color}</span>
+              </div>
+              {/* 프리셋 48색 팔레트 */}
+              <div className="grid grid-cols-12 gap-1.5 mt-1">
                 {PRESET_COLORS.map(c => (
-                  <button key={c} type="button" onClick={() => setColor(c)}
-                    className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-accent scale-110' : 'hover:scale-105'}`}
+                  <button key={c} type="button" onClick={() => handleColorChange(c)}
+                    title={c}
+                    className={`w-6 h-6 rounded-md transition-all ${color.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-offset-1 ring-accent scale-110' : 'hover:scale-110 hover:ring-1 hover:ring-border-secondary'}`}
                     style={{ backgroundColor: c }} />
                 ))}
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <input type="color" value={color} onChange={e => setColor(e.target.value)}
-                  className="w-7 h-7 rounded cursor-pointer border-0 p-0" />
-                <span className="text-[11px] text-txt-quaternary">직접 선택</span>
+              {/* 자유 선택: 네이티브 피커 + hex 직접 입력 */}
+              <div className="flex items-center gap-2 mt-3">
+                <input type="color" value={color} onChange={e => handleColorChange(e.target.value)}
+                  className="w-9 h-9 rounded-md cursor-pointer border border-border-primary p-0.5"
+                  title="색상 피커" />
+                <input
+                  type="text"
+                  value={hexInput}
+                  onChange={e => handleHexInputChange(e.target.value)}
+                  placeholder="#RRGGBB"
+                  maxLength={7}
+                  className="w-28 h-9 px-2 border border-border-primary rounded-md text-[12px] font-mono tabular-nums focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                />
+                <span className="text-[11px] text-txt-quaternary">hex 직접 입력 가능</span>
               </div>
             </div>
           </div>

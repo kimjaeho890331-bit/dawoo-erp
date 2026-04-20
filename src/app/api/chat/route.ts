@@ -115,6 +115,10 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
   2. 후보가 1개면 바로 record_deposit 호출
   3. 후보가 여러 개면 목록(빌라명, 지역, 미수금) 보여주고 "몇 번 프로젝트인가요?" 질문
   4. 사용자 선택 후 record_deposit(project_id, amount, payer_name, confirmer_name, payment_date)
+- **candidates 배열이 빈 경우 절대 엉뚱한 프로젝트를 보여주지 말 것.**
+  대신: "[이름]님 명의 프로젝트를 찾을 수 없습니다. 빌라명이나 다른 정보를 알려주세요."라고 답하고,
+  사용자가 빌라명을 주면 search_projects(keyword=...)로 다시 검색.
+- **절대 금액만으로 프로젝트를 추측하지 말 것.** 반드시 이름+빌라명 확인 후 처리.
 - confirmer_name은 반드시 현재 사용자 이름. 모르면 "AI확인"
 - record_deposit 결과 반환 시 아래 포맷으로 답변 (record_deposit가 반환한 값들을 채워넣기):
 
@@ -1133,26 +1137,28 @@ async function matchDeposit(input: Record<string, unknown>): Promise<string> {
 
   if (amount === 0) return JSON.stringify({ error: '금액을 찾을 수 없습니다' })
 
-  // 프로젝트 검색
-  let candidates: Record<string, unknown>[] = []
+  // 프로젝트 검색 (부분 매칭 — "김경숙 (302호)" 같은 경우 포함)
+  const candidateMap = new Map<string, Record<string, unknown>>()
   if (payerName) {
+    const selectCols = 'id, building_name, owner_name, payer_name, total_cost, collected, outstanding, status, cities(name), water_work_type, note'
+    // 1) owner_name에 이름 포함
     const { data: byOwner } = await supabaseAdmin
-      .from('projects')
-      .select('id, building_name, owner_name, payer_name, total_cost, collected, outstanding, status, cities(name), water_work_type')
-      .or(`owner_name.eq.${payerName},payer_name.eq.${payerName}`)
-      .limit(10)
-    candidates = byOwner || []
+      .from('projects').select(selectCols)
+      .ilike('owner_name', `%${payerName}%`).limit(20)
+    byOwner?.forEach(p => candidateMap.set(p.id as string, p))
+    // 2) payer_name에 이름 포함
+    const { data: byPayer } = await supabaseAdmin
+      .from('projects').select(selectCols)
+      .ilike('payer_name', `%${payerName}%`).limit(20)
+    byPayer?.forEach(p => candidateMap.set(p.id as string, p))
+    // 3) note에 이름 포함
+    const { data: byNote } = await supabaseAdmin
+      .from('projects').select(selectCols)
+      .ilike('note', `%${payerName}%`).limit(20)
+    byNote?.forEach(p => candidateMap.set(p.id as string, p))
   }
-  // 이름으로 못 찾으면 금액으로 미수금 매칭
-  if (candidates.length === 0) {
-    const { data: byAmount } = await supabaseAdmin
-      .from('projects')
-      .select('id, building_name, owner_name, payer_name, total_cost, collected, outstanding, status, cities(name), water_work_type')
-      .gte('outstanding', amount)
-      .order('outstanding', { ascending: true })
-      .limit(5)
-    candidates = byAmount || []
-  }
+  const candidates = Array.from(candidateMap.values())
+  // 이름 매칭 실패 시 금액 fallback 하지 않음 (엉뚱한 결과 방지)
 
   return JSON.stringify({
     amount, payer_name: payerName,

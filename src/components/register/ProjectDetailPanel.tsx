@@ -426,16 +426,6 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               </button>
             )}
             <button
-              onClick={() => setApiFieldsLocked(prev => !prev)}
-              className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-colors ${
-                apiFieldsLocked
-                  ? 'bg-[#e8e6dc] text-[#4d4c48] border border-[#e8e6dc] hover:bg-[#dedad0]'
-                  : 'text-[#c96442] border border-[#c96442]/30 bg-[#c96442]/5'
-              }`}
-            >
-              {apiFieldsLocked ? '수정' : '수정중'}
-            </button>
-            <button
               onClick={() => setShowStatusModal('취소')}
               className="px-3 py-1.5 text-[11px] font-medium text-[#b53333] border border-[#b53333]/30 rounded-lg hover:bg-[#b53333]/5 transition-colors"
             >

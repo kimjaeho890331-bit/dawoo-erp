@@ -116,7 +116,41 @@ export function DateTimeInput({ label, value, onChange, timeValue, onTimeChange 
   )
 }
 
-// --- 직원 드롭다운 선택 ---
+// --- 직원 드롭다운 (UUID 저장용 - staff_id 필드용) ---
+export function StaffIdSelect({ label, value, onChange }: {
+  label: string
+  value: string | null | undefined
+  onChange: (v: string | null) => void
+}) {
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+  const hasValue = !!value
+
+  useEffect(() => {
+    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+      setStaffList(data || [])
+    })
+  }, [])
+
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value || null)}
+        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 ${
+          hasValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
+        }`}
+      >
+        <option value="">선택</option>
+        {staffList.map(s => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+// --- 직원 드롭다운 선택 (이름 저장용 - submitter/staff 필드용) ---
 export function StaffSelect({ label, value, onChange }: {
   label: string
   value: string | null | undefined

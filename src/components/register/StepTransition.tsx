@@ -61,7 +61,6 @@ interface Props {
 export default function StepTransition({ project, onStepChange }: Props) {
   const [errors, setErrors] = useState<string[]>([])
   const [changing, setChanging] = useState(false)
-  const [showManual, setShowManual] = useState(false)
 
   const currentIdx = PROGRESS_STEPS.indexOf(project.status as ProjectStep)
   const canGoNext = currentIdx >= 0 && currentIdx < PROGRESS_STEPS.length - 1
@@ -115,11 +114,6 @@ export default function StepTransition({ project, onStepChange }: Props) {
     changeStep(PROGRESS_STEPS[currentIdx - 1])
   }, [canGoPrev, currentIdx, changeStep])
 
-  const handleManualChange = useCallback((step: string) => {
-    changeStep(step as ProjectStep)
-    setShowManual(false)
-  }, [changeStep])
-
   if (currentIdx < 0) return null
 
   return (
@@ -149,30 +143,6 @@ export default function StepTransition({ project, onStepChange }: Props) {
           )}
         </div>
 
-        {/* 수동 변경 (관리자) */}
-        <div className="relative">
-          <button
-            onClick={() => setShowManual(prev => !prev)}
-            className="text-[10px] text-txt-quaternary hover:text-txt-secondary transition-colors"
-          >
-            수동 변경
-          </button>
-          {showManual && (
-            <div className="absolute right-0 top-6 w-32 bg-surface border border-border-primary rounded-lg shadow-lg py-1 z-20">
-              {PROGRESS_STEPS.map(step => (
-                <button
-                  key={step}
-                  onClick={() => handleManualChange(step)}
-                  className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-surface-secondary transition-colors ${
-                    step === project.status ? 'text-[#c96442] font-medium' : 'text-txt-secondary'
-                  }`}
-                >
-                  {step}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* 검증 에러 표시 */}

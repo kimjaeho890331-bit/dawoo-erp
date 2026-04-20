@@ -51,6 +51,9 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
     const formData = new FormData()
     formData.append('file', file)
     formData.append('storagePath', storagePath)
+    // 구글드라이브 자동 경로: 지원사업/[시]/[카테고리]/[빌라명]/[fileType]/
+    formData.append('projectId', projectId)
+    formData.append('fileType', fileType)
 
     const res = await fetch('/api/storage/upload', {
       method: 'POST',
@@ -60,13 +63,17 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
     if (!res.ok) throw new Error('업로드 실패')
     const data = await res.json()
 
-    // attachments 테이블에 레코드 삽입
-    const { error } = await supabase.from('attachments').insert({
+    // attachments 테이블에 레코드 삽입 (드라이브 링크도 저장)
+    const insertData: Record<string, unknown> = {
       project_id: projectId,
       name: file.name,
       file_path: data.path,
       file_type: fileType,
-    })
+    }
+    if (data.drive?.webViewLink) {
+      insertData.drive_url = data.drive.webViewLink
+    }
+    const { error } = await supabase.from('attachments').insert(insertData)
     if (error) throw error
   }
 

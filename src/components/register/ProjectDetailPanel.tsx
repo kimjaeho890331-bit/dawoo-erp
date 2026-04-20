@@ -47,6 +47,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
   const [editingMemo, setEditingMemo] = useState(false)
+  const [editingInfo, setEditingInfo] = useState(false)
+  const [staffOptions, setStaffOptions] = useState<{ id: string; name: string }[]>([])
   const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
   const [statusReason, setStatusReason] = useState('')
 
@@ -55,6 +57,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       setEditData({})
       setHasChanges(false)
       setApiFieldsLocked(true)
+      setEditingInfo(false)
       // 현재 단계에 맞는 탭 자동 선택
       const stepIdx = getStepIndex(project.status)
       if (stepIdx <= 4) setActiveTab('접수')
@@ -63,6 +66,13 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       else setActiveTab('접수')
     }
   }, [project])
+
+  // 직원 목록 로드
+  useEffect(() => {
+    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+      setStaffOptions(data || [])
+    })
+  }, [])
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -529,10 +539,10 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               </span>
             )}
             <button
-              onClick={() => setActiveTab('기본정보')}
+              onClick={() => setEditingInfo(prev => !prev)}
               className="ml-auto text-[11px] text-[#c96442] hover:text-[#b5573a] transition-colors font-medium"
             >
-              수정
+              {editingInfo ? '완료' : '수정'}
             </button>
           </div>
           {/* 주소 + 카카오맵 */}
@@ -553,12 +563,53 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               </div>
             )}
           </div>
-          {/* 2행: 소유주 / 연락처 / 담당자 */}
-          <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
-            <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
-            <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
-            <InfoField label="담당자" value={project.staff?.name || '-'} />
-          </div>
+          {/* 2행: 소유주 / 연락처 / 담당자 — 인라인 편집 */}
+          {editingInfo ? (
+            <div className="grid grid-cols-3 gap-2 mb-1.5">
+              <div>
+                <span className="text-[11px] text-txt-tertiary block mb-0.5">소유주</span>
+                <input
+                  type="text"
+                  value={(getVal('owner_name') as string) ?? ''}
+                  onChange={e => updateField('owner_name', e.target.value || null)}
+                  className="w-full h-[28px] px-2 text-[12px] bg-white border border-[#c96442] rounded focus:outline-none focus:ring-2 focus:ring-[#c96442]/10"
+                  placeholder="소유주"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-txt-tertiary block mb-0.5">연락처</span>
+                <input
+                  type="tel"
+                  value={(getVal('owner_phone') as string) ?? ''}
+                  onChange={e => updateField('owner_phone', e.target.value || null)}
+                  className="w-full h-[28px] px-2 text-[12px] bg-white border border-[#c96442] rounded focus:outline-none focus:ring-2 focus:ring-[#c96442]/10"
+                  placeholder="010-0000-0000"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-txt-tertiary block mb-0.5">담당자</span>
+                <select
+                  value={(getVal('staff_id') as string) ?? ''}
+                  onChange={e => updateField('staff_id', e.target.value || null)}
+                  className="w-full h-[28px] px-2 text-[12px] bg-white border border-[#c96442] rounded focus:outline-none focus:ring-2 focus:ring-[#c96442]/10"
+                >
+                  <option value="">선택</option>
+                  {staffOptions.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
+              <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
+              <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
+              <InfoField label="담당자" value={(() => {
+                const sid = getVal('staff_id') as string
+                return staffOptions.find(s => s.id === sid)?.name || project.staff?.name || '-'
+              })()} />
+            </div>
+          )}
           {/* 상담내역 + 세입자 연락처 (같은 줄) */}
           <div className="flex items-start gap-4 mb-2">
             <div className="flex-1">

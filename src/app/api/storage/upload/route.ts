@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/lib/auth'
-import { uploadFile } from '@/lib/google-drive'
+import { uploadFile, ensureProjectFolder, findOrCreateFolder } from '@/lib/google-drive'
 
 export const maxDuration = 30
 
@@ -69,8 +69,50 @@ export async function POST(request: NextRequest) {
       .from('documents')
       .getPublicUrl(data.path)
 
-    // 구글드라이브 동시 업로드 (drive_folder_id가 있으면)
-    const driveFolderId = formData.get('driveFolderId') as string | null
+    // 구글드라이브 동시 업로드
+    // Option 1: driveFolderId 직접 전달
+    // Option 2: projectId + fileType → 자동 경로 생성 (지원사업/시/카테고리/빌라명/fileType)
+    let driveFolderId = formData.get('driveFolderId') as string | null
+    const projectId = formData.get('projectId') as string | null
+    const fileType = formData.get('fileType') as string | null
+
+    if (!driveFolderId && projectId && fileType) {
+      try {
+        // 프로젝트 정보 조회
+        const { data: proj } = await supabaseAdmin
+          .from('projects')
+          .select('id, building_name, drive_folder_id, cities(name), work_types(work_categories(name))')
+          .eq('id', projectId)
+          .single()
+
+        if (proj) {
+          const cityName = (proj.cities as { name?: string } | null)?.name || '미지정'
+          const category = (proj.work_types as { work_categories?: { name?: string } } | null)?.work_categories?.name || '소규모'
+          const buildingName = (proj.building_name as string) || '(이름없음)'
+
+          // 프로젝트 폴더 (drive_folder_id 없으면 생성)
+          let projFolderId = proj.drive_folder_id as string | null
+          if (!projFolderId) {
+            projFolderId = await ensureProjectFolder(
+              cityName,
+              category as '소규모' | '수도',
+              buildingName
+            )
+            await supabaseAdmin.from('projects').update({
+              drive_folder_id: projFolderId,
+              drive_folder_url: `https://drive.google.com/drive/folders/${projFolderId}`,
+            }).eq('id', projectId)
+          }
+
+          // fileType 하위 폴더 (실측사진, 동의서, 통장사본, 시공전/중/후 등)
+          const typeFolder = await findOrCreateFolder(fileType, projFolderId)
+          driveFolderId = typeFolder.id
+        }
+      } catch (e) {
+        console.error('Drive folder setup error (non-fatal):', e)
+      }
+    }
+
     let driveFile = null
     if (driveFolderId) {
       try {

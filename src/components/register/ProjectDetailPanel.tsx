@@ -51,6 +51,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [staffOptions, setStaffOptions] = useState<{ id: string; name: string }[]>([])
   const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
   const [statusReason, setStatusReason] = useState('')
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // project.id 만 추적 (실시간 업데이트로 같은 프로젝트가 refresh 될 때는 editData 유지)
   const projectIdRef = useRef<string | null>(null)
@@ -341,9 +342,12 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           return next
         })
         setHasChanges(false)
+        setSaveError(null)
         // onRefresh 호출 안 함 — realtime 구독이 알아서 처리
       } catch (err) {
         console.error('자동저장 실패:', err)
+        const msg = err instanceof Error ? err.message : '자동저장 실패'
+        setSaveError(msg)
       }
     }, 3000)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
@@ -410,9 +414,12 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
       setHasChanges(false)
       setEditData({})
+      setSaveError(null)
     } catch (err) {
       console.error('저장 실패:', err)
-      alert('저장에 실패했습니다.')
+      const msg = err instanceof Error ? err.message : '저장 실패'
+      setSaveError(msg)
+      alert(`저장에 실패했습니다.\n${msg}`)
     } finally {
       setSaving(false)
     }
@@ -519,6 +526,21 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             </button>
           </div>
         </div>
+
+        {/* 저장 실패 배너 */}
+        {saveError && (
+          <div className="px-6 py-2 bg-[#fef2f2] border-b border-[#fecaca] flex items-center justify-between gap-3">
+            <div className="text-[12px] text-[#b91c1c]">
+              <span className="font-medium">저장 실패:</span> {saveError}
+            </div>
+            <button
+              onClick={() => setSaveError(null)}
+              className="text-[11px] text-[#b91c1c]/70 hover:text-[#b91c1c]"
+            >
+              닫기
+            </button>
+          </div>
+        )}
 
         {/* 프로그레스 바 - 슬림 라인 스타일 */}
         <div className="px-6 py-3 border-b border-border-tertiary">

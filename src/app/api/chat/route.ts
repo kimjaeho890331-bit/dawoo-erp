@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/lib/auth'
 import { ensureProjectFolder, ensureSiteFolder, uploadFile, listFiles, testConnection } from '@/lib/google-drive'
+import { applyDepositAndAdvanceStatus, formatDepositMessage } from '@/lib/payments'
 
 export const maxDuration = 60
 
@@ -110,35 +111,20 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - 저장 완료 후 몇 장 저장됐는지 간결하게 응답
 
 ## 입금 처리 [매우 중요]
-- 사용자가 "[Web발신]..." 같은 입금 문자를 붙여넣으면 반드시 이 순서로 처리:
-  1. match_deposit(deposit_text) 도구 호출 → 후보 목록 확인
-  2. 후보가 1개면 바로 record_deposit 호출
-  3. 후보가 여러 개면 목록(빌라명, 지역, 미수금) 보여주고 "몇 번 프로젝트인가요?" 질문
-  4. 사용자 선택 후 record_deposit(project_id, amount, payer_name, confirmer_name, payment_date)
-- **candidates 배열이 빈 경우 절대 엉뚱한 프로젝트를 보여주지 말 것.**
-  대신: "[이름]님 명의 프로젝트를 찾을 수 없습니다. 빌라명이나 다른 정보를 알려주세요."라고 답하고,
-  사용자가 빌라명을 주면 search_projects(keyword=...)로 다시 검색.
-- **절대 금액만으로 프로젝트를 추측하지 말 것.** 반드시 이름+빌라명 확인 후 처리.
-- confirmer_name은 반드시 현재 사용자 이름. 모르면 "AI확인"
-- record_deposit 결과 반환 시 아래 포맷으로 답변 (record_deposit가 반환한 값들을 채워넣기):
-
-"✅ 입금 등록 완료 (확인: [confirmer])" 한 줄
-빈 줄
-"🏢 [building_name]"
-"📍 [city] · [address]"
-"🔧 [category] · [support_program] ([water_work_type])"
-"💬 [note]"
-빈 줄
-"━━━━━━━━━━━━━━━━"
-"자부담금   [self_pay]원"
-"시지원금   [city_support]원"
-"추가공사금 [additional_cost]원"
-"총공사비   [total_cost]원"
-"━━━━━━━━━━━━━━━━"
-"수금액     [collected]원 ← +[deposit_amount]원"
-"미수금     [outstanding]원"
-
-모든 금액은 toLocaleString 적용하여 천 단위 콤마 표시.
+- 사용자가 "[Web발신]..." 같은 입금 문자를 붙여넣으면 반드시 이 순서:
+  1. match_deposit(deposit_text) → 후보 목록 확인
+  2. 후보 0건: "○○님 명의 프로젝트를 찾을 수 없습니다. 빌라명 알려주세요." → search_projects로 재검색
+  3. 후보 1건: 바로 record_deposit 호출
+  4. 후보 여러개: 목록(빌라명·지역·미수금) 표시 + "몇 번인가요?" 질문 → 선택 후 record_deposit
+- record_deposit 호출 시:
+  - project_id, amount는 필수
+  - payer_name(입금자명)은 매칭된 이름 전달
+  - confirmer_name은 생략 가능 (서버가 현재 사용자로 자동 주입)
+  - payment_type은 서버가 금액 기준으로 자동 분류 (자부담착수금/추가공사비/시지원금잔금)
+- record_deposit 결과의 formatted_message 필드를 그대로 사용자에게 보여주면 됨
+  (별도 포맷 만들지 말고 formatted_message 그대로 전달)
+- 오류 시 사용자에게 이유 설명 후 재시도 안내
+- **절대 금액만으로 프로젝트 추측 금지.** 이름 매칭 안 되면 사용자에게 빌라명 요청.
 
 ## 구글드라이브
 - "드라이브 연결 확인" → manage_drive(action=test)
@@ -1139,7 +1125,7 @@ async function matchDeposit(input: Record<string, unknown>): Promise<string> {
   // 프로젝트 검색 (부분 매칭 — "김경숙 (302호)" 같은 경우 포함)
   const candidateMap = new Map<string, Record<string, unknown>>()
   if (payerName) {
-    const selectCols = 'id, building_name, owner_name, payer_name, total_cost, collected, outstanding, status, cities(name), water_work_type, note'
+    const selectCols = 'id, building_name, owner_name, payer_name, total_cost, collected, outstanding, self_pay, city_support, additional_cost, status, cities(name), water_work_type, note'
     // 1) owner_name에 이름 포함
     const { data: byOwner } = await supabaseAdmin
       .from('projects').select(selectCols)
@@ -1170,72 +1156,44 @@ async function matchDeposit(input: Record<string, unknown>): Promise<string> {
       total_cost: c.total_cost,
       collected: c.collected,
       outstanding: c.outstanding,
+      self_pay: c.self_pay,
+      city_support: c.city_support,
+      additional_cost: c.additional_cost,
       status: c.status,
     })),
   })
 }
 
-// --- 입금 기록 ---
+// --- 입금 기록 (공통 라이브러리 사용) ---
+// 요청별 현재 사용자 컨텍스트 (POST 핸들러에서 세팅)
+let _currentStaffName: string = 'AI확인'
+function setCurrentStaffName(name: string) { _currentStaffName = name }
+
 async function recordDeposit(input: Record<string, unknown>): Promise<string> {
   const { project_id, amount, payer_name, confirmer_name, payment_date } = input as Record<string, string | number | undefined>
-  if (!project_id || !amount || !confirmer_name) return JSON.stringify({ error: '필수 값 누락' })
+  if (!project_id || !amount) return JSON.stringify({ error: 'project_id와 amount는 필수' })
 
-  const today = (payment_date as string) || new Date().toISOString().slice(0, 10)
-  const pid = project_id as string
-  const amt = Number(amount)
+  // confirmer_name이 없으면 현재 로그인한 직원 이름으로 자동 주입
+  const confirmer = (confirmer_name as string) || _currentStaffName
 
-  // 중복 체크
-  const { data: dup } = await supabaseAdmin
-    .from('payments')
-    .select('id')
-    .eq('project_id', pid)
-    .eq('amount', amt)
-    .eq('payment_date', today)
-    .limit(1)
-  if (dup && dup.length > 0) return JSON.stringify({ error: '이미 동일 입금이 등록되어 있습니다' })
-
-  // 입금 기록
-  await supabaseAdmin.from('payments').insert({
-    project_id: pid,
-    payment_type: '입금',
-    amount: amt,
-    payment_date: today,
-    payer_name: (payer_name as string) || (confirmer_name as string),
-    note: `AI비서 입금확인 by ${confirmer_name}`,
+  const result = await applyDepositAndAdvanceStatus({
+    projectId: project_id as string,
+    amount: Number(amount),
+    payerName: (payer_name as string) || null,
+    confirmerName: confirmer,
+    paymentDate: (payment_date as string) || null,
+    source: 'ai',
   })
 
-  // 프로젝트 상세 + 수금/미수금 업데이트
-  const { data: project } = await supabaseAdmin.from('projects')
-    .select('building_name, owner_name, road_address, jibun_address, water_work_type, support_program, note, total_cost, collected, outstanding, self_pay, city_support, additional_cost, cities(name), work_types(name, work_categories(name))')
-    .eq('id', pid).single()
+  if (!result.ok) return JSON.stringify({ error: result.error })
 
-  if (!project) return JSON.stringify({ error: '프로젝트 없음' })
-
-  const newOutstanding = Math.max(0, (project.outstanding || 0) - amt)
-  const newCollected = (project.collected || 0) + amt
-  await supabaseAdmin.from('projects').update({ outstanding: newOutstanding, collected: newCollected }).eq('id', pid)
-
-  const cityName = (project.cities as { name?: string } | null)?.name || '-'
-  const category = (project.work_types as { work_categories?: { name?: string } } | null)?.work_categories?.name || '-'
-  const workType = (project.work_types as { name?: string } | null)?.name || '-'
-
+  // AI에게 전달 — formatted 메시지와 raw 데이터 둘 다
   return JSON.stringify({
     success: true,
-    confirmer: confirmer_name,
-    building_name: project.building_name,
-    city: cityName,
-    category,
-    support_program: project.support_program || workType,
-    water_work_type: project.water_work_type,
-    address: project.road_address || project.jibun_address,
-    note: project.note,
-    self_pay: project.self_pay,
-    city_support: project.city_support,
-    additional_cost: project.additional_cost,
-    total_cost: project.total_cost,
-    collected: newCollected,
-    outstanding: newOutstanding,
-    deposit_amount: amt,
+    formatted_message: formatDepositMessage(result),
+    payment: result.payment,
+    project: result.project,
+    status_change: result.statusChange,
   })
 }
 
@@ -1306,7 +1264,7 @@ async function handleNonStreaming(
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
+        system: `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${_currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${_currentStaffName}'으로 처리합니다.`,
         messages: claudeMessages,
         tools: TOOLS,
       }),
@@ -1384,6 +1342,16 @@ export async function POST(request: NextRequest) {
     }
     const recentMessages = (messages || []).slice(-20)
 
+    // 현재 사용자 이름 조회 → 입금 확인자 자동 주입용
+    let currentStaffName = 'AI확인'
+    if (staffId) {
+      try {
+        const { data: staff } = await supabaseAdmin.from('staff').select('name').eq('id', staffId).single()
+        if (staff?.name) currentStaffName = staff.name
+      } catch { /* graceful */ }
+    }
+    setCurrentStaffName(currentStaffName)
+
     // 대화 저장
     if (staffId && channel && recentMessages.length > 0) {
       const lastMsg = recentMessages[recentMessages.length - 1]
@@ -1454,7 +1422,7 @@ export async function POST(request: NextRequest) {
               body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 4096,
-                system: SYSTEM_PROMPT,
+                system: `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${currentStaffName}'으로 처리합니다.`,
                 messages: claudeMessages,
                 tools: TOOLS,
               }),
@@ -1462,8 +1430,9 @@ export async function POST(request: NextRequest) {
 
             if (!response.ok) {
               const errText = await response.text()
-              console.error('Claude API error:', response.status, errText)
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: '오류가 발생했습니다. 다시 시도해주세요.' })}\n\n`))
+              console.error('[AI] Claude API error:', response.status, errText)
+              console.error('[AI] Last messages:', JSON.stringify(claudeMessages).substring(0, 2000))
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: `⚠️ Claude API 오류 (${response.status}): ${errText.substring(0, 200)}` })}\n\n`))
               break
             }
 
@@ -1488,8 +1457,17 @@ export async function POST(request: NextRequest) {
             const toolResultBlocks: Array<Record<string, unknown>> = []
             for (const block of result.content || []) {
               if (block.type === 'tool_use') {
-                console.log(`[AI Tool] ${block.name}:`, JSON.stringify(block.input).substring(0, 200))
-                const toolResult = await executeTool(block.name, block.input as Record<string, unknown>)
+                console.log(`[AI Tool] ${block.name} input:`, JSON.stringify(block.input).substring(0, 500))
+                let toolResult: string
+                try {
+                  toolResult = await executeTool(block.name, block.input as Record<string, unknown>)
+                  console.log(`[AI Tool] ${block.name} result:`, toolResult.substring(0, 500))
+                } catch (toolErr) {
+                  const em = toolErr instanceof Error ? toolErr.message : String(toolErr)
+                  const es = toolErr instanceof Error ? toolErr.stack : ''
+                  console.error(`[AI Tool] ${block.name} threw:`, em, es)
+                  toolResult = JSON.stringify({ error: `도구 실행 실패: ${em}` })
+                }
                 toolResultBlocks.push({
                   type: 'tool_result',
                   tool_use_id: block.id,
@@ -1501,9 +1479,11 @@ export async function POST(request: NextRequest) {
             claudeMessages.push({ role: 'user', content: toolResultBlocks })
           }
         } catch (err) {
-          console.error('Chat stream error:', err)
+          console.error('[AI] Chat stream error:', err)
+          console.error('[AI] Stack:', err instanceof Error ? err.stack : String(err))
+          const msg = err instanceof Error ? err.message : String(err)
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ text: '\n\n처리 중 오류가 발생했습니다.' })}\n\n`)
+            encoder.encode(`data: ${JSON.stringify({ text: `\n\n⚠️ 처리 중 오류: ${msg}` })}\n\n`)
           )
         } finally {
           // assistant 응답 저장 (웹 대화 기록)

@@ -14,6 +14,7 @@ import {
   buildAfternoonRemind,
   buildEveningRecap,
 } from '@/lib/notifications/digest'
+import { applyDepositAndAdvanceStatus, formatDepositMessage } from '@/lib/payments'
 
 export const maxDuration = 30
 
@@ -334,88 +335,23 @@ async function handleCallback(query: TelegramUpdate['callback_query']) {
       .maybeSingle()
 
     try {
-      // 중복 방지: 같은 project + 같은 금액 + 오늘 날짜로 이미 처리됐는지
-      const today = new Date().toISOString().slice(0, 10)
-      const { data: dup } = await supabaseAdmin
-        .from('payments')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('amount', amount)
-        .eq('payment_date', today)
-        .eq('note', '텔레그램 수금 처리')
-        .limit(1)
+      const confirmerName = staff?.name || '알수없음'
+      const result = await applyDepositAndAdvanceStatus({
+        projectId,
+        amount,
+        payerName: null,
+        confirmerName,
+        source: 'telegram',
+      })
 
-      if (dup && dup.length > 0) {
-        await answerCallbackQuery(query.id, '이미 처리된 입금입니다')
+      if (!result.ok) {
+        await answerCallbackQuery(query.id, result.error)
         return
       }
 
-      // 입금 기록 INSERT — 확인자(버튼 누른 사람) 기록
-      const confirmerName = staff?.name || '알수없음'
-      await supabaseAdmin.from('payments').insert({
-        project_id: projectId,
-        payment_type: '입금',
-        amount,
-        payment_date: today,
-        payer_name: confirmerName, // 확인한 직원
-        note: `텔레그램 입금확인 by ${confirmerName}`,
-      })
-
-      // 프로젝트 상세 정보 조회 (cities, work_types 포함)
-      const { data: project } = await supabaseAdmin
-        .from('projects')
-        .select(`
-          id, building_name, owner_name, road_address, jibun_address,
-          water_work_type, support_program, note,
-          total_cost, collected, outstanding, self_pay, city_support, additional_cost,
-          cities(name),
-          work_types(name, work_categories(name))
-        `)
-        .eq('id', projectId)
-        .single()
-
-      if (project) {
-        const newOutstanding = Math.max(0, (project.outstanding || 0) - amount)
-        const newCollected = (project.collected || 0) + amount
-        await supabaseAdmin
-          .from('projects')
-          .update({ outstanding: newOutstanding, collected: newCollected })
-          .eq('id', projectId)
-
-        await answerCallbackQuery(query.id, '수금 처리 완료!')
-        if (chatId) {
-          const won = (n: number | null | undefined) => ((n || 0)).toLocaleString('ko-KR') + '원'
-          const cityName = (project.cities as { name?: string } | null)?.name || '-'
-          const category = (project.work_types as { work_categories?: { name?: string } } | null)?.work_categories?.name || '-'
-          const workType = (project.work_types as { name?: string } | null)?.name || '-'
-          const waterType = project.water_work_type ? ` (${project.water_work_type})` : ''
-          const addr = project.road_address || project.jibun_address || '-'
-          const supportProgram = project.support_program || workType
-          const note = project.note || '-'
-
-          const msg = [
-            `✅ *입금 등록 완료*`,
-            `확인: ${confirmerName}`,
-            ``,
-            `🏢 *${project.building_name || '(이름없음)'}*`,
-            `📍 ${cityName} · ${addr}`,
-            `🔧 ${category} · ${supportProgram}${waterType}`,
-            `💬 ${note}`,
-            ``,
-            `━━━━━━━━━━━━━━━━`,
-            `자부담금   ${won(project.self_pay)}`,
-            `시지원금   ${won(project.city_support)}`,
-            `추가공사금 ${won(project.additional_cost)}`,
-            `총공사비   *${won(project.total_cost)}*`,
-            `━━━━━━━━━━━━━━━━`,
-            `수금액     ${won(newCollected)} ← +${won(amount)}`,
-            `*미수금     ${won(newOutstanding)}*`,
-          ].join('\n')
-
-          await sendMessage(chatId, msg)
-        }
-      } else {
-        await answerCallbackQuery(query.id, '프로젝트를 찾을 수 없습니다')
+      await answerCallbackQuery(query.id, '수금 처리 완료!')
+      if (chatId) {
+        await sendMessage(chatId, formatDepositMessage(result))
       }
     } catch (e) {
       console.error('[telegram callback] deposit error:', e)

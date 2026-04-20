@@ -45,11 +45,14 @@ export default function AISidebar() {
     setMessages(prev => [...prev, { role: 'assistant', content: '' }])
 
     try {
+      const staffId = typeof window !== 'undefined' ? localStorage.getItem('dawoo_current_staff_id') : null
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: updatedMessages.slice(-20),
+          staffId: staffId || undefined,
+          channel: 'web',
         }),
       })
 

@@ -354,10 +354,16 @@ async function handleCallback(query: TelegramUpdate['callback_query']) {
         note: '텔레그램 수금 처리',
       })
 
-      // 프로젝트 outstanding/collected 업데이트
+      // 프로젝트 상세 정보 조회 (cities, work_types 포함)
       const { data: project } = await supabaseAdmin
         .from('projects')
-        .select('outstanding, collected, building_name, owner_name')
+        .select(`
+          id, building_name, owner_name, road_address, jibun_address,
+          water_work_type, support_program, note,
+          total_cost, collected, outstanding, self_pay, city_support, additional_cost,
+          cities(name),
+          work_types(name, work_categories(name))
+        `)
         .eq('id', projectId)
         .single()
 
@@ -371,12 +377,34 @@ async function handleCallback(query: TelegramUpdate['callback_query']) {
 
         await answerCallbackQuery(query.id, '수금 처리 완료!')
         if (chatId) {
-          const name = project.building_name || project.owner_name || '프로젝트'
-          const formatted = amount.toLocaleString('ko-KR')
-          await sendMessage(
-            chatId,
-            `*수금 처리 완료*\n${name}: ${formatted}원\n잔여 미수금: ${newOutstanding.toLocaleString('ko-KR')}원`,
-          )
+          const won = (n: number | null | undefined) => ((n || 0)).toLocaleString('ko-KR') + '원'
+          const cityName = (project.cities as { name?: string } | null)?.name || '-'
+          const category = (project.work_types as { work_categories?: { name?: string } } | null)?.work_categories?.name || '-'
+          const workType = (project.work_types as { name?: string } | null)?.name || '-'
+          const waterType = project.water_work_type ? ` (${project.water_work_type})` : ''
+          const addr = project.road_address || project.jibun_address || '-'
+          const supportProgram = project.support_program || workType
+          const note = project.note || '-'
+
+          const msg = [
+            `✅ *입금 등록 완료*`,
+            ``,
+            `🏢 *${project.building_name || '(이름없음)'}*`,
+            `📍 ${cityName} · ${addr}`,
+            `🔧 ${category} · ${supportProgram}${waterType}`,
+            `💬 ${note}`,
+            ``,
+            `━━━━━━━━━━━━━━━━`,
+            `자부담금   ${won(project.self_pay)}`,
+            `시지원금   ${won(project.city_support)}`,
+            `추가공사금 ${won(project.additional_cost)}`,
+            `총공사비   *${won(project.total_cost)}*`,
+            `━━━━━━━━━━━━━━━━`,
+            `수금액     ${won(newCollected)} ← +${won(amount)}`,
+            `*미수금     ${won(newOutstanding)}*`,
+          ].join('\n')
+
+          await sendMessage(chatId, msg)
         }
       } else {
         await answerCallbackQuery(query.id, '프로젝트를 찾을 수 없습니다')

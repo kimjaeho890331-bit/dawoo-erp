@@ -293,6 +293,37 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editData])
 
+  // 자동 단계 전환 규칙: 해당 날짜가 입력되면 최소 이 단계로 이동
+  const AUTO_STEP_MAP: Record<string, string> = {
+    survey_date: '실측',
+    application_date: '신청서제출',
+    consent_date: '동의서',
+    approval_received_date: '승인',
+    construction_date: '공사',
+    construction_end_date: '공사',
+    completion_doc_date: '완료서류제출',
+  }
+  const STEP_ORDER = ['문의', '실측', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출', '입금']
+
+  const autoProgressStatus = (savedData: Record<string, unknown>, currentStatus: string): string | null => {
+    // 취소/예약 상태는 자동 전환 안 함
+    if (currentStatus === '취소' || currentStatus === '문의(예약)') return null
+    let targetStep = currentStatus
+    const currentIdx = STEP_ORDER.indexOf(currentStatus)
+
+    for (const [field, step] of Object.entries(AUTO_STEP_MAP)) {
+      // savedData OR 기존 project에 날짜가 있으면
+      const hasDate = savedData[field] || (project as unknown as Record<string, unknown>)[field]
+      if (hasDate) {
+        const stepIdx = STEP_ORDER.indexOf(step)
+        if (stepIdx > currentIdx && stepIdx > STEP_ORDER.indexOf(targetStep)) {
+          targetStep = step
+        }
+      }
+    }
+    return targetStep !== currentStatus ? targetStep : null
+  }
+
   const handleSave = async () => {
     if (!project || !hasChanges) return
     setSaving(true)
@@ -307,9 +338,21 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       // 날짜 변경 시 캘린더 동기화
       await syncSchedules(dataToSave)
 
+      // 자동 단계 전환
+      const nextStatus = autoProgressStatus(dataToSave, project.status)
+      if (nextStatus) {
+        await supabase.from('projects').update({ status: nextStatus }).eq('id', project.id)
+        await supabase.from('status_logs').insert({
+          project_id: project.id,
+          from_status: project.status,
+          to_status: nextStatus,
+          note: '자동 전환',
+        })
+        onRefresh?.()
+      }
+
       setHasChanges(false)
       setEditData({})
-      // onRefresh 호출하지 않음 — 입력 중 데이터 보존
     } catch (err) {
       console.error('저장 실패:', err)
       alert('저장에 실패했습니다.')

@@ -52,8 +52,15 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
   const [statusReason, setStatusReason] = useState('')
 
+  // project.id 만 추적 (실시간 업데이트로 같은 프로젝트가 refresh 될 때는 editData 유지)
+  const projectIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (project) {
+    if (!project) return
+    const isDifferentProject = projectIdRef.current !== project.id
+    projectIdRef.current = project.id
+
+    // 다른 프로젝트로 전환된 경우에만 editData 초기화
+    if (isDifferentProject) {
       setEditData({})
       setHasChanges(false)
       setApiFieldsLocked(true)
@@ -97,7 +104,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project])
+  }, [project?.id])
 
   // 직원 목록 로드
   useEffect(() => {
@@ -310,27 +317,35 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     }
   }
 
-  // 자동저장 (2초 debounce)
+  // 자동저장 (3초 debounce - 입력 중이면 계속 연기)
+  // 변경한 필드만 DB에 업데이트 (다른 사람이 다른 필드 편집 중이어도 안전)
   useEffect(() => {
     if (!hasChanges || !project) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
       try {
         const dataToSave = validateProjectData({ ...editData })
+        if (Object.keys(dataToSave).length === 0) return
         const { error } = await supabase
           .from('projects')
           .update(dataToSave)
           .eq('id', project.id)
         if (error) throw error
         await syncSchedules(dataToSave)
+        // editData에서 저장된 필드만 제거 (새로 입력 중인 필드는 유지)
+        setEditData(prev => {
+          const next = { ...prev }
+          Object.keys(dataToSave).forEach(k => {
+            if (prev[k] === dataToSave[k]) delete next[k]
+          })
+          return next
+        })
         setHasChanges(false)
-        setEditData({})
-        // DB에서 최신 데이터 다시 읽어오기
-        onRefresh?.()
+        // onRefresh 호출 안 함 — realtime 구독이 알아서 처리
       } catch (err) {
         console.error('자동저장 실패:', err)
       }
-    }, 1000)
+    }, 3000)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editData])

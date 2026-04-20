@@ -85,14 +85,37 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
     if (!project) return
     const dateFields = Object.keys(savedData).filter(k => k in SCHEDULE_MAP)
     const hasWorkerChange = 'direct_worker' in savedData || 'construction_end_date' in savedData
+    const hasStaffChange = 'staff_id' in savedData
+
+    // 시간 필드 변경 감지 — 대응되는 날짜 필드도 처리해야 함
+    const timeFieldsChanged = Object.keys(savedData).filter(k => {
+      const dateField = k.replace('_time', '_date')
+      return k.endsWith('_time') && dateField in SCHEDULE_MAP
+    })
+    // 시간 변경된 경우, 대응 날짜 필드를 dateFields에 추가 (중복 제거)
+    timeFieldsChanged.forEach(tf => {
+      const df = tf.replace('_time', '_date')
+      if (!dateFields.includes(df)) dateFields.push(df)
+    })
+
+    // 담당자만 변경된 경우: 이 프로젝트의 모든 일정 staff_id 업데이트
+    if (hasStaffChange && dateFields.length === 0 && !hasWorkerChange) {
+      await supabase.from('schedules')
+        .update({ staff_id: savedData.staff_id })
+        .eq('project_id', project.id)
+        .eq('schedule_type', 'project')
+      return
+    }
+
     if (dateFields.length === 0 && !hasWorkerChange) return
 
     for (const field of dateFields) {
-      const dateVal = savedData[field] as string | null
+      // dateVal: savedData에 있으면 그 값, 없으면 project의 기존 값
+      const dateVal = (field in savedData ? savedData[field] : (project as unknown as Record<string,string>)[field]) as string | null
       const scheduleType = SCHEDULE_MAP[field]
       // 시간: 실측은 survey_time, 나머지는 해당 time 필드
       const timeField = field.replace('_date', '_time')
-      const timeVal = (editData as Record<string,unknown>)?.[timeField] as string || (project as unknown as Record<string,string>)[timeField] || ''
+      const timeVal = (savedData[timeField] as string) || (editData as Record<string,unknown>)?.[timeField] as string || (project as unknown as Record<string,string>)[timeField] || ''
       const title = `${timeVal ? timeVal + ' ' : ''}${project.building_name || '(이름없음)'} ${scheduleType}`
       const addr = project.jibun_address || project.road_address || ''
       const ownerInfo = [project.owner_name, project.owner_phone].filter(Boolean).join(' · ')
@@ -121,7 +144,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
       const payload = {
         project_id: project.id,
-        staff_id: project.staff_id,
+        staff_id: (savedData.staff_id as string) || project.staff_id,
         schedule_type: 'project' as const,
         title,
         start_date: cleanDate,

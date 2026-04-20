@@ -115,6 +115,16 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       }
     })
 
+    // 담당자 이름 → UUID 변환용 staff 목록 로드
+    const { data: staffList } = await supabase.from('staff').select('id, name')
+    const getStaffIdByName = (name: string | null | undefined): string | null => {
+      if (!name) return null
+      // UUID 형식이면 그대로 반환
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}/.test(name)) return name
+      const found = staffList?.find(s => s.name === name)
+      return found?.id || null
+    }
+
     // 담당자만 변경된 경우: 이 프로젝트의 모든 일정 staff_id 업데이트
     if (hasStaffChange && dateFields.length === 0 && !hasWorkerChange) {
       await supabase.from('schedules')
@@ -161,9 +171,11 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
       // 단계별 담당자 우선: STEP_STAFF_MAP에 정의된 필드 → 없으면 project.staff_id
       const stepStaffField = STEP_STAFF_MAP[field]
-      const stepStaffId = stepStaffField
+      const stepStaffName = stepStaffField
         ? ((savedData[stepStaffField] as string) || (editData as Record<string,unknown>)?.[stepStaffField] as string || (project as unknown as Record<string,string>)[stepStaffField])
         : null
+      // 이름을 UUID로 변환 (StaffSelect는 이름 저장, schedules는 UUID 필요)
+      const stepStaffId = getStaffIdByName(stepStaffName)
       const finalStaffId = stepStaffId || (savedData.staff_id as string) || project.staff_id
 
       const payload = {

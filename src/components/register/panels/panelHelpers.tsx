@@ -12,6 +12,19 @@ export interface TabProps {
   apiFieldsLocked?: boolean
 }
 
+// --- 현재 로그인 직원 이름 훅 (localStorage + staff 조회) ---
+export function useCurrentStaff(): { id: string | null; name: string | null } {
+  const [staff, setStaff] = useState<{ id: string | null; name: string | null }>({ id: null, name: null })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const id = localStorage.getItem('dawoo_current_staff_id')
+    if (!id) return
+    supabase.from('staff').select('id, name').eq('id', id).single()
+      .then(({ data }) => setStaff({ id, name: data?.name || null }))
+  }, [])
+  return staff
+}
+
 // --- 상시 표시 필드 (읽기 전용) ---
 export function InfoField({ label, value, full }: { label: string; value: string; full?: boolean }) {
   return (

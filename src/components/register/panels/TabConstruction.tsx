@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import FileDropZone from '@/components/common/FileDropZone'
 import PaymentTable from '@/components/register/PaymentTable'
 import type { TabProps } from './panelHelpers'
-import { FormInput, DateTimeInput, StaffSelect } from './panelHelpers'
+import { FormInput, DateTimeInput, StaffSelect, useCurrentStaff } from './panelHelpers'
 
 // --- 시공업체 검색 자동완성 ---
 function VendorSearch({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
@@ -57,26 +57,36 @@ function VendorSearch({ value, onChange }: { value: string | null | undefined; o
 export default function TabConstruction({ project, category, getVal, onChange, currentStepIdx, onRefresh }: TabProps & { category: '소규모' | '수도'; currentStepIdx: number; onRefresh?: () => void }) {
   const isBeforeApproval = currentStepIdx < 5 // '승인' 이전
   const approvalDate = getVal('approval_received_date') as string | null | undefined
+  const approvalSubmitter = getVal('approval_submitter' as keyof typeof project) as string | null | undefined
   const isApproved = !!approvalDate
   const [approving, setApproving] = useState(false)
+  const currentStaff = useCurrentStaff()
 
-  // 승인 처리: approval_received_date=오늘 + status='승인' + status_logs
+  // 승인 처리: approval_received_date=오늘 + status='승인' + approval_submitter + status_logs
   const handleApprove = async () => {
     if (approving) return
-    if (!confirm('승인 단계로 진행할까요?')) return
+    if (!currentStaff.name) {
+      alert('로그인 직원 정보를 확인할 수 없습니다. 다시 로그인 해주세요.')
+      return
+    }
+    if (!confirm(`"${currentStaff.name}"님이 승인 처리하시겠습니까?`)) return
     setApproving(true)
     try {
       const today = new Date().toISOString().slice(0, 10)
       const { error: uErr } = await supabase
         .from('projects')
-        .update({ approval_received_date: today, status: '승인' })
+        .update({
+          approval_received_date: today,
+          approval_submitter: currentStaff.name,
+          status: '승인',
+        })
         .eq('id', project.id)
       if (uErr) throw uErr
       await supabase.from('status_logs').insert({
         project_id: project.id,
         from_status: project.status,
         to_status: '승인',
-        note: '승인 버튼 처리',
+        note: `승인 버튼 (${currentStaff.name})`,
       })
       onRefresh?.()
     } catch (err) {
@@ -87,7 +97,7 @@ export default function TabConstruction({ project, category, getVal, onChange, c
     }
   }
 
-  // 승인 취소: 날짜 비우고 status를 '신청서제출'로 되돌림
+  // 승인 취소: 날짜/처리자 비우고 status를 '신청서제출'로 되돌림
   const handleUnapprove = async () => {
     if (approving) return
     if (!confirm('승인을 취소하고 신청서제출 단계로 되돌릴까요?')) return
@@ -95,7 +105,11 @@ export default function TabConstruction({ project, category, getVal, onChange, c
     try {
       const { error: uErr } = await supabase
         .from('projects')
-        .update({ approval_received_date: null, status: '신청서제출' })
+        .update({
+          approval_received_date: null,
+          approval_submitter: null,
+          status: '신청서제출',
+        })
         .eq('id', project.id)
       if (uErr) throw uErr
       await supabase.from('status_logs').insert({
@@ -124,6 +138,9 @@ export default function TabConstruction({ project, category, getVal, onChange, c
               <CheckCircle2 className="w-4 h-4 text-[#059669]" />
               <span className="text-[13px] font-medium text-[#065f46]">승인 완료</span>
               <span className="text-[11px] text-[#047857] tabular-nums">({approvalDate})</span>
+              {approvalSubmitter && (
+                <span className="text-[11px] text-[#047857]">· {approvalSubmitter} 확인</span>
+              )}
             </div>
             <button
               onClick={handleUnapprove}

@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { CheckCircle2, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 import FileDropZone from '@/components/common/FileDropZone'
 import type { TabProps } from './panelHelpers'
-import { FormInput, DateTimeInput, StaffSelect } from './panelHelpers'
+import { FormInput, DateTimeInput, StaffSelect, useCurrentStaff } from './panelHelpers'
 
 // 수도공사 기본 단가
 const DEFAULT_WATER_PRICES = {
@@ -20,11 +22,75 @@ interface WaterPricing {
   공용_세대: number
 }
 
-export default function TabReception({ project, category, getVal, onChange }: TabProps & { category: '소규모' | '수도' }) {
+export default function TabReception({ project, category, getVal, onChange, onRefresh }: TabProps & { category: '소규모' | '수도'; onRefresh?: () => void }) {
   const router = useRouter()
   const urlCategory = category === '소규모' ? 'small' : 'water'
   const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
   const [pricingLoaded, setPricingLoaded] = useState(false)
+  const currentStaff = useCurrentStaff()
+  const [consentProcessing, setConsentProcessing] = useState(false)
+
+  const consentDate = getVal('consent_date') as string | null | undefined
+  const consentSubmitter = getVal('consent_submitter') as string | null | undefined
+  const isConsentDone = !!consentDate
+
+  const handleConsentReceive = async () => {
+    if (consentProcessing) return
+    if (!currentStaff.name) {
+      alert('로그인 직원 정보를 확인할 수 없습니다. 다시 로그인 해주세요.')
+      return
+    }
+    if (!confirm(`동의서 회수를 "${currentStaff.name}"님이 확인한 것으로 처리할까요?`)) return
+    setConsentProcessing(true)
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      // 현재 상태가 동의서 이전이면 동의서로 진전
+      const STEP_ORDER = ['문의', '실측', '견적전달', '동의서', '신청서제출', '승인', '착공계', '공사', '완료서류제출', '입금']
+      const curIdx = STEP_ORDER.indexOf(project.status)
+      const consentIdx = STEP_ORDER.indexOf('동의서')
+      const shouldAdvance = curIdx >= 0 && curIdx < consentIdx && project.status !== '취소' && project.status !== '문의(예약)'
+
+      const updateData: Record<string, unknown> = {
+        consent_date: today,
+        consent_submitter: currentStaff.name,
+      }
+      if (shouldAdvance) updateData.status = '동의서'
+
+      const { error } = await supabase.from('projects').update(updateData).eq('id', project.id)
+      if (error) throw error
+      if (shouldAdvance) {
+        await supabase.from('status_logs').insert({
+          project_id: project.id,
+          from_status: project.status,
+          to_status: '동의서',
+          note: `동의서 회수 버튼 (${currentStaff.name})`,
+        })
+      }
+      onRefresh?.()
+    } catch (err) {
+      console.error('동의서 회수 처리 실패:', err)
+      alert('처리 실패: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setConsentProcessing(false)
+    }
+  }
+
+  const handleConsentUndo = async () => {
+    if (consentProcessing) return
+    if (!confirm('동의서 회수 기록을 취소할까요?')) return
+    setConsentProcessing(true)
+    try {
+      await supabase.from('projects')
+        .update({ consent_date: null, consent_submitter: null, consent_time: null })
+        .eq('id', project.id)
+      onRefresh?.()
+    } catch (err) {
+      console.error('취소 실패:', err)
+      alert('취소 실패')
+    } finally {
+      setConsentProcessing(false)
+    }
+  }
 
 
   const area = (getVal('exclusive_area') as number) || 0
@@ -198,14 +264,40 @@ export default function TabReception({ project, category, getVal, onChange }: Ta
       <div className="relative pb-8">
         <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[2].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>3</div>
         <h3 className={`text-[13px] font-semibold ${timelineSteps[2].textColor} mb-3`}>동의서</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <DateTimeInput label="동의서 회수일" value={getVal('consent_date') as string} onChange={v => onChange('consent_date', v)} timeValue={getVal('consent_time') as string} onTimeChange={v => onChange('consent_time', v)} />
-          <StaffSelect label="수령자" value={getVal('consent_submitter') as string} onChange={v => onChange('consent_submitter', v)} />
-        </div>
-        <div className="mt-3">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
-          <FileDropZone projectId={project.id} fileType="동의서" accept="image/*,application/pdf" compact />
-        </div>
+        {/* 동의서 회수 버튼 */}
+        {isConsentDone ? (
+          <div className="flex items-center justify-between gap-3 p-3 bg-[#ecfdf5] border border-[#a7f3d0] rounded-lg mb-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+              <span className="text-[13px] font-medium text-[#065f46]">동의서 회수 완료</span>
+              <span className="text-[11px] text-[#047857] tabular-nums">({consentDate})</span>
+              {consentSubmitter && (
+                <span className="text-[11px] text-[#047857]">· {consentSubmitter} 확인</span>
+              )}
+            </div>
+            <button
+              onClick={handleConsentUndo}
+              disabled={consentProcessing}
+              className="px-2 py-1 text-[11px] text-[#065f46]/70 hover:text-[#065f46] underline disabled:opacity-50"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleConsentReceive}
+            disabled={consentProcessing}
+            className="w-full h-[44px] mb-3 flex items-center justify-center gap-2 bg-[#c96442] text-white font-medium rounded-lg hover:bg-[#b5573a] transition-colors disabled:opacity-50"
+          >
+            {consentProcessing ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 처리 중...</>
+            ) : (
+              <><CheckCircle2 className="w-4 h-4" /> 동의서 회수 완료</>
+            )}
+          </button>
+        )}
+        <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
+        <FileDropZone projectId={project.id} fileType="동의서" accept="image/*,application/pdf" compact />
       </div>
       )}
 

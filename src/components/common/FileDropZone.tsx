@@ -22,6 +22,23 @@ interface Props {
   compact?: boolean         // true면 작은 사이즈
 }
 
+// Storage 경로용 한글 → ASCII 매핑 (Supabase는 경로에 non-ASCII 거부)
+const FILE_TYPE_SLUGS: Record<string, string> = {
+  '실측사진': 'survey_photo',
+  '동의서': 'consent',
+  '통장사본': 'bankbook',
+  '신청서': 'application',
+  '시공전': 'before',
+  '시공중': 'during',
+  '시공후': 'after',
+  '완료보고서': 'completion',
+  '공문': 'notice',
+  '기타': 'etc',
+}
+const slugifyFileType = (type: string): string => {
+  return FILE_TYPE_SLUGS[type] || type.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_') || 'etc'
+}
+
 export default function FileDropZone({ projectId, fileType, accept = 'image/*', multiple = false, label, compact = false }: Props) {
   const [files, setFiles] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
@@ -61,7 +78,8 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
   const uploadFile = async (file: File) => {
     const timestamp = Date.now()
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const storagePath = `attachments/${projectId}/${fileType}/${timestamp}_${safeName}`
+    const typeSlug = slugifyFileType(fileType)
+    const storagePath = `attachments/${projectId}/${typeSlug}/${timestamp}_${safeName}`
 
     const formData = new FormData()
     formData.append('file', file)

@@ -11,13 +11,18 @@ const supabaseAdmin = createClient(
 )
 
 const ALLOWED_MIME_TYPES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif',
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'text/csv',
+  'application/vnd.ms-excel',  // .xls
+  'application/msword',        // .doc
+  'application/haansofthwp',   // .hwp
+  'application/x-hwp',         // .hwp (alternative)
+  'application/octet-stream',  // 브라우저가 타입 모를 때 (hwp, heic 등)
+  'text/csv', 'text/plain',
 ]
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 const ALLOWED_PATH_PREFIXES = ['projects/', 'templates/', 'attachments/', 'sites/']
 
 export async function POST(request: NextRequest) {

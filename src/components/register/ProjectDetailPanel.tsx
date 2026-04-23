@@ -742,7 +742,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
           {activeTab === '접수' && <TabReception project={project} category={category} getVal={getVal} onChange={updateField} />}
-          {activeTab === '승인(시공)' && <TabConstruction project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} />}
+          {activeTab === '승인(시공)' && <TabConstruction project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} onRefresh={onRefresh} />}
           {activeTab === '완료' && <TabCompletion project={project} getVal={getVal} onChange={updateField} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}
         </div>

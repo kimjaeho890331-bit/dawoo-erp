@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import FileDropZone from '@/components/common/FileDropZone'
 import PaymentTable from '@/components/register/PaymentTable'
@@ -53,30 +54,123 @@ function VendorSearch({ value, onChange }: { value: string | null | undefined; o
   )
 }
 
-export default function TabConstruction({ project, category, getVal, onChange, currentStepIdx }: TabProps & { category: '소규모' | '수도'; currentStepIdx: number }) {
+export default function TabConstruction({ project, category, getVal, onChange, currentStepIdx, onRefresh }: TabProps & { category: '소규모' | '수도'; currentStepIdx: number; onRefresh?: () => void }) {
   const isBeforeApproval = currentStepIdx < 5 // '승인' 이전
+  const approvalDate = getVal('approval_received_date') as string | null | undefined
+  const isApproved = !!approvalDate
+  const [approving, setApproving] = useState(false)
+
+  // 승인 처리: approval_received_date=오늘 + status='승인' + status_logs
+  const handleApprove = async () => {
+    if (approving) return
+    if (!confirm('승인 단계로 진행할까요?')) return
+    setApproving(true)
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const { error: uErr } = await supabase
+        .from('projects')
+        .update({ approval_received_date: today, status: '승인' })
+        .eq('id', project.id)
+      if (uErr) throw uErr
+      await supabase.from('status_logs').insert({
+        project_id: project.id,
+        from_status: project.status,
+        to_status: '승인',
+        note: '승인 버튼 처리',
+      })
+      onRefresh?.()
+    } catch (err) {
+      console.error('승인 처리 실패:', err)
+      alert('승인 처리에 실패했습니다.\n' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  // 승인 취소: 날짜 비우고 status를 '신청서제출'로 되돌림
+  const handleUnapprove = async () => {
+    if (approving) return
+    if (!confirm('승인을 취소하고 신청서제출 단계로 되돌릴까요?')) return
+    setApproving(true)
+    try {
+      const { error: uErr } = await supabase
+        .from('projects')
+        .update({ approval_received_date: null, status: '신청서제출' })
+        .eq('id', project.id)
+      if (uErr) throw uErr
+      await supabase.from('status_logs').insert({
+        project_id: project.id,
+        from_status: project.status,
+        to_status: '신청서제출',
+        note: '승인 취소',
+      })
+      onRefresh?.()
+    } catch (err) {
+      console.error('승인 취소 실패:', err)
+      alert('승인 취소에 실패했습니다.')
+    } finally {
+      setApproving(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
-      {isBeforeApproval && (
+      {/* 승인 처리 영역 (opacity 영향 없이 항상 활성) */}
+      <section>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">승인</h3>
+        {isApproved ? (
+          <div className="flex items-center justify-between gap-3 p-3 bg-[#ecfdf5] border border-[#a7f3d0] rounded-lg">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+              <span className="text-[13px] font-medium text-[#065f46]">승인 완료</span>
+              <span className="text-[11px] text-[#047857] tabular-nums">({approvalDate})</span>
+            </div>
+            <button
+              onClick={handleUnapprove}
+              disabled={approving}
+              className="px-2 py-1 text-[11px] text-[#065f46]/70 hover:text-[#065f46] underline disabled:opacity-50"
+              title="승인 취소"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleApprove}
+            disabled={approving}
+            className="w-full h-[44px] flex items-center justify-center gap-2 bg-[#c96442] text-white font-medium rounded-lg hover:bg-[#b5573a] transition-colors disabled:opacity-50"
+          >
+            {approving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                처리 중...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                승인 처리
+              </>
+            )}
+          </button>
+        )}
+      </section>
+
+      {isBeforeApproval && !isApproved && (
         <div className="p-3 bg-surface-secondary rounded-lg border border-border-tertiary text-center">
-          <p className="text-[12px] text-txt-tertiary">승인 후 입력 가능합니다. 수정 버튼을 눌러 미리 입력할 수 있습니다.</p>
+          <p className="text-[12px] text-txt-tertiary">아래 항목은 승인 처리 후 입력 가능합니다.</p>
         </div>
       )}
 
-      <div className={isBeforeApproval ? 'opacity-50' : ''}>
-        <section>
-          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">승인</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <DateTimeInput label="승인일" value={getVal('approval_received_date') as string} onChange={v => onChange('approval_received_date', v)} />
-          </div>
-          {category === '소규모' && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
+      <div className={isBeforeApproval && !isApproved ? 'opacity-50' : ''}>
+        {category === '소규모' && (
+          <section>
+            <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">착공서류</h3>
+            <div className="grid grid-cols-2 gap-3">
               <DateTimeInput label="착공서류 제출일" value={getVal('construction_doc_date') as string} onChange={v => onChange('construction_doc_date', v)} timeValue={getVal('construction_doc_time') as string} onTimeChange={v => onChange('construction_doc_time', v)} />
               <StaffSelect label="착공서류 제출자" value={getVal('construction_doc_submitter') as string} onChange={v => onChange('construction_doc_submitter', v)} />
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
         <section className="mt-5">
           <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">시공</h3>

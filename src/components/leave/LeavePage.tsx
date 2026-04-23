@@ -93,16 +93,24 @@ export default function LeavePage() {
   const [formEndDate, setFormEndDate] = useState('')
   const [formReason, setFormReason] = useState('')
 
+  // 대표는 전체 조회, 일반 직원은 본인 것만
+  const isAdmin = currentStaff?.role === '대표'
+  const myStaffId = currentStaff?.id
+
   const loadData = useCallback(async () => {
     setLoading(true)
+    let reqQuery = supabase.from('leave_requests').select('*').order('start_date', { ascending: false })
+    if (!isAdmin && myStaffId) {
+      reqQuery = reqQuery.eq('staff_id', myStaffId)
+    }
     const [reqRes, staffRes] = await Promise.all([
-      supabase.from('leave_requests').select('*').order('start_date', { ascending: false }),
+      reqQuery,
       supabase.from('staff').select('*').order('name'),
     ])
     if (!reqRes.error) setRequests((reqRes.data as LeaveRequest[]) || [])
     if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
     setLoading(false)
-  }, [])
+  }, [isAdmin, myStaffId])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -218,7 +226,9 @@ export default function LeavePage() {
   }
 
   const openCreate = () => {
-    setEditingId(null); setFormStaffId(staffList[0]?.id || ''); setFormLeaveType('연차'); setFormSubtype('')
+    // 본인 ID 기본 선택 (일반 직원은 수정 불가)
+    const defaultId = myStaffId || staffList[0]?.id || ''
+    setEditingId(null); setFormStaffId(defaultId); setFormLeaveType('연차'); setFormSubtype('')
     const today = new Date().toISOString().slice(0, 10)
     setFormStartDate(today); setFormEndDate(today); setFormReason('')
     setShowModal(true)
@@ -263,9 +273,9 @@ export default function LeavePage() {
         <button onClick={openCreate} className="btn-primary">+ 연차 신청</button>
       </div>
 
-      {/* 직원별 현황 카드 */}
+      {/* 직원별 현황 카드 — 본인만 표시 (대표는 전체) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {staffList.map(s => {
+        {(isAdmin ? staffList : staffList.filter(s => s.id === myStaffId)).map(s => {
           const total = calcTotalLeave(s.join_date)
           const used = getUsed(s.id)
           const remain = total - used
@@ -371,17 +381,32 @@ export default function LeavePage() {
               <button onClick={() => setShowModal(false)} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
             </div>
             <div className="modal-body space-y-4">
-              {/* 직원 */}
+              {/* 직원 — 대표만 변경 가능, 일반 직원은 본인 고정 */}
               <div>
                 <label className="label-field">직원</label>
-                <select value={formStaffId} onChange={e => setFormStaffId(e.target.value)}
-                  className="input-field w-full">
-                  {staffList.map(s => {
-                    const total = calcTotalLeave(s.join_date)
-                    const remain = total - getUsed(s.id)
-                    return <option key={s.id} value={s.id}>{s.name} (잔여 {remain}일)</option>
-                  })}
-                </select>
+                {isAdmin ? (
+                  <select value={formStaffId} onChange={e => setFormStaffId(e.target.value)}
+                    className="input-field w-full">
+                    {staffList.map(s => {
+                      const total = calcTotalLeave(s.join_date)
+                      const remain = total - getUsed(s.id)
+                      return <option key={s.id} value={s.id}>{s.name} (잔여 {remain}일)</option>
+                    })}
+                  </select>
+                ) : (
+                  (() => {
+                    const me = staffList.find(s => s.id === myStaffId)
+                    if (!me) return <p className="text-[12px] text-txt-tertiary">로그인 직원 정보 없음</p>
+                    const total = calcTotalLeave(me.join_date)
+                    const remain = total - getUsed(me.id)
+                    return (
+                      <div className="input-field w-full bg-surface-secondary flex items-center">
+                        <span className="text-[13px] text-txt-primary">{me.name}</span>
+                        <span className="ml-auto text-[11px] text-txt-tertiary">잔여 {remain}일</span>
+                      </div>
+                    )
+                  })()
+                )}
               </div>
 
               {/* 유형 */}

@@ -256,6 +256,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const [projects, setProjects] = useState<DBProject[]>([])
   const [cities, setCities] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
 
   // 데이터 로드
   const loadProjects = useCallback(async () => {
@@ -477,25 +478,57 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         </div>
       </div>
 
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-4 gap-4 mb-5">
-        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
-          <p className="text-xs text-txt-tertiary font-medium mb-1">진행중</p>
-          <p className="text-2xl font-bold tabular-nums">{statusCounts['진행중']}</p>
-        </div>
-        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
-          <p className="text-xs text-txt-tertiary font-medium mb-1">완료</p>
-          <p className="text-2xl font-bold tabular-nums text-green-600">{statusCounts['완료']}</p>
-        </div>
-        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
-          <p className="text-xs text-txt-tertiary font-medium mb-1">총공사비</p>
-          <p className="text-xl font-bold tabular-nums">{filteredProjects.reduce((s, p) => s + p.total_cost, 0).toLocaleString()}</p>
-        </div>
-        <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
-          <p className="text-xs text-txt-tertiary font-medium mb-1">미수금</p>
-          <p className="text-xl font-bold tabular-nums text-red-600">{filteredProjects.reduce((s, p) => s + p.outstanding, 0).toLocaleString()}</p>
-        </div>
-      </div>
+      {/* 연간 금액 정산 */}
+      {(() => {
+        const getProjectYear = (p: DBProject): number => {
+          if (p.year) return p.year
+          if (p.created_at) return new Date(p.created_at).getFullYear()
+          return new Date().getFullYear()
+        }
+        const availableYears = Array.from(new Set(projects.map(getProjectYear))).sort((a, b) => b - a)
+        if (availableYears.length === 0) availableYears.push(new Date().getFullYear())
+        const yearProjects = projects.filter(p => getProjectYear(p) === selectedYear && p.status !== '취소' && p.status !== '문의(예약)')
+        const totalRevenue = yearProjects.reduce((s, p) => s + (p.total_cost || 0) + (p.additional_cost || 0), 0)
+        const totalCollected = yearProjects.reduce((s, p) => s + (p.collected || 0), 0)
+        const totalOutstanding = yearProjects.reduce((s, p) => s + (p.outstanding || 0), 0)
+        return (
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-[13px] font-semibold text-txt-primary">연간 금액 정산</h2>
+                <select
+                  value={selectedYear}
+                  onChange={e => setSelectedYear(Number(e.target.value))}
+                  className="h-7 px-2 text-[12px] border border-border-primary rounded-md bg-surface focus:outline-none focus:border-[#c96442]"
+                >
+                  {availableYears.map(y => (
+                    <option key={y} value={y}>{y}년</option>
+                  ))}
+                </select>
+              </div>
+              <span className="text-[11px] text-txt-tertiary">취소·예약 제외</span>
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+                <p className="text-xs text-txt-tertiary font-medium mb-1">{selectedYear}년 건수</p>
+                <p className="text-2xl font-bold tabular-nums">{yearProjects.length}</p>
+              </div>
+              <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+                <p className="text-xs text-txt-tertiary font-medium mb-1">총공사비</p>
+                <p className="text-xl font-bold tabular-nums">{totalRevenue.toLocaleString()}</p>
+              </div>
+              <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+                <p className="text-xs text-txt-tertiary font-medium mb-1">수금액</p>
+                <p className="text-xl font-bold tabular-nums text-green-600">{totalCollected.toLocaleString()}</p>
+              </div>
+              <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
+                <p className="text-xs text-txt-tertiary font-medium mb-1">미수금</p>
+                <p className="text-xl font-bold tabular-nums text-red-600">{totalOutstanding.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 상태 필터 탭 + 진행 프로세스 가이드 */}
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-4 border-b border-border-primary">

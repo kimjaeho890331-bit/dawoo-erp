@@ -54,7 +54,7 @@ interface CityPromoSummary {
 
 // 일정 색상
 const TYPE_COLORS: Record<string, string> = {
-  project: '#3B82F6', personal: '#8B5CF6', promo: '#F59E0B', ai: '#06B6D4',
+  project: '#3B82F6', personal: '#8B5CF6', promo: '#3B82F6', ai: '#06B6D4',
 }
 const TYPE_LABELS: Record<string, string> = {
   project: '지원사업', personal: '개인', promo: '홍보', ai: 'AI제안',
@@ -279,7 +279,7 @@ export default function WorkCalendarPage() {
                 )
               })}
               <span className="mx-2 w-px h-4 bg-border-primary" />
-              <span className="text-[10px] text-txt-tertiary">연차=<span className="text-red-400">빨강</span> 홍보=<span className="text-yellow-500">노랑</span></span>
+              <span className="text-[10px] text-txt-tertiary">담당자별 색상으로 표시</span>
             </div>
           </div>
 
@@ -341,9 +341,8 @@ export default function WorkCalendarPage() {
                         })}
                         {rows.map((row: any[], ri) => row.map((bar: any) => {
                           const s = bar.schedule as Schedule
-                          const color = getBarColor(s)
-                          const isLeave = s.schedule_type === 'personal' && s.title.includes('연차')
-                          const barColor = isLeave ? '#EF4444' : s.schedule_type === 'promo' ? '#F59E0B' : color
+                          // 색상 고정 제거 — 담당자별 색상만 사용
+                          const barColor = getBarColor(s)
                           return (
                             <div key={s.id + '-' + wi}
                               draggable
@@ -715,11 +714,8 @@ function MobileCalendarView({
     return '종일'
   }
 
-  // Get bar color for schedule
+  // Get bar color for schedule — 담당자별 색상 고정
   const getColor = (s: Schedule) => {
-    const isLeave = s.schedule_type === 'personal' && s.title.includes('연차')
-    if (isLeave) return '#EF4444'
-    if (s.schedule_type === 'promo') return '#F59E0B'
     if (s.staff_id && staffColorMap[s.staff_id]) return staffColorMap[s.staff_id]
     return TYPE_COLORS[s.schedule_type] || '#3B82F6'
   }
@@ -852,7 +848,6 @@ function MobileCalendarView({
                         {staffName && <span className="text-txt-quaternary">·</span>}
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                           s.schedule_type === 'project' ? 'bg-blue-50 text-blue-600' :
-                          s.schedule_type === 'promo' ? 'bg-yellow-50 text-yellow-700' :
                           s.schedule_type === 'ai' ? 'bg-cyan-50 text-cyan-700' :
                           'bg-gray-100 text-gray-600'
                         }`}>
@@ -1070,7 +1065,6 @@ function TodaySection({
                     {/* 분류 배지 */}
                     <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${
                       s.schedule_type === 'project' ? 'bg-blue-50 text-blue-600' :
-                      s.schedule_type === 'promo' ? 'bg-yellow-50 text-yellow-700' :
                       s.schedule_type === 'ai' ? 'bg-cyan-50 text-cyan-700' :
                       'bg-gray-100 text-gray-600'
                     }`}>
@@ -1332,7 +1326,6 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               )}
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
                 scheduleType === 'project' ? 'bg-blue-50 text-blue-600' :
-                scheduleType === 'promo' ? 'bg-yellow-50 text-yellow-700' :
                 scheduleType === 'ai' ? 'bg-cyan-50 text-cyan-700' :
                 'bg-gray-100 text-gray-600'
               }`}>{viewTypeLabel}</span>

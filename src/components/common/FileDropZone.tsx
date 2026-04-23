@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Trash2, FileText, Upload, AlertCircle, X } from 'lucide-react'
+import { FileText, Upload, AlertCircle, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ImageViewer from '@/components/common/ImageViewer'
 
@@ -199,43 +199,126 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
     }
   }
 
+  const hasFiles = files.length > 0
+  const nonImageFiles = files.filter(f => !isImage(f.name))
+
   return (
     <div>
-      {/* 드래그앤드롭 영역 */}
+      {/* 드래그앤드롭 + 파일 통합 영역 */}
       <div
-        onClick={() => !uploading && inputRef.current?.click()}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         className={`border-2 border-dashed rounded-lg transition-colors ${
-          compact ? 'p-3' : 'p-5'
-        } ${uploading ? 'cursor-wait' : 'cursor-pointer'} ${
           dragOver
-            ? 'border-[#c96442] bg-[#c96442]/10 scale-[1.01]'
-            : 'border-border-secondary hover:border-[#c96442] hover:bg-[#c96442]/5'
+            ? 'border-[#c96442] bg-[#c96442]/10'
+            : hasFiles
+              ? 'border-border-primary bg-surface-secondary/30'
+              : 'border-border-secondary hover:border-[#c96442] hover:bg-[#c96442]/5'
         }`}
       >
-        <div className="flex flex-col items-center justify-center gap-1 pointer-events-none">
-          {uploading ? (
-            <>
-              <Upload size={compact ? 14 : 18} className="text-[#c96442] animate-pulse" />
-              <p className="text-[12px] text-[#c96442] font-medium">
-                {uploadProgress ? `업로드 중 ${uploadProgress.current}/${uploadProgress.total}` : '업로드 중...'}
-              </p>
-            </>
-          ) : (
-            <>
-              <Upload size={compact ? 14 : 18} className={dragOver ? 'text-[#c96442]' : 'text-txt-tertiary'} />
-              <p className={`text-center ${dragOver ? 'text-[#c96442] font-medium' : 'text-txt-tertiary'} ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
-                {label || `${fileType} 파일을 드래그하거나 클릭`}
-              </p>
-              {multiple && (
-                <p className="text-[10px] text-txt-quaternary">여러 파일 업로드 가능</p>
-              )}
-            </>
-          )}
-        </div>
+        {hasFiles ? (
+          /* 파일이 있을 때: 썸네일/아이콘 inline + "+ 추가" 버튼 */
+          <div className={`flex flex-wrap items-center gap-2 ${compact ? 'p-2' : 'p-2.5'}`}>
+            {/* 이미지 썸네일 (48px 고정) */}
+            {imageFiles.map((file, idx) => (
+              <div
+                key={file.id}
+                className="relative group w-[56px] h-[56px] rounded-md overflow-hidden border border-border-primary bg-surface flex-shrink-0"
+              >
+                <img
+                  src={getPublicUrl(file.file_path)}
+                  alt={file.name}
+                  className="w-full h-full object-cover cursor-pointer"
+                  onClick={() => setViewerIdx(idx)}
+                  loading="lazy"
+                />
+                <button
+                  onClick={e => { e.stopPropagation(); handleDelete(file) }}
+                  className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 hover:bg-black/90 transition-all"
+                  title="삭제"
+                >
+                  <X size={10} strokeWidth={3} />
+                </button>
+              </div>
+            ))}
+
+            {/* PDF/HWP 등 문서 아이콘 */}
+            {nonImageFiles.map(file => (
+              <a
+                key={file.id}
+                href={getPublicUrl(file.file_path)}
+                target="_blank"
+                rel="noreferrer"
+                className="relative group w-[56px] h-[56px] rounded-md border border-border-primary bg-surface flex flex-col items-center justify-center gap-0.5 flex-shrink-0 hover:border-[#c96442] transition-colors"
+                title={file.name}
+              >
+                <FileText size={16} className={isPdf(file.name) ? 'text-[#dc2626]' : 'text-txt-tertiary'} />
+                <span className="text-[8px] text-txt-tertiary px-1 truncate max-w-full">
+                  {isPdf(file.name) ? 'PDF' : file.name.split('.').pop()?.toUpperCase()}
+                </span>
+                <button
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); handleDelete(file) }}
+                  className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 hover:bg-black/90 transition-all"
+                  title="삭제"
+                >
+                  <X size={10} strokeWidth={3} />
+                </button>
+              </a>
+            ))}
+
+            {/* + 추가 버튼 */}
+            {(multiple || files.length === 0) && (
+              <button
+                onClick={() => !uploading && inputRef.current?.click()}
+                disabled={uploading}
+                className="w-[56px] h-[56px] rounded-md border-2 border-dashed border-border-secondary hover:border-[#c96442] hover:bg-[#c96442]/5 flex flex-col items-center justify-center gap-0.5 flex-shrink-0 transition-colors disabled:opacity-50"
+              >
+                {uploading ? (
+                  <Upload size={14} className="text-[#c96442] animate-pulse" />
+                ) : (
+                  <>
+                    <Upload size={14} className="text-txt-tertiary" />
+                    <span className="text-[9px] text-txt-tertiary">추가</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {uploading && uploadProgress && (
+              <span className="text-[11px] text-[#c96442] font-medium ml-1">
+                {uploadProgress.current}/{uploadProgress.total}
+              </span>
+            )}
+          </div>
+        ) : (
+          /* 파일 없을 때: 기존 큰 드롭존 */
+          <div
+            onClick={() => !uploading && inputRef.current?.click()}
+            className={`flex flex-col items-center justify-center gap-1 ${compact ? 'p-3' : 'p-5'} ${uploading ? 'cursor-wait' : 'cursor-pointer'}`}
+          >
+            {uploading ? (
+              <>
+                <Upload size={compact ? 14 : 18} className="text-[#c96442] animate-pulse" />
+                <p className="text-[12px] text-[#c96442] font-medium">
+                  {uploadProgress ? `업로드 중 ${uploadProgress.current}/${uploadProgress.total}` : '업로드 중...'}
+                </p>
+              </>
+            ) : (
+              <>
+                <Upload size={compact ? 14 : 18} className={dragOver ? 'text-[#c96442]' : 'text-txt-tertiary'} />
+                <p className={`text-center ${dragOver ? 'text-[#c96442] font-medium' : 'text-txt-tertiary'} ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
+                  {label || `${fileType} 파일을 드래그하거나 클릭`}
+                </p>
+                {multiple && (
+                  <p className="text-[10px] text-txt-quaternary">여러 파일 업로드 가능</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         <input
           ref={inputRef}
           type="file"
@@ -254,69 +337,6 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
           <button onClick={() => setError(null)} className="text-[#b91c1c]/70 hover:text-[#b91c1c]">
             <X size={14} />
           </button>
-        </div>
-      )}
-
-      {/* 파일 목록 — 이미지는 썸네일 그리드, 그 외는 리스트 */}
-      {files.length > 0 && (
-        <div className="mt-3 space-y-2">
-          {/* 이미지 썸네일 그리드 */}
-          {imageFiles.length > 0 && (
-            <div className="grid grid-cols-4 gap-2">
-              {imageFiles.map((file, idx) => (
-                <div key={file.id} className="relative group aspect-square rounded-lg overflow-hidden border border-border-primary bg-surface-secondary">
-                  <img
-                    src={getPublicUrl(file.file_path)}
-                    alt={file.name}
-                    className="w-full h-full object-cover cursor-pointer"
-                    onClick={() => setViewerIdx(idx)}
-                    loading="lazy"
-                  />
-                  <button
-                    onClick={e => { e.stopPropagation(); handleDelete(file) }}
-                    className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 transition-all"
-                    title="삭제"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                  <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/60 to-transparent">
-                    <p className="text-[9px] text-white truncate">{file.name}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 이미지 외 파일 (PDF, HWP 등) */}
-          {files.filter(f => !isImage(f.name)).length > 0 && (
-            <div className="space-y-1.5">
-              {files.filter(f => !isImage(f.name)).map(file => (
-                <div key={file.id} className="flex items-center gap-2 px-2.5 py-2 bg-surface-secondary rounded-lg group hover:bg-surface-tertiary transition-colors">
-                  <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${
-                    isPdf(file.name) ? 'bg-[#fef2f2] text-[#dc2626]' : 'bg-surface-tertiary text-txt-tertiary'
-                  }`}>
-                    <FileText size={14} />
-                  </div>
-                  <a
-                    href={getPublicUrl(file.file_path)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 text-[12px] text-txt-secondary hover:text-[#c96442] truncate"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    {file.name}
-                  </a>
-                  <button
-                    onClick={() => handleDelete(file)}
-                    className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-[#fef2f2] text-txt-tertiary hover:text-[#dc2626] transition-all"
-                    title="삭제"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 

@@ -66,8 +66,12 @@ export async function POST(request: NextRequest) {
       })
 
     if (error) {
-      console.error('Storage upload error:', error)
-      return Response.json({ error: '업로드 실패' }, { status: 500 })
+      console.error('[Upload] Storage error:', error)
+      return Response.json({
+        error: `Storage: ${error.message || JSON.stringify(error)}`,
+        details: error,
+        path: safePath,
+      }, { status: 500 })
     }
 
     const { data: urlData } = supabaseAdmin.storage
@@ -129,7 +133,9 @@ export async function POST(request: NextRequest) {
 
     return Response.json({ url: urlData.publicUrl, path: data.path, drive: driveFile })
   } catch (error) {
-    console.error('Upload API error:', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    const stack = error instanceof Error ? error.stack : undefined
+    console.error('[Upload] API error:', msg, stack)
+    return Response.json({ error: `서버 오류: ${msg}`, stack }, { status: 500 })
   }
 }

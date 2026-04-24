@@ -60,7 +60,8 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
   }, [projectId, loadPayments])
 
   const collected = payments.reduce((sum, p) => sum + p.amount, 0)
-  const outstanding = (totalCost + additionalCost) - collected
+  // total_cost는 이미 self_pay + city_support + additional_cost 포함 (all-inclusive)
+  const outstanding = totalCost - collected
 
   // 미수금/수금액 변경 시 부모에 알림
   useEffect(() => {
@@ -80,9 +81,9 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
       })
       if (error) throw error
 
-      // projects 테이블 미수금/수금액 업데이트
+      // projects 테이블 미수금/수금액 업데이트 (total_cost는 이미 all-inclusive)
       const newCollected = collected + Number(newPayment.amount)
-      const newOutstanding = Math.max(0, (totalCost + additionalCost) - newCollected)
+      const newOutstanding = Math.max(0, totalCost - newCollected)
       await supabase.from('projects').update({
         outstanding: newOutstanding,
         collected: newCollected,
@@ -104,7 +105,7 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
       await supabase.from('payments').delete().eq('id', payment.id)
 
       const newCollected = collected - payment.amount
-      const newOutstanding = Math.max(0, (totalCost + additionalCost) - newCollected)
+      const newOutstanding = Math.max(0, totalCost - newCollected)
       await supabase.from('projects').update({
         outstanding: newOutstanding,
         collected: newCollected,
@@ -121,8 +122,8 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
       {/* 요약 */}
       <div className="grid grid-cols-3 gap-3 mb-3 p-2.5 bg-surface-secondary rounded-lg text-center">
         <div>
-          <p className="text-[10px] text-txt-tertiary">총공사비+추가</p>
-          <p className="text-[12px] font-semibold tabular-nums text-txt-primary">{(totalCost + additionalCost).toLocaleString()}원</p>
+          <p className="text-[10px] text-txt-tertiary">총공사비</p>
+          <p className="text-[12px] font-semibold tabular-nums text-txt-primary">{totalCost.toLocaleString()}원</p>
         </div>
         <div>
           <p className="text-[10px] text-txt-tertiary">수금합계</p>

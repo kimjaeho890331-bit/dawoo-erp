@@ -65,7 +65,8 @@ export function inferNextStatus(
   if (currentStatus === '입금') return null
 
   const self = project.self_pay || 0
-  const total = (project.total_cost || 0) + (project.additional_cost || 0)
+  // total_cost는 이미 all-inclusive
+  const total = project.total_cost || 0
 
   // 1) 총 공사비 완납 → '입금'
   if (total > 0 && newCollected >= total) return '입금'
@@ -167,8 +168,8 @@ export async function applyDepositAndAdvanceStatus(params: {
     .select('amount')
     .eq('project_id', projectId)
   const newCollected = (allPayments || []).reduce((s, p) => s + (p.amount || 0), 0)
-  const totalWithAdd = (project.total_cost || 0) + (project.additional_cost || 0)
-  const newOutstanding = Math.max(0, totalWithAdd - newCollected)
+  // total_cost는 이미 all-inclusive (self + city + additional)
+  const newOutstanding = Math.max(0, (project.total_cost || 0) - newCollected)
 
   await supabaseAdmin
     .from('projects')

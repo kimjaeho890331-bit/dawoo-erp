@@ -488,7 +488,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         const availableYears = Array.from(new Set(projects.map(getProjectYear))).sort((a, b) => b - a)
         if (availableYears.length === 0) availableYears.push(new Date().getFullYear())
         const yearProjects = projects.filter(p => getProjectYear(p) === selectedYear && p.status !== '취소' && p.status !== '문의(예약)')
-        const totalRevenue = yearProjects.reduce((s, p) => s + (p.total_cost || 0) + (p.additional_cost || 0), 0)
+        // total_cost는 이미 self + city + additional 합산된 값 (all-inclusive)
+        const totalRevenue = yearProjects.reduce((s, p) => s + (p.total_cost || 0), 0)
         const totalCollected = yearProjects.reduce((s, p) => s + (p.collected || 0), 0)
         const totalOutstanding = yearProjects.reduce((s, p) => s + (p.outstanding || 0), 0)
         return (

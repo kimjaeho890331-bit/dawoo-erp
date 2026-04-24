@@ -12,6 +12,7 @@ import TabBasicInfo from './panels/TabBasicInfo'
 import TabReception from './panels/TabReception'
 import TabConstruction from './panels/TabConstruction'
 import TabCompletion from './panels/TabCompletion'
+import CertificateButton from './CertificateButton'
 
 const PROGRESS_STEPS: ProjectStep[] = [
   '문의', '실측', '견적전달', '동의서', '신청서제출',
@@ -490,6 +491,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
                 {saving ? '저장 중...' : '저장'}
               </button>
             )}
+            {/* 건축물대장 발급 + 상태 표시 */}
+            <CertificateButton projectId={project.id} />
+
             <button
               onClick={() => setShowStatusModal('취소')}
               className="px-3 py-1.5 text-[11px] font-medium text-[#b53333] border border-[#b53333]/30 rounded-lg hover:bg-[#b53333]/5 transition-colors"

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Sidebar from "@/components/Sidebar"
 import AISidebar from "@/components/AISidebar"
+import Toaster from "@/components/common/Toaster"
 import { AuthProvider, useAuth } from "@/components/AuthProvider"
 import { Menu } from 'lucide-react'
 
@@ -38,6 +39,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
         </div>
       </main>
       <AISidebar />
+      <Toaster />
     </>
   )
 }

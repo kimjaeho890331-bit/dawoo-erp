@@ -492,7 +492,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               </button>
             )}
             {/* 건축물대장 발급 + 상태 표시 */}
-            <CertificateButton projectId={project.id} />
+            <CertificateButton projectId={project.id} buildingName={project.building_name} />
 
             <button
               onClick={() => setShowStatusModal('취소')}

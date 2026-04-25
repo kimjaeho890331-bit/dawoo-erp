@@ -99,6 +99,8 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
     if (loading) return
     setLoading(true)
     setError(null)
+    console.log('[CertButton] 발급 요청 시작 projectId=', projectId)
+
     // 낙관적 업데이트: 즉시 pending 상태 표시
     const optimisticTask: CoworkTask = {
       id: `optimistic-${Date.now()}`,
@@ -119,19 +121,30 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: projectId }),
       })
-      const data = await res.json()
+      const text = await res.text()
+      let data: { error?: string; success?: boolean; task?: { id: string }; existing_task_id?: string } = {}
+      try { data = JSON.parse(text) } catch { /* HTML response */ }
+      console.log('[CertButton] 응답', res.status, data)
+
       if (!res.ok) {
         // 409 (이미 진행중)이면 기존 task 다시 로드
         if (res.status === 409) {
           await loadTasks()
-          throw new Error(data.error || '이미 진행중')
+          toast.info('이미 진행중인 발급 요청이 있습니다')
+          return
         }
-        throw new Error(data.error || '요청 실패')
+        const reason = data.error || text.substring(0, 200) || `HTTP ${res.status}`
+        throw new Error(reason)
       }
+      console.log('[CertButton] 성공, task=', data.task)
       // 실제 task 로드 (realtime이 INSERT를 잡아줄 거지만 즉시 동기화)
       await loadTasks()
+      toast.success('발급 요청 등록 완료')
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[CertButton] 실패:', msg)
+      setError(msg)
+      toast.error(`발급 요청 실패: ${msg}`)
       // 낙관적 업데이트 롤백
       await loadTasks()
     } finally {
@@ -232,8 +245,14 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
         )}
       </div>
 
-      {/* 에러 텍스트 */}
-      {error && <p className="text-[10px] text-[#b91c1c]">{error}</p>}
+      {/* 에러 배너 — 크고 잘 보이게 */}
+      {error && (
+        <div className="flex items-start gap-1.5 px-2 py-1.5 bg-[#fef2f2] border border-[#fecaca] rounded-md max-w-[420px]">
+          <AlertCircle className="w-3.5 h-3.5 text-[#b91c1c] flex-shrink-0 mt-0.5" />
+          <p className="flex-1 text-[11px] text-[#b91c1c] leading-snug whitespace-pre-wrap">{error}</p>
+          <button onClick={() => setError(null)} className="text-[10px] text-[#b91c1c]/70 hover:text-[#b91c1c]">×</button>
+        </div>
+      )}
 
       {/* 디버그 (dev only) */}
       {isDev && latest && (

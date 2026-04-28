@@ -8,6 +8,7 @@ import MyTodoCard, { type TodoItem } from './MyTodoCard'
 import AssignedTasksCard from './AssignedTasksCard'
 import FirstVisitModal from './FirstVisitModal'
 import SitesTimeline from './SitesTimeline'
+import TaskDetailModal from './TaskDetailModal'
 import type { BriefingResponse, Task } from '@/types'
 
 // --- 타입 ---
@@ -68,6 +69,7 @@ export default function DashboardPage() {
   const [myTasksReceived, setMyTasksReceived] = useState<Task[]>([])  // 내가 받은 일
   const [myTasksAssigned, setMyTasksAssigned] = useState<Task[]>([])  // 내가 시킨 일
   const [tasksTableMissing, setTasksTableMissing] = useState(false)
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
 
   // 메모장
   const [memos, setMemos] = useState<Memo[]>(() => loadMemosFromStorage() ?? [])
@@ -150,7 +152,7 @@ export default function DashboardPage() {
       source: 'schedule',
       title: s.title,
       date: s.start_date,
-      href: s.project_id ? `/register/${s.project_id}` : '/calendar/work',
+      href: s.project_id ? `/register/small?project=${s.project_id}` : '/calendar/work',
       projectId: s.project_id,
       assignerName: null,
       scheduleType: s.schedule_type,
@@ -161,7 +163,7 @@ export default function DashboardPage() {
       source: 'task',
       title: t.content,
       date: t.deadline,
-      href: t.project_id ? `/register/${t.project_id}` : '/dashboard',
+      href: t.project_id ? `/register/small?project=${t.project_id}` : '/dashboard',
       projectId: t.project_id,
       assignerName: getStaffName(t.assigned_by),
       rawId: t.id,
@@ -191,6 +193,27 @@ export default function DashboardPage() {
       content, assigned_to: assigneeId, assigned_by: currentStaffId, deadline, done: false,
     })
     if (!error) loadMyWork()
+  }
+  // 내 할 일 직접 등록 (assigned_to = assigned_by = 본인)
+  const addMyTask = async (content: string, deadline: string | null) => {
+    if (!currentStaffId) return
+    const { error } = await supabase.from('tasks').insert({
+      content, assigned_to: currentStaffId, assigned_by: currentStaffId, deadline, done: false,
+    })
+    if (!error) loadMyWork()
+  }
+  // 모달용 저장/삭제/완료
+  const saveTask = async (id: string, patch: Partial<Task>) => {
+    await supabase.from('tasks').update(patch).eq('id', id)
+    loadMyWork()
+  }
+  const deleteTask = async (id: string) => {
+    await supabase.from('tasks').delete().eq('id', id)
+    loadMyWork()
+  }
+  const completeTask = async (id: string) => {
+    await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', id)
+    loadMyWork()
   }
   const toggleAssignedDone = async (taskId: string, done: boolean) => {
     await supabase.from('tasks').update({ done, done_at: done ? new Date().toISOString() : null }).eq('id', taskId)
@@ -264,8 +287,8 @@ export default function DashboardPage() {
         {/* 메인 그리드 */}
         <div className="grid grid-cols-5 gap-4 items-stretch min-h-[640px]">
           <div className="col-span-2 flex flex-col gap-4">
-            <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} />
-            <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} getStaffName={getStaffName} />
+            <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
+            <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} onOpenDetail={setDetailTaskId} getStaffName={getStaffName} />
             <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden flex flex-col flex-1 min-h-0">
               <div className="px-5 py-3.5 border-b border-border-tertiary">
                 <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">메모장</h2>
@@ -299,7 +322,7 @@ export default function DashboardPage() {
           onToggle={() => toggleMobile('todo')}
           accentColor="#3B82F6"
         >
-          <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} />
+          <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
         </MobileAccordion>
 
         {/* 시킨 일 */}
@@ -311,7 +334,7 @@ export default function DashboardPage() {
           onToggle={() => toggleMobile('assigned')}
           accentColor="#F59E0B"
         >
-          <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} getStaffName={getStaffName} />
+          <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} onOpenDetail={setDetailTaskId} getStaffName={getStaffName} />
         </MobileAccordion>
 
         {/* AI 브리핑 */}
@@ -348,6 +371,33 @@ export default function DashboardPage() {
           <SitesTimeline />
         </MobileAccordion>
       </div>
+
+      {(() => {
+        const detailTask = detailTaskId
+          ? [...myTasksReceived, ...myTasksAssigned].find(t => t.id === detailTaskId)
+          : null
+        if (!detailTask) return null
+        const isSelf =
+          detailTask.assigned_to === currentStaffId &&
+          detailTask.assigned_by === currentStaffId
+        const mode: 'received' | 'assigned' | 'self' = isSelf
+          ? 'self'
+          : detailTask.assigned_by === currentStaffId
+          ? 'assigned'
+          : 'received'
+        return (
+          <TaskDetailModal
+            task={detailTask}
+            staffList={staffList}
+            mode={mode}
+            getStaffName={getStaffName}
+            onClose={() => setDetailTaskId(null)}
+            onSave={(patch) => saveTask(detailTask.id, patch)}
+            onDelete={() => deleteTask(detailTask.id)}
+            onComplete={() => completeTask(detailTask.id)}
+          />
+        )
+      })()}
     </>
   )
 }

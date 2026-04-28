@@ -18,6 +18,7 @@ interface Props {
   onAdd: (content: string, assigneeId: string, deadline: string | null) => Promise<void>
   onToggleDone: (taskId: string, done: boolean) => Promise<void>
   onDelete: (taskId: string) => Promise<void>
+  onOpenDetail: (taskId: string) => void
   getStaffName: (id: string | null) => string
 }
 
@@ -38,7 +39,7 @@ function deadlineBadge(deadline: string | null) {
 }
 
 export default function AssignedTasksCard({
-  tasks, staffList, currentStaffId, staffSelected, tableMissing, onAdd, onToggleDone, onDelete, getStaffName,
+  tasks, staffList, currentStaffId, staffSelected, tableMissing, onAdd, onToggleDone, onDelete, onOpenDetail, getStaffName,
 }: Props) {
   const [adding, setAdding] = useState(false)
   const [content, setContent] = useState('')
@@ -128,7 +129,12 @@ export default function AssignedTasksCard({
                 {tasks.slice(0, 8).map(t => {
                   const bd = deadlineBadge(t.deadline)
                   return (
-                    <div key={t.id} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-surface-tertiary group">
+                    <div
+                      key={t.id}
+                      onDoubleClick={() => onOpenDetail(t.id)}
+                      className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-surface-tertiary group cursor-pointer"
+                      title="더블클릭: 상세"
+                    >
                       <button
                         onClick={() => onToggleDone(t.id, !t.done)}
                         className="shrink-0 text-txt-tertiary hover:text-[#059669]"

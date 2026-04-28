@@ -196,7 +196,11 @@ export default function VendorsPage() {
         if (error) throw error
       }
       setModalOpen(false); fetchVendors()
-    } catch (err) { console.error('저장 실패:', err); alert('저장에 실패했습니다.') }
+    } catch (err) {
+      console.error('저장 실패:', err)
+      const msg = err instanceof Error ? err.message : (err as { message?: string })?.message || ''
+      alert(`저장에 실패했습니다.${msg ? '\n\n' + msg : ''}`)
+    }
     finally { setSaving(false) }
   }
 

@@ -1,14 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 import { Pin, X, ChevronDown, ListTodo, ClipboardList, Brain, StickyNote, Building2 } from 'lucide-react'
 import AIBriefingCard from './AIBriefingCard'
 import MyTodoCard, { type TodoItem } from './MyTodoCard'
 import AssignedTasksCard from './AssignedTasksCard'
 import FirstVisitModal from './FirstVisitModal'
-import SitesTimeline from './SitesTimeline'
 import type { BriefingResponse, Task } from '@/types'
+
+const SitesTimeline = dynamic(() => import('./SitesTimeline'), {
+  loading: () => <div className="h-[300px] bg-surface rounded-[10px] border border-border-primary animate-pulse" />,
+})
 
 // --- 타입 ---
 interface Schedule {
@@ -57,7 +62,7 @@ export default function DashboardPage() {
   const now = new Date()
   const todayLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${dayNames[now.getDay()]})`
 
-  const [staffList, setStaffList] = useState<Staff[]>([])
+  const { staffList } = useAuth()
   const [currentStaffId, setCurrentStaffId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
     return localStorage.getItem(STAFF_STORAGE_KEY)
@@ -80,12 +85,7 @@ export default function DashboardPage() {
     if (currentStaffId) localStorage.setItem(STAFF_STORAGE_KEY, currentStaffId)
   }, [currentStaffId])
 
-  // staff 목록 로드
-  useEffect(() => {
-    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
-      if (data) setStaffList(data as Staff[])
-    })
-  }, [])
+  // staffList는 AuthProvider에서 제공
 
   // 내 일정 로드 (schedules + tasks)
   const loadMyWork = useCallback(async () => {
@@ -94,19 +94,24 @@ export default function DashboardPage() {
       return
     }
 
-    // 1) 내 schedules (담당자=나, 아직 안 지난 일정)
-    const sRes = await supabase.from('schedules').select('*')
-      .neq('schedule_type', 'site')
-      .eq('staff_id', currentStaffId)
-      .gte('end_date', today)
-      .order('start_date')
+    const [sRes, rRes, aRes] = await Promise.all([
+      supabase.from('schedules').select('*')
+        .neq('schedule_type', 'site')
+        .eq('staff_id', currentStaffId)
+        .gte('end_date', today)
+        .order('start_date'),
+      supabase.from('tasks').select('*')
+        .eq('assigned_to', currentStaffId)
+        .eq('done', false)
+        .order('deadline', { ascending: true, nullsFirst: false }),
+      supabase.from('tasks').select('*')
+        .eq('assigned_by', currentStaffId)
+        .eq('done', false)
+        .order('deadline', { ascending: true, nullsFirst: false }),
+    ])
+
     if (!sRes.error) setMySchedules((sRes.data as Schedule[]) || [])
 
-    // 2) 내가 받은 tasks (assigned_to = 나, 미완료)
-    const rRes = await supabase.from('tasks').select('*')
-      .eq('assigned_to', currentStaffId)
-      .eq('done', false)
-      .order('deadline', { ascending: true, nullsFirst: false })
     if (rRes.error) {
       if (rRes.error.code === '42P01' || /does not exist|relation/.test(rRes.error.message)) {
         setTasksTableMissing(true)
@@ -117,11 +122,6 @@ export default function DashboardPage() {
       setMyTasksReceived((rRes.data as Task[]) || [])
     }
 
-    // 3) 내가 시킨 tasks (assigned_by = 나, 미완료)
-    const aRes = await supabase.from('tasks').select('*')
-      .eq('assigned_by', currentStaffId)
-      .eq('done', false)
-      .order('deadline', { ascending: true, nullsFirst: false })
     if (!aRes.error) setMyTasksAssigned((aRes.data as Task[]) || [])
   }, [today, currentStaffId])
 

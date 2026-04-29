@@ -12,9 +12,15 @@ interface StaffInfo {
   phone: string
 }
 
+interface StaffListItem {
+  id: string
+  name: string
+}
+
 interface AuthContextType {
   user: User | null
   staff: StaffInfo | null
+  staffList: StaffListItem[]
   loading: boolean
   signOut: () => Promise<void>
 }
@@ -22,6 +28,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   staff: null,
+  staffList: [],
   loading: true,
   signOut: async () => {},
 })
@@ -34,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [staff, setStaff] = useState<StaffInfo | null>(null)
+  const [staffList, setStaffList] = useState<StaffListItem[]>([])
   const [loading, setLoading] = useState(true)
 
   // Supabase 클라이언트를 한 번만 생성 (매 렌더 재생성 방지)
@@ -72,13 +80,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const init = async () => {
       try {
-        // 타임아웃 5초 — 네트워크 느릴 때 무한 로딩 방지
         const sessionPromise = supabase.auth.getSession()
         const timeoutPromise = new Promise<null>(resolve =>
-          setTimeout(() => resolve(null), 5000),
+          setTimeout(() => resolve(null), 2000),
         )
 
-        const result = await Promise.race([sessionPromise, timeoutPromise])
+        const [result] = await Promise.all([
+          Promise.race([sessionPromise, timeoutPromise]),
+          supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+            if (data && !cancelled) setStaffList(data as StaffListItem[])
+          }),
+        ])
 
         if (cancelled) return
 
@@ -128,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, router])
 
   return (
-    <AuthContext.Provider value={{ user, staff, loading, signOut }}>
+    <AuthContext.Provider value={{ user, staff, staffList, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   )

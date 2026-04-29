@@ -90,7 +90,7 @@ body {
 /* Inter for English/Numbers */
 input, select, textarea, code, pre,
 .font-inter, [data-numeric] {
-  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  font-family: var(--font-inter, 'Inter Variable'), Inter, system-ui, sans-serif;
   font-feature-settings: "cv01", "ss03";
 }
 
@@ -138,7 +138,7 @@ h3, .text-card-title {
 
 /* Money display */
 .text-money {
-  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  font-family: var(--font-inter, 'Inter Variable'), Inter, system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }

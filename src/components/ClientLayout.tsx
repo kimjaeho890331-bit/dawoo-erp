@@ -1,11 +1,13 @@
 'use client'
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import Sidebar from "@/components/Sidebar"
-import AISidebar from "@/components/AISidebar"
 import Toaster from "@/components/common/Toaster"
 import { AuthProvider, useAuth } from "@/components/AuthProvider"
 import { Menu } from 'lucide-react'
+
+const AISidebar = dynamic(() => import("@/components/AISidebar"), { ssr: false })
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth()
@@ -14,16 +16,13 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
   if (pathname === '/login') return <>{children}</>
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-page">
-        <div className="text-txt-secondary">로딩 중...</div>
-      </div>
-    )
-  }
-
   return (
     <>
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-page">
+          <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="md:ml-[240px] min-h-screen bg-page">
         {/* Mobile top bar */}

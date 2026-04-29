@@ -226,7 +226,7 @@ export default function WorkCalendarPage() {
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="px-1 py-6 max-w-[1700px] mx-auto">
       {/* 타이틀 + 탭 */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-4">
@@ -266,20 +266,20 @@ export default function WorkCalendarPage() {
           {/* 직원 필터 */}
           <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-3 mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-txt-secondary w-10 shrink-0">직원</span>
+              <span className="text-sm font-semibold text-txt-secondary w-10 shrink-0">직원</span>
               {staffList.map(s => {
                 const c = staffColorMap[s.id] || '#94a3b8'
                 const on = activeStaff.size === 0 || activeStaff.has(s.id)
                 return (
                   <button key={s.id} onClick={() => toggleStaff(s.id)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition ${on ? 'border-transparent shadow-sm' : 'border-border-primary opacity-40'}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition ${on ? 'border-transparent shadow-sm' : 'border-border-primary opacity-40'}`}
                     style={on ? { backgroundColor: c + '18', color: c } : {}}>
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />{s.name}
                   </button>
                 )
               })}
               <span className="mx-2 w-px h-4 bg-border-primary" />
-              <span className="text-[10px] text-txt-tertiary">담당자별 색상으로 표시</span>
+              <span className="text-[12px] text-txt-tertiary">담당자별 색상으로 표시</span>
             </div>
           </div>
 
@@ -288,17 +288,17 @@ export default function WorkCalendarPage() {
             <div className="flex items-center justify-between px-5 py-3 border-b border-border-tertiary">
               <div className="flex items-center gap-2">
                 <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&lsaquo;</button>
-                <h2 className="text-lg font-semibold text-txt-primary min-w-[150px] text-center">{monthLabel}</h2>
+                <h2 className="text-xl font-semibold text-txt-primary min-w-[160px] text-center">{monthLabel}</h2>
                 <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&rsaquo;</button>
               </div>
-              <button onClick={goToday} className="px-3 py-1.5 text-xs border border-border-primary rounded-lg hover:bg-surface-tertiary text-txt-secondary font-medium">오늘</button>
+              <button onClick={goToday} className="px-3 py-1.5 text-sm border border-border-primary rounded-lg hover:bg-surface-tertiary text-txt-secondary font-medium">오늘</button>
             </div>
 
             {loading ? <div className="text-center py-20 text-txt-tertiary">불러오는 중...</div> : (
               <div>
-                <div className="grid grid-cols-7 text-center text-xs font-semibold border-b border-border-tertiary">
+                <div className="grid grid-cols-7 text-center text-[15px] font-semibold border-b border-border-tertiary">
                   {dayNames.map((d, i) => (
-                    <div key={d} className={`py-2 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-txt-tertiary'}`}>{d}</div>
+                    <div key={d} className={`py-2.5 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-txt-tertiary'}`}>{d}</div>
                   ))}
                 </div>
 
@@ -312,7 +312,7 @@ export default function WorkCalendarPage() {
                     }
                     if (!placed) rows.push([bar])
                   }
-                  const bh = 36, bg = 2, ah = rows.length * (bh + bg)
+                  const bh = 48, bg = 2, ah = rows.length * (bh + bg)
 
                   return (
                     <div key={wi} className="border-b border-surface-secondary last:border-b-0">
@@ -325,7 +325,7 @@ export default function WorkCalendarPage() {
                               title={day ? '더블클릭 → 일정 추가' : ''}
                               onDragOver={day ? handleDragOver : undefined}
                               onDrop={day ? (e) => handleDrop(e, d) : undefined}>
-                              {day && <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-medium
+                              {day && <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[14px] font-medium
                                 ${d === today ? 'bg-accent text-white' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{day}</span>}
                             </div>
                           )
@@ -348,7 +348,7 @@ export default function WorkCalendarPage() {
                               draggable
                               onDragStart={(e) => handleDragStart(e, s)}
                               onClick={(e) => { e.stopPropagation(); setEditSchedule(s); setShowModal(true) }}
-                              className="absolute flex flex-col justify-center rounded-md cursor-grab active:cursor-grabbing hover:brightness-95 overflow-hidden shadow-sm px-1.5 py-0.5"
+                              className="absolute flex flex-col justify-center rounded-md cursor-grab active:cursor-grabbing hover:brightness-95 overflow-hidden shadow-sm px-2 py-1"
                               style={{
                                 left: `${bar.left}%`, width: `${bar.width}%`, top: ri * (bh + bg) + 1, height: bh,
                                 backgroundColor: s.confirmed ? barColor : 'white',
@@ -358,18 +358,18 @@ export default function WorkCalendarPage() {
                               title={`${bar.staffName || ''} ${s.title}\n${s.memo || ''}`}>
                               <div className="flex items-center gap-1 truncate">
                                 {bar.staffName && (
-                                  <span className="shrink-0 w-[14px] h-[14px] rounded-full flex items-center justify-center text-[8px] font-bold"
+                                  <span className="shrink-0 w-[20px] h-[20px] rounded-full flex items-center justify-center text-[11px] font-bold"
                                     style={{ backgroundColor: s.confirmed ? 'rgba(255,255,255,0.3)' : barColor, color: s.confirmed ? 'white' : 'white' }}>
                                     {bar.staffName.length >= 2 ? bar.staffName.charAt(1) : bar.staffName.charAt(0)}
                                   </span>
                                 )}
                                 {s.start_date === s.end_date && s.start_time && (
-                                  <span className="shrink-0 text-[9px] font-bold tabular-nums">{s.start_time}</span>
+                                  <span className="shrink-0 text-[12px] font-bold tabular-nums">{s.start_time}</span>
                                 )}
-                                <span className="text-[10px] font-medium truncate">{s.title}</span>
+                                <span className="text-[14px] font-semibold truncate">{s.title}</span>
                               </div>
                               {s.memo && (
-                                <div className="text-[9px] truncate opacity-80 mt-px">{s.memo.split('\n')[0]}</div>
+                                <div className="text-[12px] truncate opacity-80 mt-px">{s.memo.split('\n')[0]}</div>
                               )}
                             </div>
                           )

@@ -95,14 +95,18 @@ export default function WorkCalendarPage() {
   const firstDow = new Date(month.year, month.month, 1).getDay()
   const monthLabel = `${month.year}년 ${month.month + 1}월`
 
-  // 데이터 로드
+  // 데이터 로드 — 가시 범위 ±7일 (이전/다음 달 노출 일자 포함)
   const loadData = useCallback(async () => {
     setLoading(true)
+    const padStart = new Date(month.year, month.month, 1); padStart.setDate(padStart.getDate() - 7)
+    const padEnd = new Date(month.year, month.month, daysInMonth); padEnd.setDate(padEnd.getDate() + 7)
+    const padStartStr = padStart.toISOString().slice(0, 10)
+    const padEndStr = padEnd.toISOString().slice(0, 10)
     const [sr, stf] = await Promise.all([
       supabase.from('schedules').select('*')
         .neq('schedule_type', 'site')
-        .gte('end_date', ds(month.year, month.month, 1))
-        .lte('start_date', ds(month.year, month.month, daysInMonth))
+        .gte('end_date', padStartStr)
+        .lte('start_date', padEndStr)
         .order('start_date'),
       supabase.from('staff').select('*').order('name'),
     ])
@@ -140,18 +144,37 @@ export default function WorkCalendarPage() {
     })
   , [schedules, activeStaff])
 
-  // 주 단위 그룹
+  // 주 단위 그룹 — 이전/다음 달 노출 일자 포함
+  type Cell = { day: number; year: number; month: number; isCurMonth: boolean }
   const weeks = useMemo(() => {
-    const r: (number | null)[][] = []; let w: (number | null)[] = []
-    for (let i = 0; i < firstDow; i++) w.push(null)
-    for (let d = 1; d <= daysInMonth; d++) { w.push(d); if (w.length === 7) { r.push(w); w = [] } }
-    if (w.length) { while (w.length < 7) w.push(null); r.push(w) }
+    const r: Cell[][] = []; let w: Cell[] = []
+    // 이전 달 꼬리
+    const prevDays = new Date(month.year, month.month, 0).getDate()
+    const pY = month.month === 0 ? month.year - 1 : month.year
+    const pM = month.month === 0 ? 11 : month.month - 1
+    for (let i = 0; i < firstDow; i++) {
+      const d = prevDays - firstDow + 1 + i
+      w.push({ day: d, year: pY, month: pM, isCurMonth: false })
+    }
+    // 이번 달
+    for (let d = 1; d <= daysInMonth; d++) {
+      w.push({ day: d, year: month.year, month: month.month, isCurMonth: true })
+      if (w.length === 7) { r.push(w); w = [] }
+    }
+    // 다음 달 머리
+    if (w.length) {
+      const nY = month.month === 11 ? month.year + 1 : month.year
+      const nM = month.month === 11 ? 0 : month.month + 1
+      let d = 1
+      while (w.length < 7) { w.push({ day: d++, year: nY, month: nM, isCurMonth: false }) }
+      r.push(w)
+    }
     return r
-  }, [daysInMonth, firstDow])
+  }, [daysInMonth, firstDow, month])
 
-  const getWeekBars = useCallback((week: (number | null)[]) => {
-    const wd = week.map(d => d ? ds(month.year, month.month, d) : null)
-    const ws = wd.find(d => d) || '', we = [...wd].reverse().find(d => d) || ''
+  const getWeekBars = useCallback((week: Cell[]) => {
+    const wd = week.map(c => ds(c.year, c.month, c.day))
+    const ws = wd[0], we = wd[wd.length - 1]
     return filtered.filter(s => s.start_date <= we && s.end_date >= ws).sort((a, b) => {
       if (!a.start_time && !b.start_time) return 0
       if (!a.start_time) return -1
@@ -317,27 +340,28 @@ export default function WorkCalendarPage() {
                   return (
                     <div key={wi} className="border-b border-surface-secondary last:border-b-0">
                       <div className="grid grid-cols-7">
-                        {week.map((day, di) => {
-                          const d = day ? ds(month.year, month.month, day) : ''
+                        {week.map((cell, di) => {
+                          const d = ds(cell.year, cell.month, cell.day)
+                          const cur = cell.isCurMonth
                           return (
-                            <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
-                              onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
-                              title={day ? '더블클릭 → 일정 추가' : ''}
-                              onDragOver={day ? handleDragOver : undefined}
-                              onDrop={day ? (e) => handleDrop(e, d) : undefined}>
-                              {day && <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[14px] font-medium
-                                ${d === today ? 'bg-accent text-white' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{day}</span>}
+                            <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 cursor-pointer ${!cur ? 'bg-surface-secondary/30' : ''}`}
+                              onDoubleClick={() => { setSelectedDate(d); setEditSchedule(null); setShowModal(true) }}
+                              title="더블클릭 → 일정 추가"
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, d)}>
+                              <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[14px] font-medium
+                                ${d === today ? 'bg-accent text-white' : !cur ? 'text-txt-quaternary' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{cell.day}</span>
                             </div>
                           )
                         })}
                       </div>
                       <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 116) }}>
-                        {week.map((day, di) => {
-                          const d = day ? ds(month.year, month.month, day) : ''
-                          return <div key={di} className={`border-r border-surface-secondary last:border-r-0 ${day ? 'cursor-pointer' : ''}`}
-                            onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
-                            onDragOver={day ? handleDragOver : undefined}
-                            onDrop={day ? (e) => handleDrop(e, d) : undefined} />
+                        {week.map((cell, di) => {
+                          const d = ds(cell.year, cell.month, cell.day)
+                          return <div key={di} className={`border-r border-surface-secondary last:border-r-0 cursor-pointer ${!cell.isCurMonth ? 'bg-surface-secondary/30' : ''}`}
+                            onDoubleClick={() => { setSelectedDate(d); setEditSchedule(null); setShowModal(true) }}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, d)} />
                         })}
                         {rows.map((row: any[], ri) => row.map((bar: any) => {
                           const s = bar.schedule as Schedule
@@ -661,24 +685,42 @@ function MobileCalendarView({
     setSelectedDate(n.toISOString().slice(0, 10))
   }
 
-  // Build calendar grid weeks
+  // Build calendar grid weeks — 이전/다음 달 노출 일자 포함
+  type MCell = { day: number; year: number; month: number; isCurMonth: boolean }
   const weeks = useMemo(() => {
-    const r: (number | null)[][] = []; let w: (number | null)[] = []
-    for (let i = 0; i < firstDow; i++) w.push(null)
-    for (let d = 1; d <= daysInMonth; d++) { w.push(d); if (w.length === 7) { r.push(w); w = [] } }
-    if (w.length) { while (w.length < 7) w.push(null); r.push(w) }
+    const r: MCell[][] = []; let w: MCell[] = []
+    const prevDays = new Date(month.year, month.month, 0).getDate()
+    const pY = month.month === 0 ? month.year - 1 : month.year
+    const pM = month.month === 0 ? 11 : month.month - 1
+    for (let i = 0; i < firstDow; i++) {
+      const d = prevDays - firstDow + 1 + i
+      w.push({ day: d, year: pY, month: pM, isCurMonth: false })
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      w.push({ day: d, year: month.year, month: month.month, isCurMonth: true })
+      if (w.length === 7) { r.push(w); w = [] }
+    }
+    if (w.length) {
+      const nY = month.month === 11 ? month.year + 1 : month.year
+      const nM = month.month === 11 ? 0 : month.month + 1
+      let d = 1
+      while (w.length < 7) { w.push({ day: d++, year: nY, month: nM, isCurMonth: false }) }
+      r.push(w)
+    }
     return r
-  }, [daysInMonth, firstDow])
+  }, [daysInMonth, firstDow, month])
 
-  // Map of dateString -> schedules for that date
+  // Map of dateString -> schedules for that date (가시 범위 모든 일자)
   const dateScheduleMap = useMemo(() => {
     const map: Record<string, Schedule[]> = {}
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = ds(month.year, month.month, d)
-      map[dateStr] = schedules.filter(s => s.start_date <= dateStr && s.end_date >= dateStr)
+    for (const week of weeks) {
+      for (const cell of week) {
+        const dateStr = ds(cell.year, cell.month, cell.day)
+        map[dateStr] = schedules.filter(s => s.start_date <= dateStr && s.end_date >= dateStr)
+      }
     }
     return map
-  }, [schedules, month, daysInMonth])
+  }, [schedules, weeks])
 
   // Schedules for the selected date
   const selectedSchedules = useMemo(() => {
@@ -753,42 +795,36 @@ function MobileCalendarView({
             <div className="px-1 pb-2">
               {weeks.map((week, wi) => (
                 <div key={wi} className="grid grid-cols-7">
-                  {week.map((day, di) => {
-                    const dateStr = day ? ds(month.year, month.month, day) : ''
+                  {week.map((cell, di) => {
+                    const dateStr = ds(cell.year, cell.month, cell.day)
+                    const cur = cell.isCurMonth
                     const isToday = dateStr === today
                     const isSelected = dateStr === selectedDate
-                    const daySchedules = day ? (dateScheduleMap[dateStr] || []) : []
+                    const daySchedules = dateScheduleMap[dateStr] || []
                     const dotCount = Math.min(daySchedules.length, 3)
 
                     return (
                       <button
                         key={di}
-                        disabled={!day}
-                        onClick={() => { if (day) setSelectedDate(dateStr) }}
-                        className={`flex flex-col items-center justify-center py-1.5 ${day ? 'cursor-pointer' : ''}`}
+                        onClick={() => setSelectedDate(dateStr)}
+                        className="flex flex-col items-center justify-center py-1.5 cursor-pointer"
                       >
-                        {day ? (
-                          <>
-                            <span className={`flex items-center justify-center w-9 h-9 rounded-full text-[13px] font-medium transition-colors
-                              ${isToday ? 'bg-accent text-white' : isSelected ? 'bg-accent/10 text-accent' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-primary'}`}>
-                              {day}
-                            </span>
-                            <div className="flex items-center gap-[3px] h-[6px] mt-0.5">
-                              {dotCount > 0 && Array.from({ length: dotCount }).map((_, i) => {
-                                const sc = daySchedules[i]
-                                return (
-                                  <span
-                                    key={i}
-                                    className="w-[5px] h-[5px] rounded-full"
-                                    style={{ backgroundColor: sc ? getColor(sc) : '#CBD5E1' }}
-                                  />
-                                )
-                              })}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="w-9 h-9" />
-                        )}
+                        <span className={`flex items-center justify-center w-9 h-9 rounded-full text-[13px] font-medium transition-colors
+                          ${isToday ? 'bg-accent text-white' : isSelected ? 'bg-accent/10 text-accent' : !cur ? 'text-txt-quaternary' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-primary'}`}>
+                          {cell.day}
+                        </span>
+                        <div className="flex items-center gap-[3px] h-[6px] mt-0.5">
+                          {dotCount > 0 && Array.from({ length: dotCount }).map((_, i) => {
+                            const sc = daySchedules[i]
+                            return (
+                              <span
+                                key={i}
+                                className="w-[5px] h-[5px] rounded-full"
+                                style={{ backgroundColor: sc ? getColor(sc) : '#CBD5E1', opacity: cur ? 1 : 0.4 }}
+                              />
+                            )
+                          })}
+                        </div>
                       </button>
                     )
                   })}

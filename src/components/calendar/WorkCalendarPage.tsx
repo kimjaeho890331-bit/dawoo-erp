@@ -95,21 +95,32 @@ export default function WorkCalendarPage() {
   const firstDow = new Date(month.year, month.month, 1).getDay()
   const monthLabel = `${month.year}년 ${month.month + 1}월`
 
+  const prevMonthYear = month.month === 0 ? month.year - 1 : month.year
+  const prevMonthIdx = month.month === 0 ? 11 : month.month - 1
+  const prevMonthDays = new Date(prevMonthYear, prevMonthIdx + 1, 0).getDate()
+  const nextMonthYear = month.month === 11 ? month.year + 1 : month.year
+  const nextMonthIdx = month.month === 11 ? 0 : month.month + 1
+
+  const visibleStart = firstDow > 0 ? ds(prevMonthYear, prevMonthIdx, prevMonthDays - firstDow + 1) : ds(month.year, month.month, 1)
+  const lastDow = new Date(month.year, month.month, daysInMonth).getDay()
+  const trailingDays = lastDow === 6 ? 0 : 6 - lastDow
+  const visibleEnd = trailingDays > 0 ? ds(nextMonthYear, nextMonthIdx, trailingDays) : ds(month.year, month.month, daysInMonth)
+
   // 데이터 로드
   const loadData = useCallback(async () => {
     setLoading(true)
     const [sr, stf] = await Promise.all([
       supabase.from('schedules').select('*')
         .neq('schedule_type', 'site')
-        .gte('end_date', ds(month.year, month.month, 1))
-        .lte('start_date', ds(month.year, month.month, daysInMonth))
+        .gte('end_date', visibleStart)
+        .lte('start_date', visibleEnd)
         .order('start_date'),
       supabase.from('staff').select('*').order('name'),
     ])
     if (!sr.error) setSchedules((sr.data as Schedule[]) || [])
     if (!stf.error) setStaffList((stf.data as Staff[]) || [])
     setLoading(false)
-  }, [month, daysInMonth])
+  }, [visibleStart, visibleEnd])
   useEffect(() => { loadData() }, [loadData])
 
   // Realtime: schedules 변경 시 자동 갱신
@@ -140,18 +151,32 @@ export default function WorkCalendarPage() {
     })
   , [schedules, activeStaff])
 
-  // 주 단위 그룹
+  // 주 단위 그룹 (이전달/다음달 날짜 포함)
   const weeks = useMemo(() => {
-    const r: (number | null)[][] = []; let w: (number | null)[] = []
-    for (let i = 0; i < firstDow; i++) w.push(null)
-    for (let d = 1; d <= daysInMonth; d++) { w.push(d); if (w.length === 7) { r.push(w); w = [] } }
-    if (w.length) { while (w.length < 7) w.push(null); r.push(w) }
+    const r: { day: number; dateStr: string; isCurrent: boolean }[][] = []
+    let w: { day: number; dateStr: string; isCurrent: boolean }[] = []
+    for (let i = firstDow - 1; i >= 0; i--) {
+      const d = prevMonthDays - i
+      w.push({ day: d, dateStr: ds(prevMonthYear, prevMonthIdx, d), isCurrent: false })
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      w.push({ day: d, dateStr: ds(month.year, month.month, d), isCurrent: true })
+      if (w.length === 7) { r.push(w); w = [] }
+    }
+    if (w.length) {
+      let nd = 1
+      while (w.length < 7) {
+        w.push({ day: nd, dateStr: ds(nextMonthYear, nextMonthIdx, nd), isCurrent: false })
+        nd++
+      }
+      r.push(w)
+    }
     return r
-  }, [daysInMonth, firstDow])
+  }, [daysInMonth, firstDow, month, prevMonthDays, prevMonthYear, prevMonthIdx, nextMonthYear, nextMonthIdx])
 
-  const getWeekBars = useCallback((week: (number | null)[]) => {
-    const wd = week.map(d => d ? ds(month.year, month.month, d) : null)
-    const ws = wd.find(d => d) || '', we = [...wd].reverse().find(d => d) || ''
+  const getWeekBars = useCallback((week: { day: number; dateStr: string; isCurrent: boolean }[]) => {
+    const wd = week.map(c => c.dateStr)
+    const ws = wd[0], we = wd[6]
     return filtered.filter(s => s.start_date <= we && s.end_date >= ws).sort((a, b) => {
       if (!a.start_time && !b.start_time) return 0
       if (!a.start_time) return -1
@@ -226,7 +251,7 @@ export default function WorkCalendarPage() {
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="px-3 py-4 max-w-full mx-auto">
       {/* 타이틀 + 탭 */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-4">
@@ -296,7 +321,7 @@ export default function WorkCalendarPage() {
 
             {loading ? <div className="text-center py-20 text-txt-tertiary">불러오는 중...</div> : (
               <div>
-                <div className="grid grid-cols-7 text-center text-xs font-semibold border-b border-border-tertiary">
+                <div className="grid grid-cols-7 text-center text-sm font-semibold border-b border-border-tertiary">
                   {dayNames.map((d, i) => (
                     <div key={d} className={`py-2 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-txt-tertiary'}`}>{d}</div>
                   ))}
@@ -317,27 +342,27 @@ export default function WorkCalendarPage() {
                   return (
                     <div key={wi} className="border-b border-surface-secondary last:border-b-0">
                       <div className="grid grid-cols-7">
-                        {week.map((day, di) => {
-                          const d = day ? ds(month.year, month.month, day) : ''
+                        {week.map((cell, di) => {
+                          const d = cell.dateStr
                           return (
-                            <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
-                              onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
-                              title={day ? '더블클릭 → 일정 추가' : ''}
-                              onDragOver={day ? handleDragOver : undefined}
-                              onDrop={day ? (e) => handleDrop(e, d) : undefined}>
-                              {day && <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-medium
-                                ${d === today ? 'bg-accent text-white' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{day}</span>}
+                            <div key={di} className={`px-1 py-1.5 border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 cursor-pointer ${!cell.isCurrent ? 'bg-surface-secondary/20' : ''}`}
+                              onDoubleClick={() => { setSelectedDate(d); setEditSchedule(null); setShowModal(true) }}
+                              title="더블클릭 → 일정 추가"
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, d)}>
+                              <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-medium
+                                ${d === today ? 'bg-accent text-white' : !cell.isCurrent ? 'text-txt-quaternary' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{cell.day}</span>
                             </div>
                           )
                         })}
                       </div>
                       <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 116) }}>
-                        {week.map((day, di) => {
-                          const d = day ? ds(month.year, month.month, day) : ''
-                          return <div key={di} className={`border-r border-surface-secondary last:border-r-0 ${day ? 'cursor-pointer' : ''}`}
-                            onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
-                            onDragOver={day ? handleDragOver : undefined}
-                            onDrop={day ? (e) => handleDrop(e, d) : undefined} />
+                        {week.map((cell, di) => {
+                          const d = cell.dateStr
+                          return <div key={di} className="border-r border-surface-secondary last:border-r-0 cursor-pointer"
+                            onDoubleClick={() => { setSelectedDate(d); setEditSchedule(null); setShowModal(true) }}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, d)} />
                         })}
                         {rows.map((row: any[], ri) => row.map((bar: any) => {
                           const s = bar.schedule as Schedule
@@ -358,18 +383,18 @@ export default function WorkCalendarPage() {
                               title={`${bar.staffName || ''} ${s.title}\n${s.memo || ''}`}>
                               <div className="flex items-center gap-1 truncate">
                                 {bar.staffName && (
-                                  <span className="shrink-0 w-[14px] h-[14px] rounded-full flex items-center justify-center text-[8px] font-bold"
+                                  <span className="shrink-0 w-[16px] h-[16px] rounded-full flex items-center justify-center text-[9px] font-bold"
                                     style={{ backgroundColor: s.confirmed ? 'rgba(255,255,255,0.3)' : barColor, color: s.confirmed ? 'white' : 'white' }}>
                                     {bar.staffName.length >= 2 ? bar.staffName.charAt(1) : bar.staffName.charAt(0)}
                                   </span>
                                 )}
                                 {s.start_date === s.end_date && s.start_time && (
-                                  <span className="shrink-0 text-[9px] font-bold tabular-nums">{s.start_time}</span>
+                                  <span className="shrink-0 text-[11px] font-bold tabular-nums">{s.start_time}</span>
                                 )}
-                                <span className="text-[10px] font-medium truncate">{s.title}</span>
+                                <span className="text-[12px] font-medium truncate">{s.title}</span>
                               </div>
                               {s.memo && (
-                                <div className="text-[9px] truncate opacity-80 mt-px">{s.memo.split('\n')[0]}</div>
+                                <div className="text-[11px] truncate opacity-80 mt-px">{s.memo.split('\n')[0]}</div>
                               )}
                             </div>
                           )

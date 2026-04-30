@@ -226,7 +226,7 @@ export default function WorkCalendarPage() {
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="px-4 py-6 w-full">
       {/* 타이틀 + 탭 */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-4">
@@ -296,9 +296,9 @@ export default function WorkCalendarPage() {
 
             {loading ? <div className="text-center py-20 text-txt-tertiary">불러오는 중...</div> : (
               <div>
-                <div className="grid grid-cols-7 text-center text-xs font-semibold border-b border-border-tertiary">
+                <div className="grid grid-cols-7 text-center text-[13px] font-semibold border-b border-border-tertiary">
                   {dayNames.map((d, i) => (
-                    <div key={d} className={`py-2 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-txt-tertiary'}`}>{d}</div>
+                    <div key={d} className={`py-2.5 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-txt-tertiary'}`}>{d}</div>
                   ))}
                 </div>
 
@@ -312,7 +312,7 @@ export default function WorkCalendarPage() {
                     }
                     if (!placed) rows.push([bar])
                   }
-                  const bh = 36, bg = 2, ah = rows.length * (bh + bg)
+                  const bh = 42, bg = 3, ah = rows.length * (bh + bg)
 
                   return (
                     <div key={wi} className="border-b border-surface-secondary last:border-b-0">
@@ -320,18 +320,18 @@ export default function WorkCalendarPage() {
                         {week.map((day, di) => {
                           const d = day ? ds(month.year, month.month, day) : ''
                           return (
-                            <div key={di} className={`px-2 py-2 text-xs border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
+                            <div key={di} className={`px-2 py-2 text-sm border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
                               onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
                               title={day ? '더블클릭 → 일정 추가' : ''}
                               onDragOver={day ? handleDragOver : undefined}
                               onDrop={day ? (e) => handleDrop(e, d) : undefined}>
-                              {day && <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-medium
+                              {day && <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-medium
                                 ${d === today ? 'bg-accent text-white' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{day}</span>}
                             </div>
                           )
                         })}
                       </div>
-                      <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 116) }}>
+                      <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 128) }}>
                         {week.map((day, di) => {
                           const d = day ? ds(month.year, month.month, day) : ''
                           return <div key={di} className={`border-r border-surface-secondary last:border-r-0 ${day ? 'cursor-pointer' : ''}`}
@@ -348,7 +348,7 @@ export default function WorkCalendarPage() {
                               draggable
                               onDragStart={(e) => handleDragStart(e, s)}
                               onClick={(e) => { e.stopPropagation(); setEditSchedule(s); setShowModal(true) }}
-                              className="absolute flex flex-col justify-center rounded-md cursor-grab active:cursor-grabbing hover:brightness-95 overflow-hidden shadow-sm px-1.5 py-0.5"
+                              className="absolute flex flex-col justify-center rounded-md cursor-grab active:cursor-grabbing hover:brightness-95 overflow-hidden shadow-sm px-2 py-1"
                               style={{
                                 left: `${bar.left}%`, width: `${bar.width}%`, top: ri * (bh + bg) + 1, height: bh,
                                 backgroundColor: s.confirmed ? barColor : 'white',
@@ -358,18 +358,18 @@ export default function WorkCalendarPage() {
                               title={`${bar.staffName || ''} ${s.title}\n${s.memo || ''}`}>
                               <div className="flex items-center gap-1 truncate">
                                 {bar.staffName && (
-                                  <span className="shrink-0 w-[14px] h-[14px] rounded-full flex items-center justify-center text-[8px] font-bold"
+                                  <span className="shrink-0 w-[16px] h-[16px] rounded-full flex items-center justify-center text-[10px] font-bold"
                                     style={{ backgroundColor: s.confirmed ? 'rgba(255,255,255,0.3)' : barColor, color: s.confirmed ? 'white' : 'white' }}>
                                     {bar.staffName.length >= 2 ? bar.staffName.charAt(1) : bar.staffName.charAt(0)}
                                   </span>
                                 )}
                                 {s.start_date === s.end_date && s.start_time && (
-                                  <span className="shrink-0 text-[9px] font-bold tabular-nums">{s.start_time}</span>
+                                  <span className="shrink-0 text-[11px] font-bold tabular-nums">{s.start_time}</span>
                                 )}
-                                <span className="text-[10px] font-medium truncate">{s.title}</span>
+                                <span className="text-[12px] font-medium truncate">{s.title}</span>
                               </div>
                               {s.memo && (
-                                <div className="text-[9px] truncate opacity-80 mt-px">{s.memo.split('\n')[0]}</div>
+                                <div className="text-[11px] truncate opacity-80 mt-px">{s.memo.split('\n')[0]}</div>
                               )}
                             </div>
                           )

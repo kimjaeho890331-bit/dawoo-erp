@@ -1,6 +1,6 @@
 'use client'
 
-import { Sparkles, AlertTriangle, Clock, Lightbulb } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import BriefingItem from './BriefingItem'
 import type { BriefingItem as BriefingItemType, BriefingCategory } from '@/types'
 
@@ -10,13 +10,15 @@ interface Props {
   loading: boolean
 }
 
-const CATEGORIES: { key: BriefingCategory; label: string; icon: React.ReactNode; color: string }[] = [
-  { key: 'now', label: '지금 당장', icon: <AlertTriangle size={14} />, color: 'text-[#dc2626]' },
-  { key: 'today', label: '오늘 안에', icon: <Clock size={14} />, color: 'text-[#d97706]' },
-  { key: 'week', label: '이번 주', icon: <Lightbulb size={14} />, color: 'text-[#059669]' },
-]
+// 칸막이를 없애고 상황 우선순위순으로 한 칸에 흐르게 정렬
+const CATEGORY_WEIGHT: Record<BriefingCategory, number> = { now: 0, today: 1, week: 2 }
 
 export default function AIBriefingCard({ items, summary, loading }: Props) {
+  const sorted = [...items].sort((a, b) => {
+    const w = (CATEGORY_WEIGHT[a.category] ?? 9) - (CATEGORY_WEIGHT[b.category] ?? 9)
+    return w !== 0 ? w : a.priority - b.priority
+  })
+
   return (
     <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden h-full flex flex-col">
       {/* 헤더 */}
@@ -30,33 +32,19 @@ export default function AIBriefingCard({ items, summary, loading }: Props) {
         </p>
       </div>
 
-      {/* 카테고리별 리스트 */}
-      <div className="divide-y divide-border-tertiary flex-1 overflow-y-auto">
-        {CATEGORIES.map(cat => {
-          const catItems = items.filter(i => i.category === cat.key)
-          return (
-            <div key={cat.key} className="px-4 py-3">
-              <div className="flex items-center gap-1.5 px-1 mb-1.5">
-                <span className={cat.color}>{cat.icon}</span>
-                <span className="text-[12px] font-semibold text-txt-secondary">{cat.label}</span>
-                <span className="text-[11px] text-txt-tertiary">({catItems.length})</span>
-              </div>
-              {catItems.length === 0 ? (
-                <div className="text-center py-4 text-txt-quaternary text-[12px]">
-                  {cat.key === 'now' && '긴급 항목 없음'}
-                  {cat.key === 'today' && '오늘 안에 처리할 항목 없음'}
-                  {cat.key === 'week' && '이번 주 예정 없음'}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {catItems.slice(0, 5).map(item => (
-                    <BriefingItem key={item.id} item={item} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+      {/* 상황별 제안 — 한 칸 자유 흐름 */}
+      <div className="flex-1 overflow-y-auto px-3 py-3">
+        {loading ? (
+          <div className="text-center py-10 text-txt-quaternary text-[13px]">상황 분석 중...</div>
+        ) : sorted.length === 0 ? (
+          <div className="text-center py-10 text-txt-quaternary text-[13px]">지금 챙길 일이 없습니다</div>
+        ) : (
+          <div className="space-y-1">
+            {sorted.map(item => (
+              <BriefingItem key={item.id} item={item} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

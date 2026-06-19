@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Pin, X, ChevronDown, ListTodo, ClipboardList, Brain, StickyNote, Building2 } from 'lucide-react'
+import { ChevronDown, ListTodo, ClipboardList, Brain, Building2 } from 'lucide-react'
 import AIBriefingCard from './AIBriefingCard'
 import MyTodoCard, { type TodoItem } from './MyTodoCard'
 import AssignedTasksCard from './AssignedTasksCard'
 import FirstVisitModal from './FirstVisitModal'
 import SitesTimeline from './SitesTimeline'
 import TaskDetailModal from './TaskDetailModal'
+import WeeklyIntakeCard from './WeeklyIntakeCard'
 import type { BriefingResponse, Task } from '@/types'
 
 // --- 타입 ---
@@ -28,29 +29,7 @@ interface Staff {
   name: string
 }
 
-interface Memo {
-  id: string
-  content: string
-  pinned: boolean
-}
-
-const MEMO_STORAGE_KEY = 'dawoo_dashboard_memos'
 const STAFF_STORAGE_KEY = 'dawoo_current_staff_id'
-
-function loadMemosFromStorage(): Memo[] | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(MEMO_STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as Memo[]
-  } catch { /* */ }
-  return null
-}
-
-function saveMemosToStorage(memos: Memo[]) {
-  try {
-    localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memos))
-  } catch { /* */ }
-}
 
 export default function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10)
@@ -70,11 +49,6 @@ export default function DashboardPage() {
   const [myTasksAssigned, setMyTasksAssigned] = useState<Task[]>([])  // 내가 시킨 일
   const [tasksTableMissing, setTasksTableMissing] = useState(false)
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
-
-  // 메모장
-  const [memos, setMemos] = useState<Memo[]>(() => loadMemosFromStorage() ?? [])
-  const [newMemo, setNewMemo] = useState('')
-  useEffect(() => { saveMemosToStorage(memos) }, [memos])
 
   // 담당자 변경 시 localStorage 저장
   useEffect(() => {
@@ -176,16 +150,6 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mySchedules, myTasksReceived, staffList])
 
-  // 메모장
-  const addMemo = () => {
-    if (!newMemo.trim()) return
-    setMemos(p => [{ id: Date.now().toString(), content: newMemo.trim(), pinned: false }, ...p])
-    setNewMemo('')
-  }
-  const togglePin = (id: string) => setMemos(p => p.map(m => m.id === id ? { ...m, pinned: !m.pinned } : m))
-  const deleteMemo = (id: string) => setMemos(p => p.filter(m => m.id !== id))
-  const sortedMemos = [...memos].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
-
   // 시킨 일 CRUD
   const addAssignedTask = async (content: string, assigneeId: string, deadline: string | null) => {
     if (!currentStaffId) return
@@ -242,32 +206,6 @@ export default function DashboardPage() {
   const [mobileOpen, setMobileOpen] = useState<Record<string, boolean>>({ todo: true })
   const toggleMobile = (key: string) => setMobileOpen(p => ({ ...p, [key]: !p[key] }))
 
-  // --- 메모장 공통 JSX ---
-  const memoContent = (
-    <>
-      <div className="flex gap-1.5 mb-2 px-1">
-        <input value={newMemo} onChange={e => setNewMemo(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMemo()}
-          placeholder="메모 입력..." className="flex-1 text-[13px] border border-border-primary rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-accent focus:outline-none bg-surface text-txt-primary placeholder:text-txt-tertiary" />
-        <button onClick={addMemo} className="px-2.5 py-1.5 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shrink-0">추가</button>
-      </div>
-      {sortedMemos.length === 0 ? (
-        <div className="text-center py-6 text-txt-quaternary text-[13px]">메모 없음</div>
-      ) : (
-        sortedMemos.map(m => (
-          <div key={m.id} className={`flex items-start gap-1.5 px-2.5 py-2 rounded-lg group ${m.pinned ? 'bg-[#ffedd5]/30' : 'hover:bg-surface-tertiary'}`}>
-            <button onClick={() => togglePin(m.id)} className={`mt-0.5 shrink-0 ${m.pinned ? '' : 'opacity-0 group-hover:opacity-100'}`}>
-              <Pin size={16} className={m.pinned ? 'text-[#d97706]' : 'text-txt-quaternary'} />
-            </button>
-            <span className="text-[13px] text-txt-secondary flex-1 leading-snug">{m.content}</span>
-            <button onClick={() => deleteMemo(m.id)} className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 text-txt-quaternary hover:text-[#dc2626]">
-              <X size={14} />
-            </button>
-          </div>
-        ))
-      )}
-    </>
-  )
-
   return (
     <>
       {showFirstVisitModal && (
@@ -284,20 +222,13 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* 메인 그리드 */}
-        <div className="grid grid-cols-5 gap-4 items-stretch min-h-[640px]">
-          <div className="col-span-2 flex flex-col gap-4">
+        {/* 메인 그리드 — 좌: 주간 접수 현황 / 우: AI 비서 + 할 일 */}
+        <div className="grid grid-cols-[1.6fr_1fr] gap-4 items-start">
+          <WeeklyIntakeCard />
+          <div className="flex flex-col gap-4">
+            <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} loading={briefingLoading} />
             <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
             <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} onOpenDetail={setDetailTaskId} getStaffName={getStaffName} />
-            <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden flex flex-col flex-1 min-h-0">
-              <div className="px-5 py-3.5 border-b border-border-tertiary">
-                <h2 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">메모장</h2>
-              </div>
-              <div className="px-4 py-3 flex-1 overflow-y-auto">{memoContent}</div>
-            </div>
-          </div>
-          <div className="col-span-3">
-            <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} loading={briefingLoading} />
           </div>
         </div>
         <SitesTimeline />
@@ -312,6 +243,9 @@ export default function DashboardPage() {
             {greeting}, {briefing?.summary ?? '분석 준비 중...'}
           </p>
         </div>
+
+        {/* 주간 접수 현황 (항상 노출) */}
+        <WeeklyIntakeCard />
 
         {/* 내 할 일 */}
         <MobileAccordion
@@ -346,18 +280,6 @@ export default function DashboardPage() {
           accentColor="#8B5CF6"
         >
           <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} loading={briefingLoading} />
-        </MobileAccordion>
-
-        {/* 메모장 */}
-        <MobileAccordion
-          title="메모장"
-          icon={<StickyNote size={16} />}
-          badge={memos.length}
-          open={!!mobileOpen.memo}
-          onToggle={() => toggleMobile('memo')}
-          accentColor="#10B981"
-        >
-          <div className="px-3 py-2">{memoContent}</div>
         </MobileAccordion>
 
         {/* 현장 스케줄 */}

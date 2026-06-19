@@ -27,6 +27,13 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - 제공된 도구(tool)를 적극 활용하여 실제 DB에 등록/조회.
 - 불필요한 질문 금지. 이미 알려준 정보 다시 묻지 않기.
 
+## 등록/수정/삭제 확인 절차 (중요)
+접수 등록, 일정/지출 등록, 입금 기록, 단계 변경, 삭제 등 "쓰기" 도구를 호출하면
+시스템이 자동으로 **확인 카드**를 띄워 사용자가 직접 [등록] 버튼을 눌러 실행한다.
+- 쓰기 도구 호출 직전, 무엇을 등록할지 한 문장으로 간단히 안내만 한다 (예: "권선동 실측 일정을 등록할게요").
+- "등록할까요?", "맞나요?" 같은 되묻기 금지 — 확인 카드가 그 역할을 한다. 정보가 모이면 바로 도구를 호출.
+- 조회/검색 도구는 확인 없이 즉시 실행된다.
+
 ## 자기소개
 "뭐 할 수 있어?", "도움말", "기능" 등 질문 시 아래 기능을 간결하게 안내:
 - 접수: 주소+소유주로 신규 접수 등록
@@ -1270,10 +1277,125 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
   }
 }
 
+// ============================================================
+// 확인 카드 게이트 — 쓰기/위험 도구는 사용자 승인(executeAction) 전까지 실행하지 않음
+// ============================================================
+
+// 쓰기 도구 판별. 읽기/검색/집계 도구는 false → 자동 실행.
+function isWriteAction(name: string, input: Record<string, unknown>): boolean {
+  const action = (input?.action as string) || ''
+  switch (name) {
+    case 'register_project':
+    case 'update_project':
+    case 'update_status':
+    case 'record_deposit':
+      return true
+    case 'manage_schedule':
+      return action === 'create' || action === 'update' || action === 'delete'
+    case 'manage_expense':
+      return action === 'create'
+    case 'manage_memory':
+      return action === 'save'
+    // save_photo_to_drive / manage_drive: 요청 내 첨부 이미지 의존 + 저위험 → 게이트 제외(자동 실행)
+    default:
+      return false
+  }
+}
+
+// 확인 카드 색상/형태: delete(빨강 위험) / money(금액 hero) / create(기본)
+function actionVariant(name: string, input: Record<string, unknown>): 'delete' | 'money' | 'create' {
+  const action = (input?.action as string) || ''
+  if (name === 'manage_schedule' && action === 'delete') return 'delete'
+  if (name === 'manage_expense' && action === 'create') return 'money'
+  if (name === 'record_deposit') return 'money'
+  return 'create'
+}
+
+// 실행 결과(JSON 문자열 파싱본)를 사람이 읽을 완료 메시지로 변환
+function buildResultMessage(name: string, input: Record<string, unknown>, parsed: Record<string, unknown>): string {
+  const won = (v: unknown) => (Number(v) || 0).toLocaleString('ko-KR') + '원'
+  switch (name) {
+    case 'register_project': {
+      const p = (parsed.project as Record<string, unknown>) || {}
+      return `접수 등록 완료 — ${(p.building_name as string) || (input.building_name as string) || ''} ${(p.owner_name as string) || (input.owner_name as string) || ''}`.trim()
+    }
+    case 'update_project':
+      return '접수 정보를 수정했습니다.'
+    case 'update_status':
+      return `단계 변경 완료 — ${(parsed.building as string) || ''} ${(parsed.from as string) || ''} → ${(parsed.to as string) || (input.new_status as string) || ''}`.trim()
+    case 'manage_schedule': {
+      if ((input.action as string) === 'delete') return '일정을 삭제했습니다.'
+      const s = (parsed.schedule as Record<string, unknown>) || {}
+      return `일정 등록 완료 — ${(s.title as string) || (input.title as string) || ''} (${(s.start_date as string) || (input.start_date as string) || ''})`
+    }
+    case 'manage_expense': {
+      const e = (parsed.expense as Record<string, unknown>) || {}
+      return `지출 등록 완료 — ${(e.title as string) || (input.title as string) || ''} ${won(e.amount ?? input.amount)}`
+    }
+    case 'record_deposit':
+      return (parsed.formatted_message as string) || `입금 기록 완료 — ${won(input.amount)}`
+    case 'manage_memory':
+      return '기억했습니다.'
+    case 'manage_drive':
+      return '드라이브 폴더를 생성했습니다.'
+    case 'save_photo_to_drive':
+      return '사진을 드라이브에 저장했습니다.'
+    default:
+      return '완료되었습니다.'
+  }
+}
+
+// 읽기 도구 실행 중 진행상황 라벨 (프론트 로딩 표시용)
+function toolProgressLabel(name: string): string {
+  const M: Record<string, string> = {
+    search_address: '주소 조회 중', get_building_info: '건축물대장 조회 중', get_unit_info: '전유부 조회 중',
+    search_projects: '접수대장 조회 중', search_sites: '현장 조회 중', manage_schedule: '일정 조회 중',
+    manage_expense: '지출 조회 중', search_vendors: '거래처 조회 중', get_dashboard_stats: '실적 집계 중',
+    generate_report: '보고서 작성 중', get_activity_log: '활동 조회 중', manage_memory: '기억 조회 중',
+    manage_drive: '드라이브 확인 중', match_deposit: '입금 매칭 중',
+  }
+  return M[name] || '처리 중'
+}
+
+// chat_messages 저장 — session_id 컬럼 미존재(마이그레이션 전)면 컬럼 제외 재시도
+async function insertChatMessage(row: { staff_id: string; role: string; content: string; channel: string; session_id?: string | null }) {
+  const { error } = await supabaseAdmin.from('chat_messages').insert(row)
+  if (error && /session_id|column|schema cache|find the/i.test(error.message)) {
+    const legacy = { staff_id: row.staff_id, role: row.role, content: row.content, channel: row.channel }
+    await supabaseAdmin.from('chat_messages').insert(legacy)
+  }
+}
+
+// 세션 최근활동 시각 갱신 (없으면 graceful)
+async function touchSession(sessionId: string, isoNow: string) {
+  await supabaseAdmin.from('chat_sessions').update({ last_message_at: isoNow }).eq('id', sessionId)
+}
+
+// ai_memory 규칙을 시스템 프롬프트에 주입 — 대표/직원 교정이 다음 대화에 자동 반영되는 되먹임 고리
+async function loadMemoryBlock(): Promise<string> {
+  try {
+    const { data } = await supabaseAdmin.from('ai_memory').select('category, key, value').order('category').limit(100)
+    if (!data || data.length === 0) return ''
+    const lines = data.map((m: Record<string, unknown>) => `- [${m.category}] ${m.key}: ${m.value}`).join('\n')
+    return `\n\n## 회사 학습 규칙 (대표/직원이 'AI 검토'에서 교정한 규칙 — 반드시 우선 반영)\n${lines}`
+  } catch { return '' }
+}
+
+// AI 운영 신호 로그 (확인카드 결정·피드백) — ai_events. 'AI 검토' 대시보드 소스. 없으면 graceful
+async function logEvent(kind: string, opts: { staffId?: string; sessionId?: string | null; tool?: string; detail?: string }) {
+  try {
+    await supabaseAdmin.from('ai_events').insert({
+      staff_id: opts.staffId || null, session_id: opts.sessionId || null,
+      kind, tool: opts.tool || null, detail: opts.detail || null,
+    })
+  } catch { /* graceful */ }
+}
+
 // --- Non-streaming handler (텔레그램 및 기타 용도) ---
 async function handleNonStreaming(
   apiKey: string,
   claudeMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
+  systemPrompt: string,
   staffId?: string,
   channel?: 'web' | 'telegram',
 ): Promise<Response> {
@@ -1291,7 +1413,7 @@ async function handleNonStreaming(
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
-        system: `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${_currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${_currentStaffName}'으로 처리합니다.`,
+        system: systemPrompt,
         messages: claudeMessages,
         tools: TOOLS,
       }),
@@ -1361,7 +1483,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { messages, staffId, channel, nonStreaming } = body as {
-      messages: Array<{ role: string; content: string; images?: string[] }>
+      messages: Array<{ role: string; content: string; images?: string[]; files?: { data: string; media_type: string; name?: string }[] }>
       staffId?: string
       channel?: 'web' | 'telegram'
       nonStreaming?: boolean
@@ -1379,35 +1501,76 @@ export async function POST(request: NextRequest) {
     }
     setCurrentStaffName(currentStaffName)
 
-    // 대화 저장
-    if (staffId && channel && recentMessages.length > 0) {
-      const lastMsg = recentMessages[recentMessages.length - 1]
-      if (lastMsg.role === 'user') {
-        try {
-          await supabaseAdmin.from('chat_messages').insert({
-            staff_id: staffId, role: 'user', content: lastMsg.content, channel,
-          })
-        } catch { /* graceful */ }
+    // --- 확인 카드 [등록] 클릭 → 단일 도구 직접 실행 (Claude 재호출 없음) ---
+    const { executeAction, sessionId } = body as {
+      executeAction?: { tool: string; input: Record<string, unknown> }
+      sessionId?: string
+    }
+    if (executeAction && executeAction.tool) {
+      const nowIso = new Date().toISOString()
+      try {
+        const raw = await executeTool(executeAction.tool, executeAction.input || {})
+        let parsed: Record<string, unknown>
+        try { parsed = JSON.parse(raw) } catch { parsed = { message: raw } }
+        const ok = !parsed.error
+        const message = ok
+          ? buildResultMessage(executeAction.tool, executeAction.input || {}, parsed)
+          : `실패: ${parsed.error}`
+        if (ok) logEvent('confirm_approved', { staffId, sessionId, tool: executeAction.tool })
+        if (ok && staffId) {
+          try {
+            await insertChatMessage({ staff_id: staffId, role: 'assistant', content: message, channel: channel || 'web', session_id: sessionId || null })
+            if (sessionId) await touchSession(sessionId, nowIso)
+          } catch { /* graceful */ }
+        }
+        return Response.json({ ok, message })
+      } catch (e) {
+        return Response.json({ ok: false, message: `실패: ${e instanceof Error ? e.message : String(e)}` })
       }
     }
 
-    // Claude API 메시지 형식으로 변환 (이미지 포함)
+    // --- 세션 확보 + 사용자 메시지 저장 ---
+    let activeSessionId: string | null = sessionId || null
+    if (staffId && recentMessages.length > 0) {
+      const lastMsg = recentMessages[recentMessages.length - 1]
+      if (lastMsg.role === 'user') {
+        // 웹에서 새 대화면 세션 생성 (텔레그램은 세션 미사용)
+        if (channel === 'web' && !activeSessionId) {
+          try {
+            const title = (lastMsg.content || '새 대화').slice(0, 40) || '새 대화'
+            const { data: sess } = await supabaseAdmin.from('chat_sessions')
+              .insert({ staff_id: staffId, title, channel: 'web' }).select('id').single()
+            if (sess?.id) activeSessionId = sess.id as string
+          } catch { /* graceful — 마이그레이션 전이면 세션 없이 진행 */ }
+        }
+        if (channel) {
+          try { await insertChatMessage({ staff_id: staffId, role: 'user', content: lastMsg.content, channel, session_id: activeSessionId }) } catch { /* graceful */ }
+        }
+      }
+    }
+
+    // Claude API 메시지 형식으로 변환 (이미지 + PDF 파일 포함)
+    type MsgIn = { role: string; content: string; images?: string[]; files?: { data: string; media_type: string; name?: string }[] }
     const claudeMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }> =
-      recentMessages.map((msg: { role: string; content: string; images?: string[] }) => {
-        if (msg.role === 'user' && msg.images && msg.images.length > 0) {
-          // 이미지 + 텍스트를 multimodal content로 변환
+      recentMessages.map((msg: MsgIn) => {
+        const hasImages = msg.role === 'user' && !!msg.images && msg.images.length > 0
+        const hasFiles = msg.role === 'user' && !!msg.files && msg.files.length > 0
+        if (hasImages || hasFiles) {
+          // 이미지/PDF + 텍스트를 multimodal content로 변환
           const contentBlocks: Array<Record<string, unknown>> = []
-          msg.images.forEach(img => {
-            contentBlocks.push({
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/jpeg', data: img },
-            })
+          ;(msg.images || []).forEach(img => {
+            contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img } })
           })
-          if (msg.content && msg.content !== '(사진 첨부)') {
-            contentBlocks.push({ type: 'text', text: msg.content })
-          } else {
-            contentBlocks.push({ type: 'text', text: '첨부된 사진을 확인해주세요.' })
-          }
+          ;(msg.files || []).forEach(f => {
+            if (f.media_type === 'application/pdf') {
+              contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.data } })
+            } else if (f.media_type?.startsWith('image/')) {
+              contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: f.media_type, data: f.data } })
+            }
+          })
+          const note = msg.content && msg.content !== '(사진 첨부)' && msg.content !== '(파일 첨부)'
+            ? msg.content : '첨부된 자료를 확인해주세요.'
+          contentBlocks.push({ type: 'text', text: note })
           return { role: 'user', content: contentBlocks }
         }
         return { role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content }
@@ -1425,9 +1588,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 요청 단위 시스템 프롬프트 = 기본 + 현재 사용자 + 회사 학습 규칙(ai_memory 주입)
+    const memoryBlock = await loadMemoryBlock()
+    const systemPrompt = `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${currentStaffName}'으로 처리합니다.${memoryBlock}`
+
     // non-streaming 모드 (텔레그램용): JSON 한 번에 반환
     if (nonStreaming) {
-      return handleNonStreaming(apiKey, claudeMessages, staffId, channel)
+      return handleNonStreaming(apiKey, claudeMessages, systemPrompt, staffId, channel)
     }
 
     const encoder = new TextEncoder()
@@ -1435,6 +1602,10 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // 새/이어보기 세션 ID를 프론트로 회신 (레일 갱신용)
+          if (activeSessionId) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ session: { id: activeSessionId } })}\n\n`))
+          }
           const MAX_ITERATIONS = 8
 
           for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -1449,7 +1620,7 @@ export async function POST(request: NextRequest) {
               body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 4096,
-                system: `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${currentStaffName}'으로 처리합니다.`,
+                system: systemPrompt,
                 messages: claudeMessages,
                 tools: TOOLS,
               }),
@@ -1478,12 +1649,30 @@ export async function POST(request: NextRequest) {
               break
             }
 
-            // tool_use → 도구 실행 → 결과를 메시지에 추가
+            // 쓰기/위험 도구면 실행하지 않고 확인 카드 요청 (사용자 승인 후 executeAction으로 실행)
+            const writeBlock = (result.content || []).find(
+              (b: Record<string, unknown>) =>
+                b.type === 'tool_use' && isWriteAction(b.name as string, b.input as Record<string, unknown>)
+            ) as Record<string, unknown> | undefined
+            if (writeBlock) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                confirm: {
+                  tool: writeBlock.name,
+                  input: writeBlock.input,
+                  variant: actionVariant(writeBlock.name as string, writeBlock.input as Record<string, unknown>),
+                },
+              })}\n\n`))
+              logEvent('confirm_shown', { staffId, sessionId: activeSessionId, tool: writeBlock.name as string })
+              break
+            }
+
+            // 읽기 도구 → 실행 → 결과를 메시지에 추가
             claudeMessages.push({ role: 'assistant', content: result.content })
 
             const toolResultBlocks: Array<Record<string, unknown>> = []
             for (const block of result.content || []) {
               if (block.type === 'tool_use') {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ progress: toolProgressLabel(block.name) })}\n\n`))
                 console.log(`[AI Tool] ${block.name} input:`, JSON.stringify(block.input).substring(0, 500))
                 let toolResult: string
                 try {
@@ -1516,14 +1705,9 @@ export async function POST(request: NextRequest) {
           // assistant 응답 저장 (웹 대화 기록)
           if (staffId && channel && streamedText) {
             try {
-              await supabaseAdmin.from('chat_messages').insert({
-                staff_id: staffId,
-                role: 'assistant',
-                content: streamedText,
-                channel,
-              })
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            } catch (_e) { /* graceful */ }
+              await insertChatMessage({ staff_id: staffId, role: 'assistant', content: streamedText, channel, session_id: activeSessionId })
+              if (activeSessionId) await touchSession(activeSessionId, new Date().toISOString())
+            } catch { /* graceful */ }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()

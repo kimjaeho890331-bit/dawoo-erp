@@ -139,7 +139,7 @@ export default function MyTodoCard({ todos, staffSelected, tasksTableMissing, on
                     ? TYPE_COLORS.task
                     : TYPE_COLORS[t.scheduleType || ''] || '#3B82F6'
                   return (
-                    <div key={t.id} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-surface-tertiary group">
+                    <div key={t.id} className="flex items-center gap-1.5 px-2 min-h-[34px] py-1 rounded-lg hover:bg-surface-tertiary group">
                       {t.source === 'task' && (
                         <button
                           onClick={() => onCompleteTask(t.rawId)}

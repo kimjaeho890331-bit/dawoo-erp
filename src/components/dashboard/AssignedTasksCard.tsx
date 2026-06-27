@@ -132,7 +132,7 @@ export default function AssignedTasksCard({
                     <div
                       key={t.id}
                       onDoubleClick={() => onOpenDetail(t.id)}
-                      className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-surface-tertiary group cursor-pointer"
+                      className="flex items-center gap-1.5 px-2 min-h-[34px] py-1 rounded-lg hover:bg-surface-tertiary group cursor-pointer"
                       title="더블클릭: 상세"
                     >
                       <button
@@ -145,9 +145,9 @@ export default function AssignedTasksCard({
                       <span className={`text-[11px] tabular-nums w-14 shrink-0 ${bd.color}`}>
                         {bd.label}
                       </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[12px] text-txt-primary truncate">{t.content}</div>
-                        <div className="text-[10px] text-txt-tertiary">→ {getStaffName(t.assigned_to)}</div>
+                      <div className="flex-1 min-w-0 text-[12px] text-txt-primary truncate">
+                        {t.content}
+                        <span className="text-[10px] text-txt-tertiary ml-1">→ {getStaffName(t.assigned_to)}</span>
                       </div>
                       <button
                         onClick={() => onDelete(t.id)}

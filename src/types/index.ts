@@ -225,6 +225,52 @@ export interface Attachment {
 }
 
 // ============================================
+// AI 생성 자료실 (ai_templates / ai_generations)
+// ============================================
+
+/** 템플릿 변수 정의 (variables JSONB의 각 항목) */
+export interface AiTemplateVariable {
+  key: string;             // 변수 키 (예: building_name)
+  label: string;           // 화면 표시명 (예: 빌라명)
+  source?: string | null;  // 자동 채움 출처 (예: projects.building_name)
+  required?: boolean;      // 필수 여부
+  default?: string | null; // 기본값
+}
+
+/** 생성 템플릿 — 포스터/안내문 등 "틀" */
+export interface AiTemplate {
+  id: string;
+  name: string;
+  category: string;                 // 포스터 | 안내문 | 공문 | 기타
+  description: string | null;
+  render_type: 'html' | 'overlay';
+  body: string;                     // HTML/CSS 본문 (변수 {{key}} placeholder 포함)
+  variables: AiTemplateVariable[];
+  output_format: 'png' | 'pdf';
+  width: number;
+  height: number;
+  sample_url: string | null;
+  enabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 생성 이력 — 누가·언제·무엇을 만들고 드라이브 어디 저장했는지 */
+export interface AiGeneration {
+  id: string;
+  template_id: string | null;
+  project_id: string | null;
+  title: string | null;
+  variables_used: Record<string, string>;
+  output_format: string | null;
+  drive_file_id: string | null;
+  drive_file_url: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+// ============================================
 // 할 일 / 시킨 일 (tasks 테이블)
 // ============================================
 
@@ -273,14 +319,44 @@ export interface BriefingItem {
   meta?: Record<string, string | number | null>; // 추가 데이터 (주소/연락처 등)
 }
 
+export interface BriefingAction {
+  label: string;                   // 칩에 보일 짧은 라벨 (예: "동의서 미수령 정리")
+  query: string;                   // AI 비서에 보낼 질문
+}
+
 export interface BriefingResponse {
   generatedAt: string;             // ISO timestamp
   staffId: string | null;          // 필터 기준 담당자 (null = 전체)
-  summary: string;                 // 상단 한 줄 요약
+  summary: string;                 // 상단 한 줄 요약 (룰 기반 폴백)
+  narrative?: string;              // AI가 생성한 상황 브리핑 (2~3문장) — 있으면 summary 대신 노출
+  assistantActions?: BriefingAction[]; // AI 추천 "오늘 챙길 일" → 클릭 시 AI 비서가 처리
   items: BriefingItem[];
   info: {
     outstandingCount: number;      // 미수금 건수 (정보성)
     outstandingTotal: number;      // 미수금 총액 (정보성, 경고 아님)
     todayScheduleCount: number;
   };
+}
+
+// --- 주간 보고서 (월요일 기준: 지난주 vs 지지난주, 회사/팀 단위) ---
+export interface WeeklyStat {
+  intake: number;     // 접수 건수
+  water: number;      // 수도
+  small: number;      // 소규모
+  amount: number;     // 수주액(총공사비 합, 원)
+  approved: number;   // 승인 전환 건수 (status_logs)
+  completed: number;  // 완료서류제출 전환 건수
+  paid: number;       // 입금 전환 건수
+}
+export interface WeeklyReport {
+  generatedAt: string;
+  lwStart: string;    // 지난주 시작(월) YYYY-MM-DD
+  wbStart: string;    // 지지난주 시작(월) YYYY-MM-DD
+  lw: WeeklyStat;     // 지난주
+  wb: WeeklyStat;     // 지지난주
+  summary: string;
+  goodPoints: string[];   // 잘한 점
+  problems: string[];     // 문제점
+  improvements: string[]; // 보완점
+  aiGenerated: boolean;   // AI 생성 성공 여부 (false면 숫자만)
 }

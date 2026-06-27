@@ -10,6 +10,8 @@ interface IntakeRow {
   road_address: string | null
   region: string | null
   created_at: string
+  total_cost: number | null
+  status: string | null
   staff: { id: string; name: string } | null
   cities: { name: string } | null
   work_types: { work_categories: { name: string } | null } | null
@@ -51,6 +53,15 @@ function dateLabel(iso: string): string {
   const d = new Date(iso)
   return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
+function costLabel(n: number | null): string {
+  if (!n || n <= 0) return '—'
+  const man = Math.round(n / 10000)
+  if (man >= 10000) {
+    const eok = man / 10000
+    return `${eok % 1 === 0 ? eok : eok.toFixed(1)}억`
+  }
+  return `${man.toLocaleString()}만`
+}
 
 type Filter = 'all' | '수도' | '소규모'
 
@@ -77,7 +88,7 @@ export default function WeeklyIntakeCard() {
       const { data, error } = await supabase
         .from('projects')
         .select(`
-          id, building_name, road_address, region, created_at,
+          id, building_name, road_address, region, created_at, total_cost, status,
           staff:staff_id ( id, name ),
           cities:city_id ( name ),
           work_types:work_type_id ( work_categories:category_id ( name ) )
@@ -231,8 +242,8 @@ export default function WeeklyIntakeCard() {
         </div>
 
         {/* 헤더 행 */}
-        <div className="grid grid-cols-[46px_52px_1fr_52px_32px] gap-2 px-4 py-2 text-[11px] text-txt-tertiary border-b border-border-tertiary">
-          <span>날짜</span><span>분류</span><span>현장 / 빌라명</span><span>지역</span><span className="text-right">담당</span>
+        <div className="grid grid-cols-[40px_44px_minmax(0,1fr)_44px_58px_60px_84px] gap-1.5 px-4 py-2 text-[11px] text-txt-tertiary border-b border-border-tertiary">
+          <span>날짜</span><span>분류</span><span>현장/빌라</span><span>지역</span><span className="text-right">공사비</span><span>상태</span><span>담당</span>
         </div>
 
         <div className="max-h-[300px] overflow-y-auto">
@@ -244,7 +255,7 @@ export default function WeeklyIntakeCard() {
             const cat = catOf(r)
             const href = cat === '수도' ? `/register/water?project=${r.id}` : `/register/small?project=${r.id}`
             return (
-              <a key={r.id} href={href} className="grid grid-cols-[46px_52px_1fr_52px_32px] gap-2 items-center px-4 py-2 border-b border-border-tertiary last:border-0 hover:bg-surface-tertiary transition-colors">
+              <a key={r.id} href={href} className="grid grid-cols-[40px_44px_minmax(0,1fr)_44px_58px_60px_84px] gap-1.5 items-center px-4 min-h-[34px] py-1 border-b border-border-tertiary last:border-0 hover:bg-surface-tertiary transition-colors">
                 <span className="text-[11px] text-txt-tertiary">{dateLabel(r.created_at)}</span>
                 <span className="text-[10.5px] font-medium px-0 py-0.5 rounded text-center"
                   style={cat === '수도' ? { color: C_WATER_TX, background: C_WATER_BG }
@@ -254,8 +265,11 @@ export default function WeeklyIntakeCard() {
                 </span>
                 <span className="text-[12.5px] text-txt-primary truncate">{buildingLabel(r)}</span>
                 <span className="text-[11px] text-txt-secondary truncate">{regionLabel(r)}</span>
-                <span className="justify-self-end w-5 h-5 rounded-full bg-surface-tertiary text-txt-secondary text-[10px] flex items-center justify-center" title={r.staff?.name ?? '미지정'}>
-                  {r.staff?.name?.charAt(0) ?? '–'}
+                <span className="text-[11px] text-txt-primary text-right tabular-nums">{costLabel(r.total_cost)}</span>
+                <span className="text-[11px] text-txt-secondary truncate" title={r.status ?? ''}>{r.status ?? '—'}</span>
+                <span className="flex items-center gap-1 min-w-0" title={r.staff?.name ?? '미지정'}>
+                  <span className="w-[18px] h-[18px] rounded-full bg-surface-tertiary text-txt-secondary text-[9.5px] flex items-center justify-center shrink-0">{r.staff?.name?.charAt(0) ?? '–'}</span>
+                  <span className="text-[11px] text-txt-secondary truncate">{r.staff?.name ?? '미지정'}</span>
                 </span>
               </a>
             )

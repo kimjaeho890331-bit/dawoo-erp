@@ -10,7 +10,16 @@ import FirstVisitModal from './FirstVisitModal'
 import SitesTimeline from './SitesTimeline'
 import TaskDetailModal from './TaskDetailModal'
 import WeeklyIntakeCard from './WeeklyIntakeCard'
-import type { BriefingResponse, Task } from '@/types'
+import type { BriefingResponse, Task, WeeklyReport } from '@/types'
+
+// 월요일 00:00(로컬) 기준 주 시작 — 주간 보고서 캐시 키용
+function weekKeyLocal(d: Date): string {
+  const x = new Date(d)
+  const day = x.getDay()
+  x.setDate(x.getDate() + (day === 0 ? -6 : 1 - day))
+  x.setHours(0, 0, 0, 0)
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+}
 
 // --- 타입 ---
 interface Schedule {
@@ -49,6 +58,31 @@ export default function DashboardPage() {
   const [myTasksAssigned, setMyTasksAssigned] = useState<Task[]>([])  // 내가 시킨 일
   const [tasksTableMissing, setTasksTableMissing] = useState(false)
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
+
+  // 주간 보고서 (월요일 기준 지난주 vs 지지난주) — 주 단위 sessionStorage 캐시
+  const isMonday = now.getDay() === 1
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const c = sessionStorage.getItem(`dawoo_weekly_report_${weekKeyLocal(new Date())}`)
+      return c ? (JSON.parse(c) as WeeklyReport) : null
+    } catch { return null }
+  })
+  useEffect(() => {
+    if (weeklyReport) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/ai/weekly-report')
+        if (!res.ok) return
+        const data = (await res.json()) as WeeklyReport
+        if (cancelled) return
+        setWeeklyReport(data)
+        try { sessionStorage.setItem(`dawoo_weekly_report_${weekKeyLocal(new Date())}`, JSON.stringify(data)) } catch { /* */ }
+      } catch { /* */ }
+    })()
+    return () => { cancelled = true }
+  }, [weeklyReport])
 
   // 담당자 변경 시 localStorage 저장
   useEffect(() => {
@@ -101,19 +135,27 @@ export default function DashboardPage() {
     if (!aRes.error) setMyTasksAssigned((aRes.data as Task[]) || [])
   }, [today, currentStaffId])
 
-  // 브리핑 API 호출
-  const loadBriefing = useCallback(async () => {
-    if (!currentStaffId) return
+  // 브리핑 API 호출 — AI 서술/액션 포함(/api/ai/briefing). 같은 날 재방문은 sessionStorage 캐시(Claude 재호출 절감)
+  const loadBriefing = useCallback(async (force = false) => {
+    if (!currentStaffId) { setBriefingLoading(false); return }  // 직원 미선택/로드실패 시 무한 로딩 방지
+    const cacheKey = `dawoo_briefing_${currentStaffId}_${today}`
+    if (!force) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey)
+        if (cached) { setBriefing(JSON.parse(cached) as BriefingResponse); setBriefingLoading(false); return }
+      } catch { /* */ }
+    }
     setBriefingLoading(true)
     try {
-      const res = await fetch(`/api/dashboard/briefing?staff_id=${currentStaffId}`)
+      const res = await fetch(`/api/ai/briefing?staff_id=${currentStaffId}`)
       if (res.ok) {
         const data = (await res.json()) as BriefingResponse
         setBriefing(data)
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(data)) } catch { /* */ }
       }
     } catch { /* */ }
     setBriefingLoading(false)
-  }, [currentStaffId])
+  }, [currentStaffId, today])
 
   useEffect(() => { loadMyWork(); loadBriefing() }, [loadMyWork, loadBriefing])
 
@@ -226,7 +268,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-[1.6fr_1fr] gap-4 items-start">
           <WeeklyIntakeCard />
           <div className="flex flex-col gap-4">
-            <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} loading={briefingLoading} />
+            <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
             <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
             <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} onOpenDetail={setDetailTaskId} getStaffName={getStaffName} />
           </div>
@@ -279,7 +321,7 @@ export default function DashboardPage() {
           onToggle={() => toggleMobile('briefing')}
           accentColor="#8B5CF6"
         >
-          <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} loading={briefingLoading} />
+          <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
         </MobileAccordion>
 
         {/* 현장 스케줄 */}

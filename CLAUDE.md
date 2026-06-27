@@ -11,7 +11,7 @@
 |------|------|
 | Frontend | Next.js 16+ (App Router), React, TypeScript, Tailwind CSS v4 |
 | Backend | Supabase (PostgreSQL, Edge Functions, Storage, Auth) |
-| AI | Claude API (claude-sonnet-4-20250514) |
+| AI | Claude API (claude-sonnet-4-6) |
 | 서류 자동화 | Cowork (Claude) → 구글드라이브 직접 입력 |
 | 외부 API | 도로명주소(Juso), 건축물대장(표제부+전유부+소유자), NEIS 학교 |
 | 배포 | Vercel / GitHub (`kimjaeho890331-bit/dawoo-erp`) |

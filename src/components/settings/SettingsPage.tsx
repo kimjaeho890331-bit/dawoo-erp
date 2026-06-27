@@ -275,7 +275,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center justify-between py-1">
                     <span className="text-[13px] text-txt-secondary">AI 모델</span>
-                    <span className="text-[12px] text-txt-tertiary">claude-sonnet-4-20250514</span>
+                    <span className="text-[12px] text-txt-tertiary">claude-sonnet-4-6</span>
                   </div>
                   <div className="flex items-center justify-between py-1">
                     <span className="text-[13px] text-txt-secondary">배포</span>

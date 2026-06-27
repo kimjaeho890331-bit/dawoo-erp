@@ -42,6 +42,7 @@ const SYSTEM_PROMPT = `당신은 다우건설 ERP AI 비서입니다. 접수 등
 - 일정: 캘린더 일정 등록/조회/수정
 - 현장: 현장관리 조회
 - 지출: 지출 등록/집계
+- 정산: 계약금액/수금/잔액 조회 (정보 제공 — 독촉 아님)
 - 거래처: 협력업체/일용직 검색
 - 보고서: 일일/주간/월간 보고서 자동 생성
 - 통계: 대시보드 실적 통계
@@ -343,6 +344,16 @@ const TOOLS = [
       properties: {
         keyword: { type: 'string', description: '이름/업종/연락처 검색' },
         vendor_type: { type: 'string', enum: ['협력업체', '일용직'], description: '거래처 유형' },
+      },
+    },
+  },
+  {
+    name: 'get_settlement',
+    description: '정산 내역(계약금액/수금/잔액)을 조회합니다. keyword 주면 특정 접수건, 없으면 전체 합계. 미수금/잔액은 정보 제공일 뿐 독촉용이 아님 — 재촉하지 말 것.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keyword: { type: 'string', description: '빌라명/소유주명 (특정 건 정산 조회 시)' },
       },
     },
   },
@@ -887,6 +898,39 @@ async function searchVendors(input: Record<string, unknown>): Promise<string> {
 
 // --- Phase B: 분석 + 학습 함수들 ---
 
+// 정산 내역 — 계약금액/수금/잔액. 미수금은 정보성(독촉용 아님).
+async function getSettlement(input: Record<string, unknown>): Promise<string> {
+  // PostgREST .or() 파서가 쓰는 특수문자 제거 (필터 깨짐/주입 방지)
+  const keyword = ((input.keyword as string) || '').replace(/[,()*]/g, ' ').trim()
+  const cols = 'id, building_name, owner_name, total_cost, collected, outstanding, status, cities(name)'
+  if (keyword) {
+    const { data, error } = await supabaseAdmin
+      .from('projects').select(cols)
+      .or(`building_name.ilike.%${keyword}%,owner_name.ilike.%${keyword}%`)
+      .neq('status', '취소').limit(10)
+    if (error) return JSON.stringify({ error: error.message })
+    return JSON.stringify({
+      note: '미수금/잔액은 정보 제공 — 독촉용 아님',
+      projects: (data || []).map((p: Record<string, unknown>) => ({
+        building: p.building_name, owner: p.owner_name, city: (p.cities as { name?: string } | null)?.name,
+        total_cost: p.total_cost, collected: p.collected, outstanding: p.outstanding, status: p.status,
+      })),
+    })
+  }
+  // 전체 합계
+  const { data, error } = await supabaseAdmin.from('projects').select('total_cost, collected, outstanding, status').neq('status', '취소')
+  if (error) return JSON.stringify({ error: error.message })
+  const rows = data || []
+  const sum = (k: string) => rows.reduce((s: number, p: Record<string, unknown>) => s + (Number(p[k]) || 0), 0)
+  return JSON.stringify({
+    note: '미수금/잔액은 정보 제공 — 독촉용 아님',
+    count: rows.length,
+    total_contract: sum('total_cost'),
+    total_collected: sum('collected'),
+    total_outstanding: sum('outstanding'),
+  })
+}
+
 async function getDashboardStats(input: Record<string, unknown>): Promise<string> {
   const month = (input.month as string) || new Date().toISOString().slice(0, 7)
   const monthStart = `${month}-01`
@@ -1256,6 +1300,8 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return manageExpense(input)
     case 'search_vendors':
       return searchVendors(input)
+    case 'get_settlement':
+      return getSettlement(input)
     case 'get_dashboard_stats':
       return getDashboardStats(input)
     case 'generate_report':
@@ -1411,7 +1457,7 @@ async function handleNonStreaming(
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: systemPrompt,
         messages: claudeMessages,
@@ -1588,9 +1634,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 요청 단위 시스템 프롬프트 = 기본 + 현재 사용자 + 회사 학습 규칙(ai_memory 주입)
+    // 요청 단위 시스템 프롬프트 = 기본 + 현재 사용자 + 화면 맥락 + 회사 학습 규칙(ai_memory 주입)
+    const { pageContext } = body as { pageContext?: string }
+    const pageBlock = pageContext ? `\n\n## 사용자 현재 화면\n사용자는 지금 '${pageContext}' 화면을 보고 있습니다. 화면과 관련된 요청이면 맥락으로 활용하세요.` : ''
     const memoryBlock = await loadMemoryBlock()
-    const systemPrompt = `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${currentStaffName}'으로 처리합니다.${memoryBlock}`
+    const systemPrompt = `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${currentStaffName}'으로 처리합니다.${pageBlock}${memoryBlock}`
 
     // non-streaming 모드 (텔레그램용): JSON 한 번에 반환
     if (nonStreaming) {
@@ -1618,7 +1666,7 @@ export async function POST(request: NextRequest) {
                 'anthropic-version': '2023-06-01',
               },
               body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
+                model: 'claude-sonnet-4-6',
                 max_tokens: 4096,
                 system: systemPrompt,
                 messages: claudeMessages,
@@ -1630,7 +1678,7 @@ export async function POST(request: NextRequest) {
               const errText = await response.text()
               console.error('[AI] Claude API error:', response.status, errText)
               console.error('[AI] Last messages:', JSON.stringify(claudeMessages).substring(0, 2000))
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: `⚠️ Claude API 오류 (${response.status}): ${errText.substring(0, 200)}` })}\n\n`))
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: `Claude API 오류 (${response.status}): ${errText.substring(0, 200)}` })}\n\n`))
               break
             }
 
@@ -1699,7 +1747,7 @@ export async function POST(request: NextRequest) {
           console.error('[AI] Stack:', err instanceof Error ? err.stack : String(err))
           const msg = err instanceof Error ? err.message : String(err)
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ text: `\n\n⚠️ 처리 중 오류: ${msg}` })}\n\n`)
+            encoder.encode(`data: ${JSON.stringify({ text: `\n\n처리 중 오류: ${msg}` })}\n\n`)
           )
         } finally {
           // assistant 응답 저장 (웹 대화 기록)

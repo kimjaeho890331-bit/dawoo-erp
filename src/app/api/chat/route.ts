@@ -465,8 +465,20 @@ async function searchAddress(keyword: string): Promise<string> {
     resultType: 'json',
   })
   try {
+    if (!ADDRESS_API_KEY) {
+      return JSON.stringify({ error: '주소 검색 서비스가 설정되지 않았습니다 (ADDRESS_API_KEY 미설정). 주소를 직접 입력받으세요.' })
+    }
     const res = await fetch(`https://business.juso.go.kr/addrlink/addrLinkApi.do?${params}`)
     const data = await res.json()
+    // Juso API 오류 코드 노출 (승인키 미승인 등을 "결과 없음"으로 오인하지 않도록)
+    const common = data?.results?.common
+    if (common && common.errorCode && common.errorCode !== '0') {
+      return JSON.stringify({
+        error: common.errorCode === 'E0001'
+          ? '주소 검색 서비스 인증 오류(승인키 미승인). 주소를 직접 입력받으세요.'
+          : `주소 검색 오류: ${common.errorMessage}`,
+      })
+    }
     const results = data?.results?.juso || []
     if (results.length === 0) return JSON.stringify({ message: '검색 결과가 없습니다', results: [] })
     return JSON.stringify(

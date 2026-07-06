@@ -32,18 +32,17 @@ export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocke
     setOwnerError('')
     setOwners([])
     try {
-      // 주소 검색으로 코드 추출
+      // 주소 검색으로 코드 추출 (/api/address/search 는 매핑된 배열을 반환)
       const searchRes = await fetch(`/api/address/search?keyword=${encodeURIComponent(addr)}`)
       const searchData = await searchRes.json()
-      const results = searchData?.results?.juso
-      if (!results || results.length === 0) {
-        setOwnerError('주소 코드를 찾을 수 없습니다')
+      if (!Array.isArray(searchData) || searchData.length === 0) {
+        setOwnerError(searchData?.error || '주소 코드를 찾을 수 없습니다')
         return
       }
-      const matched = results[0]
+      const matched = searchData[0]
       const params = new URLSearchParams({
-        sigunguCd: matched.admCd?.substring(0, 5) || '',
-        bjdongCd: matched.admCd?.substring(5, 10) || '',
+        sigunguCd: matched.sigunguCd || matched.admCd?.substring(0, 5) || '',
+        bjdongCd: matched.bjdongCd || matched.admCd?.substring(5, 10) || '',
         bun: (matched.lnbrMnnm || '0').padStart(4, '0'),
         ji: (matched.lnbrSlno || '0').padStart(4, '0'),
       })

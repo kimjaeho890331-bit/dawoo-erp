@@ -73,6 +73,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
   const [addressResults, setAddressResults] = useState<AddressResult[]>([])
   const [addressSearching, setAddressSearching] = useState(false)
   const [showAddressDropdown, setShowAddressDropdown] = useState(false)
+  const [addressError, setAddressError] = useState('')
   const addressDropdownRef = useRef<HTMLDivElement>(null)
 
   // 건축물 정보 상태
@@ -197,12 +198,20 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     if (!addressKeyword.trim()) return
     setAddressSearching(true)
     setShowAddressDropdown(true)
+    setAddressError('')
     try {
       const res = await fetch(`/api/address/search?keyword=${encodeURIComponent(addressKeyword)}`)
       const data = await res.json()
-      setAddressResults(Array.isArray(data) ? data : [])
+      if (Array.isArray(data)) {
+        setAddressResults(data)
+      } else {
+        // API 오류(승인키 미승인 등)를 조용히 삼키지 않고 사용자에게 노출
+        setAddressResults([])
+        setAddressError(data?.error || '주소 검색에 실패했습니다. 아래 주소 칸에 직접 입력해주세요.')
+      }
     } catch {
       setAddressResults([])
+      setAddressError('주소 검색에 실패했습니다. 아래 주소 칸에 직접 입력해주세요.')
     } finally {
       setAddressSearching(false)
     }
@@ -453,8 +462,10 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
               <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
                 {addressSearching ? (
                   <div className="px-4 py-3 text-[13px] text-txt-tertiary text-center">검색 중...</div>
+                ) : addressError ? (
+                  <div className="px-4 py-3 text-[12px] text-[#dc2626] text-center leading-relaxed">{addressError}</div>
                 ) : addressResults.length === 0 ? (
-                  <div className="px-4 py-3 text-[13px] text-txt-tertiary text-center">검색 결과가 없습니다</div>
+                  <div className="px-4 py-3 text-[13px] text-txt-tertiary text-center">검색 결과가 없습니다. 아래 칸에 직접 입력하세요.</div>
                 ) : (
                   addressResults.map((addr, idx) => (
                     <button
@@ -472,23 +483,21 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             )}
           </div>
 
-          {/* 도로명주소 (자동입력, 읽기전용) */}
+          {/* 도로명주소 (검색 자동입력 + 직접 입력 가능) */}
           <ModalField
             label="도로명주소 *"
             value={form.road_address}
             onChange={v => update('road_address', v)}
-            placeholder="주소 검색으로 자동 입력됩니다"
+            placeholder="주소 검색 또는 직접 입력"
             error={errors.road_address}
-            readOnly
           />
 
-          {/* 지번주소 (자동입력, 읽기전용) */}
+          {/* 지번주소 (검색 자동입력 + 직접 입력 가능) */}
           <ModalField
             label="지번주소"
             value={form.jibun_address}
             onChange={v => update('jibun_address', v)}
-            placeholder="주소 검색으로 자동 입력됩니다"
-            readOnly
+            placeholder="주소 검색 또는 직접 입력"
           />
 
           {/* 빌라명 (자동입력, 수정가능) */}

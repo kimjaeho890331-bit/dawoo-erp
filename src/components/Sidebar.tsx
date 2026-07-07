@@ -146,6 +146,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           {!collapsed && <span>대시보드</span>}
         </Link>
 
+        {/* AI 비서 — 클릭 시 팝업 (우측 하단 버튼 대체) */}
+        <button
+          type="button"
+          onClick={() => { onClose(); window.dispatchEvent(new Event('dawoo:open-ai')) }}
+          className="flex items-center gap-3 mx-2 mt-1 px-3 py-2 rounded-lg text-[13px] text-left transition-colors text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer"
+        >
+          <SvgIcon d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          {!collapsed && <span>AI 비서</span>}
+        </button>
+
         {/* 메뉴 그룹 */}
         <nav className="flex-1 overflow-y-auto mt-1 px-2">
           {menuGroups.map((group) => (

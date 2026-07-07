@@ -192,6 +192,13 @@ export default function AIAssistant() {
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 100) }, [open])
 
+  // 사이드바 'AI 비서' 메뉴에서 열기 (우측 하단 플로팅 버튼 대체)
+  useEffect(() => {
+    const openHandler = () => setOpen(true)
+    window.addEventListener('dawoo:open-ai', openHandler)
+    return () => window.removeEventListener('dawoo:open-ai', openHandler)
+  }, [])
+
   // 팝업 열릴 때 지난 대화 목록 + 오늘 브리핑 로드
   useEffect(() => {
     if (open && !sessionsLoaded) {
@@ -451,18 +458,6 @@ export default function AIAssistant() {
   // ── 렌더 ─────────────────────────────────────────────
   return (
     <>
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className="fixed right-5 bottom-5 w-14 h-14 rounded-full bg-accent text-white flex flex-col items-center justify-center gap-0.5 z-[9998] hover:bg-accent-hover transition-colors cursor-pointer"
-          style={{ boxShadow: '0 8px 28px rgba(201,100,66,0.32), 0 2px 6px rgba(0,0,0,0.12)' }}
-          aria-label="AI 비서 열기"
-        >
-          <Sparkles className="w-5 h-5" />
-          <span className="text-[9px] font-bold tracking-wide">AI 비서</span>
-        </button>
-      )}
-
       {open && (
         <div
           className="fixed inset-0 z-[9999] bg-black/40 flex md:items-center md:justify-center md:p-6"

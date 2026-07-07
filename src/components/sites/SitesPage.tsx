@@ -398,6 +398,17 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 //   탭 1: 기본정보 (인라인 수정 - 레이아웃 유지)
 // ===========================
 // 박스 형태 인라인 필드 — 클릭 즉시 편집 가능, 1초 debounce 자동저장
+// ⚠️ Box는 반드시 모듈 최상위에 정의 — TabBasicInfo 내부에 두면 리렌더마다 새 함수가 되어
+//    input이 언마운트/재마운트 → 입력 포커스 상실 + 스크롤 튐 버그 발생 (실시간 동기화로 리렌더 잦아 특히 심함)
+function Box({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="border border-border-primary rounded-[10px] px-3 py-2 bg-surface hover:border-accent/40 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/10 transition-colors">
+      <div className="text-[10px] font-medium text-txt-tertiary mb-0.5">{label}</div>
+      <div className="text-[13px] text-txt-primary">{children}</div>
+    </div>
+  )
+}
+
 function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }) {
   const [form, setForm] = useState({
     name: site.name,
@@ -506,14 +517,6 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
     return parseInt(digits).toLocaleString()
   }
   const parseMoney = (v: string) => v.replace(/\D/g, '')
-
-  // 박스 필드 컴포넌트
-  const Box = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="border border-border-primary rounded-[10px] px-3 py-2 bg-surface hover:border-accent/40 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/10 transition-colors">
-      <div className="text-[10px] font-medium text-txt-tertiary mb-0.5">{label}</div>
-      <div className="text-[13px] text-txt-primary">{children}</div>
-    </div>
-  )
 
   const inputCls = "w-full bg-transparent border-0 outline-none text-[13px] text-txt-primary placeholder:text-txt-quaternary p-0"
 

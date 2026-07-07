@@ -99,8 +99,12 @@ export default function SitesPage() {
   const [showRegister, setShowRegister] = useState(false)
   const [editSite, setEditSite] = useState<Site | null>(null)
 
+  const initialLoadedRef = useRef(false)
   const loadSites = useCallback(async () => {
-    setLoading(true)
+    // 최초 1회만 전체 스피너 표시. 이후(자동저장 onRefresh·실시간 동기화) 새로고침은 조용히 갱신.
+    // 매번 스피너를 켜면 목록 전체(펼친 현장의 캘린더·입력칸 포함)가 언마운트→리마운트되어
+    // 스크롤이 위(캘린더)로 튀고 입력 포커스가 사라지는 버그가 발생함.
+    if (!initialLoadedRef.current) setLoading(true)
     try {
       const { data, error } = await supabase
         .from('sites')
@@ -108,6 +112,7 @@ export default function SitesPage() {
         .order('created_at', { ascending: false })
       if (!error) setSites((data as Site[]) || [])
     } catch { /* 테이블 미생성 시 무시 */ }
+    initialLoadedRef.current = true
     setLoading(false)
   }, [])
 

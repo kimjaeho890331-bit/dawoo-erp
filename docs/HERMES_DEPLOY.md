@@ -46,7 +46,7 @@
 - [x] 중복결제(KVM 2 1건) + 미사용 Business 웹호스팅 **환불 요청 완료** → KVM 2 **1개만 유지**
 
 **Phase 1 — 헤르메스 배포 (진행중) ◀ 현재**
-- [ ] VPS 프로비저닝: 서버위치 **아시아**(말레이시아 98ms 등) → OS/앱 **Hermes Agent / Ubuntu 24.04 / Docker**
+- [ ] VPS 프로비저닝: 서버위치 **인도네시아(자카르타)** — 아시아 리전 → OS/앱 **Hermes Agent / Ubuntu 24.04 / Docker**
 - [ ] 배포 설정 폼: 관리자 ID/PW, 모델 선택, Slack 토큰란은 **비움** → **Deploy** (10~15분)
 - [ ] Docker Manager → 헤르메스 옆 **`Open`** → 터미널(CLI) 확보
 

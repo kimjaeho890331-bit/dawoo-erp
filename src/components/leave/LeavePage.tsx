@@ -26,8 +26,28 @@ interface Staff {
   id: string
   name: string
   role: string
+  position?: string | null
   join_date: string | null
   color?: string | null
+}
+
+// --- 직책/직급 정렬 순서 ---
+// 직책(role): 대표 → 관리자 → 현장소장 → 직원, 그 외는 뒤로
+const ROLE_ORDER: Record<string, number> = { '대표': 0, '관리자': 1, '현장소장': 2, '직원': 3 }
+// 직급(position, 호칭) 높은 순. 문자열 부분일치로 판정, 목록에 없으면 998, 비어있으면 999(맨 뒤)
+const POSITION_ORDER = ['회장', '부회장', '사장', '부사장', '전무', '상무', '이사', '본부장', '실장', '부장', '차장', '팀장', '과장', '대리', '주임', '사원']
+const roleRank = (role: string) => ROLE_ORDER[role] ?? 99
+const positionRank = (pos?: string | null) => {
+  if (!pos) return 999
+  const idx = POSITION_ORDER.findIndex(p => pos.includes(p))
+  return idx === -1 ? 998 : idx
+}
+// 직책 → 직급 → 입사일 빠른 순 → 이름
+function compareStaffByRank(a: Staff, b: Staff): number {
+  return roleRank(a.role) - roleRank(b.role)
+    || positionRank(a.position) - positionRank(b.position)
+    || (a.join_date || '9999-99-99').localeCompare(b.join_date || '9999-99-99')
+    || a.name.localeCompare(b.name, 'ko')
 }
 
 // --- 연차 기준 (근로기준법) ---
@@ -84,6 +104,7 @@ export default function LeavePage() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState('전체')
+  const [filterStaffId, setFilterStaffId] = useState<string | null>(null)  // null = 전체
 
   // 폼
   const [formStaffId, setFormStaffId] = useState('')
@@ -117,7 +138,12 @@ export default function LeavePage() {
   const getName = (id: string) => staffList.find(s => s.id === id)?.name || ''
   const getUsed = (id: string) => requests.filter(r => r.staff_id === id && r.status === '승인').reduce((s, r) => s + r.days, 0)
 
-  const filtered = requests.filter(r => filterStatus === '전체' || r.status === filterStatus)
+  // 직책+직급 순 정렬 (현황 카드 + 이름 칩 공용)
+  const sortedStaff = useMemo(() => [...staffList].sort(compareStaffByRank), [staffList])
+
+  // 이름(직원) 선택을 먼저 적용한 뒤 상태 필터 — 상태 개수 배지도 선택한 사람 기준으로 표시
+  const staffScoped = filterStaffId ? requests.filter(r => r.staff_id === filterStaffId) : requests
+  const filtered = staffScoped.filter(r => filterStatus === '전체' || r.status === filterStatus)
 
   // 폼 유효성 검사
   const formDays = useMemo(() => {
@@ -273,9 +299,9 @@ export default function LeavePage() {
         <button onClick={openCreate} className="btn-primary">+ 연차 신청</button>
       </div>
 
-      {/* 직원별 연차 현황 카드 — 전 직원 표시 */}
+      {/* 직원별 연차 현황 카드 — 전 직원, 직책+직급 순 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {staffList.map(s => {
+        {sortedStaff.map(s => {
           const total = calcTotalLeave(s.join_date)
           const used = getUsed(s.id)
           const remain = total - used
@@ -313,16 +339,38 @@ export default function LeavePage() {
 
       {/* 필터 + 리스트 */}
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-        <div className="px-4 py-3 border-b border-border-tertiary flex items-center justify-between">
-          <div className="flex gap-1">
-            {['전체', '대기', '승인', '반려'].map(st => (
-              <button key={st} onClick={() => setFilterStatus(st)}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                  filterStatus === st ? 'bg-accent text-white' : 'text-txt-secondary hover:bg-surface-secondary'
-                }`}>{st} {st !== '전체' && <span className="ml-0.5 opacity-70">({requests.filter(r => r.status === st).length})</span>}</button>
-            ))}
+        <div className="px-4 py-3 border-b border-border-tertiary space-y-2.5">
+          {/* 상태 필터 (개수는 선택한 직원 기준) */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1">
+              {['전체', '대기', '승인', '반려'].map(st => (
+                <button key={st} onClick={() => setFilterStatus(st)}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                    filterStatus === st ? 'bg-accent text-white' : 'text-txt-secondary hover:bg-surface-secondary'
+                  }`}>{st} {st !== '전체' && <span className="ml-0.5 opacity-70">({staffScoped.filter(r => r.status === st).length})</span>}</button>
+              ))}
+            </div>
+            <span className="text-xs text-txt-tertiary">{filtered.length}건</span>
           </div>
-          <span className="text-xs text-txt-tertiary">{filtered.length}건</span>
+          {/* 이름별 조회 — 직책+직급 순, 클릭 시 해당 직원만 표시 (다시 클릭 시 전체) */}
+          <div className="flex flex-wrap items-center gap-1">
+            <button onClick={() => setFilterStaffId(null)}
+              className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
+                filterStaffId === null ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
+              }`}>전체</button>
+            {sortedStaff.map(s => {
+              const active = filterStaffId === s.id
+              return (
+                <button key={s.id} onClick={() => setFilterStaffId(active ? null : s.id)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
+                    active ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
+                  }`}>
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: staffColorMap[s.id] || '#94a3b8' }} />
+                  {s.name}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {filtered.length === 0 ? (

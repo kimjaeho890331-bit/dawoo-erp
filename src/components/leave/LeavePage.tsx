@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
+import { toast } from '@/lib/toast'
 
 interface LeaveRequest {
   id: string
@@ -212,11 +213,12 @@ export default function LeavePage() {
       .eq('staff_id', req.staff_id).eq('schedule_type', 'personal')
       .eq('start_date', req.start_date).eq('end_date', req.end_date)
 
-    await supabase.from('schedules').insert({
+    const { error } = await supabase.from('schedules').insert({
       title, start_date: req.start_date, end_date: req.end_date,
       staff_id: req.staff_id, schedule_type: 'personal', color, confirmed: true, all_day: true,
       memo: `${getName(req.staff_id)} ${typeLabel}${req.reason ? ' - ' + req.reason : ''}`,
     })
+    return { error, typeLabel }
   }
 
   const removeFromCalendar = async (req: LeaveRequest) => {
@@ -231,7 +233,19 @@ export default function LeavePage() {
     const { error } = await supabase.from('leave_requests').update({
       status: '승인', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
-    if (!error) { await syncToCalendar({ ...req, status: '승인' }); loadData() }
+    if (error) { toast.error(`승인 처리에 실패했습니다: ${error.message}`); return }
+
+    // 업무 캘린더 자동 등록 + 결과 안내
+    const sync = await syncToCalendar({ ...req, status: '승인' })
+    const dateStr = req.start_date === req.end_date
+      ? formatDate(req.start_date)
+      : `${formatDate(req.start_date)} ~ ${formatDate(req.end_date)}`
+    if (sync?.error) {
+      toast.error(`${getName(req.staff_id)} ${sync.typeLabel} 승인됨 · 업무 캘린더 등록 실패: ${sync.error.message}`)
+    } else {
+      toast.success(`${getName(req.staff_id)} ${sync?.typeLabel} 업무 캘린더에 등록되었습니다 (${dateStr})`)
+    }
+    loadData()
   }
 
   const handleReject = async (id: string) => {

@@ -93,24 +93,24 @@ export default function LeavePage() {
   const [formEndDate, setFormEndDate] = useState('')
   const [formReason, setFormReason] = useState('')
 
-  // 대표는 전체 조회, 일반 직원은 본인 것만
-  const isAdmin = currentStaff?.role === '대표'
-  const myStaffId = currentStaff?.id
+  // 공유 도구: 전 직원 연차를 함께 조회하고, 신청 시 직원을 직접 선택한다.
+  // "현재 직원"은 앱 전역 localStorage 값(대시보드/캘린더와 동일) 우선, 이메일 로그인은 fallback.
+  const [currentStaffId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('dawoo_current_staff_id')
+  })
+  const myStaffId = currentStaffId || currentStaff?.id || null
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    let reqQuery = supabase.from('leave_requests').select('*').order('start_date', { ascending: false })
-    if (!isAdmin && myStaffId) {
-      reqQuery = reqQuery.eq('staff_id', myStaffId)
-    }
     const [reqRes, staffRes] = await Promise.all([
-      reqQuery,
+      supabase.from('leave_requests').select('*').order('start_date', { ascending: false }),
       supabase.from('staff').select('*').order('name'),
     ])
     if (!reqRes.error) setRequests((reqRes.data as LeaveRequest[]) || [])
     if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
     setLoading(false)
-  }, [isAdmin, myStaffId])
+  }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -203,7 +203,7 @@ export default function LeavePage() {
     const req = requests.find(r => r.id === id)
     if (!req) return
     const { error } = await supabase.from('leave_requests').update({
-      status: '승인', approved_at: new Date().toISOString(), approved_by: currentStaff?.id || null,
+      status: '승인', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
     if (!error) { await syncToCalendar({ ...req, status: '승인' }); loadData() }
   }
@@ -212,7 +212,7 @@ export default function LeavePage() {
     const req = requests.find(r => r.id === id)
     if (!req) return
     const { error } = await supabase.from('leave_requests').update({
-      status: '반려', approved_at: new Date().toISOString(), approved_by: currentStaff?.id || null,
+      status: '반려', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
     if (!error) { await removeFromCalendar(req); loadData() }
   }
@@ -226,8 +226,8 @@ export default function LeavePage() {
   }
 
   const openCreate = () => {
-    // 본인 ID 기본 선택 (일반 직원은 수정 불가)
-    const defaultId = myStaffId || staffList[0]?.id || ''
+    // 현재 직원을 기본 선택 (목록에 실제 존재할 때만) — 없으면 첫 직원
+    const defaultId = staffList.find(s => s.id === myStaffId)?.id || staffList[0]?.id || ''
     setEditingId(null); setFormStaffId(defaultId); setFormLeaveType('연차'); setFormSubtype('')
     const today = new Date().toISOString().slice(0, 10)
     setFormStartDate(today); setFormEndDate(today); setFormReason('')
@@ -273,9 +273,9 @@ export default function LeavePage() {
         <button onClick={openCreate} className="btn-primary">+ 연차 신청</button>
       </div>
 
-      {/* 직원별 현황 카드 — 본인만 표시 (대표는 전체) */}
+      {/* 직원별 연차 현황 카드 — 전 직원 표시 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {(isAdmin ? staffList : staffList.filter(s => s.id === myStaffId)).map(s => {
+        {staffList.map(s => {
           const total = calcTotalLeave(s.join_date)
           const used = getUsed(s.id)
           const remain = total - used
@@ -381,10 +381,12 @@ export default function LeavePage() {
               <button onClick={() => setShowModal(false)} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
             </div>
             <div className="modal-body space-y-4">
-              {/* 직원 — 대표만 변경 가능, 일반 직원은 본인 고정 */}
+              {/* 직원 — 목록에서 직접 선택 (공유 방식) */}
               <div>
                 <label className="label-field">직원</label>
-                {isAdmin ? (
+                {staffList.length === 0 ? (
+                  <p className="text-[12px] text-txt-tertiary">등록된 직원이 없습니다. 직원관리에서 먼저 등록해주세요.</p>
+                ) : (
                   <select value={formStaffId} onChange={e => setFormStaffId(e.target.value)}
                     className="input-field w-full">
                     {staffList.map(s => {
@@ -393,19 +395,6 @@ export default function LeavePage() {
                       return <option key={s.id} value={s.id}>{s.name} (잔여 {remain}일)</option>
                     })}
                   </select>
-                ) : (
-                  (() => {
-                    const me = staffList.find(s => s.id === myStaffId)
-                    if (!me) return <p className="text-[12px] text-txt-tertiary">로그인 직원 정보 없음</p>
-                    const total = calcTotalLeave(me.join_date)
-                    const remain = total - getUsed(me.id)
-                    return (
-                      <div className="input-field w-full bg-surface-secondary flex items-center">
-                        <span className="text-[13px] text-txt-primary">{me.name}</span>
-                        <span className="ml-auto text-[11px] text-txt-tertiary">잔여 {remain}일</span>
-                      </div>
-                    )
-                  })()
                 )}
               </div>
 

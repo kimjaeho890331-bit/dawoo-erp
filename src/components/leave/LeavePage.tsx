@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ClipboardList, Calendar, AlertTriangle } from 'lucide-react'
+import { ClipboardList, Calendar, AlertTriangle, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
+import { toast } from '@/lib/toast'
 
 interface LeaveRequest {
   id: string
@@ -26,8 +27,28 @@ interface Staff {
   id: string
   name: string
   role: string
+  position?: string | null
   join_date: string | null
   color?: string | null
+}
+
+// --- 직책/직급 정렬 순서 ---
+// 직책(role): 대표 → 관리자 → 현장소장 → 직원, 그 외는 뒤로
+const ROLE_ORDER: Record<string, number> = { '대표': 0, '관리자': 1, '현장소장': 2, '직원': 3 }
+// 직급(position, 호칭) 높은 순. 문자열 부분일치로 판정, 목록에 없으면 998, 비어있으면 999(맨 뒤)
+const POSITION_ORDER = ['회장', '부회장', '사장', '부사장', '전무', '상무', '이사', '본부장', '실장', '부장', '차장', '팀장', '과장', '대리', '주임', '사원']
+const roleRank = (role: string) => ROLE_ORDER[role] ?? 99
+const positionRank = (pos?: string | null) => {
+  if (!pos) return 999
+  const idx = POSITION_ORDER.findIndex(p => pos.includes(p))
+  return idx === -1 ? 998 : idx
+}
+// 직책 → 직급 → 입사일 빠른 순 → 이름
+function compareStaffByRank(a: Staff, b: Staff): number {
+  return roleRank(a.role) - roleRank(b.role)
+    || positionRank(a.position) - positionRank(b.position)
+    || (a.join_date || '9999-99-99').localeCompare(b.join_date || '9999-99-99')
+    || a.name.localeCompare(b.name, 'ko')
 }
 
 // --- 연차 기준 (근로기준법) ---
@@ -55,12 +76,6 @@ const TYPE_COLORS: Record<string, string> = {
   '기타': 'bg-surface-secondary text-txt-secondary',
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  '대기': 'bg-yellow-100 text-yellow-700',
-  '승인': 'bg-green-100 text-green-700',
-  '반려': 'bg-red-100 text-red-700',
-}
-
 // 주말 포함 일수 계산
 function calcDays(start: string, end: string, type: string): number {
   if (type.includes('반차')) return 0.5
@@ -83,7 +98,9 @@ export default function LeavePage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [filterStatus, setFilterStatus] = useState('전체')
+  const [filterStatus, setFilterStatus] = useState('대기')
+  const [filterStaffId, setFilterStaffId] = useState<string | null>(null)  // null = 전체
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)  // 수정/삭제 드롭다운
 
   // 폼
   const [formStaffId, setFormStaffId] = useState('')
@@ -93,31 +110,36 @@ export default function LeavePage() {
   const [formEndDate, setFormEndDate] = useState('')
   const [formReason, setFormReason] = useState('')
 
-  // 대표는 전체 조회, 일반 직원은 본인 것만
-  const isAdmin = currentStaff?.role === '대표'
-  const myStaffId = currentStaff?.id
+  // 공유 도구: 전 직원 연차를 함께 조회하고, 신청 시 직원을 직접 선택한다.
+  // "현재 직원"은 앱 전역 localStorage 값(대시보드/캘린더와 동일) 우선, 이메일 로그인은 fallback.
+  const [currentStaffId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('dawoo_current_staff_id')
+  })
+  const myStaffId = currentStaffId || currentStaff?.id || null
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    let reqQuery = supabase.from('leave_requests').select('*').order('start_date', { ascending: false })
-    if (!isAdmin && myStaffId) {
-      reqQuery = reqQuery.eq('staff_id', myStaffId)
-    }
     const [reqRes, staffRes] = await Promise.all([
-      reqQuery,
+      supabase.from('leave_requests').select('*').order('start_date', { ascending: false }),
       supabase.from('staff').select('*').order('name'),
     ])
     if (!reqRes.error) setRequests((reqRes.data as LeaveRequest[]) || [])
     if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
     setLoading(false)
-  }, [isAdmin, myStaffId])
+  }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
   const getName = (id: string) => staffList.find(s => s.id === id)?.name || ''
   const getUsed = (id: string) => requests.filter(r => r.staff_id === id && r.status === '승인').reduce((s, r) => s + r.days, 0)
 
-  const filtered = requests.filter(r => filterStatus === '전체' || r.status === filterStatus)
+  // 직책+직급 순 정렬 (현황 카드 + 이름 칩 공용)
+  const sortedStaff = useMemo(() => [...staffList].sort(compareStaffByRank), [staffList])
+
+  // 이름(직원) 선택을 먼저 적용한 뒤 상태 필터 — 상태 개수 배지도 선택한 사람 기준으로 표시
+  const staffScoped = filterStaffId ? requests.filter(r => r.staff_id === filterStaffId) : requests
+  const filtered = staffScoped.filter(r => r.status === filterStatus)
 
   // 폼 유효성 검사
   const formDays = useMemo(() => {
@@ -186,11 +208,12 @@ export default function LeavePage() {
       .eq('staff_id', req.staff_id).eq('schedule_type', 'personal')
       .eq('start_date', req.start_date).eq('end_date', req.end_date)
 
-    await supabase.from('schedules').insert({
+    const { error } = await supabase.from('schedules').insert({
       title, start_date: req.start_date, end_date: req.end_date,
       staff_id: req.staff_id, schedule_type: 'personal', color, confirmed: true, all_day: true,
       memo: `${getName(req.staff_id)} ${typeLabel}${req.reason ? ' - ' + req.reason : ''}`,
     })
+    return { error, typeLabel }
   }
 
   const removeFromCalendar = async (req: LeaveRequest) => {
@@ -203,16 +226,28 @@ export default function LeavePage() {
     const req = requests.find(r => r.id === id)
     if (!req) return
     const { error } = await supabase.from('leave_requests').update({
-      status: '승인', approved_at: new Date().toISOString(), approved_by: currentStaff?.id || null,
+      status: '승인', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
-    if (!error) { await syncToCalendar({ ...req, status: '승인' }); loadData() }
+    if (error) { toast.error(`승인 처리에 실패했습니다: ${error.message}`); return }
+
+    // 업무 캘린더 자동 등록 + 결과 안내
+    const sync = await syncToCalendar({ ...req, status: '승인' })
+    const dateStr = req.start_date === req.end_date
+      ? formatDate(req.start_date)
+      : `${formatDate(req.start_date)} ~ ${formatDate(req.end_date)}`
+    if (sync?.error) {
+      toast.error(`${getName(req.staff_id)} ${sync.typeLabel} 승인됨 · 업무 캘린더 등록 실패: ${sync.error.message}`)
+    } else {
+      toast.success(`${getName(req.staff_id)} ${sync?.typeLabel} 업무 캘린더에 등록되었습니다 (${dateStr})`)
+    }
+    loadData()
   }
 
   const handleReject = async (id: string) => {
     const req = requests.find(r => r.id === id)
     if (!req) return
     const { error } = await supabase.from('leave_requests').update({
-      status: '반려', approved_at: new Date().toISOString(), approved_by: currentStaff?.id || null,
+      status: '반려', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
     if (!error) { await removeFromCalendar(req); loadData() }
   }
@@ -226,8 +261,8 @@ export default function LeavePage() {
   }
 
   const openCreate = () => {
-    // 본인 ID 기본 선택 (일반 직원은 수정 불가)
-    const defaultId = myStaffId || staffList[0]?.id || ''
+    // 현재 직원을 기본 선택 (목록에 실제 존재할 때만) — 없으면 첫 직원
+    const defaultId = staffList.find(s => s.id === myStaffId)?.id || staffList[0]?.id || ''
     setEditingId(null); setFormStaffId(defaultId); setFormLeaveType('연차'); setFormSubtype('')
     const today = new Date().toISOString().slice(0, 10)
     setFormStartDate(today); setFormEndDate(today); setFormReason('')
@@ -273,9 +308,9 @@ export default function LeavePage() {
         <button onClick={openCreate} className="btn-primary">+ 연차 신청</button>
       </div>
 
-      {/* 직원별 현황 카드 — 본인만 표시 (대표는 전체) */}
+      {/* 직원별 연차 현황 카드 — 전 직원, 직책+직급 순 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {(isAdmin ? staffList : staffList.filter(s => s.id === myStaffId)).map(s => {
+        {sortedStaff.map(s => {
           const total = calcTotalLeave(s.join_date)
           const used = getUsed(s.id)
           const remain = total - used
@@ -312,17 +347,39 @@ export default function LeavePage() {
       </div>
 
       {/* 필터 + 리스트 */}
-      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-        <div className="px-4 py-3 border-b border-border-tertiary flex items-center justify-between">
-          <div className="flex gap-1">
-            {['전체', '대기', '승인', '반려'].map(st => (
-              <button key={st} onClick={() => setFilterStatus(st)}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                  filterStatus === st ? 'bg-accent text-white' : 'text-txt-secondary hover:bg-surface-secondary'
-                }`}>{st} {st !== '전체' && <span className="ml-0.5 opacity-70">({requests.filter(r => r.status === st).length})</span>}</button>
-            ))}
+      <div className="bg-surface rounded-[10px] border border-border-primary">
+        <div className="px-4 py-3 border-b border-border-tertiary space-y-2.5">
+          {/* 상태 필터 (개수는 선택한 직원 기준) */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1">
+              {['대기', '승인', '반려'].map(st => (
+                <button key={st} onClick={() => setFilterStatus(st)}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                    filterStatus === st ? 'bg-accent text-white' : 'text-txt-secondary hover:bg-surface-secondary'
+                  }`}>{st} <span className="ml-0.5 opacity-70">({staffScoped.filter(r => r.status === st).length})</span></button>
+              ))}
+            </div>
+            <span className="text-xs text-txt-tertiary">{filtered.length}건</span>
           </div>
-          <span className="text-xs text-txt-tertiary">{filtered.length}건</span>
+          {/* 이름별 조회 — 직책+직급 순, 클릭 시 해당 직원만 표시 (다시 클릭 시 전체) */}
+          <div className="flex flex-wrap items-center gap-1">
+            <button onClick={() => setFilterStaffId(null)}
+              className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
+                filterStaffId === null ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
+              }`}>전체</button>
+            {sortedStaff.map(s => {
+              const active = filterStaffId === s.id
+              return (
+                <button key={s.id} onClick={() => setFilterStaffId(active ? null : s.id)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
+                    active ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
+                  }`}>
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: staffColorMap[s.id] || '#94a3b8' }} />
+                  {s.name}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {filtered.length === 0 ? (
@@ -337,7 +394,7 @@ export default function LeavePage() {
                 : null
 
               return (
-                <div key={r.id} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-tertiary transition-colors">
+                <div key={r.id} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-tertiary transition-colors last:rounded-b-[10px]">
                   <div className="flex items-center gap-2 w-20 shrink-0">
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <span className="text-sm font-medium text-txt-primary">{getName(r.staff_id)}</span>
@@ -353,17 +410,34 @@ export default function LeavePage() {
                     <span className="text-xs text-txt-tertiary tabular-nums">({r.days}일)</span>
                   </div>
                   <span className="text-sm text-txt-secondary flex-1 truncate">{r.reason || '-'}</span>
-                  <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium shrink-0 ${STATUS_COLORS[r.status]}`}>{r.status}</span>
                   {r.status === '승인' && <span className="shrink-0" title="캘린더 등록"><Calendar size={14} className="text-green-600" /></span>}
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {r.status === '대기' && (
                       <>
-                        <button onClick={() => handleApprove(r.id)} className="text-[11px] px-2 py-1 bg-green-50 text-green-600 rounded hover:bg-green-100">승인</button>
-                        <button onClick={() => handleReject(r.id)} className="text-[11px] px-2 py-1 bg-red-50 text-red-500 rounded hover:bg-red-100">반려</button>
+                        <button onClick={() => handleApprove(r.id)}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors">승인</button>
+                        <button onClick={() => handleReject(r.id)}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-red-300 text-red-600 bg-surface hover:bg-red-50 transition-colors">반려</button>
                       </>
                     )}
-                    <button onClick={() => openEdit(r)} className="btn-inline">수정</button>
-                    <button onClick={() => handleDelete(r.id)} className="btn-inline-danger">삭제</button>
+                    <div className="relative">
+                      <button onClick={() => setOpenMenuId(openMenuId === r.id ? null : r.id)}
+                        aria-haspopup="menu" aria-expanded={openMenuId === r.id} title="수정 · 삭제"
+                        className="flex items-center gap-0.5 text-[11px] px-2 py-1 rounded-md border border-border-primary text-txt-secondary hover:bg-surface-secondary transition-colors">
+                        관리 <ChevronDown size={13} className={`transition-transform ${openMenuId === r.id ? 'rotate-180' : ''}`} />
+                      </button>
+                      {openMenuId === r.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
+                          <div className="absolute right-0 top-full mt-1 z-50 w-28 bg-surface border border-border-primary rounded-lg shadow-lg py-1" role="menu">
+                            <button role="menuitem" onClick={() => { setOpenMenuId(null); openEdit(r) }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-txt-secondary hover:bg-surface-secondary transition-colors">수정</button>
+                            <button role="menuitem" onClick={() => { setOpenMenuId(null); handleDelete(r.id) }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">삭제</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -381,10 +455,12 @@ export default function LeavePage() {
               <button onClick={() => setShowModal(false)} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
             </div>
             <div className="modal-body space-y-4">
-              {/* 직원 — 대표만 변경 가능, 일반 직원은 본인 고정 */}
+              {/* 직원 — 목록에서 직접 선택 (공유 방식) */}
               <div>
                 <label className="label-field">직원</label>
-                {isAdmin ? (
+                {staffList.length === 0 ? (
+                  <p className="text-[12px] text-txt-tertiary">등록된 직원이 없습니다. 직원관리에서 먼저 등록해주세요.</p>
+                ) : (
                   <select value={formStaffId} onChange={e => setFormStaffId(e.target.value)}
                     className="input-field w-full">
                     {staffList.map(s => {
@@ -393,19 +469,6 @@ export default function LeavePage() {
                       return <option key={s.id} value={s.id}>{s.name} (잔여 {remain}일)</option>
                     })}
                   </select>
-                ) : (
-                  (() => {
-                    const me = staffList.find(s => s.id === myStaffId)
-                    if (!me) return <p className="text-[12px] text-txt-tertiary">로그인 직원 정보 없음</p>
-                    const total = calcTotalLeave(me.join_date)
-                    const remain = total - getUsed(me.id)
-                    return (
-                      <div className="input-field w-full bg-surface-secondary flex items-center">
-                        <span className="text-[13px] text-txt-primary">{me.name}</span>
-                        <span className="ml-auto text-[11px] text-txt-tertiary">잔여 {remain}일</span>
-                      </div>
-                    )
-                  })()
                 )}
               </div>
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ClipboardList, Calendar, AlertTriangle } from 'lucide-react'
+import { ClipboardList, Calendar, AlertTriangle, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
@@ -76,12 +76,6 @@ const TYPE_COLORS: Record<string, string> = {
   '기타': 'bg-surface-secondary text-txt-secondary',
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  '대기': 'bg-yellow-100 text-yellow-700',
-  '승인': 'bg-green-100 text-green-700',
-  '반려': 'bg-red-100 text-red-700',
-}
-
 // 주말 포함 일수 계산
 function calcDays(start: string, end: string, type: string): number {
   if (type.includes('반차')) return 0.5
@@ -104,8 +98,9 @@ export default function LeavePage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [filterStatus, setFilterStatus] = useState('전체')
+  const [filterStatus, setFilterStatus] = useState('대기')
   const [filterStaffId, setFilterStaffId] = useState<string | null>(null)  // null = 전체
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)  // 수정/삭제 드롭다운
 
   // 폼
   const [formStaffId, setFormStaffId] = useState('')
@@ -144,7 +139,7 @@ export default function LeavePage() {
 
   // 이름(직원) 선택을 먼저 적용한 뒤 상태 필터 — 상태 개수 배지도 선택한 사람 기준으로 표시
   const staffScoped = filterStaffId ? requests.filter(r => r.staff_id === filterStaffId) : requests
-  const filtered = staffScoped.filter(r => filterStatus === '전체' || r.status === filterStatus)
+  const filtered = staffScoped.filter(r => r.status === filterStatus)
 
   // 폼 유효성 검사
   const formDays = useMemo(() => {
@@ -352,16 +347,16 @@ export default function LeavePage() {
       </div>
 
       {/* 필터 + 리스트 */}
-      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+      <div className="bg-surface rounded-[10px] border border-border-primary">
         <div className="px-4 py-3 border-b border-border-tertiary space-y-2.5">
           {/* 상태 필터 (개수는 선택한 직원 기준) */}
           <div className="flex items-center justify-between">
             <div className="flex gap-1">
-              {['전체', '대기', '승인', '반려'].map(st => (
+              {['대기', '승인', '반려'].map(st => (
                 <button key={st} onClick={() => setFilterStatus(st)}
                   className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                     filterStatus === st ? 'bg-accent text-white' : 'text-txt-secondary hover:bg-surface-secondary'
-                  }`}>{st} {st !== '전체' && <span className="ml-0.5 opacity-70">({staffScoped.filter(r => r.status === st).length})</span>}</button>
+                  }`}>{st} <span className="ml-0.5 opacity-70">({staffScoped.filter(r => r.status === st).length})</span></button>
               ))}
             </div>
             <span className="text-xs text-txt-tertiary">{filtered.length}건</span>
@@ -399,7 +394,7 @@ export default function LeavePage() {
                 : null
 
               return (
-                <div key={r.id} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-tertiary transition-colors">
+                <div key={r.id} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-tertiary transition-colors last:rounded-b-[10px]">
                   <div className="flex items-center gap-2 w-20 shrink-0">
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <span className="text-sm font-medium text-txt-primary">{getName(r.staff_id)}</span>
@@ -415,17 +410,34 @@ export default function LeavePage() {
                     <span className="text-xs text-txt-tertiary tabular-nums">({r.days}일)</span>
                   </div>
                   <span className="text-sm text-txt-secondary flex-1 truncate">{r.reason || '-'}</span>
-                  <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium shrink-0 ${STATUS_COLORS[r.status]}`}>{r.status}</span>
                   {r.status === '승인' && <span className="shrink-0" title="캘린더 등록"><Calendar size={14} className="text-green-600" /></span>}
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {r.status === '대기' && (
                       <>
-                        <button onClick={() => handleApprove(r.id)} className="text-[11px] px-2 py-1 bg-green-50 text-green-600 rounded hover:bg-green-100">승인</button>
-                        <button onClick={() => handleReject(r.id)} className="text-[11px] px-2 py-1 bg-red-50 text-red-500 rounded hover:bg-red-100">반려</button>
+                        <button onClick={() => handleApprove(r.id)}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors">승인</button>
+                        <button onClick={() => handleReject(r.id)}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-red-300 text-red-600 bg-surface hover:bg-red-50 transition-colors">반려</button>
                       </>
                     )}
-                    <button onClick={() => openEdit(r)} className="btn-inline">수정</button>
-                    <button onClick={() => handleDelete(r.id)} className="btn-inline-danger">삭제</button>
+                    <div className="relative">
+                      <button onClick={() => setOpenMenuId(openMenuId === r.id ? null : r.id)}
+                        aria-haspopup="menu" aria-expanded={openMenuId === r.id} title="수정 · 삭제"
+                        className="flex items-center gap-0.5 text-[11px] px-2 py-1 rounded-md border border-border-primary text-txt-secondary hover:bg-surface-secondary transition-colors">
+                        관리 <ChevronDown size={13} className={`transition-transform ${openMenuId === r.id ? 'rotate-180' : ''}`} />
+                      </button>
+                      {openMenuId === r.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
+                          <div className="absolute right-0 top-full mt-1 z-50 w-28 bg-surface border border-border-primary rounded-lg shadow-lg py-1" role="menu">
+                            <button role="menuitem" onClick={() => { setOpenMenuId(null); openEdit(r) }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-txt-secondary hover:bg-surface-secondary transition-colors">수정</button>
+                            <button role="menuitem" onClick={() => { setOpenMenuId(null); handleDelete(r.id) }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors">삭제</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               )

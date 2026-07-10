@@ -45,10 +45,17 @@
 - [x] KVM 2 VPS 구매
 - [x] 중복결제(KVM 2 1건) + 미사용 Business 웹호스팅 **환불 요청 완료** → KVM 2 **1개만 유지**
 
-**Phase 1 — 헤르메스 배포 (진행중) ◀ 현재**
-- [ ] VPS 프로비저닝: 서버위치 **인도네시아(자카르타)** — 아시아 리전 → OS/앱 **Hermes Agent / Ubuntu 24.04 / Docker**
-- [ ] 배포 설정 폼: 관리자 ID/PW, 모델 선택, Slack 토큰란은 **비움** → **Deploy** (10~15분)
-- [ ] Docker Manager → 헤르메스 옆 **`Open`** → 터미널(CLI) 확보
+**Phase 1 — 헤르메스 배포 (거의 완료) ◀ 현재**
+- [x] VPS 프로비저닝: **자카르타(인도네시아)**, 서버 `srv1816319.hstgr.cloud`, Ubuntu 24.04 + Docker
+- [x] Hermes Agent 템플릿 배포 (관리자 ID: `hermes` / PW는 대표가 별도 저장)
+- [x] Docker 컨테이너 2개 실행중: `hermes-agent-7emm`(본체) + `traefik`(프록시) — **2개가 정상**
+- [x] 터미널 진입: hPanel → 도커 매니저 → hermes-agent 옆 **터미널/Open** → 컨테이너 `hermes-agent-7emm-hermes-agent-1`, 프롬프트 `root@...:/opt/hermes#`
+- [x] `hermes doctor` 통과 (Node/Playwright/도구 정상) + `hermes doctor --fix`
+- [x] `hermes setup` — Full setup, Terminal Backend = **local 유지**
+- [x] Provider **Anthropic** 연결 + 모델 **claude-sonnet-4-6** 설정 (`✓ API key saved`)
+- [x] TUI 부팅 확인: Hermes Agent v0.18.2 · 28 tools · 68 skills
+- [ ] **⚠️ 마지막 남은 것: API 키 교체** — 첫 키(hermes-vps용 신규발급)가 **크레딧 없는 다른 계정** 소속이라 HTTP 400 "credit balance too low". **기존 ERP 키(작동 검증됨)로 재입력** 필요 → 아래 재개 지점 참조
+- [ ] `hermes` 대화 테스트 (`안녕` → 응답 확인)
 
 **Phase 2 — Slack 연결 (예정)**
 - [ ] `hermes slack manifest --write` → 앱 생성 → `xapp-`/`xoxb-` 토큰
@@ -65,14 +72,28 @@
 ---
 
 ## ▶ 재개 지점 (다음 세션에서 여기부터)
-**현재 위치: Phase 1 — VPS 배포 폼 단계.**
+**현재 위치: Phase 1 마지막 단계 — API 키를 "기존 ERP 키"로 교체 후 대화 테스트.**
 
-1. hPanel → **VPS** → 남긴 KVM 2 → **설정** → OS/앱 `Hermes Agent (Ubuntu 24.04 · Docker)` → **다음**
-2. **배포 폼** 입력:
-   - 관리자 ID / 비밀번호 → 강하게 정하고 **저장** 🔑
-   - 모델 → **Quick Setup(nexos.ai)** 로 빠른 시작 *(또는 Full setup → `ANTHROPIC_API_KEY`)*
-   - Slack 토큰란 → **비움** (Phase 2에서)
-3. **Deploy** → 완료 후 Docker Manager → **`Open`** → 터미널
+터미널 진입: hPanel → VPS(`srv1816319`) → **도커 매니저** → hermes-agent 옆 **터미널** 클릭.
+
+1. (Claude 세션에서) **"기존 ERP 키 클립보드에 복사해줘"** 요청 → `.env.local`의 `ANTHROPIC_API_KEY`를 clip.exe로 복사해줌
+2. VPS 터미널: `hermes model` → `6`(Anthropic) → `2`(API key) → **키 붙여넣기**(우클릭) → Enter → 모델 목록에서 ↓4번 `claude-sonnet-4-6` → Enter
+3. `hermes` 실행 → `안녕! 넌 누구야?` → **응답 오면 Phase 1 완료** → `/quit`으로 나가기
+4. 이어서 Phase 2: `hermes slack manifest --write`
+
+### ⚠️ 마법사 조작 요령 (시행착오에서 배운 것)
+- **숫자를 물으면 숫자만, 키는 "API key:" 프롬프트에서만** 붙여넣기
+- **Ctrl+C / ESC 누르면 마법사 통째로 종료됨** — 오타는 Backspace로만 수정
+- 브라우저 터미널 붙여넣기 = **우클릭 → 붙여넣기** 또는 `Ctrl+Shift+V`
+- 입력창에 `]11;rgb:0000/...` 같은 문자가 끼면 터미널 신호 노이즈 — Ctrl+U로 지우고 무시
+
+### 컨테이너 내부 경로 (참고)
+- 설정: `/opt/data/config.yaml` · 비밀키: `/opt/data/.env` · 설치: `/opt/hermes`
+
+### 🔑 API 키 메모
+- `dawoo-erp/.env.local`의 `ANTHROPIC_API_KEY` = **ERP가 쓰는 키, 크레딧 있음(curl 검증 완료)** ← 당분간 헤르메스도 이 키 사용
+- `HERMES_ANTHROPIC_API_KEY`(같은 파일) = hermes-vps용으로 신규 발급했으나 **크레딧 없는 다른 계정** 소속이라 미사용
+- **나중에 정리**: ERP 키의 계정(console.anthropic.com)에서 `hermes-vps` 키 재발급 → 헤르메스 키 교체 (계정 분리 관리 목적)
 
 ---
 

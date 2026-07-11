@@ -65,6 +65,69 @@ export function buildStaffColorMap(
   return m
 }
 
+// --- 가독성(대비) 유틸 ---
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = normalizeHex(hex).slice(1)
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+/** WCAG 상대 휘도 (0=검정 ~ 1=흰색) */
+function relLuminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map(v => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/** WCAG 대비율 (1~21) */
+function contrastRatio(a: string, b: string): number {
+  const la = relLuminance(a), lb = relLuminance(b)
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la]
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+const DARK_TEXT = '#1F2937'
+
+const contrastTextCache = new Map<string, string>()
+
+/**
+ * 색 배경 위 글자색 자동 결정.
+ * 흰 글자 vs 진한 글자 중 대비가 높은 쪽 반환 — 파스텔 배경이어도 항상 읽힘.
+ */
+export function getContrastText(bgHex: string): string {
+  if (!isValidHex(bgHex)) return '#FFFFFF'
+  const key = normalizeHex(bgHex)
+  const cached = contrastTextCache.get(key)
+  if (cached) return cached
+  const result = contrastRatio(key, '#FFFFFF') >= contrastRatio(key, DARK_TEXT) ? '#FFFFFF' : DARK_TEXT
+  contrastTextCache.set(key, result)
+  return result
+}
+
+const readableCache = new Map<string, string>()
+
+/**
+ * 흰/연한 배경 위에 글자·테두리로 쓸 색.
+ * 흰 배경 대비 3:1 미만이면 색조를 유지한 채 어둡게 조정해 반환.
+ * (배경·점에는 원색을 그대로 쓰고, 글자에만 이 값을 사용)
+ */
+export function ensureReadableOnLight(hex: string): string {
+  if (!isValidHex(hex)) return hex
+  const key = normalizeHex(hex)
+  const cached = readableCache.get(key)
+  if (cached) return cached
+  let [r, g, b] = hexToRgb(key)
+  let result = key
+  for (let i = 0; i < 20 && contrastRatio(result, '#FFFFFF') < 3; i++) {
+    r = Math.floor(r * 0.88); g = Math.floor(g * 0.88); b = Math.floor(b * 0.88)
+    result = `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`
+  }
+  readableCache.set(key, result)
+  return result
+}
+
 /** hex 유효성 검사 (#rrggbb 또는 #rgb) */
 export function isValidHex(v: string): boolean {
   return /^#([0-9a-fA-F]{3}){1,2}$/.test(v)

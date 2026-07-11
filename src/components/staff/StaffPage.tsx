@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { formatPhone, formatMoney } from '@/lib/utils/format'
 import { generateInviteCode } from '@/lib/staff/inviteCode'
-import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex } from '@/lib/staff-colors'
+import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex, getContrastText } from '@/lib/staff-colors'
 
 interface Staff {
   id: string
@@ -153,8 +153,8 @@ export default function StaffPage() {
                         onClick={() => setDetailItem(s)}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                              style={{ backgroundColor: s.color || '#94a3b8' }}>
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                              style={{ backgroundColor: s.color || '#94a3b8', color: getContrastText(s.color || '#94a3b8') }}>
                               {s.name.charAt(0)}
                             </div>
                             <span className="font-medium text-txt-primary">{s.name}</span>
@@ -343,8 +343,8 @@ function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => 
     <div className="bg-surface rounded-[10px] border border-border-primary p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-semibold text-white"
-            style={{ backgroundColor: staff.color || '#94a3b8' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-semibold"
+            style={{ backgroundColor: staff.color || '#94a3b8', color: getContrastText(staff.color || '#94a3b8') }}>
             {staff.name.charAt(0)}
           </div>
           <div>

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { buildStaffColorMap } from '@/lib/staff-colors'
+import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
+import StaffColorPopover from './StaffColorPopover'
 
 // --- 타입 ---
 interface Schedule {
@@ -129,6 +130,20 @@ export default function WorkCalendarPage() {
 
   // staff.color 우선, 미지정 시 id 해시로 fallback 팔레트 매핑
   const staffColorMap = useMemo(() => buildStaffColorMap(staffList), [staffList])
+
+  // 직원 색상 팝오버 (칩 우클릭)
+  const [colorPicker, setColorPicker] = useState<{ staffId: string; x: number; y: number } | null>(null)
+
+  const handleStaffColorSave = async (staffId: string, color: string) => {
+    const prev = staffList
+    setStaffList(list => list.map(s => s.id === staffId ? { ...s, color } : s))
+    setColorPicker(null)
+    const { error } = await supabase.from('staff').update({ color }).eq('id', staffId)
+    if (error) {
+      setStaffList(prev)
+      alert('색상 저장 실패: ' + error.message)
+    }
+  }
 
   const filtered = useMemo(() =>
     schedules.filter(s => {
@@ -272,16 +287,36 @@ export default function WorkCalendarPage() {
                 const on = activeStaff.size === 0 || activeStaff.has(s.id)
                 return (
                   <button key={s.id} onClick={() => toggleStaff(s.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      const r = e.currentTarget.getBoundingClientRect()
+                      setColorPicker({ staffId: s.id, x: r.left, y: r.bottom + 4 })
+                    }}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition ${on ? 'border-transparent shadow-sm' : 'border-border-primary opacity-40'}`}
-                    style={on ? { backgroundColor: c + '18', color: c } : {}}>
+                    style={on ? { backgroundColor: c + '18', color: ensureReadableOnLight(c) } : {}}>
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />{s.name}
                   </button>
                 )
               })}
               <span className="mx-2 w-px h-4 bg-border-primary" />
-              <span className="text-[10px] text-txt-tertiary">담당자별 색상으로 표시</span>
+              <span className="text-[10px] text-txt-tertiary">담당자별 색상 표시 · 칩 우클릭으로 색상 변경</span>
             </div>
           </div>
+
+          {/* 직원 색상 팝오버 */}
+          {colorPicker && (() => {
+            const st = staffList.find(s => s.id === colorPicker.staffId)
+            if (!st) return null
+            return (
+              <StaffColorPopover
+                staffName={st.name}
+                color={staffColorMap[st.id] || '#94a3b8'}
+                anchor={{ x: colorPicker.x, y: colorPicker.y }}
+                onSelect={(c) => handleStaffColorSave(st.id, c)}
+                onClose={() => setColorPicker(null)}
+              />
+            )
+          })()}
 
           {/* 캘린더 */}
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
@@ -343,6 +378,9 @@ export default function WorkCalendarPage() {
                           const s = bar.schedule as Schedule
                           // 색상 고정 제거 — 담당자별 색상만 사용
                           const barColor = getBarColor(s)
+                          // 밝은 직원색이어도 글자가 항상 읽히도록 자동 보정
+                          const confirmedText = getContrastText(barColor)
+                          const readableInk = ensureReadableOnLight(barColor)
                           return (
                             <div key={s.id + '-' + wi}
                               draggable
@@ -352,14 +390,14 @@ export default function WorkCalendarPage() {
                               style={{
                                 left: `${bar.left}%`, width: `${bar.width}%`, top: ri * (bh + bg) + 1, height: bh,
                                 backgroundColor: s.confirmed ? barColor : 'white',
-                                border: s.confirmed ? 'none' : `1.5px dashed ${barColor}`,
-                                color: s.confirmed ? 'white' : barColor,
+                                border: s.confirmed ? 'none' : `1.5px dashed ${readableInk}`,
+                                color: s.confirmed ? confirmedText : readableInk,
                               }}
                               title={`${bar.staffName || ''} ${s.title}\n${s.memo || ''}`}>
                               <div className="flex items-center gap-1 truncate">
                                 {bar.staffName && (
                                   <span className="shrink-0 w-[16px] h-[16px] rounded-full flex items-center justify-center text-[10px] font-bold"
-                                    style={{ backgroundColor: s.confirmed ? 'rgba(255,255,255,0.3)' : barColor, color: s.confirmed ? 'white' : 'white' }}>
+                                    style={{ backgroundColor: s.confirmed ? 'rgba(255,255,255,0.3)' : barColor, color: s.confirmed ? confirmedText : getContrastText(barColor) }}>
                                     {bar.staffName.length >= 2 ? bar.staffName.charAt(1) : bar.staffName.charAt(0)}
                                   </span>
                                 )}
@@ -1014,8 +1052,8 @@ function TodaySection({
                   <span className="absolute top-1 right-1.5 text-[8px] text-txt-quaternary font-medium">나</span>
                 )}
                 <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold"
-                  style={{ backgroundColor: color }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold"
+                  style={{ backgroundColor: color, color: getContrastText(color) }}
                 >
                   {staff.name.length >= 2 ? staff.name.charAt(1) : staff.name.charAt(0)}
                 </span>

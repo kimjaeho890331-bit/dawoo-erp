@@ -10,6 +10,7 @@ import FirstVisitModal from './FirstVisitModal'
 import SitesTimeline from './SitesTimeline'
 import TaskDetailModal from './TaskDetailModal'
 import WeeklyIntakeCard from './WeeklyIntakeCard'
+import FunnelCard from './FunnelCard'
 import type { BriefingResponse, Task, WeeklyReport } from '@/types'
 
 // 월요일 00:00(로컬) 기준 주 시작 — 주간 보고서 캐시 키용
@@ -264,9 +265,12 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* 메인 그리드 — 좌: 주간 접수 현황 / 우: AI 비서 + 할 일 */}
+        {/* 메인 그리드 — 좌: 접수 퍼널 + 주간 접수 현황 / 우: AI 비서 + 할 일 */}
         <div className="grid grid-cols-[1.6fr_1fr] gap-4 items-start">
-          <WeeklyIntakeCard />
+          <div className="flex flex-col gap-4">
+            <FunnelCard />
+            <WeeklyIntakeCard />
+          </div>
           <div className="flex flex-col gap-4">
             <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
             <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
@@ -286,7 +290,8 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* 주간 접수 현황 (항상 노출) */}
+        {/* 접수 퍼널 + 주간 접수 현황 (항상 노출) */}
+        <FunnelCard />
         <WeeklyIntakeCard />
 
         {/* 내 할 일 */}

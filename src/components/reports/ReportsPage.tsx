@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import FunnelMonthlyReport from './FunnelMonthlyReport'
 
 // --- 타입 (11개 채널) ---
 interface Project {
@@ -39,7 +40,7 @@ function isToday(d: string | null) { return d ? d.startsWith(new Date().toISOStr
 function fmt(n: number) { return n.toLocaleString() }
 function fmtW(n: number) { return n >= 10000 ? `${Math.round(n / 10000)}만${n % 10000 > 0 ? ` ${fmt(n % 10000)}` : ''}원` : `${fmt(n)}원` }
 
-type Tab = 'reports' | 'summary' | 'staff' | 'sites' | 'finance'
+type Tab = 'reports' | 'funnel' | 'summary' | 'staff' | 'sites' | 'finance'
 type ReportType = 'daily' | 'weekly' | 'monthly'
 
 // 보고서 = 서술형 문단들
@@ -642,6 +643,7 @@ export default function ReportsPage() {
           <div className="flex bg-surface-secondary rounded-lg p-0.5">
             {([
               { key: 'reports' as Tab, label: '보고서' },
+              { key: 'funnel' as Tab, label: '접수 퍼널' },
               { key: 'summary' as Tab, label: '긴급/요약' },
               { key: 'staff' as Tab, label: '직원 성과' },
               { key: 'sites' as Tab, label: '현장 현황' },
@@ -786,6 +788,9 @@ export default function ReportsPage() {
           )}
         </div>
       )}
+
+      {/* ===== 탭: 접수 퍼널 (월별 정산) ===== */}
+      {tab === 'funnel' && <FunnelMonthlyReport />}
 
       {/* ===== 탭 2: 긴급/요약 ===== */}
       {tab === 'summary' && (

@@ -371,7 +371,7 @@ export default function VendorsPage() {
           </svg>
           <input type="text" placeholder={activeTab === '일용직' ? '이름, 분류 검색...' : '업체명, 분류, 담당자 검색...'}
             value={search} onChange={e => setSearch(e.target.value)}
-            className="input-field w-full pl-10 pr-4" />
+            className="input-field w-full" style={{ paddingLeft: 36 }} />
         </div>
       </div>
 

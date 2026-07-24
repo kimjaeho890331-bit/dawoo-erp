@@ -166,12 +166,14 @@ export default function AsPage() {
         : form.resolved_date,
     }
 
-    if (editingId) {
-      await supabase.from('as_records').update(payload).eq('id', editingId)
-    } else {
-      await supabase.from('as_records').insert(payload)
-    }
+    const { error } = editingId
+      ? await supabase.from('as_records').update(payload).eq('id', editingId)
+      : await supabase.from('as_records').insert(payload)
     setSaving(false)
+    if (error) {
+      alert(`저장 실패: ${error.message}`)
+      return
+    }
     setModalOpen(false)
     fetchRecords()
   }

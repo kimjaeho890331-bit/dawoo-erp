@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, DragEvent } from 'react'
-import { Check, Paperclip, FileText, Landmark, CreditCard, HardHat, Building2, User, Phone, Hash } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 'react'
+import { Check, Paperclip, FileText, Landmark, CreditCard, HardHat, Building2, User, Phone, Hash, Plus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // --- 타입 ---
@@ -26,6 +26,17 @@ interface Vendor {
 }
 
 type VendorType = '협력업체' | '일용직'
+
+interface VendorCategory {
+  id: string
+  name: string
+  created_at: string
+}
+
+// 분류 문자열 → 공종 목록 (기존 데이터의 "/" "," 구분자 모두 지원)
+const splitCats = (s: string) => (s || '').split(/[,/]/).map(x => x.trim()).filter(Boolean)
+const koCompare = (a: string, b: string) => a.localeCompare(b, 'ko')
+const UNCATEGORIZED = '미분류'
 
 const EMPTY_VENDOR = {
   name: '', vendor_type: '협력업체' as VendorType, category: '', contact_person: '', phone: '', email: '',
@@ -126,6 +137,11 @@ export default function VendorsPage() {
   const [form, setForm] = useState(EMPTY_VENDOR)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [chips, setChips] = useState<VendorCategory[]>([])
+  const [addingChip, setAddingChip] = useState(false)
+  const [chipInput, setChipInput] = useState('')
+  const [chipDeleteConfirm, setChipDeleteConfirm] = useState<string | null>(null)
+  const [chipPanelOpen, setChipPanelOpen] = useState(false)
 
   const fetchVendors = useCallback(async () => {
     setLoading(true)
@@ -137,7 +153,43 @@ export default function VendorsPage() {
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchVendors() }, [fetchVendors])
+  const fetchChips = useCallback(async () => {
+    const { data, error } = await supabase.from('vendor_categories').select('*')
+    if (!error && data) setChips(data)
+  }, [])
+
+  useEffect(() => { fetchVendors(); fetchChips() }, [fetchVendors, fetchChips])
+
+  // --- 공종칩 등록/삭제 ---
+  const sortedChipNames = useMemo(() => chips.map(c => c.name).sort(koCompare), [chips])
+
+  const handleAddChip = async () => {
+    const name = chipInput.trim()
+    if (!name) return
+    if (chips.some(c => c.name === name)) { alert('이미 등록된 공종입니다.'); return }
+    const { error } = await supabase.from('vendor_categories').insert({ name })
+    if (error) { alert(`공종 등록 실패: ${error.message}`); return }
+    setChipInput('')
+    setAddingChip(false)
+    fetchChips()
+  }
+
+  const handleDeleteChip = async (chip: VendorCategory) => {
+    const { error } = await supabase.from('vendor_categories').delete().eq('id', chip.id)
+    if (error) { alert(`공종 삭제 실패: ${error.message}`); return }
+    setChipDeleteConfirm(null)
+    fetchChips()
+  }
+
+  // --- 분류(공종) 선택 토글 ---
+  const selectedCats = useMemo(() => splitCats(form.category), [form.category])
+
+  const toggleCat = (name: string) => {
+    const next = selectedCats.includes(name)
+      ? selectedCats.filter(c => c !== name)
+      : [...selectedCats, name]
+    setForm(prev => ({ ...prev, category: next.join('/') }))
+  }
 
   // 필터링
   const filtered = vendors.filter(v => {
@@ -149,10 +201,30 @@ export default function VendorsPage() {
     return true
   })
 
+  // 공종별 그룹핑 (ㄱ~ㅎ 순, 여러 공종이면 각 그룹에 표시, 공종 없으면 미분류 맨 뒤)
+  const grouped = useMemo(() => {
+    const map = new Map<string, Vendor[]>()
+    filtered.forEach(v => {
+      const cats = splitCats(v.category)
+      const keys = cats.length ? cats : [UNCATEGORIZED]
+      keys.forEach(k => {
+        if (!map.has(k)) map.set(k, [])
+        map.get(k)!.push(v)
+      })
+    })
+    const names = [...map.keys()].filter(k => k !== UNCATEGORIZED).sort(koCompare)
+    if (map.has(UNCATEGORIZED)) names.push(UNCATEGORIZED)
+    return names.map(name => ({
+      name,
+      vendors: map.get(name)!.slice().sort((a, b) => koCompare(a.name, b.name)),
+    }))
+  }, [filtered])
+
   const openCreateModal = () => {
     setEditingVendor(null)
     setForm({ ...EMPTY_VENDOR, vendor_type: activeTab })
     setDeleteConfirm(null)
+    setChipPanelOpen(false)
     setModalOpen(true)
   }
 
@@ -166,6 +238,7 @@ export default function VendorsPage() {
       id_card_url: vendor.id_card_url, safety_cert_url: vendor.safety_cert_url,
     })
     setDeleteConfirm(null)
+    setChipPanelOpen(false)
     setModalOpen(true)
   }
 
@@ -249,6 +322,47 @@ export default function VendorsPage() {
         })}
       </div>
 
+      {/* 공종칩 바 */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <span className="text-[13px] font-medium text-txt-tertiary mr-1">공종</span>
+        {sortedChipNames.map(name => {
+          const chip = chips.find(c => c.name === name)!
+          return chipDeleteConfirm === chip.id ? (
+            <span key={chip.id} className="inline-flex items-center gap-1 pl-3 pr-1 py-1 rounded-full text-[12px] bg-red-50 border border-red-200 text-red-600">
+              삭제?
+              <button onClick={() => handleDeleteChip(chip)} className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[11px]">확인</button>
+              <button onClick={() => setChipDeleteConfirm(null)} className="px-1.5 py-0.5 rounded-full bg-surface-secondary text-txt-secondary text-[11px]">취소</button>
+            </span>
+          ) : (
+            <span key={chip.id} className="group/chip inline-flex items-center gap-1 pl-3 pr-2 py-1 rounded-full text-[12px] font-medium bg-surface-secondary text-txt-secondary border border-border-primary">
+              {chip.name}
+              <button onClick={() => setChipDeleteConfirm(chip.id)}
+                className="opacity-0 group-hover/chip:opacity-100 transition-opacity text-txt-quaternary hover:text-red-500">
+                <X size={12} />
+              </button>
+            </span>
+          )
+        })}
+        {addingChip ? (
+          <span className="inline-flex items-center gap-1">
+            <input
+              type="text" autoFocus value={chipInput}
+              onChange={e => setChipInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddChip(); if (e.key === 'Escape') { setAddingChip(false); setChipInput('') } }}
+              placeholder="공종명 입력"
+              className="border border-border-primary rounded-full px-3 py-1 text-[12px] w-[120px] focus:border-accent outline-none"
+            />
+            <button onClick={handleAddChip} className="px-2.5 py-1 rounded-full bg-accent text-white text-[12px]">등록</button>
+            <button onClick={() => { setAddingChip(false); setChipInput('') }} className="px-2.5 py-1 rounded-full bg-surface-secondary text-txt-secondary text-[12px]">취소</button>
+          </span>
+        ) : (
+          <button onClick={() => setAddingChip(true)}
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-medium border border-dashed border-border-secondary text-txt-tertiary hover:border-accent hover:text-accent-text transition-colors">
+            <Plus size={12} /> 공종 추가
+          </button>
+        )}
+      </div>
+
       {/* 검색 */}
       <div className="mb-5">
         <div className="relative max-w-md">
@@ -273,9 +387,16 @@ export default function VendorsPage() {
           <p className="text-sm mt-1">등록 버튼을 눌러 추가해 주세요</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map(vendor => (
-            <div key={vendor.id} onClick={() => openEditModal(vendor)}
+        <div className="space-y-7">
+          {grouped.map(group => (
+            <section key={group.name}>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-[15px] font-semibold text-txt-primary">{group.name}</h2>
+                <span className="text-xs px-2 py-[1px] rounded-full bg-surface-tertiary text-txt-secondary tabular-nums">{group.vendors.length}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {group.vendors.map(vendor => (
+            <div key={`${group.name}-${vendor.id}`} onClick={() => openEditModal(vendor)}
               className="bg-surface border border-border-primary rounded-[10px] p-5 hover:shadow-md hover:border-border-secondary transition-all cursor-pointer group">
               <div className="flex items-start justify-between mb-2">
                 <div className="min-w-0 flex-1">
@@ -283,7 +404,11 @@ export default function VendorsPage() {
                     {vendor.name}
                   </h3>
                   {vendor.category && (
-                    <span className="inline-block mt-1 px-[10px] py-[2px] rounded-full text-[11px] font-medium bg-surface-secondary text-txt-secondary">{vendor.category}</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {splitCats(vendor.category).map(cat => (
+                        <span key={cat} className="inline-block px-[10px] py-[2px] rounded-full text-[11px] font-medium bg-surface-secondary text-txt-secondary">{cat}</span>
+                      ))}
+                    </div>
                   )}
                 </div>
                 {/* 서류 상태 아이콘 */}
@@ -329,6 +454,9 @@ export default function VendorsPage() {
                 )}
               </div>
             </div>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -374,12 +502,47 @@ export default function VendorsPage() {
                   className="input-field w-full" />
               </div>
 
-              {/* 분류 (자유 입력) */}
+              {/* 분류 (공종칩 선택) */}
               <div>
-                <label className="label-field">분류</label>
-                <input type="text" value={form.category} onChange={e => updateForm('category', e.target.value)}
-                  placeholder={isWorker ? '예: 미장, 타일, 철거' : '예: 전기, 설비, 도배'}
-                  className="input-field w-full" />
+                <label className="label-field">분류 (공종)</label>
+                <div
+                  onClick={() => setChipPanelOpen(o => !o)}
+                  className="w-full min-h-[42px] border border-border-primary rounded-lg px-3 py-2 flex flex-wrap items-center gap-1.5 cursor-pointer hover:border-accent transition-colors"
+                >
+                  {selectedCats.length === 0 ? (
+                    <span className="text-sm text-txt-quaternary">클릭해서 공종 선택</span>
+                  ) : (
+                    selectedCats.map(cat => (
+                      <span key={cat} className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-[3px] rounded-full text-[12px] font-medium bg-accent-light text-accent-text">
+                        {cat}
+                        <button onClick={e => { e.stopPropagation(); toggleCat(cat) }} className="hover:text-red-500">
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+                {chipPanelOpen && (
+                  <div className="mt-2 border border-border-primary rounded-lg p-2.5 max-h-[140px] overflow-y-auto">
+                    {sortedChipNames.length === 0 ? (
+                      <p className="text-sm text-txt-quaternary px-1">등록된 공종이 없습니다. 거래처 DB 화면 상단에서 공종을 추가하세요.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {sortedChipNames.map(name => {
+                          const on = selectedCats.includes(name)
+                          return (
+                            <button key={name} type="button" onClick={() => toggleCat(name)}
+                              className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-colors ${
+                                on ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+                              }`}>
+                              {name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 협력업체 전용 필드 */}

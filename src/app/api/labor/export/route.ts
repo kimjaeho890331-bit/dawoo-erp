@@ -30,9 +30,18 @@ const BORDER = { top: THIN, left: THIN, bottom: THIN, right: THIN }
 const HEADER_FILL: ExcelJS.FillPattern = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }
 const MONEY = '#,##0'
 
+interface LaborRates {
+  income: number; resident: number; employment: number
+  pension: number; health: number; longterm: number
+}
+
+const DEFAULT_RATES: LaborRates = { income: 2.7, resident: 10, employment: 0.9, pension: 4.5, health: 3.43, longterm: 11.52 }
+
 export async function POST(req: NextRequest) {
   try {
-    const { year, month, records } = (await req.json()) as { year: number; month: number; records: LaborRow[] }
+    const body = (await req.json()) as { year: number; month: number; rates?: LaborRates; records: LaborRow[] }
+    const { year, month, records } = body
+    const rates = { ...DEFAULT_RATES, ...(body.rates || {}) }
     if (!year || !month || !Array.isArray(records) || records.length === 0) {
       return new NextResponse('요청 데이터가 올바르지 않습니다.', { status: 400 })
     }
@@ -73,11 +82,11 @@ export async function POST(req: NextRequest) {
     ws.getCell('U3').value = '일수'; ws.getCell('U4').value = '일급'
     ws.getCell('V3').value = '노무비'; ws.getCell('V4').value = '총    액'
     ws.getCell('W3').value = '차량\n유지비'; mergeV('W')
-    const rates: [string, number, string][] = [
-      ['X', 0.027, '갑근세'], ['Y', 0.1, '주민세'], ['Z', 0.009, '고용보험'],
-      ['AA', 0.045, '국민연금'], ['AB', 0.0343, '건강보험'], ['AC', 0.1152, '장기요양'],
+    const rateHeader: [string, number, string][] = [
+      ['X', rates.income / 100, '갑근세'], ['Y', rates.resident / 100, '주민세'], ['Z', rates.employment / 100, '고용보험'],
+      ['AA', rates.pension / 100, '국민연금'], ['AB', rates.health / 100, '건강보험'], ['AC', rates.longterm / 100, '장기요양'],
     ]
-    rates.forEach(([col, rate, label]) => {
+    rateHeader.forEach(([col, rate, label]) => {
       ws.getCell(`${col}3`).value = rate
       ws.getCell(`${col}4`).value = label
     })
@@ -122,12 +131,12 @@ export async function POST(req: NextRequest) {
         mergePair(col)
         cell.numFmt = MONEY
       }
-      ded('X', r.ded_income_tax, `ROUNDDOWN(IF((U${r1}-150000)*0.027<1000,0,(U${r1}-150000)*0.027*U${r0}),-1)`)
-      ded('Y', r.ded_resident_tax, `ROUNDDOWN(X${r0}*10%,-1)`)
-      ded('Z', r.ded_employment, `ROUNDDOWN(V${r0}*0.9%,-1)`)
-      ded('AA', r.ded_pension, null)
-      ded('AB', r.ded_health, null)
-      ded('AC', r.ded_longterm, null)
+      ded('X', r.ded_income_tax, `ROUNDDOWN(IF((U${r1}-150000)*$X$3<1000,0,(U${r1}-150000)*$X$3*U${r0}),-1)`)
+      ded('Y', r.ded_resident_tax, `ROUNDDOWN(X${r0}*$Y$3,-1)`)
+      ded('Z', r.ded_employment, `ROUNDDOWN(V${r0}*$Z$3,-1)`)
+      ded('AA', r.ded_pension, `ROUNDDOWN(V${r0}*$AA$3,-1)`)
+      ded('AB', r.ded_health, `ROUNDDOWN(V${r0}*$AB$3,-1)`)
+      ded('AC', r.ded_longterm, `ROUNDDOWN(AB${r0}*$AC$3,-1)`)
 
       ws.getCell(`AD${r0}`).value = { formula: `SUM(X${r0}:AC${r1})` }; mergePair('AD')
       ws.getCell(`AE${r0}`).value = { formula: `V${r0}-X${r0}-Y${r0}-Z${r0}-AA${r0}-AB${r0}-AC${r0}` }; mergePair('AE')

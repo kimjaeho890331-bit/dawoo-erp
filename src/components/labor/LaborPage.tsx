@@ -39,27 +39,57 @@ interface WorkerInfo {
   account_number: string | null
 }
 
-// --- 공제 계산 (일용노무비 명세서 양식 기준) ---
+// --- 공제 요율 (% 단위, 화면에서 직접 수정 → 월별 저장) ---
+export interface LaborRates {
+  income: number     // 소득세: (일급-15만) × 요율
+  resident: number   // 주민세: 소득세 × 요율
+  employment: number // 고용보험: 총지급액 × 요율
+  pension: number    // 국민연금: 총지급액 × 요율
+  health: number     // 건강보험: 총지급액 × 요율
+  longterm: number   // 장기요양: 건강보험 × 요율
+}
+
+export const DEFAULT_RATES: LaborRates = { income: 2.7, resident: 10, employment: 0.9, pension: 4.5, health: 3.43, longterm: 11.52 }
+
+// --- 공제 계산 (요율 기반 자동산출, 수동값 있으면 우선) ---
 const roundDown10 = (n: number) => Math.floor(n / 10) * 10
 
-export function calcRow(r: LaborRecord) {
+export function calcRow(r: LaborRecord, rates: LaborRates) {
   const workDays = Object.values(r.day_values || {}).reduce((s, v) => s + (Number(v) || 0), 0)
   const wage = r.daily_wage || 0
   const total = Math.round(workDays * wage)
-  // 갑근세: (일급-150,000)×2.7%, 일 세액 1,000원 미만 소액부징수, 10원 절사
-  const dailyTax = Math.max(0, wage - 150000) * 0.027
+  // 소득세: (일급-150,000)×요율, 일 세액 1,000원 미만 소액부징수, 10원 절사
+  const dailyTax = Math.max(0, wage - 150000) * (rates.income / 100)
   const autoIncome = dailyTax < 1000 ? 0 : roundDown10(dailyTax * workDays)
   const income = r.ded_income_tax ?? autoIncome
-  const resident = r.ded_resident_tax ?? roundDown10(income * 0.1)
-  const employment = r.ded_employment ?? roundDown10(total * 0.009)
-  const pension = r.ded_pension ?? 0
-  const health = r.ded_health ?? 0
-  const longterm = r.ded_longterm ?? 0
+  const resident = r.ded_resident_tax ?? roundDown10(income * (rates.resident / 100))
+  const employment = r.ded_employment ?? roundDown10(total * (rates.employment / 100))
+  const pension = r.ded_pension ?? roundDown10(total * (rates.pension / 100))
+  const health = r.ded_health ?? roundDown10(total * (rates.health / 100))
+  const longterm = r.ded_longterm ?? roundDown10(health * (rates.longterm / 100))
   const dedSum = income + resident + employment + pension + health + longterm
   return { workDays, total, income, resident, employment, pension, health, longterm, dedSum, netPay: total - dedSum }
 }
 
 const fmt = (n: number) => (n ? n.toLocaleString() : '')
+
+// --- 요율 헤더 input (직접 수정 → 월별 저장) ---
+function RateInput({ value, onSave }: { value: number; onSave: (v: string) => void }) {
+  const [v, setV] = useState(String(value))
+  useEffect(() => { setV(String(value)) }, [value])
+  return (
+    <span className="inline-flex items-center justify-center gap-px">
+      <input
+        type="text" value={v}
+        onChange={e => setV(e.target.value)}
+        onBlur={() => { if (v !== String(value)) onSave(v) }}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        className="w-[34px] bg-transparent outline-none text-[9px] text-center text-accent-text font-semibold border-b border-dashed border-border-secondary focus:border-accent"
+      />
+      <span className="text-[9px]">%</span>
+    </span>
+  )
+}
 
 // --- 공용 셀 input ---
 function CellInput({ value, onSave, className = '', align = 'left', placeholder = '' }: {
@@ -89,6 +119,7 @@ export default function LaborPage() {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [records, setRecords] = useState<LaborRecord[]>([])
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
+  const [rates, setRates] = useState<LaborRates>(DEFAULT_RATES)
   const [loading, setLoading] = useState(true)
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [nameDropdown, setNameDropdown] = useState<string | null>(null) // 열려있는 근무자 드롭다운의 record id
@@ -121,8 +152,30 @@ export default function LaborPage() {
     }
   }, [])
 
+  // 요율 로드: 해당 월 → 없으면 가장 최근 월 요율 → 기본값
+  const fetchRates = useCallback(async () => {
+    const { data } = await supabase.from('labor_rates').select('rates')
+      .eq('year', year).eq('month', month).maybeSingle()
+    if (data?.rates) { setRates({ ...DEFAULT_RATES, ...data.rates }); return }
+    const { data: latest } = await supabase.from('labor_rates').select('rates')
+      .order('year', { ascending: false }).order('month', { ascending: false }).limit(1).maybeSingle()
+    setRates(latest?.rates ? { ...DEFAULT_RATES, ...latest.rates } : DEFAULT_RATES)
+  }, [year, month])
+
+  // 요율 수정 → 해당 월에 저장
+  const saveRate = async (field: keyof LaborRates, raw: string) => {
+    const v = parseFloat(raw)
+    if (isNaN(v) || v < 0) return
+    const next = { ...rates, [field]: v }
+    setRates(next)
+    const { error } = await supabase.from('labor_rates')
+      .upsert({ year, month, rates: next, updated_at: new Date().toISOString() })
+    if (error) alert(`요율 저장 실패: ${error.message}`)
+  }
+
   useEffect(() => { fetchRecords() }, [fetchRecords])
   useEffect(() => { fetchWorkers() }, [fetchWorkers])
+  useEffect(() => { fetchRates() }, [fetchRates])
 
   // 드롭다운 바깥 클릭 시 닫기
   useEffect(() => {
@@ -200,7 +253,7 @@ export default function LaborPage() {
       const res = await fetch('/api/labor/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, records: checkedRecords }),
+        body: JSON.stringify({ year, month, rates, records: checkedRecords }),
       })
       if (!res.ok) throw new Error(await res.text())
       const blob = await res.blob()
@@ -218,13 +271,13 @@ export default function LaborPage() {
   // --- 노무비 결재 (체크된 근무자 → 지출결의서 생성) ---
   const handleSubmitApproval = async () => {
     if (checkedRecords.length === 0) { alert('결재 올릴 근무자를 체크해주세요.'); return }
-    const totalNet = checkedRecords.reduce((s, r) => s + calcRow(r).netPay, 0)
+    const totalNet = checkedRecords.reduce((s, r) => s + calcRow(r, rates).netPay, 0)
     const names = checkedRecords.map(r => r.worker_name || '(이름없음)')
     const title = `${month}월 일용직 노무비 (${names[0]}${names.length > 1 ? ` 외 ${names.length - 1}명` : ''})`
     if (!confirm(`지출결의서를 생성합니다.\n\n${title}\n금액: ${totalNet.toLocaleString()}원\n\n진행할까요?`)) return
     setSubmitting(true)
     const memo = checkedRecords.map(r => {
-      const c = calcRow(r)
+      const c = calcRow(r, rates)
       return `${r.worker_name}: ${c.workDays}일 × ${fmt(r.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`
     }).join('\n')
     const { error } = await supabase.from('expenses').insert({
@@ -240,11 +293,11 @@ export default function LaborPage() {
   // --- 합계 ---
   const totals = useMemo(() => {
     return records.reduce((acc, r) => {
-      const c = calcRow(r)
+      const c = calcRow(r, rates)
       acc.total += c.total; acc.dedSum += c.dedSum; acc.netPay += c.netPay
       return acc
     }, { total: 0, dedSum: 0, netPay: 0 })
-  }, [records])
+  }, [records, rates])
 
   const days1 = Array.from({ length: 15 }, (_, i) => i + 1)
   const days2 = Array.from({ length: 16 }, (_, i) => i + 16)
@@ -316,9 +369,9 @@ export default function LaborPage() {
                 {days1.map(d => <th key={d} className={`${thCls} w-7`}>{d}</th>)}
                 <th className={thCls}>일수</th>
                 <th className={`${thCls} min-w-[80px]`} rowSpan={2}>총지급액</th>
-                <th className={thCls}>소득세<br /><span className="text-[9px]">2.7%</span></th>
-                <th className={thCls}>국민연금<br /><span className="text-[9px]">4.5%</span></th>
-                <th className={thCls}>건강보험<br /><span className="text-[9px]">3.43%</span></th>
+                <th className={thCls}>소득세<br /><RateInput value={rates.income} onSave={v => saveRate('income', v)} /></th>
+                <th className={thCls}>국민연금<br /><RateInput value={rates.pension} onSave={v => saveRate('pension', v)} /></th>
+                <th className={thCls}>건강보험<br /><RateInput value={rates.health} onSave={v => saveRate('health', v)} /></th>
                 <th className={`${thCls} min-w-[70px]`} rowSpan={2}>공제합계</th>
                 <th className={`${thCls} min-w-[80px]`} rowSpan={2}>실 지급액</th>
                 <th className={`${thCls} min-w-[90px]`} rowSpan={2}>지급일</th>
@@ -331,16 +384,16 @@ export default function LaborPage() {
                 <th className={thCls}>계좌번호</th>
                 {days2.map(d => <th key={d} className={`${thCls} w-7 ${d > daysInMonth ? 'opacity-30' : ''}`}>{d}</th>)}
                 <th className={thCls}>일급</th>
-                <th className={thCls}>주민세<br /><span className="text-[9px]">10%</span></th>
-                <th className={thCls}>고용보험<br /><span className="text-[9px]">0.9%</span></th>
-                <th className={thCls}>장기요양<br /><span className="text-[9px]">11.52%</span></th>
+                <th className={thCls}>주민세<br /><RateInput value={rates.resident} onSave={v => saveRate('resident', v)} /></th>
+                <th className={thCls}>고용보험<br /><RateInput value={rates.employment} onSave={v => saveRate('employment', v)} /></th>
+                <th className={thCls}>장기요양<br /><RateInput value={rates.longterm} onSave={v => saveRate('longterm', v)} /></th>
               </tr>
             </thead>
             <tbody>
               {records.length === 0 ? (
                 <tr><td colSpan={30} className="text-center py-12 text-txt-quaternary text-sm">등록된 근무자가 없습니다. 아래 [근무자 추가]를 눌러주세요.</td></tr>
               ) : records.map(r => {
-                const c = calcRow(r)
+                const c = calcRow(r, rates)
                 return (
                   <FragmentRow key={r.id} r={r} c={c} daysInMonth={daysInMonth} days1={days1} days2={days2}
                     tdCls={tdCls} checked={checked.has(r.id)} toggleCheck={toggleCheck}
@@ -360,8 +413,9 @@ export default function LaborPage() {
       </button>
 
       <p className="text-xs text-txt-quaternary leading-relaxed">
-        · 소득세(일급 15만원 초과분 2.7%, 일 1,000원 미만 소액부징수)·주민세(소득세의 10%)·고용보험(총지급액 0.9%)은 자동계산됩니다. 셀을 클릭해 직접 수정할 수 있고, 지우면 자동계산으로 돌아갑니다.<br />
-        · 국민연금·건강보험·장기요양은 가입 대상인 경우에만 직접 입력하세요.<br />
+        · 공제 6종은 표 머리글의 <b>요율을 직접 수정</b>할 수 있고(해당 월에 저장됨), 입력한 요율대로 자동 산출되어 -금액으로 표시됩니다.<br />
+        · 소득세는 일급 15만원 초과분 × 요율(일 세액 1,000원 미만 소액부징수), 주민세는 소득세 × 요율, 장기요양은 건강보험 × 요율, 나머지는 총지급액 × 요율 기준입니다.<br />
+        · 공제 대상이 아닌 근무자는 해당 칸에 0을 입력하세요. 셀 값을 지우면 다시 자동계산으로 돌아갑니다.<br />
         · 근무자 이름을 클릭하면 이전에 등록한 작업자를 선택할 수 있고, 주민등록번호/연락처/은행/계좌가 자동 입력됩니다.
       </p>
     </div>
@@ -396,13 +450,17 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
       )}
     </td>
   )
-  const dedCell = (field: keyof LaborRecord, autoVal: number) => (
-    <td className={`${tdCls} min-w-[60px]`}>
-      <CellInput value={(r[field] as number | null) != null ? String(r[field]) : (autoVal ? String(autoVal) : '')}
-        align="right" className={(r[field] as number | null) != null ? 'font-medium text-txt-primary' : 'text-txt-tertiary'}
-        onSave={v => setDeduction(r, field, v)} />
-    </td>
-  )
+  // 공제 칸: 자동산출/수동값을 -금액으로 표기, 직접 수정 가능(지우면 자동 복귀)
+  const dedCell = (field: keyof LaborRecord, effectiveVal: number) => {
+    const isManual = (r[field] as number | null) != null
+    return (
+      <td className={`${tdCls} min-w-[60px]`}>
+        <CellInput value={effectiveVal ? `-${effectiveVal.toLocaleString()}` : (isManual ? '0' : '')}
+          align="right" className={isManual ? 'font-medium text-txt-primary' : 'text-txt-tertiary'}
+          onSave={v => setDeduction(r, field, v)} />
+      </td>
+    )
+  }
   return (
     <>
       <tr className="border-t-2 border-border-primary">

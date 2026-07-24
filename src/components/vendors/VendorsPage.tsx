@@ -394,66 +394,66 @@ export default function VendorsPage() {
                 <h2 className="text-[15px] font-semibold text-txt-primary">{group.name}</h2>
                 <span className="text-xs px-2 py-[1px] rounded-full bg-surface-tertiary text-txt-secondary tabular-nums">{group.vendors.length}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="bg-surface border border-border-primary rounded-[10px] overflow-hidden divide-y divide-border-tertiary">
                 {group.vendors.map(vendor => (
-            <div key={`${group.name}-${vendor.id}`} onClick={() => openEditModal(vendor)}
-              className="bg-surface border border-border-primary rounded-[10px] p-5 hover:shadow-md hover:border-border-secondary transition-all cursor-pointer group">
-              <div className="flex items-start justify-between mb-2">
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-txt-primary truncate group-hover:text-accent-text transition-colors">
-                    {vendor.name}
-                  </h3>
-                  {vendor.category && (
-                    <div className="flex flex-wrap gap-1 mt-1">
+                  <div key={`${group.name}-${vendor.id}`} onClick={() => openEditModal(vendor)}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-tertiary transition-colors cursor-pointer group">
+                    {/* 이름 */}
+                    <div className="w-[180px] shrink-0 min-w-0">
+                      <span className="block font-medium text-sm text-txt-primary truncate group-hover:text-accent-text transition-colors">{vendor.name}</span>
+                    </div>
+                    {/* 공종칩 */}
+                    <div className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden">
                       {splitCats(vendor.category).map(cat => (
-                        <span key={cat} className="inline-block px-[10px] py-[2px] rounded-full text-[11px] font-medium bg-surface-secondary text-txt-secondary">{cat}</span>
+                        <span key={cat} className="shrink-0 px-2 py-[1px] rounded-full text-[11px] font-medium bg-surface-secondary text-txt-secondary">{cat}</span>
                       ))}
                     </div>
-                  )}
-                </div>
-                {/* 서류 상태 아이콘 */}
-                <div className="flex gap-1 shrink-0 ml-2">
-                  {vendor.vendor_type === '협력업체' ? (
-                    <>
-                      <span title="사업자등록증"><FileText size={14} className={vendor.biz_license_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
-                      <span title="통장사본"><Landmark size={14} className={vendor.bankbook_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
-                    </>
-                  ) : (
-                    <>
-                      <span title="통장사본"><Landmark size={14} className={vendor.bankbook_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
-                      <span title="신분증"><CreditCard size={14} className={vendor.id_card_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
-                      <span title="안전교육증"><HardHat size={14} className={vendor.safety_cert_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="mb-2">
-                <StarRating value={vendor.rating} size="sm" />
-              </div>
-
-              <div className="space-y-1 text-sm">
-                {vendor.contact_person && (
-                  <div className="flex items-center gap-2 text-txt-secondary">
-                    <User size={14} className="text-txt-tertiary" />
-                    <span className="truncate">{vendor.contact_person}</span>
+                    {/* 별점 */}
+                    <div className="shrink-0 hidden md:block">
+                      <StarRating value={vendor.rating} size="sm" />
+                    </div>
+                    {/* 담당자 */}
+                    <div className="w-[100px] shrink-0 hidden lg:flex items-center gap-1.5 text-sm text-txt-secondary min-w-0">
+                      {vendor.contact_person && (
+                        <>
+                          <User size={13} className="text-txt-tertiary shrink-0" />
+                          <span className="truncate">{vendor.contact_person}</span>
+                        </>
+                      )}
+                    </div>
+                    {/* 연락처 */}
+                    <div className="w-[120px] shrink-0 text-sm">
+                      {vendor.phone && (
+                        <a href={`tel:${vendor.phone}`} onClick={e => e.stopPropagation()}
+                          className="text-accent-text hover:underline whitespace-nowrap flex items-center gap-1.5">
+                          <Phone size={13} className="text-txt-tertiary shrink-0" />{vendor.phone}
+                        </a>
+                      )}
+                    </div>
+                    {/* 사업자번호 */}
+                    <div className="w-[110px] shrink-0 hidden xl:flex items-center gap-1.5 text-sm text-txt-secondary whitespace-nowrap">
+                      {vendor.vendor_type === '협력업체' && vendor.business_number && (
+                        <>
+                          <Hash size={13} className="text-txt-tertiary shrink-0" />{vendor.business_number}
+                        </>
+                      )}
+                    </div>
+                    {/* 서류 상태 아이콘 */}
+                    <div className="flex gap-1 shrink-0">
+                      {vendor.vendor_type === '협력업체' ? (
+                        <>
+                          <span title="사업자등록증"><FileText size={14} className={vendor.biz_license_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
+                          <span title="통장사본"><Landmark size={14} className={vendor.bankbook_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
+                        </>
+                      ) : (
+                        <>
+                          <span title="통장사본"><Landmark size={14} className={vendor.bankbook_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
+                          <span title="신분증"><CreditCard size={14} className={vendor.id_card_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
+                          <span title="안전교육증"><HardHat size={14} className={vendor.safety_cert_url ? 'text-green-500' : 'text-txt-quaternary'} /></span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                )}
-                {vendor.phone && (
-                  <div className="flex items-center gap-2 text-txt-secondary">
-                    <Phone size={14} className="text-txt-tertiary" />
-                    <a href={`tel:${vendor.phone}`} onClick={e => e.stopPropagation()}
-                      className="text-accent-text hover:underline truncate">{vendor.phone}</a>
-                  </div>
-                )}
-                {vendor.vendor_type === '협력업체' && vendor.business_number && (
-                  <div className="flex items-center gap-2 text-txt-secondary">
-                    <Hash size={14} className="text-txt-tertiary" />
-                    <span className="truncate">{vendor.business_number}</span>
-                  </div>
-                )}
-              </div>
-            </div>
                 ))}
               </div>
             </section>

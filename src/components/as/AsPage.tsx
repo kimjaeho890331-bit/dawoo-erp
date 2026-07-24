@@ -10,7 +10,7 @@ interface AsRecord {
   site_name: string
   address: string
   category: AsCategory
-  issue_type: IssueType
+  issue_type: string
   description: string
   status: AsStatus
   reported_date: string
@@ -90,6 +90,7 @@ export default function AsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [customIssueType, setCustomIssueType] = useState('')
   const [saving, setSaving] = useState(false)
 
   // --- 데이터 로드 ---
@@ -128,17 +129,20 @@ export default function AsPage() {
   const openCreate = () => {
     setEditingId(null)
     setForm({ ...EMPTY_FORM, category: activeCategory, reported_date: new Date().toISOString().slice(0, 10) })
+    setCustomIssueType('')
     setModalOpen(true)
   }
 
   const openEdit = (record: AsRecord) => {
     setEditingId(record.id)
+    const isPresetIssue = ISSUE_TYPES.includes(record.issue_type as IssueType)
+    setCustomIssueType(isPresetIssue ? '' : record.issue_type)
     setForm({
       project_id: record.project_id,
       site_name: record.site_name,
       address: record.address,
       category: record.category || '입찰수의계약',
-      issue_type: record.issue_type,
+      issue_type: isPresetIssue ? record.issue_type : '기타',
       description: record.description,
       status: record.status,
       reported_date: record.reported_date,
@@ -161,6 +165,7 @@ export default function AsPage() {
     setSaving(true)
     const payload = {
       ...form,
+      issue_type: form.issue_type === '기타' && customIssueType.trim() ? customIssueType.trim() : form.issue_type,
       resolved_date: form.status === '완료' && !form.resolved_date
         ? new Date().toISOString().slice(0, 10)
         : form.resolved_date,
@@ -310,7 +315,7 @@ export default function AsPage() {
                       <div className="text-xs text-txt-tertiary mt-0.5">{record.address}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-[10px] py-[2px] rounded-full text-[11px] font-medium ${ISSUE_STYLE[record.issue_type]}`}>
+                      <span className={`inline-block px-[10px] py-[2px] rounded-full text-[11px] font-medium ${ISSUE_STYLE[record.issue_type as IssueType] || ISSUE_STYLE['기타']}`}>
                         {record.issue_type}
                       </span>
                     </td>
@@ -428,6 +433,15 @@ export default function AsPage() {
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
+                  {form.issue_type === '기타' && (
+                    <input
+                      type="text"
+                      value={customIssueType}
+                      onChange={e => setCustomIssueType(e.target.value)}
+                      className="w-full mt-2 border border-border-primary rounded-lg px-3 h-[36px] text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
+                      placeholder="하자유형 직접 입력"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-txt-secondary mb-1">상태</label>

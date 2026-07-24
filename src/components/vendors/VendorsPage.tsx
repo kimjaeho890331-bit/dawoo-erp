@@ -142,6 +142,7 @@ export default function VendorsPage() {
   const [chipInput, setChipInput] = useState('')
   const [chipDeleteConfirm, setChipDeleteConfirm] = useState<string | null>(null)
   const [chipPanelOpen, setChipPanelOpen] = useState(false)
+  const [directInput, setDirectInput] = useState('')
 
   const fetchVendors = useCallback(async () => {
     setLoading(true)
@@ -191,6 +192,18 @@ export default function VendorsPage() {
     setForm(prev => ({ ...prev, category: next.join('/') }))
   }
 
+  // 분류 직접 입력 → 선택에 추가 + 공종칩 자동 등록
+  const handleDirectAdd = async () => {
+    const name = directInput.trim()
+    if (!name) return
+    if (!selectedCats.includes(name)) toggleCat(name)
+    setDirectInput('')
+    if (!chips.some(c => c.name === name)) {
+      const { error } = await supabase.from('vendor_categories').insert({ name })
+      if (!error) fetchChips()
+    }
+  }
+
   // 필터링
   const filtered = vendors.filter(v => {
     if (v.vendor_type !== activeTab) return false
@@ -225,6 +238,7 @@ export default function VendorsPage() {
     setForm({ ...EMPTY_VENDOR, vendor_type: activeTab })
     setDeleteConfirm(null)
     setChipPanelOpen(false)
+    setDirectInput('')
     setModalOpen(true)
   }
 
@@ -239,6 +253,7 @@ export default function VendorsPage() {
     })
     setDeleteConfirm(null)
     setChipPanelOpen(false)
+    setDirectInput('')
     setModalOpen(true)
   }
 
@@ -523,24 +538,38 @@ export default function VendorsPage() {
                   )}
                 </div>
                 {chipPanelOpen && (
-                  <div className="mt-2 border border-border-primary rounded-lg p-2.5 max-h-[140px] overflow-y-auto">
-                    {sortedChipNames.length === 0 ? (
-                      <p className="text-sm text-txt-quaternary px-1">등록된 공종이 없습니다. 거래처 DB 화면 상단에서 공종을 추가하세요.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {sortedChipNames.map(name => {
-                          const on = selectedCats.includes(name)
-                          return (
-                            <button key={name} type="button" onClick={() => toggleCat(name)}
-                              className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-colors ${
-                                on ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
-                              }`}>
-                              {name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
+                  <div className="mt-2 border border-border-primary rounded-lg p-2.5">
+                    <div className="max-h-[110px] overflow-y-auto">
+                      {sortedChipNames.length === 0 ? (
+                        <p className="text-sm text-txt-quaternary px-1">등록된 공종이 없습니다. 아래에 직접 입력해 등록하세요.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {sortedChipNames.map(name => {
+                            const on = selectedCats.includes(name)
+                            return (
+                              <button key={name} type="button" onClick={() => toggleCat(name)}
+                                className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-colors ${
+                                  on ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+                                }`}>
+                                {name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    {/* 직접 입력 → 선택 + 공종칩 자동 등록 */}
+                    <div className="mt-2 pt-2 border-t border-border-tertiary flex items-center gap-1.5">
+                      <input
+                        type="text" value={directInput}
+                        onChange={e => setDirectInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleDirectAdd() } }}
+                        placeholder="공종 직접 입력 후 Enter"
+                        className="flex-1 border border-border-primary rounded-full px-3 py-1 text-[12px] focus:border-accent outline-none"
+                      />
+                      <button type="button" onClick={handleDirectAdd}
+                        className="px-3 py-1 rounded-full bg-accent text-white text-[12px] shrink-0">추가</button>
+                    </div>
                   </div>
                 )}
               </div>

@@ -9,6 +9,7 @@ interface AsRecord {
   project_id: string | null
   site_name: string
   address: string
+  category: AsCategory
   issue_type: IssueType
   description: string
   status: AsStatus
@@ -23,6 +24,9 @@ interface AsRecord {
 }
 
 type AsStatus = '접수' | '진행중' | '완료'
+type AsCategory = '입찰수의계약' | '수도' | '소규모'
+type TopTab = '입찰수의계약' | '지원사업'
+type SubTab = '수도' | '소규모'
 type IssueType = '누수' | '균열' | '도배불량' | '타일탈락' | '설비고장' | '전기불량' | '기타'
 type FilterTab = '전체' | AsStatus
 
@@ -30,6 +34,18 @@ type FilterTab = '전체' | AsStatus
 const STATUS_LIST: AsStatus[] = ['접수', '진행중', '완료']
 const FILTER_TABS: FilterTab[] = ['전체', '접수', '진행중', '완료']
 const ISSUE_TYPES: IssueType[] = ['누수', '균열', '도배불량', '타일탈락', '설비고장', '전기불량', '기타']
+
+const TOP_TABS: { key: TopTab; label: string }[] = [
+  { key: '입찰수의계약', label: '입찰 및 수의계약' },
+  { key: '지원사업', label: '지원사업' },
+]
+const SUB_TABS: SubTab[] = ['수도', '소규모']
+
+const CATEGORY_OPTIONS: { value: AsCategory; label: string }[] = [
+  { value: '입찰수의계약', label: '입찰 및 수의계약' },
+  { value: '수도', label: '지원사업 · 수도' },
+  { value: '소규모', label: '지원사업 · 소규모' },
+]
 
 const STATUS_STYLE: Record<AsStatus, string> = {
   '접수': 'bg-[#fee2e2] text-[#991b1b]',
@@ -51,6 +67,7 @@ const EMPTY_FORM: Omit<AsRecord, 'id' | 'created_at'> = {
   project_id: null,
   site_name: '',
   address: '',
+  category: '입찰수의계약',
   issue_type: '누수',
   description: '',
   status: '접수',
@@ -67,6 +84,8 @@ const EMPTY_FORM: Omit<AsRecord, 'id' | 'created_at'> = {
 export default function AsPage() {
   const [records, setRecords] = useState<AsRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [topTab, setTopTab] = useState<TopTab>('입찰수의계약')
+  const [subTab, setSubTab] = useState<SubTab>('수도')
   const [activeTab, setActiveTab] = useState<FilterTab>('전체')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -87,20 +106,28 @@ export default function AsPage() {
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
   // --- 필터링 ---
-  const filtered = activeTab === '전체' ? records : records.filter(r => r.status === activeTab)
+  // 선택된 탭의 카테고리 (지원사업이면 하위 탭 값)
+  const activeCategory: AsCategory = topTab === '지원사업' ? subTab : '입찰수의계약'
+  const categoryRecords = records.filter(r => r.category === activeCategory)
+  const filtered = activeTab === '전체' ? categoryRecords : categoryRecords.filter(r => r.status === activeTab)
 
-  // --- 요약 ---
+  // --- 카테고리별 건수 (탭 뱃지용) ---
+  const countByCategory = (cat: AsCategory) => records.filter(r => r.category === cat).length
+  const topTabCount = (tab: TopTab) =>
+    tab === '지원사업' ? countByCategory('수도') + countByCategory('소규모') : countByCategory('입찰수의계약')
+
+  // --- 요약 (선택한 탭 기준) ---
   const summary = {
-    total: records.length,
-    접수: records.filter(r => r.status === '접수').length,
-    진행중: records.filter(r => r.status === '진행중').length,
-    완료: records.filter(r => r.status === '완료').length,
+    total: categoryRecords.length,
+    접수: categoryRecords.filter(r => r.status === '접수').length,
+    진행중: categoryRecords.filter(r => r.status === '진행중').length,
+    완료: categoryRecords.filter(r => r.status === '완료').length,
   }
 
   // --- 모달 열기 ---
   const openCreate = () => {
     setEditingId(null)
-    setForm({ ...EMPTY_FORM, reported_date: new Date().toISOString().slice(0, 10) })
+    setForm({ ...EMPTY_FORM, category: activeCategory, reported_date: new Date().toISOString().slice(0, 10) })
     setModalOpen(true)
   }
 
@@ -110,6 +137,7 @@ export default function AsPage() {
       project_id: record.project_id,
       site_name: record.site_name,
       address: record.address,
+      category: record.category || '입찰수의계약',
       issue_type: record.issue_type,
       description: record.description,
       status: record.status,
@@ -176,6 +204,42 @@ export default function AsPage() {
           + A/S 접수
         </button>
       </div>
+
+      {/* 카테고리 탭 */}
+      <div className="tabs-container">
+        {TOP_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => { setTopTab(tab.key); setActiveTab('전체') }}
+            className={`tab-item ${topTab === tab.key ? 'tab-active' : ''}`}
+          >
+            {tab.label}
+            <span className={`ml-2 text-xs px-[10px] py-[2px] rounded-full font-medium ${
+              topTab === tab.key ? 'bg-accent-light text-accent-text' : 'bg-surface-tertiary text-txt-secondary'
+            }`}>{topTabCount(tab.key)}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* 지원사업 하위 탭 (수도/소규모) */}
+      {topTab === '지원사업' && (
+        <div className="flex gap-1 bg-surface-secondary rounded-lg p-1 w-fit">
+          {SUB_TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => { setSubTab(tab); setActiveTab('전체') }}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                subTab === tab
+                  ? 'bg-surface text-txt-primary shadow-sm'
+                  : 'text-txt-secondary hover:text-txt-primary'
+              }`}
+            >
+              {tab}
+              <span className="ml-1 text-xs">({countByCategory(tab)})</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 요약 카드 */}
       <div className="grid grid-cols-4 gap-4">
@@ -311,6 +375,20 @@ export default function AsPage() {
             </div>
 
             <div className="px-6 py-4 space-y-4">
+              {/* 구분 */}
+              <div>
+                <label className="block text-sm font-medium text-txt-secondary mb-1">구분 *</label>
+                <select
+                  value={form.category}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value as AsCategory }))}
+                  className="w-full border border-border-primary rounded-lg px-3 h-[36px] text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
+                >
+                  {CATEGORY_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* 현장명 */}
               <div>
                 <label className="block text-sm font-medium text-txt-secondary mb-1">현장명 *</label>

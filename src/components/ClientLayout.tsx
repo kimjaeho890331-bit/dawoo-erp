@@ -6,6 +6,8 @@ import AIAssistant from "@/components/AIAssistant"
 import Toaster from "@/components/common/Toaster"
 import { AuthProvider, useAuth } from "@/components/AuthProvider"
 import { Menu } from 'lucide-react'
+import ServiceWorkerRegistrar from "@/components/pwa/ServiceWorkerRegistrar"
+import InstallBanner from "@/components/pwa/InstallBanner"
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth()
@@ -34,12 +36,14 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
           <span className="text-[14px] font-semibold text-txt-primary">DAWOO ERP</span>
           <div className="w-9" /> {/* spacer */}
         </div>
+        <InstallBanner />
         <div className="px-4 py-4 md:px-8 md:py-6">
           {children}
         </div>
       </main>
       <AIAssistant />
       <Toaster />
+      <ServiceWorkerRegistrar />
     </>
   )
 }

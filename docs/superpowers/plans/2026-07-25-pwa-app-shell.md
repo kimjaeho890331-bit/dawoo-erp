@@ -510,14 +510,15 @@ interface BeforeInstallPromptEvent extends Event {
 const DISMISS_KEY = 'dawoo_install_dismissed'
 
 export default function InstallBanner() {
+  // 이벤트가 오기 전에는 null이라 아무것도 렌더되지 않는다.
+  // 별도의 dismissed 상태가 필요 없는 이유. (effect 안에서 동기적으로
+  // setState를 하면 react-hooks/set-state-in-effect 린트에 걸린다.)
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null)
-  const [dismissed, setDismissed] = useState(true)  // 초기값 true — SSR/최초 렌더에서 깜빡임 방지
 
   useEffect(() => {
-    // 이미 설치돼 실행 중이면 배너를 띄우지 않는다.
+    // 이미 설치돼 실행 중이거나 사용자가 닫은 적이 있으면 구독하지 않는다.
     if (window.matchMedia('(display-mode: standalone)').matches) return
     if (localStorage.getItem(DISMISS_KEY) === '1') return
-    setDismissed(false)
 
     const onPrompt = (e: Event) => {
       e.preventDefault()  // 크롬 기본 배너를 막고 우리 배너를 쓴다
@@ -542,11 +543,11 @@ export default function InstallBanner() {
 
   const dismiss = () => {
     localStorage.setItem(DISMISS_KEY, '1')
-    setDismissed(true)
+    setPromptEvent(null)
   }
 
   // 이벤트가 오지 않으면(설치 불가 환경) 아무것도 렌더하지 않는다.
-  if (dismissed || !promptEvent) return null
+  if (!promptEvent) return null
 
   return (
     <div className="md:hidden mx-4 mt-3 flex items-center gap-3 rounded-xl border border-border-accent bg-surface p-3">

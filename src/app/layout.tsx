@@ -1,10 +1,23 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
 
 export const metadata: Metadata = {
   title: "DAWOO ERP - 다우건설",
   description: "다우건설 AI 기반 ERP 시스템",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "다우ERP" },
+  icons: { apple: "/apple-touch-icon.png" },
+};
+
+// themeColor는 metadata가 아니라 viewport에 있어야 한다(Next.js 규칙).
+// maximumScale을 1로 막지 않는다 — 확대를 막으면 접근성 문제가 된다.
+export const viewport: Viewport = {
+  themeColor: "#c96442",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

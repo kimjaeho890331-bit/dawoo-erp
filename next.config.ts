@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
+              "worker-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
               "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com",
@@ -34,6 +35,14 @@ const nextConfig: NextConfig = {
               "frame-ancestors 'none'",
             ].join('; '),
           },
+        ],
+      },
+      {
+        // 워커가 캐시되면 갱신이 늦는다. 항상 새로 받게 한다.
+        source: '/sw.js',
+        headers: [
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
         ],
       },
     ];

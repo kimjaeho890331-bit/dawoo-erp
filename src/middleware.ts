@@ -32,6 +32,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/auth/') ||
     pathname === '/manifest.webmanifest' ||
     pathname === '/sw.js' ||
+    pathname === '/offline.html' ||
     pathname === '/apple-touch-icon.png' ||
     pathname.startsWith('/icon-')
   ) {

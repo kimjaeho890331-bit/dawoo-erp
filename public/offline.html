@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>연결 끊김 · 다우 ERP</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 24px; text-align: center;
+    background: #f5f4ed; color: #141413;
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  .logo {
+    width: 56px; height: 56px; border-radius: 14px; background: #c96442;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 28px; font-weight: 600;
+  }
+  h1 { margin: 6px 0 0; font-size: 17px; font-weight: 600; }
+  p { margin: 0; font-size: 13px; line-height: 1.7; color: #5e5d59; }
+  button {
+    margin-top: 8px; padding: 11px 22px; border: none; border-radius: 8px;
+    background: #c96442; color: #fff; font-size: 14px; font-family: inherit; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="logo">D</div>
+  <h1>인터넷에 연결되어 있지 않습니다</h1>
+  <p>다우 ERP는 인터넷 연결이 필요합니다.<br>연결을 확인한 뒤 다시 시도해주세요.</p>
+  <button onclick="location.reload()">다시 시도</button>
+</body>
+</html>

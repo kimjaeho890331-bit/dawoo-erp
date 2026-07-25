@@ -68,12 +68,17 @@ Next.js App Router 파일 컨벤션. `MetadataRoute.Manifest` 반환.
 
 ### 1-4. 서비스워커 (`public/sw.js`, 신규)
 
-캐싱 없음. 다음 세 가지만 한다.
-
-- `install` → `self.skipWaiting()`
-- `activate` → `self.clients.claim()`
+- `install` → 오프라인 안내 페이지 1개만 캐시에 넣고 `self.skipWaiting()`
+- `activate` → 구버전 캐시 정리 후 `self.clients.claim()`
+- `fetch` → **화면 이동 요청만** 가로채 네트워크 우선, 실패 시 안내 페이지
 - `push` → `event.data.json()`을 읽어 `showNotification`
 - `notificationclick` → 알림 payload의 `data.url`로 이동. **이미 열린 앱 창이 있으면 그 창을 focus 후 navigate**하고, 없을 때만 `openWindow`. (매번 새 창을 열면 앱 창이 쌓인다.)
+
+**`fetch` 핸들러는 선택이 아니다.** 크롬은 fetch 핸들러가 없으면 `beforeinstallprompt`를 쏘지 않아 설치 배너가 아예 뜨지 않는다. 메뉴를 통한 수동 설치는 Chrome 108(모바일)부터 이 요구가 없어졌지만, **프롬프트 표시 알고리즘은 여전히 요구한다.** 게다가 크롬은 조건만 채우려고 넣은 빈 핸들러를 무시하므로 실제로 동작하는 코드여야 한다.
+
+그래서 최소한의 실제 동작으로 화면 이동만 처리한다. 정적 자원·API 요청에는 `respondWith`를 부르지 않아 브라우저 기본 동작이 유지되고, 서비스워커를 거치는 지연도 생기지 않는다. 캐시에 넣는 것은 `public/offline.html` 한 개뿐이며 콘텐츠는 캐싱하지 않는다 — 오프라인 지원이 아니라 연결 끊김 안내다.
+
+`/offline.html`도 미들웨어 인증에서 빼야 한다(워커가 로그인 전에도 캐시에 담는다).
 
 ### 1-5. 설치 배너 (`src/components/pwa/`, 신규)
 
@@ -216,7 +221,7 @@ staff.notify_push BOOLEAN DEFAULT true   -- notify_telegram과 대칭
 
 - **APK 직접 빌드·배포** (TWA, Bubblewrap, PWABuilder). WebAPK가 같은 결과를 준다.
 - **스토어 등록** (Play Store, App Store).
-- **오프라인 지원**. 캐싱 전략·Serwist·백그라운드 동기화 전부 제외.
+- **오프라인 지원**. 캐싱 전략·Serwist·백그라운드 동기화 전부 제외. (연결 끊김 안내 페이지 1개만 캐시하는데, 이건 설치 프롬프트 조건을 채우기 위한 최소 fetch 핸들러의 부산물이지 오프라인 기능이 아니다.)
 - **아이폰 대응**. 전원 안드로이드. `apple-touch-icon`과 `appleWebApp` 메타만 비용 0이라 넣어둔다.
 - **커스텀 도메인 연결**. 현행 `dawoo-erp-web.vercel.app` 유지. (설치는 origin에 묶이므로, 나중에 도메인을 바꾸면 전 직원 재설치가 필요하다는 점은 인지된 상태.)
 - **PC 화면 변경**. `md` 이상 렌더 결과가 지금과 같아야 한다.

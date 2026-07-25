@@ -43,7 +43,6 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
       </main>
       <AIAssistant />
       <Toaster />
-      <ServiceWorkerRegistrar />
     </>
   )
 }
@@ -52,6 +51,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   return (
     <AuthProvider>
       <AuthenticatedLayout>{children}</AuthenticatedLayout>
+      {/*
+        서비스워커는 로그인 화면과 인증 로딩 중에도 등록되어야 한다.
+        AuthenticatedLayout 안에 두면 두 경우의 조기 반환에 걸려 등록이
+        늦어지는데, 직원이 처음 보는 화면이 /login이고 크롬은 그 시점에
+        설치 가능 여부를 판정한다. 워커가 없으면 조건 미달로 판정하고,
+        나중에 등록해봐야 그 페이지 로드에서는 이미 늦다.
+      */}
+      <ServiceWorkerRegistrar />
     </AuthProvider>
   )
 }

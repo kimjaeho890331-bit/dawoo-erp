@@ -61,8 +61,8 @@ export default function AIBriefingCard({ items, summary, narrative, actions, loa
         )}
       </div>
 
-      {/* 상황별 제안 — 한 칸 자유 흐름 (+ 월요일 주간 보고서) */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+      {/* 상황별 제안 — 한 칸 자유 흐름 (+ 월요일 주간 보고서) — 5개 정도만 노출, 나머지는 스크롤 */}
+      <div className="flex-1 max-h-[300px] overflow-y-auto px-3 py-3 space-y-2">
         {weeklyReport && <WeeklyReportPanel report={weeklyReport} defaultOpen={weeklyOpenDefault} />}
         {loading ? (
           <div className="text-center py-8 text-txt-quaternary text-[13px]">상황 분석 중...</div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
 import StaffColorPopover from './StaffColorPopover'
@@ -96,9 +96,9 @@ export default function WorkCalendarPage() {
   const firstDow = new Date(month.year, month.month, 1).getDay()
   const monthLabel = `${month.year}년 ${month.month + 1}월`
 
-  // 데이터 로드
+  // 데이터 로드 — 재조회 시 loading을 다시 켜지 않음 (그리드가 잠깐 사라지며 페이지 높이가
+  // 줄어들어 스크롤이 상단으로 점프하는 문제 방지). 로딩 표시는 최초 1회만.
   const loadData = useCallback(async () => {
-    setLoading(true)
     const [sr, stf] = await Promise.all([
       supabase.from('schedules').select('*')
         .neq('schedule_type', 'site')
@@ -112,6 +112,15 @@ export default function WorkCalendarPage() {
     setLoading(false)
   }, [month, daysInMonth])
   useEffect(() => { loadData() }, [loadData])
+
+  // 최초 진입 시 오늘 날짜가 화면에 보이도록 스크롤 (1회만)
+  const todayCellRef = useRef<HTMLDivElement | null>(null)
+  const didScrollToToday = useRef(false)
+  useEffect(() => {
+    if (loading || didScrollToToday.current) return
+    didScrollToToday.current = true
+    todayCellRef.current?.scrollIntoView({ block: 'center' })
+  }, [loading])
 
   // Realtime: schedules 변경 시 자동 갱신
   useEffect(() => {
@@ -355,7 +364,7 @@ export default function WorkCalendarPage() {
                         {week.map((day, di) => {
                           const d = day ? ds(month.year, month.month, day) : ''
                           return (
-                            <div key={di} className={`px-2 py-2 text-sm border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
+                            <div key={di} ref={d === today ? todayCellRef : undefined} className={`px-2 py-2 text-sm border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
                               onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
                               title={day ? '더블클릭 → 일정 추가' : ''}
                               onDragOver={day ? handleDragOver : undefined}

@@ -86,12 +86,18 @@ Next.js App Router 파일 컨벤션. `MetadataRoute.Manifest` 반환.
 
 배치는 `ClientLayout`의 모바일 상단바 바로 아래. 로그인 화면에는 띄우지 않는다(설치는 로그인 후).
 
-### 1-6. 헤더 (`next.config.ts`, 수정)
+### 1-6. 미들웨어 예외 (`src/middleware.ts`, 수정)
+
+matcher가 `'/((?!_next/static|_next/image|favicon.ico).*)'` 라서 `/manifest.webmanifest`·`/sw.js`·`/icon-*.png`가 전부 인증 검사를 탄다. 로그인한 사용자는 쿠키가 함께 나가 통과하지만, **크롬은 로그인 전에도 매니페스트와 아이콘을 읽어 설치 가능 여부를 판정한다.** 리다이렉트가 걸리면 설치 배너가 아예 뜨지 않는다.
+
+L27~30의 통과 조건에 `/manifest.webmanifest`, `/sw.js`, `/apple-touch-icon.png`, `/icon-` 접두사를 추가한다. 이 파일들에는 민감 정보가 없다.
+
+### 1-7. 헤더 (`next.config.ts`, 수정)
 
 기존 CSP는 `worker-src` 디렉티브가 없어 `script-src 'self'`로 폴백되므로 `/sw.js` 등록이 현재도 통과한다. 다만 의도를 고정하기 위해 `worker-src 'self'`를 명시한다.
 `/sw.js` 전용 헤더 추가 — `Cache-Control: no-cache, no-store, must-revalidate`. 워커가 캐시되면 갱신이 늦는다.
 
-### 1-7. 1단계 완료 기준
+### 1-8. 1단계 완료 기준
 
 폰 크롬으로 접속 → 배너의 설치 → 홈 화면/앱 서랍에 아이콘 → 실행 시 주소창 없이 대시보드. 대시보드·접수대장·업무캘린더가 앱 안에서 정상 동작.
 

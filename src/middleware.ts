@@ -25,7 +25,16 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // /login, 정적 리소스는 인증 불필요 — 바로 통과
-  if (pathname === '/login' || pathname.startsWith('/auth/')) {
+  // PWA 자원(매니페스트·워커·아이콘)은 크롬이 로그인 전에 읽어
+  // 설치 가능 여부를 판정하므로 인증에서 뺀다. 민감 정보가 없다.
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/auth/') ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/sw.js' ||
+    pathname === '/apple-touch-icon.png' ||
+    pathname.startsWith('/icon-')
+  ) {
     return NextResponse.next()
   }
 

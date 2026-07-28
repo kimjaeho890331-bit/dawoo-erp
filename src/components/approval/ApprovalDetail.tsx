@@ -87,7 +87,10 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
     staff_id: l.staff_id, name: l.staff?.name ?? '', role: l.role, state: l.state, acted_at: l.acted_at,
   }))
 
-  const showApprove = canApprove(report, lines, staff.id) || canResumeCompletion(report, lines, staff.id)
+  const canApproveNow = canApprove(report, lines, staff.id)
+  const canResumeNow = canResumeCompletion(report, lines, staff.id)
+  const showApprove = canApproveNow || canResumeNow
+  const resumeOnly = !canApproveNow && canResumeNow
   const final = isFinalApprover(lines, staff.id)
   const busy = actionBusy !== null
 
@@ -270,6 +273,8 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         totalAmount={report.total_amount}
         paymentCount={payments.length}
         isFinal={final}
+        resumeOnly={resumeOnly}
+        docNo={report.doc_no}
         onClose={() => setModal(false)}
         onDone={() => { setModal(false); load() }}
       />

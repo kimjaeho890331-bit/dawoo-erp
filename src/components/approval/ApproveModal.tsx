@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { formatMoney } from '@/lib/utils/format'
 import { EXPENSE_CATEGORIES } from '@/types/approval'
@@ -12,19 +12,31 @@ interface Props {
   totalAmount: number
   paymentCount: number
   isFinal: boolean
+  resumeOnly: boolean
+  docNo: string | null
   onClose: () => void
   onDone: () => void
   reportId: string
 }
 
 export default function ApproveModal({
-  open, title, drafterName, totalAmount, paymentCount, isFinal, onClose, onDone, reportId,
+  open, title, drafterName, totalAmount, paymentCount, isFinal, resumeOnly, docNo, onClose, onDone, reportId,
 }: Props) {
   const [mode, setMode] = useState<'approve' | 'reject'>('approve')
   const [category, setCategory] = useState<string>('')
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // 모달이 열릴 때 상태 초기화
+  useEffect(() => {
+    if (open) {
+      setMode('approve')
+      setCategory('')
+      setComment('')
+      setError(null)
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -78,22 +90,34 @@ export default function ApproveModal({
               className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'approve' ? 'border-accent border-2' : 'border-border-primary text-txt-secondary'}`}>
               승인
             </button>
-            <button onClick={() => setMode('reject')}
-              className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'reject' ? 'border-danger border-2' : 'border-border-primary text-txt-secondary'}`}>
-              반려
-            </button>
+            {!resumeOnly && (
+              <button onClick={() => setMode('reject')}
+                className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'reject' ? 'border-danger border-2' : 'border-border-primary text-txt-secondary'}`}>
+                반려
+              </button>
+            )}
           </div>
+
+          {resumeOnly && (
+            <div className="text-xs text-txt-tertiary mb-4 p-2.5 bg-surface-secondary rounded-lg">
+              이미 결재가 완료된 문서의 마무리 처리입니다. 반려는 할 수 없습니다.
+            </div>
+          )}
 
           {mode === 'approve' && isFinal && (
             <>
               <div className="text-xs text-txt-secondary mb-1.5">계정과목 <span className="text-danger">*</span></div>
               <select value={category} onChange={e => setCategory(e.target.value)}
+                aria-label="계정과목"
                 className="w-full px-3 py-2 text-sm border border-border-primary rounded-lg mb-1.5">
                 <option value="">선택</option>
                 {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <p className="text-xs text-txt-tertiary mb-4">
-                승인하면 문서번호가 부여되고 지급정보 {paymentCount}건이 지출관리에 등록됩니다
+                {docNo
+                  ? `문서번호 ${docNo}로 지급정보 ${paymentCount}건이 지출관리에 등록됩니다`
+                  : `승인하면 문서번호가 부여되고 지급정보 ${paymentCount}건이 지출관리에 등록됩니다`
+                }
               </p>
             </>
           )}

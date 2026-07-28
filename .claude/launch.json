@@ -4,7 +4,7 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "C:\\Users\\dawoo0\\dawoo-erp"],
+      "runtimeArgs": ["run", "dev"],
       "port": 3000
     }
   ]

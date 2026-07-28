@@ -1,0 +1,145 @@
+import { describe, it, expect } from 'vitest'
+import {
+  currentTurnLine, canSubmit, canWithdraw, canDelete,
+  canApprove, canCancel, isFinalApprover, validateApprovalLine,
+} from './status'
+import type { ExpenseReport, ExpenseReportLine } from '@/types/approval'
+
+const DRAFTER = 'staff-kim'
+const A = 'staff-choi'
+const B = 'staff-cho'
+
+function report(over: Partial<ExpenseReport> = {}): ExpenseReport {
+  return {
+    id: 'r1', doc_no: null, title: '테스트', status: 'pending',
+    drafter_staff_id: DRAFTER, submitted_at: null, completed_at: null,
+    total_amount: 0, category: null, body_html: null, retention_years: 5,
+    created_at: '', updated_at: '', ...over,
+  }
+}
+
+function line(seq: number, staff_id: string, over: Partial<ExpenseReportLine> = {}): ExpenseReportLine {
+  return {
+    id: `l${seq}`, report_id: 'r1', seq, staff_id,
+    role: 'approval', state: 'waiting', acted_at: null, comment: null, ...over,
+  }
+}
+
+describe('currentTurnLine', () => {
+  it('대기 중인 행 가운데 seq가 가장 작은 행을 고른다', () => {
+    const lines = [line(2, B), line(1, A, { state: 'approved' }), line(3, B)]
+    expect(currentTurnLine(lines)?.seq).toBe(2)
+  })
+
+  it('전부 처리됐으면 null', () => {
+    expect(currentTurnLine([line(1, A, { state: 'approved' })])).toBeNull()
+  })
+})
+
+describe('canApprove', () => {
+  const lines = [line(1, A), line(2, B)]
+
+  it('현재 차례인 사람은 승인할 수 있다', () => {
+    expect(canApprove(report(), lines, A)).toBe(true)
+  })
+
+  it('차례가 아닌 사람은 승인할 수 없다', () => {
+    expect(canApprove(report(), lines, B)).toBe(false)
+  })
+
+  it('진행중이 아니면 아무도 승인할 수 없다', () => {
+    expect(canApprove(report({ status: 'approved' }), lines, A)).toBe(false)
+  })
+
+  it('결재선에 없는 사람은 승인할 수 없다', () => {
+    expect(canApprove(report(), lines, 'staff-outsider')).toBe(false)
+  })
+})
+
+describe('isFinalApprover', () => {
+  it('seq가 가장 큰 사람이 최종 결재자다', () => {
+    const lines = [line(1, A), line(2, B)]
+    expect(isFinalApprover(lines, B)).toBe(true)
+    expect(isFinalApprover(lines, A)).toBe(false)
+  })
+})
+
+describe('canWithdraw', () => {
+  it('아무도 처리하지 않았으면 기안자가 회수할 수 있다', () => {
+    expect(canWithdraw(report(), [line(1, A)], DRAFTER)).toBe(true)
+  })
+
+  it('1차 결재자가 이미 처리했으면 회수할 수 없다', () => {
+    const lines = [line(1, A, { state: 'approved' }), line(2, B)]
+    expect(canWithdraw(report(), lines, DRAFTER)).toBe(false)
+  })
+
+  it('기안자가 아니면 회수할 수 없다', () => {
+    expect(canWithdraw(report(), [line(1, A)], A)).toBe(false)
+  })
+})
+
+describe('canDelete', () => {
+  it('저장된·회수된·반려된만 삭제할 수 있다', () => {
+    expect(canDelete(report({ status: 'draft' }), DRAFTER)).toBe(true)
+    expect(canDelete(report({ status: 'withdrawn' }), DRAFTER)).toBe(true)
+    expect(canDelete(report({ status: 'rejected' }), DRAFTER)).toBe(true)
+  })
+
+  it('진행중과 완료는 삭제할 수 없다', () => {
+    expect(canDelete(report({ status: 'pending' }), DRAFTER)).toBe(false)
+    expect(canDelete(report({ status: 'approved' }), DRAFTER)).toBe(false)
+  })
+})
+
+describe('canSubmit', () => {
+  it('기안자가 저장된·회수된·반려된 문서를 상신한다', () => {
+    expect(canSubmit(report({ status: 'draft' }), DRAFTER)).toBe(true)
+    expect(canSubmit(report({ status: 'rejected' }), DRAFTER)).toBe(true)
+  })
+
+  it('이미 진행중이면 다시 상신할 수 없다', () => {
+    expect(canSubmit(report({ status: 'pending' }), DRAFTER)).toBe(false)
+  })
+})
+
+describe('canCancel', () => {
+  it('내가 승인했고 뒷사람이 아직이면 취소할 수 있다', () => {
+    const lines = [line(1, A, { state: 'approved' }), line(2, B)]
+    expect(canCancel(report(), lines, A)).toBe(true)
+  })
+
+  it('뒷사람이 이미 처리했으면 취소할 수 없다', () => {
+    const lines = [line(1, A, { state: 'approved' }), line(2, B, { state: 'approved' })]
+    expect(canCancel(report(), lines, A)).toBe(false)
+  })
+
+  it('문서가 완료됐으면 취소할 수 없다', () => {
+    const lines = [line(1, A, { state: 'approved' })]
+    expect(canCancel(report({ status: 'approved' }), lines, A)).toBe(false)
+  })
+})
+
+describe('validateApprovalLine', () => {
+  it('정상 결재선은 null을 돌려준다', () => {
+    expect(validateApprovalLine([line(1, A, { role: 'cooperation' }), line(2, B)], DRAFTER)).toBeNull()
+  })
+
+  it('빈 결재선은 막는다', () => {
+    expect(validateApprovalLine([], DRAFTER)).toBe('결재선을 설정해 주세요.')
+  })
+
+  it('기안자 본인은 결재선에 넣을 수 없다', () => {
+    expect(validateApprovalLine([line(1, DRAFTER)], DRAFTER)).toBe('기안자는 본인을 결재자로 지정할 수 없습니다.')
+  })
+
+  it('마지막이 협조자면 막는다', () => {
+    expect(validateApprovalLine([line(1, A), line(2, B, { role: 'cooperation' })], DRAFTER))
+      .toBe('마지막은 결재 역할이어야 합니다.')
+  })
+
+  it('같은 사람을 두 번 넣을 수 없다', () => {
+    expect(validateApprovalLine([line(1, A), line(2, A)], DRAFTER))
+      .toBe('같은 사람을 두 번 지정할 수 없습니다.')
+  })
+})

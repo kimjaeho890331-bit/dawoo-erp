@@ -56,4 +56,18 @@ describe('paymentsToExpenses', () => {
     const out = paymentsToExpenses({ report, payments: [payment()], category: '자재비', firstFileUrl: 'https://x/a.jpg' })
     expect(out[0].expense.receipt_url).toBe('https://x/a.jpg')
   })
+
+  it('이미 지출이 있는 행을 제외해도 거래처명 접미사는 필터링 전 행 수로 판정한다', () => {
+    // 지급정보 2행: 첫 번째는 이미 처리됨, 두 번째는 미처리
+    // multi는 필터링 전 2행으로 판정되어야 하므로, 남은 1행의 제목에도 거래처명이 붙어야 한다.
+    const payments = [
+      payment({ id: 'p1', vendor_name: '나래이앤씨', expense_id: 'exp-1' }),
+      payment({ id: 'p2', vendor_name: '신성공사' }),
+    ]
+    const out = paymentsToExpenses({ report, payments, category: '자재비', firstFileUrl: null })
+    expect(out).toHaveLength(1)
+    expect(out[0].payment_id).toBe('p2')
+    // 필터링 전 payments.length=2이므로 multi=true → 거래처명 접미사 포함
+    expect(out[0].expense.title).toBe('잠원초 인방보수공사 계약금 30% (신성공사)')
+  })
 })

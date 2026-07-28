@@ -14,6 +14,9 @@ export interface ExpenseInsert {
 
 interface Args {
   report: Pick<ExpenseReport, 'title' | 'doc_no' | 'drafter_staff_id'>
+  /** 해당 문서의 지급정보 전체. expense_id가 이미 채워진 행도 반드시 포함해야 한다 —
+   *  제목의 거래처명 접미사 여부를 필터링 전 행 수로 판정하기 때문이다.
+   *  만약 DB에서 expense_id IS NULL 조건으로 걸러서 넘기면 제목 형식이 달라져 지출의 일관성이 깨진다. */
   payments: ExpenseReportPayment[]
   category: string
   firstFileUrl: string | null

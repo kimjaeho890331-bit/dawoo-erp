@@ -19,6 +19,8 @@ const ALLOWED_MIME_TYPES = [
   'application/msword',        // .doc
   'application/haansofthwp',   // .hwp
   'application/x-hwp',         // .hwp (alternative)
+  'application/vnd.ms-powerpoint',  // .ppt
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',  // .pptx
   'application/octet-stream',  // 브라우저가 타입 모를 때 (hwp, heic 등)
   'text/csv', 'text/plain',
 ]

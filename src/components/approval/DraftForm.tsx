@@ -10,6 +10,7 @@ import PaymentTable from './PaymentTable'
 import DetailTable from './DetailTable'
 import FileAttach, { type AttachedFile } from './FileAttach'
 import type { PaymentRow, DetailRow } from '@/types/approval'
+import { validateApprovalLine } from '@/lib/approval/status'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
 
@@ -56,43 +57,49 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
 
   const save = useCallback(async (thenSubmit: boolean) => {
     if (!staff) return
+
+    if (thenSubmit) {
+      const lineErr = validateApprovalLine(
+        lines.map((l, i) => ({ ...l, seq: i, state: 'waiting' as const })),
+        staff.id,
+      )
+      if (lineErr) { setError(lineErr); return }
+    }
+
     setBusy(true); setError(null)
 
-    const res = await fetch('/api/approval/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: reportId, title, body_html: bodyHtml,
-        payments, details,
-        lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
-      }),
-    })
-    const json = await res.json()
-    if (!res.ok) { setError(json.error); setBusy(false); return }
+    try {
+      const res = await fetch('/api/approval/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: reportId, title, body_html: bodyHtml,
+          payments, details,
+          lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
+          files,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error); return }
 
-    // 첨부는 저장 후 문서 id가 나와야 붙일 수 있다
-    await supabase.from('expense_report_files').delete().eq('report_id', json.id)
-    if (files.length > 0) {
-      await supabase.from('expense_report_files').insert(
-        files.map(f => ({ report_id: json.id, ...f })),
-      )
-    }
+      if (!thenSubmit) {
+        router.push(`/approval/${json.id}`)
+        return
+      }
 
-    if (!thenSubmit) {
-      setBusy(false)
+      const sub = await fetch('/api/approval/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: json.id }),
+      })
+      const subJson = await sub.json()
+      if (!sub.ok) { setError(subJson.error); return }
       router.push(`/approval/${json.id}`)
-      return
+    } catch {
+      setError('저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setBusy(false)
     }
-
-    const sub = await fetch('/api/approval/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: json.id }),
-    })
-    const subJson = await sub.json()
-    setBusy(false)
-    if (!sub.ok) { setError(subJson.error); return }
-    router.push(`/approval/${json.id}`)
   }, [staff, reportId, title, bodyHtml, payments, details, lines, files, router])
 
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)

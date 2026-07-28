@@ -11,6 +11,7 @@ interface DetailInput {
   dept_name?: string | null; amount?: number | null; note?: string | null
 }
 interface LineInput { staff_id: string; role: 'approval' | 'cooperation' }
+interface FileInput { file_name: string; file_url: string; size: number }
 
 interface Body {
   id?: string
@@ -19,6 +20,7 @@ interface Body {
   payments: PaymentInput[]
   details: DetailInput[]
   lines: LineInput[]
+  files?: FileInput[]
 }
 
 export async function POST(request: NextRequest) {
@@ -31,6 +33,7 @@ export async function POST(request: NextRequest) {
   const payments = body.payments ?? []
   const details = body.details ?? []
   const lines = body.lines ?? []
+  const files = body.files ?? []
 
   if (!body.title?.trim()) {
     return Response.json({ error: '기안제목을 입력해 주세요' }, { status: 400 })
@@ -100,6 +103,15 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       )
     }
+
+    const { error: delFilesError } = await admin
+      .from('expense_report_files').delete().eq('report_id', reportId)
+    if (delFilesError) {
+      return Response.json(
+        { error: `기존 첨부파일 삭제 실패: ${delFilesError.message}` },
+        { status: 500 },
+      )
+    }
   } else {
     const { data, error } = await admin.from('expense_reports').insert({
       title: body.title,
@@ -154,6 +166,21 @@ export async function POST(request: NextRequest) {
     if (linesError) {
       return Response.json(
         { error: `결재선 저장 실패: ${linesError.message}` },
+        { status: 500 },
+      )
+    }
+  }
+
+  if (files.length > 0) {
+    const { error: filesError } = await admin.from('expense_report_files').insert(
+      files.map(f => ({
+        report_id: reportId,
+        file_name: f.file_name, file_url: f.file_url, size: f.size,
+      })),
+    )
+    if (filesError) {
+      return Response.json(
+        { error: `첨부파일 저장 실패: ${filesError.message}` },
         { status: 500 },
       )
     }

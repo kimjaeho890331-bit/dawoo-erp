@@ -34,30 +34,35 @@ export default function FileAttach({ files, onChange }: Props) {
     setBusy(true)
     const added: AttachedFile[] = []
 
-    for (const file of Array.from(list)) {
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-      if (!ALLOWED_EXT.includes(ext)) {
-        setError(`${file.name}: 허용되지 않는 형식입니다`)
-        continue
+    try {
+      for (const file of Array.from(list)) {
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+        if (!ALLOWED_EXT.includes(ext)) {
+          setError(`${file.name}: 허용되지 않는 형식입니다`)
+          continue
+        }
+        if (file.size >= MAX_SIZE) {
+          setError(`${file.name}: 20MB를 넘습니다`)
+          continue
+        }
+
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('storagePath', `approval/${Date.now()}_${file.name}`)
+
+        const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
+        const json = await res.json()
+        if (!res.ok) { setError(json.error ?? '업로드 실패'); continue }
+
+        added.push({ file_name: file.name, file_url: json.url, size: file.size })
       }
-      if (file.size >= MAX_SIZE) {
-        setError(`${file.name}: 20MB를 넘습니다`)
-        continue
-      }
 
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('storagePath', `approval/${Date.now()}_${file.name}`)
-
-      const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!res.ok) { setError(json.error ?? '업로드 실패'); continue }
-
-      added.push({ file_name: file.name, file_url: json.url, size: file.size })
+      onChange([...files, ...added])
+    } catch {
+      setError('업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setBusy(false)
     }
-
-    onChange([...files, ...added])
-    setBusy(false)
   }
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {

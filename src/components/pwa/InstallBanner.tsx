@@ -23,7 +23,11 @@ declare global {
   }
 }
 
-const DISMISS_KEY = 'dawoo_install_dismissed'
+// 닫기는 영구가 아니라 기한제다. 예전 키(dawoo_install_dismissed)는
+// 한 번 닫으면 영영 안 떠서 설치할 방법이 사라졌다. 키 이름을 바꿔
+// 기존에 저장된 영구 차단은 자동으로 무효가 된다.
+const HIDE_UNTIL_KEY = 'dawoo_install_hide_until'
+const HIDE_DAYS = 7
 
 // 크롬이 설치 신호를 안 주면 이 시간 뒤에 대체 안내로 넘어간다.
 const FALLBACK_DELAY_MS = 4000
@@ -42,7 +46,8 @@ export default function InstallBanner() {
   useEffect(() => {
     const environment = detectEnvironment()
     if (environment.isStandalone) return                       // 이미 앱으로 실행 중
-    if (localStorage.getItem(DISMISS_KEY) === '1') return
+    const hideUntil = Number(localStorage.getItem(HIDE_UNTIL_KEY) || 0)
+    if (hideUntil > Date.now()) return
 
     // 진단용 — 워커가 실제로 붙었는지 사용자에게 보여준다.
     navigator.serviceWorker?.getRegistration().then(r => setSwActive(!!r?.active))
@@ -87,7 +92,7 @@ export default function InstallBanner() {
   }
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, '1')
+    localStorage.setItem(HIDE_UNTIL_KEY, String(Date.now() + HIDE_DAYS * 86400000))
     setMode('hidden')
   }
 

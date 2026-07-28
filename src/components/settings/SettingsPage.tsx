@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Building2, Users, Bell, Shield, Database, Save, Check, Loader2 } from 'lucide-react'
+import { Building2, Users, Bell, Shield, Database, Save, Check, Loader2, Smartphone } from 'lucide-react'
+import InstallPanel from '@/components/pwa/InstallPanel'
 
 // --- 타입 ---
 interface CompanyInfo {
@@ -92,7 +93,7 @@ function loadSettingsFromStorage(): AllSettings {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'company' | 'notification' | 'system'>('company')
+  const [tab, setTab] = useState<'company' | 'notification' | 'app' | 'system'>('company')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -135,6 +136,7 @@ export default function SettingsPage() {
   const tabs = [
     { key: 'company' as const, label: '회사 정보', icon: Building2 },
     { key: 'notification' as const, label: '알림 설정', icon: Bell },
+    { key: 'app' as const, label: '앱 설치', icon: Smartphone },
     { key: 'system' as const, label: '시스템', icon: Database },
   ]
 
@@ -229,6 +231,9 @@ export default function SettingsPage() {
           )}
 
           {/* 시스템 설정 */}
+          {/* 앱 설치 — 배너를 닫았더라도 여기서는 항상 설치할 수 있다 */}
+          {tab === 'app' && <InstallPanel />}
+
           {tab === 'system' && (
             <div className="space-y-4">
               <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">

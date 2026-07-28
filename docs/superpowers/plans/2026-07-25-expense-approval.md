@@ -18,7 +18,12 @@
 - 인라인 편집 우선, `input` 남발 금지. 파일은 드래그앤드롭 + 미리보기.
 - 날짜는 `YYYY-MM-DD`만 허용. 숫자는 숫자만. `src/lib/utils/validate.ts` 규칙과 맞춘다.
 - 금액 표시는 `src/lib/utils/format.ts`의 `formatMoney(value: string | number): string` / `parseMoney(value: string): number`를 쓴다. 둘 다 순수 함수라 서버 라우트에서도 안전하다.
-- Tailwind 토큰은 `src/app/globals.css`에 정의된 것만 쓴다. 자주 쓰는 것: `bg-surface` · `bg-surface-secondary` · `bg-surface-tertiary` · `text-txt-primary/secondary/tertiary/quaternary` · **`border-border-primary`**(`border-border`가 아니다) · `border-border-secondary`.
+- Tailwind 토큰은 `src/app/globals.css`에 정의된 것만 쓴다. **Tailwind 기본 팔레트(`blue-600`, `red-600` 등)를 쓰지 않는다** — 이 프로젝트의 브랜드색은 파랑이 아니라 테라코타(`#c96442`)다.
+  - 면: `bg-surface` · `bg-surface-secondary` · `bg-surface-tertiary`
+  - 글자: `text-txt-primary` · `text-txt-secondary` · `text-txt-tertiary` · `text-txt-quaternary` · `text-txt-inverse`
+  - 테두리: **`border-border-primary`**(`border-border`가 아니다) · `border-border-secondary`
+  - 강조(주요 버튼·활성 상태·승인): `bg-accent` · `bg-accent-hover` · `bg-accent-light` · `text-accent-text` · `border-accent`
+  - 위험(에러·필수 표시·반려): `text-danger` · `bg-danger-bg` · `border-danger`
 - 계정과목 후보는 `식대 / 교통비 / 자재비 / 현장경비 / 노무비 / 사무용품 / 기타` (기존 `ExpensesPage.tsx:65`의 `EXPENSE_CATS`와 동일해야 한다).
 - 문서번호 형식은 `CDV-26-000158` — `양식약어-년2자리-순번6자리`. 2026년 시작값은 `157`.
 - 첨부 제한: 20MB 미만, 이미지(jpg·jpeg·png·gif)·문서(doc·docx·ppt·pptx·xls·xlsx·pdf·hwp), 최대 10개.
@@ -1562,8 +1567,8 @@ interface Props {
 
 const STATE_COLOR: Record<LineState, string> = {
   waiting: 'text-txt-tertiary',
-  approved: 'text-blue-600',
-  rejected: 'text-red-600',
+  approved: 'text-accent-text',
+  rejected: 'text-danger',
 }
 
 export default function ApprovalLineView({ drafterName, drafterActedAt, lines }: Props) {
@@ -1740,13 +1745,13 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
                 <div className="px-3 py-4 text-sm text-txt-tertiary">왼쪽에서 직원을 골라 추가하세요</div>
               )}
             </div>
-            {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
+            {error && <div className="mt-2 text-sm text-danger">{error}</div>}
           </div>
         </div>
 
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-border-primary">
           <button onClick={onClose} className="px-5 py-2 text-sm border border-border-primary rounded-lg">취소</button>
-          <button onClick={apply} className="px-5 py-2 text-sm rounded-lg bg-blue-600 text-white">적용</button>
+          <button onClick={apply} className="px-5 py-2 text-sm rounded-lg bg-accent text-txt-inverse">적용</button>
         </div>
       </div>
     </div>
@@ -1937,8 +1942,8 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
           </tr>
         </thead>
         <tbody>
-          <tr className="border-t border-border-primary bg-blue-50/60">
-            <td className="px-2 text-center text-[11px] text-blue-700">일괄</td>
+          <tr className="border-t border-border-primary bg-accent-light">
+            <td className="px-2 text-center text-[11px] text-accent-text">일괄</td>
             <td>
               <select className={cell} value={template.vendor_name}
                 onChange={e => setTemplate({ ...template, vendor_name: e.target.value })}>
@@ -2122,7 +2127,7 @@ export default function FileAttach({ files, onChange }: Props) {
         20MB 미만 이미지(jpg, jpeg, png, gif) 또는 문서(doc, docx, ppt, pptx, xls, xlsx, pdf, hwp), 최대 10개.
         드래그해서 놓아도 됩니다.
       </p>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   )
 }
@@ -2257,7 +2262,7 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
       </table>
 
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium">결재선 <span className="text-red-600">*</span></span>
+        <span className="text-sm font-medium">결재선 <span className="text-danger">*</span></span>
         <button onClick={() => setLineOpen(true)} className="px-3 py-1.5 text-xs border border-border-primary rounded">
           결재선 설정
         </button>
@@ -2266,13 +2271,13 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
         <ApprovalLineView drafterName={staff?.name ?? ''} lines={lines} />
       </div>
 
-      <div className="bg-blue-50 text-blue-700 text-xs rounded-lg px-3 py-2.5 mb-6">
+      <div className="bg-accent-light text-accent-text text-xs rounded-lg px-3 py-2.5 mb-6">
         결제 관련 지출결의서 입니다.
       </div>
 
       <div className="text-sm font-medium mb-2">기안내용</div>
       <div className="flex items-center gap-3 mb-3">
-        <span className="w-16 text-xs text-txt-secondary">기안제목 <span className="text-red-600">*</span></span>
+        <span className="w-16 text-xs text-txt-secondary">기안제목 <span className="text-danger">*</span></span>
         <input value={title} onChange={e => setTitle(e.target.value.slice(0, 50))}
           className="flex-1 px-3 py-2 text-sm border border-border-primary rounded-lg" placeholder="기안제목 입력" />
         <span className="text-xs text-txt-tertiary">{title.length}/50</span>
@@ -2288,13 +2293,13 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
       <textarea value={bodyHtml} onChange={e => setBodyHtml(e.target.value)}
         className="w-full min-h-32 px-3 py-3 text-sm border border-border-primary rounded-lg mb-6" />
 
-      {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
+      {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
         <button disabled={busy} onClick={() => save(false)}
           className="px-6 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">임시저장</button>
         <button disabled={busy} onClick={() => save(true)}
-          className="px-6 py-2 text-sm rounded-lg bg-blue-600 text-white disabled:opacity-40">상신하기</button>
+          className="px-6 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">상신하기</button>
       </div>
 
       <ApprovalLineModal
@@ -2606,18 +2611,18 @@ export default function ApproveModal({
 
           <div className="flex gap-2 mb-4">
             <button onClick={() => setMode('approve')}
-              className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'approve' ? 'border-blue-600 border-2' : 'border-border-primary text-txt-secondary'}`}>
+              className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'approve' ? 'border-accent border-2' : 'border-border-primary text-txt-secondary'}`}>
               승인
             </button>
             <button onClick={() => setMode('reject')}
-              className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'reject' ? 'border-red-600 border-2' : 'border-border-primary text-txt-secondary'}`}>
+              className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'reject' ? 'border-danger border-2' : 'border-border-primary text-txt-secondary'}`}>
               반려
             </button>
           </div>
 
           {mode === 'approve' && isFinal && (
             <>
-              <div className="text-xs text-txt-secondary mb-1.5">계정과목 <span className="text-red-600">*</span></div>
+              <div className="text-xs text-txt-secondary mb-1.5">계정과목 <span className="text-danger">*</span></div>
               <select value={category} onChange={e => setCategory(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-border-primary rounded-lg mb-1.5">
                 <option value="">선택</option>
@@ -2630,18 +2635,18 @@ export default function ApproveModal({
           )}
 
           <div className="text-xs text-txt-secondary mb-1.5">
-            결재의견 {mode === 'reject' && <span className="text-red-600">*</span>}
+            결재의견 {mode === 'reject' && <span className="text-danger">*</span>}
           </div>
           <textarea value={comment} onChange={e => setComment(e.target.value)}
             className="w-full h-20 px-3 py-2 text-sm border border-border-primary rounded-lg" />
 
-          {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+          {error && <div className="mt-3 text-sm text-danger">{error}</div>}
         </div>
 
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-border-primary">
           <button onClick={onClose} className="px-5 py-2 text-sm border border-border-primary rounded-lg">취소</button>
           <button onClick={submit} disabled={busy}
-            className="px-5 py-2 text-sm rounded-lg bg-blue-600 text-white disabled:opacity-40">결재</button>
+            className="px-5 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">결재</button>
         </div>
       </div>
     </div>
@@ -2773,7 +2778,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <div className="flex flex-col gap-1">
             {files.map(f => (
               <a key={f.id} href={f.file_url} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline">
+                className="flex items-center gap-1.5 text-xs text-accent-text hover:underline">
                 <Paperclip size={12} /> {f.file_name}
               </a>
             ))}
@@ -2870,7 +2875,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         </tbody>
       </table>
 
-      {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
+      {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
         <Link href="/approval" className="px-5 py-2 text-sm border border-border-primary rounded-lg">목록</Link>
@@ -2884,13 +2889,13 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <button onClick={() => act('withdraw')} className="px-5 py-2 text-sm border border-border-primary rounded-lg">회수</button>
         )}
         {canDelete(report, staff.id) && (
-          <button onClick={() => act('delete')} className="px-5 py-2 text-sm border border-border-primary rounded-lg text-red-600">삭제</button>
+          <button onClick={() => act('delete')} className="px-5 py-2 text-sm border border-border-primary rounded-lg text-danger">삭제</button>
         )}
         {canCancel(report, lines, staff.id) && (
           <button onClick={() => act('cancel')} className="px-5 py-2 text-sm border border-border-primary rounded-lg">결재취소</button>
         )}
         {showApprove && (
-          <button onClick={() => setModal(true)} className="px-5 py-2 text-sm rounded-lg bg-blue-600 text-white">결재</button>
+          <button onClick={() => setModal(true)} className="px-5 py-2 text-sm rounded-lg bg-accent text-txt-inverse">결재</button>
         )}
       </div>
 
@@ -3127,7 +3132,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           <div className="text-sm font-medium mb-2">참조문서</div>
           <div className="flex flex-col gap-1">
             {refs.map(r => (
-              <Link key={r.id} href={`/approval/${r.id}`} className="text-xs text-blue-600 hover:underline">
+              <Link key={r.id} href={`/approval/${r.id}`} className="text-xs text-accent-text hover:underline">
                 {r.doc_no ?? ''} {r.title}
               </Link>
             ))}
@@ -3684,7 +3689,7 @@ export default function PushToggle() {
         결재 요청·승인·반려를 휴대폰으로 받습니다.
         아이폰은 사파리 탭이 아니라 <span className="font-medium">공유 → 홈 화면에 추가</span>로 설치한 뒤에만 알림이 옵니다.
       </p>
-      {msg && <p className="mt-1.5 text-xs text-blue-600">{msg}</p>}
+      {msg && <p className="mt-1.5 text-xs text-accent-text">{msg}</p>}
     </div>
   )
 }
@@ -3862,7 +3867,7 @@ import { formatMoney } from '@/lib/utils/format'
 ```tsx
                 {it.label}
                 {it.key === 'toApprove' && pendingCount > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-[11px] rounded-full bg-blue-600 text-white">
+                  <span className="ml-1.5 px-1.5 py-0.5 text-[11px] rounded-full bg-accent text-txt-inverse">
                     {pendingCount}
                   </span>
                 )}

@@ -34,10 +34,11 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: '지급 정보를 한 행 이상 입력해 주세요' }, { status: 400 })
   }
 
-  // 재상신: 이전 결재 이력(comment)은 지우지 않고 결재선의 state·acted_at만 되돌린다
+  // 재상신: state만 되돌리고 acted_at·comment는 남긴다
+  // → 결재자가 자기가 왜 반려했는지(누가, 언제, 무슨 의견) 다시 볼 수 있어야 한다
   const { error: linesError } = await admin
     .from('expense_report_lines')
-    .update({ state: 'waiting', acted_at: null })
+    .update({ state: 'waiting' })
     .eq('report_id', id)
 
   if (linesError) {

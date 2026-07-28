@@ -27,6 +27,7 @@ describe('paymentsToExpenses', () => {
       site_id: null,
       receipt_url: null,
       memo: '[CDV-26-000158] 나래이앤씨 / 농협은행 352-0373-7807-13',
+      expense_report_payment_id: 'p1',
     })
   })
 

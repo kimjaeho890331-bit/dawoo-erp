@@ -36,16 +36,42 @@ async function completeApproval({
       )
     }
 
-    const { error: docNoError } = await admin
+    // 조건부 저장: 문서에 아직 doc_no가 없을 때만 내가 채번한 번호를 박는다.
+    // 두 요청이 동시에 재개 경로에 들어와도 먼저 박는 쪽만 이기고, 진 쪽은
+    // 자기가 뽑은 번호를 버리고 문서를 다시 읽어 이긴 쪽 번호로 수렴한다
+    // (순번에 구멍이 나는 것은 허용된다).
+    const { data: claimed, error: docNoError } = await admin
       .from('expense_reports')
       .update({ doc_no: docNo })
       .eq('id', id)
+      .is('doc_no', null)
+      .select('doc_no')
+      .maybeSingle()
 
     if (docNoError) {
       return Response.json(
         { error: `문서번호 저장 실패: ${docNoError.message}` },
         { status: 500 },
       )
+    }
+
+    if (claimed) {
+      docNo = claimed.doc_no!
+    } else {
+      const { data: existing, error: rereadError } = await admin
+        .from('expense_reports')
+        .select('doc_no')
+        .eq('id', id)
+        .single()
+
+      if (rereadError || !existing?.doc_no) {
+        return Response.json(
+          { error: `문서번호 재조회 실패: ${rereadError?.message ?? '알 수 없는 오류'}` },
+          { status: 500 },
+        )
+      }
+
+      docNo = existing.doc_no
     }
   }
 
@@ -90,6 +116,12 @@ async function completeApproval({
       .insert(row.expense)
       .select('id')
       .single()
+
+    if (error?.code === '23505') {
+      // uq_expenses_report_payment 위반: 다른 요청(동시에 들어온 재개 경로 등)이
+      // 이 지급 건의 지출을 이미 만들었다는 뜻이다. 중단하지 않고 이 행만 건너뛴다.
+      continue
+    }
 
     if (error || !exp) {
       // 여기서 멈춘다. 이미 만든 건 expense_id가 박혀 있어 재시도해도 중복되지 않는다.

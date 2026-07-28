@@ -353,3 +353,22 @@ COMMENT ON TABLE expense_report_details IS '상세 내용 — 비용 내역 (선
 COMMENT ON TABLE expense_report_lines IS '결재선 — seq 순서대로 결재/협조';
 COMMENT ON TABLE doc_sequences IS '문서번호 순번. 2026년 CDV는 157부터 시작(카카오워크 이어받기)';
 COMMENT ON FUNCTION next_doc_no IS '문서번호 원자적 채번 — CDV-26-000158 형식';
+
+-- ============================================
+-- 24. expenses ↔ 지출결의서 연결 + 중복 생성 방지 (013_expenses_approval_link.sql)
+-- ============================================
+-- 최종 승인 완료 처리의 재개 경로는 결재선 선점을 건너뛰므로, 승인 버튼 더블클릭 등
+-- 요청이 겹치면 같은 지급정보 행에서 expenses가 두 번 생성될 수 있다. 앱 코드만으로는
+-- 이 동시성 창을 완전히 막을 수 없어 DB 유일 제약으로 직접 차단한다.
+
+ALTER TABLE expenses
+  ADD COLUMN IF NOT EXISTS expense_report_payment_id UUID REFERENCES expense_report_payments(id);
+
+-- 부분 유니크 인덱스: NULL(일반 지출)은 몇 개든 무관, 값이 채워진 행만
+-- 지급정보 1건당 지출 1건으로 강제한다.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_expenses_report_payment
+  ON expenses(expense_report_payment_id)
+  WHERE expense_report_payment_id IS NOT NULL;
+
+COMMENT ON COLUMN expenses.expense_report_payment_id IS
+  '지출결의서 승인으로 생성된 경우 원본 지급정보 행. 부분 유니크 인덱스로 중복 생성을 DB가 차단한다.';

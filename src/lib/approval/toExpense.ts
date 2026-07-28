@@ -10,6 +10,9 @@ export interface ExpenseInsert {
   site_id: null
   receipt_url: string | null
   memo: string
+  /** 원본 지급정보 행 id. expenses(expense_report_payment_id)의 부분 유니크 인덱스가
+   *  이 값으로 중복 생성을 막는다 — 반드시 채워야 한다. */
+  expense_report_payment_id: string
 }
 
 interface Args {
@@ -44,6 +47,7 @@ export function paymentsToExpenses({
         site_id: null,
         receipt_url: firstFileUrl,
         memo: `[${report.doc_no ?? ''}] ${p.vendor_name} / ${p.bank} ${p.account_no}`,
+        expense_report_payment_id: p.id,
       },
     }))
 }

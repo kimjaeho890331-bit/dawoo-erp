@@ -15,6 +15,8 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
   const [template, setTemplate] = useState<DetailRow>({ ...EMPTY_DETAIL })
   const [checked, setChecked] = useState<Set<number>>(new Set())
 
+  const vendorOptions = [...new Set(vendors)]
+
   const set = (i: number, patch: Partial<DetailRow>) =>
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
 
@@ -23,6 +25,18 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
     if (next.has(i)) next.delete(i)
     else next.add(i)
     setChecked(next)
+  }
+
+  const removeRow = (i: number) => {
+    onChange(rows.filter((_, idx) => idx !== i))
+    setChecked(prev => {
+      const next = new Set<number>()
+      prev.forEach(idx => {
+        if (idx < i) next.add(idx)
+        else if (idx > i) next.add(idx - 1)
+      })
+      return next
+    })
   }
 
   const applyTemplate = () => {
@@ -69,7 +83,7 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
               <select className={cell} value={template.vendor_name}
                 onChange={e => setTemplate({ ...template, vendor_name: e.target.value })}>
                 <option value="">선택</option>
-                {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                {vendorOptions.map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </td>
             <td><input className={cell} value={template.account}
@@ -94,7 +108,7 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
                 <select className={cell} value={r.vendor_name}
                   onChange={e => set(i, { vendor_name: e.target.value })}>
                   <option value="">선택</option>
-                  {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                  {vendorOptions.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </td>
               <td><input className={cell} value={r.account} onChange={e => set(i, { account: e.target.value })} /></td>
@@ -104,7 +118,7 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
                 onChange={e => set(i, { amount: parseMoney(e.target.value) })} /></td>
               <td><input className={cell} value={r.note} onChange={e => set(i, { note: e.target.value })} /></td>
               <td className="text-center">
-                <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} aria-label="행 삭제">
+                <button onClick={() => removeRow(i)} aria-label="행 삭제">
                   <Trash2 size={13} className="text-txt-tertiary" />
                 </button>
               </td>

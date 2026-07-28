@@ -39,6 +39,16 @@ export function canApprove(report: ReportLike, lines: LineLike[], staffId: strin
   return turn !== null && turn.staff_id === staffId
 }
 
+/**
+ * 최종 승인 처리가 도중에 끊긴 문서를 같은 결재자가 이어서 완료할 수 있는지.
+ * 결재선은 전부 처리됐는데 문서가 아직 pending으로 남은 상태를 뜻한다.
+ */
+export function canResumeCompletion(report: ReportLike, lines: LineLike[], staffId: string): boolean {
+  if (report.status !== 'pending') return false
+  if (currentTurnLine(lines) !== null) return false
+  return isFinalApprover(lines, staffId)
+}
+
 /** 완료된 문서는 이미 지출이 생성돼 취소할 수 없다. */
 export function canCancel(report: ReportLike, lines: LineLike[], staffId: string): boolean {
   if (report.status !== 'pending') return false

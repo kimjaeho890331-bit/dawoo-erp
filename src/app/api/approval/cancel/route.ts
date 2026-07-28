@@ -20,11 +20,16 @@ export async function POST(request: NextRequest) {
 
   const mine = loaded.lines.find(l => l.staff_id === staff.id && l.state === 'approved')!
 
-  const { error } = await admin.from('expense_report_lines').update({
+  // 'approved'일 때만 갱신되도록 조건을 걸고, 실제로 갱신됐는지 확인한다 —
+  // 취소 요청이 동시에 두 번 오거나 뒷사람의 처리와 겹치는 경우를 막는다.
+  const { data: claimed, error } = await admin.from('expense_report_lines').update({
     state: 'waiting', acted_at: null,
-  }).eq('id', mine.id)
+  }).eq('id', mine.id).eq('state', 'approved').select('id').maybeSingle()
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
+  if (!claimed) {
+    return Response.json({ error: '이미 처리된 결재입니다' }, { status: 409 })
+  }
 
   const { error: reportError } = await admin.from('expense_reports')
     .update({ updated_at: new Date().toISOString() })

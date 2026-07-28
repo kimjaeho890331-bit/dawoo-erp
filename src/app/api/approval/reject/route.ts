@@ -22,12 +22,17 @@ export async function POST(request: NextRequest) {
   const turn = currentTurnLine(loaded.lines)!
   const now = new Date().toISOString()
 
-  const { error: lineError } = await admin.from('expense_report_lines').update({
+  // 승인과 마찬가지로 아직 'waiting'일 때만 갱신되도록 조건을 걸고, 실제로
+  // 갱신됐는지 확인한다 — 승인과 반려가 동시에 도착하는 경우도 여기서 막힌다.
+  const { data: claimed, error: lineError } = await admin.from('expense_report_lines').update({
     state: 'rejected', acted_at: now, comment,
-  }).eq('id', turn.id)
+  }).eq('id', turn.id).eq('state', 'waiting').select('id').maybeSingle()
 
   if (lineError) {
     return Response.json({ error: `반려 처리 실패: ${lineError.message}` }, { status: 500 })
+  }
+  if (!claimed) {
+    return Response.json({ error: '이미 처리된 결재입니다' }, { status: 409 })
   }
 
   const { error } = await admin.from('expense_reports').update({

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   currentTurnLine, canSubmit, canWithdraw, canDelete,
   canApprove, canCancel, isFinalApprover, validateApprovalLine,
+  canResumeCompletion,
 } from './status'
 import type { ExpenseReport, ExpenseReportLine } from '@/types/approval'
 
@@ -117,6 +118,28 @@ describe('canCancel', () => {
   it('문서가 완료됐으면 취소할 수 없다', () => {
     const lines = [line(1, A, { state: 'approved' })]
     expect(canCancel(report({ status: 'approved' }), lines, A)).toBe(false)
+  })
+})
+
+describe('canResumeCompletion', () => {
+  it('결재선이 전부 승인됐고 문서가 pending이면 최종 결재자는 재개할 수 있다', () => {
+    const lines = [line(1, A, { state: 'approved' }), line(2, B, { state: 'approved' })]
+    expect(canResumeCompletion(report(), lines, B)).toBe(true)
+  })
+
+  it('아직 대기 중인 행이 있으면 재개할 수 없다', () => {
+    const lines = [line(1, A, { state: 'approved' }), line(2, B)]
+    expect(canResumeCompletion(report(), lines, B)).toBe(false)
+  })
+
+  it('문서가 이미 approved면 재개할 수 없다', () => {
+    const lines = [line(1, A, { state: 'approved' }), line(2, B, { state: 'approved' })]
+    expect(canResumeCompletion(report({ status: 'approved' }), lines, B)).toBe(false)
+  })
+
+  it('최종 결재자가 아닌 사람은 재개할 수 없다', () => {
+    const lines = [line(1, A, { state: 'approved' }), line(2, B, { state: 'approved' })]
+    expect(canResumeCompletion(report(), lines, A)).toBe(false)
   })
 })
 

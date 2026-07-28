@@ -18,8 +18,8 @@ interface Props {
 
 const STATE_COLOR: Record<LineState, string> = {
   waiting: 'text-txt-tertiary',
-  approved: 'text-blue-600',
-  rejected: 'text-red-600',
+  approved: 'text-accent-text',
+  rejected: 'text-danger',
 }
 
 export default function ApprovalLineView({ drafterName, drafterActedAt, lines }: Props) {

@@ -144,13 +144,13 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
                 <div className="px-3 py-4 text-sm text-txt-tertiary">왼쪽에서 직원을 골라 추가하세요</div>
               )}
             </div>
-            {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
+            {error && <div className="mt-2 text-sm text-danger">{error}</div>}
           </div>
         </div>
 
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-border-primary">
           <button onClick={onClose} className="px-5 py-2 text-sm border border-border-primary rounded-lg">취소</button>
-          <button onClick={apply} className="px-5 py-2 text-sm rounded-lg bg-blue-600 text-white">적용</button>
+          <button onClick={apply} className="px-5 py-2 text-sm rounded-lg bg-accent text-txt-inverse">적용</button>
         </div>
       </div>
     </div>

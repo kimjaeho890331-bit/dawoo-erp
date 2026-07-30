@@ -69,6 +69,39 @@ export default function ApprovalPage() {
   const [box, setBox] = useState<BoxKey>('toApprove')
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendingCount, setPendingCount] = useState(0)
+
+  // 사이드 배지 "결재전" 건수 — load()의 toApprove 판정과 반드시 같은 기준을 써야 한다.
+  // (문서가 pending이고, 내 앞 순번이 전부 처리돼 지금이 내 차례인 것만 센다.)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!actor) { if (!cancelled) setPendingCount(0); return }
+
+      const { data: myLines } = await supabase
+        .from('expense_report_lines')
+        .select('report_id')
+        .eq('staff_id', actor.id)
+
+      const ids = Array.from(new Set((myLines ?? []).map(l => l.report_id as string)))
+      if (ids.length === 0) { if (!cancelled) setPendingCount(0); return }
+
+      const { data } = await supabase
+        .from('expense_reports')
+        .select('id, lines:expense_report_lines(seq, staff_id, role, state)')
+        .in('id', ids)
+        .eq('status', 'pending')
+
+      if (cancelled) return
+      const withLines = (data ?? []) as unknown as { id: string; lines: LineForTurn[] }[]
+      const count = withLines.filter(r => {
+        const turn = currentTurnLine(r.lines)
+        return turn !== null && turn.staff_id === actor.id
+      }).length
+      setPendingCount(count)
+    })()
+    return () => { cancelled = true }
+  }, [actor])
 
   const load = useCallback(async () => {
     if (!actor) { setRows([]); setLoading(false); return }
@@ -158,8 +191,13 @@ export default function ApprovalPage() {
             <div className="px-4 mb-1.5 text-xs text-txt-tertiary">{g.group}</div>
             {g.items.map(it => (
               <button key={it.key} onClick={() => setBox(it.key)}
-                className={`w-full text-left px-4 py-1.5 text-sm ${box === it.key ? 'bg-surface-secondary font-medium text-txt-primary' : 'text-txt-secondary'}`}>
+                className={`w-full flex items-center px-4 py-1.5 text-sm ${box === it.key ? 'bg-surface-secondary font-medium text-txt-primary' : 'text-txt-secondary'}`}>
                 {it.label}
+                {it.key === 'toApprove' && pendingCount > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-[11px] leading-none rounded-full bg-accent text-txt-inverse">
+                    {pendingCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>

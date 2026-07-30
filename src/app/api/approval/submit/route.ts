@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
-import { canSubmit, validateApprovalLine } from '@/lib/approval/status'
+import { canSubmit, currentTurnLine, validateApprovalLine } from '@/lib/approval/status'
+import { sendPush } from '@/lib/push/send'
+import { formatMoney } from '@/lib/utils/format'
 
 export async function POST(request: NextRequest) {
   const { id, actor_staff_id } = (await request.json()) as { id: string; actor_staff_id?: string }
@@ -57,6 +59,18 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return Response.json({ error: `상신 실패: ${error.message}` }, { status: 500 })
+  }
+
+  // 방금 모든 행을 'waiting'으로 되돌렸으므로, 그 상태 그대로 1차 결재자를 구한다.
+  // 알림 실패는 상신 자체를 실패시키지 않는다(sendPush는 예외를 던지지 않는다).
+  const turn = currentTurnLine(loaded.lines.map(l => ({ ...l, state: 'waiting' as const })))
+  if (turn) {
+    await sendPush([turn.staff_id], {
+      title: '결재 요청',
+      body: `${loaded.report.title} / ${formatMoney(loaded.report.total_amount)}원`,
+      url: `/approval/${id}`,
+      tag: `approval-${id}`,
+    })
   }
 
   return Response.json({ ok: true })

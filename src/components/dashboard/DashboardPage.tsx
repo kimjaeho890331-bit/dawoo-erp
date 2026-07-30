@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { ChevronDown, ListTodo, ClipboardList, Brain, Building2 } from 'lucide-react'
+import { ChevronDown, ListTodo, ClipboardList, Brain, Building2, FileCheck2 } from 'lucide-react'
+import { currentTurnLine } from '@/lib/approval/status'
+import type { LineRole, LineState } from '@/types/approval'
 import AIBriefingCard from './AIBriefingCard'
 import MyTodoCard, { type TodoItem } from './MyTodoCard'
 import AssignedTasksCard from './AssignedTasksCard'
@@ -40,6 +43,14 @@ interface Staff {
 }
 
 const STAFF_STORAGE_KEY = 'dawoo_current_staff_id'
+
+// currentTurnLine이 요구하는 필드 전부(seq/staff_id/role/state)를 조회해야 한다.
+interface LineForTurn {
+  seq: number
+  staff_id: string
+  role: LineRole
+  state: LineState
+}
 
 export default function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10)
@@ -97,6 +108,40 @@ export default function DashboardPage() {
       if (data) setStaffList(data as Staff[])
     })
   }, [])
+
+  // 결재할 문서 건수 — ApprovalPage의 "결재전"과 같은 기준: 문서가 pending이고
+  // 내 앞 순번이 전부 처리돼 지금이 내 차례인 것만 센다(내가 결재선에 있기만
+  // 한 것은 세지 않는다. 두 화면 숫자가 다르면 사용자가 혼란스럽다).
+  const [approvalCount, setApprovalCount] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!currentStaffId) { if (!cancelled) setApprovalCount(0); return }
+
+      const { data: myLines } = await supabase
+        .from('expense_report_lines')
+        .select('report_id')
+        .eq('staff_id', currentStaffId)
+
+      const ids = Array.from(new Set((myLines ?? []).map(l => l.report_id as string)))
+      if (ids.length === 0) { if (!cancelled) setApprovalCount(0); return }
+
+      const { data } = await supabase
+        .from('expense_reports')
+        .select('id, lines:expense_report_lines(seq, staff_id, role, state)')
+        .in('id', ids)
+        .eq('status', 'pending')
+
+      if (cancelled) return
+      const withLines = (data ?? []) as unknown as { id: string; lines: LineForTurn[] }[]
+      const count = withLines.filter(r => {
+        const turn = currentTurnLine(r.lines)
+        return turn !== null && turn.staff_id === currentStaffId
+      }).length
+      setApprovalCount(count)
+    })()
+    return () => { cancelled = true }
+  }, [currentStaffId])
 
   // 내 일정 로드 (schedules + tasks)
   const loadMyWork = useCallback(async () => {
@@ -272,6 +317,14 @@ export default function DashboardPage() {
             <WeeklyIntakeCard />
           </div>
           <div className="flex flex-col gap-4">
+            <Link href="/approval"
+              className="bg-surface border border-border-primary rounded-[10px] px-4 py-3 flex items-center justify-between hover:bg-surface-secondary transition-colors">
+              <div className="flex items-center gap-2">
+                <FileCheck2 size={16} className="text-txt-tertiary" />
+                <span className="text-[13px] text-txt-secondary">결재할 문서</span>
+              </div>
+              <span className="text-lg font-semibold text-txt-primary">{approvalCount}건</span>
+            </Link>
             <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
             <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
             <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} onOpenDetail={setDetailTaskId} getStaffName={getStaffName} />
@@ -289,6 +342,16 @@ export default function DashboardPage() {
             {greeting}, {briefing?.summary ?? '분석 준비 중...'}
           </p>
         </div>
+
+        {/* 결재할 문서 */}
+        <Link href="/approval"
+          className="bg-surface border border-border-primary rounded-xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileCheck2 size={16} className="text-txt-tertiary" />
+            <span className="text-[13px] text-txt-secondary">결재할 문서</span>
+          </div>
+          <span className="text-base font-semibold text-txt-primary">{approvalCount}건</span>
+        </Link>
 
         {/* 접수 퍼널 + 주간 접수 현황 (항상 노출) */}
         <FunnelCard />

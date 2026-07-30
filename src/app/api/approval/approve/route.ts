@@ -5,6 +5,7 @@ import {
 } from '@/lib/approval/status'
 import { issueDocNo } from '@/lib/approval/docNo'
 import { paymentsToExpenses } from '@/lib/approval/toExpense'
+import { sendPush } from '@/lib/push/send'
 import { EXPENSE_CATEGORIES, type ExpenseReport } from '@/types/approval'
 
 /**
@@ -170,6 +171,14 @@ async function completeApproval({
     )
   }
 
+  // 알림 실패가 완료 처리 응답을 막아선 안 된다(sendPush는 예외를 던지지 않는다).
+  await sendPush([report.drafter_staff_id], {
+    title: '결재 완료',
+    body: `${docNo} — ${report.title}`,
+    url: `/approval/${id}`,
+    tag: `approval-${id}`,
+  })
+
   return Response.json({ ok: true, final: true, doc_no: docNo, expenses_created: created })
 }
 
@@ -227,6 +236,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (!final) {
+      // 방금 갱신한 상태(turn을 approved로 반영)를 기준으로 다음 차례를 판정한다 —
+      // 갱신 전 스냅샷(lines)을 그대로 쓰면 지금 막 처리한 사람에게 다시 알림이 간다.
+      const next = currentTurnLine(
+        lines.map(l => (l.id === turn.id ? { ...l, state: 'approved' as const } : l)),
+      )
+      if (next) {
+        await sendPush([next.staff_id], {
+          title: '결재 요청',
+          body: report.title,
+          url: `/approval/${id}`,
+          tag: `approval-${id}`,
+        })
+      }
       return Response.json({ ok: true, final: false })
     }
   }

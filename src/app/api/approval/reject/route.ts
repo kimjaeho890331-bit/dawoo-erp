@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { canApprove, currentTurnLine } from '@/lib/approval/status'
+import { sendPush } from '@/lib/push/send'
 
 export async function POST(request: NextRequest) {
   const { id, comment, actor_staff_id } = (await request.json()) as {
@@ -43,6 +44,13 @@ export async function POST(request: NextRequest) {
   }).eq('id', id)
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  await sendPush([loaded.report.drafter_staff_id], {
+    title: '결재 반려',
+    body: `${loaded.report.title} — ${comment}`,
+    url: `/approval/${id}`,
+    tag: `approval-${id}`,
+  })
 
   return Response.json({ ok: true })
 }

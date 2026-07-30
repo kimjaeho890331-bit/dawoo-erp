@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { canCancel } from '@/lib/approval/status'
+import { sendPush } from '@/lib/push/send'
 
 export async function POST(request: NextRequest) {
   const { id, actor_staff_id } = (await request.json()) as { id: string; actor_staff_id?: string }
@@ -39,6 +40,23 @@ export async function POST(request: NextRequest) {
   if (reportError) {
     return Response.json({ error: reportError.message }, { status: 500 })
   }
+
+  // 취소로 문서가 mine의 차례로 되돌아간다. "다음 결재자"는 currentTurnLine이
+  // 아니라(그건 다시 mine 자신을 가리킨다) mine 다음 순번에서 대기 중이던 사람 —
+  // 취소 이전 스냅샷(loaded.lines) 기준으로 찾는다.
+  const nextLine = loaded.lines
+    .filter(l => l.seq > mine.seq && l.state === 'waiting')
+    .sort((a, b) => a.seq - b.seq)[0]
+
+  const recipients = [loaded.report.drafter_staff_id]
+  if (nextLine) recipients.push(nextLine.staff_id)
+
+  await sendPush(recipients, {
+    title: '결재 취소됨',
+    body: loaded.report.title,
+    url: `/approval/${id}`,
+    tag: `approval-${id}`,
+  })
 
   return Response.json({ ok: true })
 }

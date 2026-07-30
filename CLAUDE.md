@@ -33,6 +33,8 @@
 - 수정/삭제 필수 / 인라인 편집 (input 남발 금지)
 - 파일: 드래그앤드롭 + 미리보기 / 사진: 전체화면 뷰어
 - 아이콘: Lucide React, text-tertiary 단색. 이모지 금지
+- **지출결의서 결재 행위자는 로그인 계정이 아니라 화면에서 고른다** — `staff` 테이블에 로그인 이메일이 채워져 있지 않아, `/approval`은 `ActorPicker.tsx`의 `useActor()`(localStorage `dawoo_current_staff_id`)로 "지금 누구로 쓰는지"를 정하고 서버가 `actor_staff_id`로 매 요청 자격을 재검증한다
+- **지급정보 거래처명은 `VendorNameCell.tsx`가 자동입력** — `vendors`에서 고르면 은행·계좌·사업자번호가 채워지고 자유 입력도 유지된다
 
 ## 하지 않는 것
 - 승인번호 없음 / 지점 없음(수원본사만) / CRM 별도 없음(접수대장에 포함)
@@ -43,7 +45,7 @@
 ```
 [지원사업] /register/small 소규모 | /register/water 수도
 [현장]    /sites 현장관리 (접수대장과 별개)
-[업무]    /calendar/work 캘린더(2탭) | /expenses 지출(3탭) | /leave 연차
+[업무]    /calendar/work 캘린더(2탭) | /approval 지출결의서(전자결재) | /expenses 지출(3탭) | /leave 연차
 [데이터]  /vendors 거래처DB(2탭) | /as A/S관리
 [관리]    /documents 서류함(4탭) | /staff 직원 | /accounting-cal 회계달력
 [분석]    /reports 보고서 | /kpi KPI(3탭)
@@ -67,6 +69,8 @@
 | expenses / estimates | 지출결의서 + 견적서 |
 | kpi_settings / vendors / promo_records / as_records | KPI + 거래처 + 홍보 + A/S |
 | ai_knowledge / ai_memory / chat_history / cowork_tasks | AI 관련 |
+| expense_reports / _payments / _details / _lines / _files / _refs / doc_sequences | 지출결의서 전자결재 |
+| push_subscriptions | 웹푸시 구독 기기 |
 상세 → dawoo_db_schema.sql
 
 ## 기능별 요약
@@ -78,6 +82,7 @@
 | 캘린더 | 직원별색깔, 홍보현황탭 | docs/CALENDAR.md |
 | 서류함 | 4탭, 구글드라이브 연결 | docs/DOCUMENTS.md |
 | 보고서+KPI | 12소스→4종보고서, 100점 배점 | docs/REPORT_KPI.md |
+| 지출결의서 전자결재 | 기안→상신→승인→`expenses` 자동등록, 결재 시점 웹푸시, 채번(`CDV-26-######`) | docs/superpowers/specs/2026-07-25-expense-approval-design.md |
 
 ## 개발 로드맵
 - **Phase 1**: ERP 기본 안정화 (접수/현장/캘린더/서류 버그 없이 동작, Auth, 대시보드)
@@ -121,6 +126,8 @@ src/app/[기능명]/page.tsx                  ← 라우트 (import만)
 | `/api/ocr/bank` | 통장사본 OCR |
 | `/api/pricing` | 견적 단가 |
 | `/api/storage/upload·delete` | 파일 업로드/삭제 |
+| `/api/approval/*` | 지출결의서 결재 액션 (상신·승인·반려·회수·취소·엑셀) |
+| `/api/push/subscribe` | 웹푸시 구독 등록 |
 
 ## 환경변수 (.env.local)
 ```

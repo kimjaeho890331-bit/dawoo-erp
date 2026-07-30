@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Building2, Users, Bell, Shield, Database, Save, Check, Loader2, Smartphone } from 'lucide-react'
 import InstallPanel from '@/components/pwa/InstallPanel'
+import PushToggle from '@/components/settings/PushToggle'
 
 // --- 타입 ---
 interface CompanyInfo {
@@ -206,26 +207,33 @@ export default function SettingsPage() {
 
           {/* 알림 설정 */}
           {tab === 'notification' && (
-            <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-              <div className="px-6 py-4 border-b border-border-tertiary">
-                <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">알림 설정</h2>
-                <p className="text-[12px] text-txt-tertiary mt-0.5">AI 보고서 및 자동 알림 기준</p>
-              </div>
-              <div className="divide-y divide-border-tertiary">
-                {notifications.map(n => (
-                  <div key={n.key} className="flex items-center justify-between px-6 py-4">
-                    <div>
-                      <p className="text-[13px] font-medium text-txt-primary">{n.label}</p>
-                      <p className="text-[12px] text-txt-tertiary mt-0.5">{n.description}</p>
+            <div className="space-y-4">
+              <section>
+                <h2 className="text-sm font-medium mb-2 text-txt-primary">결재 휴대폰 알림</h2>
+                <PushToggle />
+              </section>
+
+              <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+                <div className="px-6 py-4 border-b border-border-tertiary">
+                  <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">알림 설정</h2>
+                  <p className="text-[12px] text-txt-tertiary mt-0.5">AI 보고서 및 자동 알림 기준</p>
+                </div>
+                <div className="divide-y divide-border-tertiary">
+                  {notifications.map(n => (
+                    <div key={n.key} className="flex items-center justify-between px-6 py-4">
+                      <div>
+                        <p className="text-[13px] font-medium text-txt-primary">{n.label}</p>
+                        <p className="text-[12px] text-txt-tertiary mt-0.5">{n.description}</p>
+                      </div>
+                      <button
+                        onClick={() => toggleNotif(n.key)}
+                        className={`w-11 h-6 rounded-full transition-colors relative ${n.enabled ? 'bg-accent' : 'bg-surface-tertiary'}`}
+                      >
+                        <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm ${n.enabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => toggleNotif(n.key)}
-                      className={`w-11 h-6 rounded-full transition-colors relative ${n.enabled ? 'bg-accent' : 'bg-surface-tertiary'}`}
-                    >
-                      <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm ${n.enabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-                    </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}

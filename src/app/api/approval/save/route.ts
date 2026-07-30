@@ -22,6 +22,7 @@ interface Body {
   details: DetailInput[]
   lines: LineInput[]
   files?: FileInput[]
+  refs?: string[]
 }
 
 export async function POST(request: NextRequest) {
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
   const details = body.details ?? []
   const lines = body.lines ?? []
   const files = body.files ?? []
+  const refs = body.refs ?? []
 
   if (!body.title?.trim()) {
     return Response.json({ error: '기안제목을 입력해 주세요' }, { status: 400 })
@@ -114,6 +116,15 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       )
     }
+
+    const { error: delRefsError } = await admin
+      .from('expense_report_refs').delete().eq('report_id', reportId)
+    if (delRefsError) {
+      return Response.json(
+        { error: `기존 참조문서 삭제 실패: ${delRefsError.message}` },
+        { status: 500 },
+      )
+    }
   } else {
     const { data, error } = await admin.from('expense_reports').insert({
       title: body.title,
@@ -169,6 +180,18 @@ export async function POST(request: NextRequest) {
     if (linesError) {
       return Response.json(
         { error: `결재선 저장 실패: ${linesError.message}` },
+        { status: 500 },
+      )
+    }
+  }
+
+  if (refs.length > 0) {
+    const { error: refsError } = await admin.from('expense_report_refs').insert(
+      refs.map(refId => ({ report_id: reportId, ref_report_id: refId })),
+    )
+    if (refsError) {
+      return Response.json(
+        { error: `참조문서 저장 실패: ${refsError.message}` },
         { status: 500 },
       )
     }

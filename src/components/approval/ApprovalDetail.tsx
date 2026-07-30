@@ -31,6 +31,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const [details, setDetails] = useState<ExpenseReportDetail[]>([])
   const [lines, setLines] = useState<LineWithStaff[]>([])
   const [files, setFiles] = useState<ExpenseReportFile[]>([])
+  const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
   const [modal, setModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState<ActionKey | null>(null)
@@ -47,16 +48,22 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
     setReport(rest as ExpenseReport)
     setDrafterName(drafter?.name ?? '')
 
-    const [{ data: p }, { data: d }, { data: l }, { data: f }] = await Promise.all([
+    const [{ data: p }, { data: d }, { data: l }, { data: f }, { data: rf }] = await Promise.all([
       supabase.from('expense_report_payments').select('*').eq('report_id', reportId).order('seq'),
       supabase.from('expense_report_details').select('*').eq('report_id', reportId).order('seq'),
       supabase.from('expense_report_lines').select('*, staff(name)').eq('report_id', reportId).order('seq'),
       supabase.from('expense_report_files').select('*').eq('report_id', reportId).order('uploaded_at'),
+      supabase
+        .from('expense_report_refs')
+        .select('ref_report_id, expense_reports!expense_report_refs_ref_report_id_fkey(id, doc_no, title)')
+        .eq('report_id', reportId),
     ])
     setPayments((p ?? []) as ExpenseReportPayment[])
     setDetails((d ?? []) as ExpenseReportDetail[])
     setLines((l ?? []) as LineWithStaff[])
     setFiles((f ?? []) as ExpenseReportFile[])
+    setRefs((rf ?? []).map((x: Record<string, unknown>) =>
+      x.expense_reports as { id: string; doc_no: string | null; title: string }))
   }, [reportId])
 
   useEffect(() => { load() }, [load])
@@ -139,6 +146,19 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
                 className="flex items-center gap-1.5 text-xs text-accent-text hover:underline">
                 <Paperclip size={12} /> {f.file_name}
               </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {refs.length > 0 && (
+        <div className="mb-6">
+          <div className="text-sm font-medium mb-2">참조문서</div>
+          <div className="flex flex-col gap-1">
+            {refs.map(r => (
+              <Link key={r.id} href={`/approval/${r.id}`} className="text-xs text-accent-text hover:underline">
+                {r.doc_no ?? ''} {r.title}
+              </Link>
             ))}
           </div>
         </div>
@@ -238,6 +258,11 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
         <Link href="/approval" className="px-5 py-2 text-sm border border-border-primary rounded-lg">목록</Link>
 
+        {report.status === 'approved' && (
+          <Link href={`/approval/${reportId}/reissue`} className="px-5 py-2 text-sm border border-border-primary rounded-lg">
+            재기안
+          </Link>
+        )}
         {actor && canSubmit(report, actor.id) && (
           <Link href={`/approval/${reportId}/edit`} className="px-5 py-2 text-sm border border-border-primary rounded-lg">
             수정

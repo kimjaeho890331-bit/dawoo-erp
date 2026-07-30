@@ -14,7 +14,7 @@ import { validateApprovalLine } from '@/lib/approval/status'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
 
-export default function DraftForm({ reportId }: { reportId?: string }) {
+export default function DraftForm({ reportId, copyFromId }: { reportId?: string; copyFromId?: string }) {
   const router = useRouter()
   const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
 
@@ -24,36 +24,62 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
   const [details, setDetails] = useState<DetailRow[]>([])
   const [lines, setLines] = useState<LineDraft[]>([])
   const [files, setFiles] = useState<AttachedFile[]>([])
+  const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
+  const [refPool, setRefPool] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
   const [lineOpen, setLineOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!reportId) return
+    supabase
+      .from('expense_reports')
+      .select('id, doc_no, title')
+      .eq('status', 'approved')
+      .order('completed_at', { ascending: false })
+      .limit(50)
+      .then(({ data }) => setRefPool(data ?? []))
+  }, [])
+
+  useEffect(() => {
+    const sourceId = reportId ?? copyFromId
+    if (!sourceId) return
     const load = async () => {
-      const { data: r } = await supabase.from('expense_reports').select('*').eq('id', reportId).maybeSingle()
+      const { data: r } = await supabase.from('expense_reports').select('*').eq('id', sourceId).maybeSingle()
       if (!r) return
       setTitle(r.title)
       setBodyHtml(r.body_html ?? DEFAULT_BODY)
 
       const [{ data: p }, { data: d }, { data: l }, { data: f }] = await Promise.all([
-        supabase.from('expense_report_payments').select('*').eq('report_id', reportId).order('seq'),
-        supabase.from('expense_report_details').select('*').eq('report_id', reportId).order('seq'),
-        supabase.from('expense_report_lines').select('*, staff(name)').eq('report_id', reportId).order('seq'),
-        supabase.from('expense_report_files').select('*').eq('report_id', reportId).order('uploaded_at'),
+        supabase.from('expense_report_payments').select('*').eq('report_id', sourceId).order('seq'),
+        supabase.from('expense_report_details').select('*').eq('report_id', sourceId).order('seq'),
+        supabase.from('expense_report_lines').select('*, staff(name)').eq('report_id', sourceId).order('seq'),
+        supabase.from('expense_report_files').select('*').eq('report_id', sourceId).order('uploaded_at'),
       ])
 
       setPayments((p ?? []).map(x => ({ ...x, business_no: x.business_no ?? '' })) as PaymentRow[])
       setDetails((d ?? []) as DetailRow[])
-      setLines((l ?? []).map((x: Record<string, unknown>) => ({
-        staff_id: x.staff_id as string,
-        name: (x.staff as { name: string })?.name ?? '',
-        role: x.role as LineDraft['role'],
-      })))
-      setFiles((f ?? []) as AttachedFile[])
+
+      if (copyFromId) {
+        setLines([])
+        setFiles([])
+      } else {
+        setLines((l ?? []).map((x: Record<string, unknown>) => ({
+          staff_id: x.staff_id as string,
+          name: (x.staff as { name: string })?.name ?? '',
+          role: x.role as LineDraft['role'],
+        })))
+        setFiles((f ?? []) as AttachedFile[])
+
+        const { data: rf } = await supabase
+          .from('expense_report_refs')
+          .select('ref_report_id, expense_reports!expense_report_refs_ref_report_id_fkey(id, doc_no, title)')
+          .eq('report_id', sourceId)
+        setRefs((rf ?? []).map((x: Record<string, unknown>) =>
+          x.expense_reports as { id: string; doc_no: string | null; title: string }))
+      }
     }
     load()
-  }, [reportId])
+  }, [reportId, copyFromId])
 
   const save = useCallback(async (thenSubmit: boolean) => {
     if (!actor) { setError('기안자를 선택해 주세요'); return }
@@ -77,6 +103,7 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
           payments, details,
           lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
           files,
+          refs: refs.map(r => r.id),
         }),
       })
       const json = await res.json()
@@ -100,7 +127,7 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
     } finally {
       setBusy(false)
     }
-  }, [actor, reportId, title, bodyHtml, payments, details, lines, files, router])
+  }, [actor, reportId, title, bodyHtml, payments, details, lines, files, refs, router])
 
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
@@ -166,6 +193,34 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
       <div className="flex gap-3 mb-6">
         <span className="w-16 text-xs text-txt-secondary pt-1.5">파일첨부</span>
         <div className="flex-1"><FileAttach files={files} onChange={setFiles} /></div>
+      </div>
+
+      <div className="flex gap-3 mb-6">
+        <span className="w-16 text-xs text-txt-secondary pt-1.5">참조문서</span>
+        <div className="flex-1">
+          <div className="flex flex-wrap gap-2 mb-2">
+            {refs.map(r => (
+              <span key={r.id} className="flex items-center gap-1.5 px-2 py-1 text-xs bg-surface-secondary rounded">
+                {r.doc_no ?? ''} {r.title}
+                <button onClick={() => setRefs(refs.filter(x => x.id !== r.id))} aria-label="참조 해제" className="text-txt-tertiary">×</button>
+              </span>
+            ))}
+          </div>
+          <select
+            value=""
+            onChange={e => {
+              const found = refPool.find(r => r.id === e.target.value)
+              if (found && !refs.some(x => x.id === found.id)) setRefs([...refs, found])
+            }}
+            aria-label="참조문서 추가"
+            className="px-3 py-1.5 text-xs border border-border-primary rounded-lg bg-surface text-txt-primary"
+          >
+            <option value="">완료된 문서 추가</option>
+            {refPool.filter(r => r.id !== reportId).map(r => (
+              <option key={r.id} value={r.id}>{r.doc_no ?? ''} {r.title}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="mb-5"><PaymentTable rows={payments} onChange={setPayments} /></div>

@@ -1,8 +1,11 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Trash2, Plus } from 'lucide-react'
 import { formatMoney, parseMoney } from '@/lib/utils/format'
+import { supabase } from '@/lib/supabase'
 import { EMPTY_PAYMENT, type PaymentRow } from '@/types/approval'
+import VendorNameCell, { type VendorOption } from './VendorNameCell'
 
 interface Props {
   rows: PaymentRow[]
@@ -11,6 +14,24 @@ interface Props {
 
 export default function PaymentTable({ rows, onChange }: Props) {
   const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
+
+  // 거래처DB 후보 목록. 조회 전용 — vendors 테이블에는 쓰지 않는다.
+  const [vendors, setVendors] = useState<VendorOption[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('vendors')
+      .select('id, name, business_number, bank_name, account_number, bank_info')
+      .order('name')
+      .then(({ data }) => {
+        if (cancelled) return
+        setVendors((data ?? []) as VendorOption[])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const set = (i: number, patch: Partial<PaymentRow>) =>
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
@@ -50,8 +71,16 @@ export default function PaymentTable({ rows, onChange }: Props) {
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-border-primary">
-              <td className="border-r border-border-primary"><input className={cell} value={r.vendor_name}
-                onChange={e => set(i, { vendor_name: e.target.value })} placeholder="거래처명" /></td>
+              <td className="border-r border-border-primary">
+                <VendorNameCell
+                  value={r.vendor_name}
+                  vendors={vendors}
+                  onInput={v => set(i, { vendor_name: v })}
+                  onSelect={patch => set(i, patch)}
+                  className={cell}
+                  placeholder="거래처명"
+                />
+              </td>
               <td className="border-r border-border-primary"><input className={`${cell} text-right`} value={r.amount ? formatMoney(r.amount) : ''}
                 onChange={e => set(i, { amount: parseMoney(e.target.value) })} placeholder="0" /></td>
               <td className="border-r border-border-primary"><input className={cell} type="date" value={r.pay_request_date}

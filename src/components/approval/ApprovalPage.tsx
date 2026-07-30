@@ -65,7 +65,7 @@ const MY_DRAFT_STATUS: Record<'draft' | 'submitted' | 'withdrawn' | 'rejected' |
 }
 
 export default function ApprovalPage() {
-  const { staff } = useAuth()
+  const { staff, loading: authLoading } = useAuth()
   const [box, setBox] = useState<BoxKey>('toApprove')
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
@@ -142,6 +142,16 @@ export default function ApprovalPage() {
   }, [staff, box])
 
   useEffect(() => { load() }, [load])
+
+  if (!authLoading && !staff) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-sm text-danger">
+          로그인 계정과 직원 정보가 연결되어 있지 않습니다. 관리자에게 직원 정보(이메일) 등록을 요청해 주세요.
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen">

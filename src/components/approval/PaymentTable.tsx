@@ -15,7 +15,7 @@ export default function PaymentTable({ rows, onChange }: Props) {
   const set = (i: number, patch: Partial<PaymentRow>) =>
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
 
-  const cell = 'w-full px-2 py-1.5 text-xs bg-transparent outline-none'
+  const cell = 'w-full px-2 py-1.5 text-xs bg-transparent outline-none rounded hover:bg-surface-secondary focus:bg-surface focus:ring-1 focus:ring-accent'
 
   return (
     <div className="border border-border-primary rounded-lg overflow-hidden">
@@ -38,29 +38,29 @@ export default function PaymentTable({ rows, onChange }: Props) {
       <table className="w-full table-fixed text-xs">
         <thead className="bg-surface-secondary text-txt-secondary">
           <tr>
-            <th className="w-[17%] px-2 py-2 text-left font-normal">거래처명 *</th>
-            <th className="w-[15%] px-2 py-2 text-right font-normal">지급금액 *</th>
-            <th className="w-[14%] px-2 py-2 text-left font-normal">지급요청일 *</th>
-            <th className="w-[12%] px-2 py-2 text-left font-normal">은행 *</th>
-            <th className="w-[20%] px-2 py-2 text-left font-normal">계좌번호 *</th>
-            <th className="w-[16%] px-2 py-2 text-left font-normal">사업자번호</th>
+            <th className="w-[17%] px-2 py-2 text-left font-normal border-r border-border-primary">거래처명 *</th>
+            <th className="w-[15%] px-2 py-2 text-right font-normal border-r border-border-primary">지급금액 *</th>
+            <th className="w-[14%] px-2 py-2 text-left font-normal border-r border-border-primary">지급요청일 *</th>
+            <th className="w-[12%] px-2 py-2 text-left font-normal border-r border-border-primary">은행 *</th>
+            <th className="w-[20%] px-2 py-2 text-left font-normal border-r border-border-primary">계좌번호 *</th>
+            <th className="w-[16%] px-2 py-2 text-left font-normal border-r border-border-primary">사업자번호</th>
             <th className="w-[6%] px-2 py-2"></th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-border-primary">
-              <td><input className={cell} value={r.vendor_name}
+              <td className="border-r border-border-primary"><input className={cell} value={r.vendor_name}
                 onChange={e => set(i, { vendor_name: e.target.value })} placeholder="거래처명" /></td>
-              <td><input className={`${cell} text-right`} value={r.amount ? formatMoney(r.amount) : ''}
+              <td className="border-r border-border-primary"><input className={`${cell} text-right`} value={r.amount ? formatMoney(r.amount) : ''}
                 onChange={e => set(i, { amount: parseMoney(e.target.value) })} placeholder="0" /></td>
-              <td><input className={cell} type="date" value={r.pay_request_date}
+              <td className="border-r border-border-primary"><input className={cell} type="date" value={r.pay_request_date}
                 onChange={e => set(i, { pay_request_date: e.target.value })} /></td>
-              <td><input className={cell} value={r.bank}
+              <td className="border-r border-border-primary"><input className={cell} value={r.bank}
                 onChange={e => set(i, { bank: e.target.value })} placeholder="은행명" /></td>
-              <td><input className={cell} value={r.account_no}
+              <td className="border-r border-border-primary"><input className={cell} value={r.account_no}
                 onChange={e => set(i, { account_no: e.target.value })} placeholder="계좌번호" /></td>
-              <td><input className={cell} value={r.business_no}
+              <td className="border-r border-border-primary"><input className={cell} value={r.business_no}
                 onChange={e => set(i, { business_no: e.target.value })} placeholder="선택" /></td>
               <td className="text-center">
                 <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} aria-label="행 삭제">

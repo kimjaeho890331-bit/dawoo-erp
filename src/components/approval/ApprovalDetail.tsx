@@ -23,7 +23,7 @@ type ActionKey = 'withdraw' | 'delete' | 'cancel'
 
 export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const router = useRouter()
-  const { staff } = useAuth()
+  const { staff, loading: authLoading } = useAuth()
 
   const [report, setReport] = useState<ExpenseReport | null>(null)
   const [drafterName, setDrafterName] = useState('')
@@ -79,6 +79,14 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
     } finally {
       setActionBusy(null)
     }
+  }
+
+  if (!authLoading && !staff) {
+    return (
+      <div className="px-8 py-10 text-sm text-danger">
+        로그인 계정과 직원 정보가 연결되어 있지 않습니다. 관리자에게 직원 정보(이메일) 등록을 요청해 주세요.
+      </div>
+    )
   }
 
   if (!report || !staff) return <div className="px-8 py-10 text-sm text-txt-tertiary">불러오는 중</div>
@@ -148,22 +156,22 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         <table className="w-full table-fixed text-xs">
           <thead className="bg-surface-secondary text-txt-secondary">
             <tr>
-              <th className="w-[18%] px-2 py-2 text-left font-normal">거래처명</th>
-              <th className="w-[16%] px-2 py-2 text-right font-normal">지급금액</th>
-              <th className="w-[14%] px-2 py-2 text-left font-normal">지급요청일</th>
-              <th className="w-[13%] px-2 py-2 text-left font-normal">은행</th>
-              <th className="w-[22%] px-2 py-2 text-left font-normal">계좌번호</th>
+              <th className="w-[18%] px-2 py-2 text-left font-normal border-r border-border-primary">거래처명</th>
+              <th className="w-[16%] px-2 py-2 text-right font-normal border-r border-border-primary">지급금액</th>
+              <th className="w-[14%] px-2 py-2 text-left font-normal border-r border-border-primary">지급요청일</th>
+              <th className="w-[13%] px-2 py-2 text-left font-normal border-r border-border-primary">은행</th>
+              <th className="w-[22%] px-2 py-2 text-left font-normal border-r border-border-primary">계좌번호</th>
               <th className="w-[17%] px-2 py-2 text-left font-normal">사업자번호</th>
             </tr>
           </thead>
           <tbody>
             {payments.map(p => (
               <tr key={p.id} className="border-t border-border-primary">
-                <td className="px-2 py-2.5">{p.vendor_name}</td>
-                <td className="px-2 py-2.5 text-right">{formatMoney(p.amount)}</td>
-                <td className="px-2 py-2.5">{p.pay_request_date}</td>
-                <td className="px-2 py-2.5">{p.bank}</td>
-                <td className="px-2 py-2.5">{p.account_no}</td>
+                <td className="px-2 py-2.5 border-r border-border-primary">{p.vendor_name}</td>
+                <td className="px-2 py-2.5 text-right border-r border-border-primary">{formatMoney(p.amount)}</td>
+                <td className="px-2 py-2.5 border-r border-border-primary">{p.pay_request_date}</td>
+                <td className="px-2 py-2.5 border-r border-border-primary">{p.bank}</td>
+                <td className="px-2 py-2.5 border-r border-border-primary">{p.account_no}</td>
                 <td className="px-2 py-2.5">{p.business_no ?? ''}</td>
               </tr>
             ))}
@@ -177,22 +185,22 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <table className="w-full table-fixed text-xs">
             <thead className="bg-surface-secondary text-txt-secondary">
               <tr>
-                <th className="px-2 py-2 text-left font-normal">거래처명</th>
-                <th className="px-2 py-2 text-left font-normal">계정</th>
-                <th className="px-2 py-2 text-left font-normal">내용</th>
-                <th className="px-2 py-2 text-left font-normal">부서명</th>
-                <th className="px-2 py-2 text-right font-normal">금액</th>
+                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">거래처명</th>
+                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">계정</th>
+                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">내용</th>
+                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">부서명</th>
+                <th className="px-2 py-2 text-right font-normal border-r border-border-primary">금액</th>
                 <th className="px-2 py-2 text-left font-normal">비고</th>
               </tr>
             </thead>
             <tbody>
               {details.map(d => (
                 <tr key={d.id} className="border-t border-border-primary">
-                  <td className="px-2 py-2.5">{d.vendor_name ?? ''}</td>
-                  <td className="px-2 py-2.5">{d.account ?? ''}</td>
-                  <td className="px-2 py-2.5">{d.content ?? ''}</td>
-                  <td className="px-2 py-2.5">{d.dept_name ?? ''}</td>
-                  <td className="px-2 py-2.5 text-right">{d.amount ? formatMoney(d.amount) : ''}</td>
+                  <td className="px-2 py-2.5 border-r border-border-primary">{d.vendor_name ?? ''}</td>
+                  <td className="px-2 py-2.5 border-r border-border-primary">{d.account ?? ''}</td>
+                  <td className="px-2 py-2.5 border-r border-border-primary">{d.content ?? ''}</td>
+                  <td className="px-2 py-2.5 border-r border-border-primary">{d.dept_name ?? ''}</td>
+                  <td className="px-2 py-2.5 text-right border-r border-border-primary">{d.amount ? formatMoney(d.amount) : ''}</td>
                   <td className="px-2 py-2.5">{d.note ?? ''}</td>
                 </tr>
               ))}
@@ -209,20 +217,20 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       <table className="w-full table-fixed text-xs mb-6">
         <thead className="bg-surface-secondary text-txt-secondary">
           <tr>
-            <th className="w-[12%] px-2 py-2 text-left font-normal">결재구분</th>
-            <th className="w-[18%] px-2 py-2 text-left font-normal">결재자</th>
-            <th className="w-[12%] px-2 py-2 text-left font-normal">상태</th>
-            <th className="w-[20%] px-2 py-2 text-left font-normal">일시</th>
+            <th className="w-[12%] px-2 py-2 text-left font-normal border-r border-border-primary">결재구분</th>
+            <th className="w-[18%] px-2 py-2 text-left font-normal border-r border-border-primary">결재자</th>
+            <th className="w-[12%] px-2 py-2 text-left font-normal border-r border-border-primary">상태</th>
+            <th className="w-[20%] px-2 py-2 text-left font-normal border-r border-border-primary">일시</th>
             <th className="px-2 py-2 text-left font-normal">결재의견</th>
           </tr>
         </thead>
         <tbody>
           {lines.filter(l => l.acted_at).map(l => (
             <tr key={l.id} className="border-t border-border-primary">
-              <td className="px-2 py-2.5">{LINE_ROLE_LABEL[l.role]}</td>
-              <td className="px-2 py-2.5">{l.staff?.name ?? ''}</td>
-              <td className="px-2 py-2.5">{LINE_STATE_LABEL[l.state]}</td>
-              <td className="px-2 py-2.5">{l.acted_at ? new Date(l.acted_at).toLocaleString('ko-KR') : ''}</td>
+              <td className="px-2 py-2.5 border-r border-border-primary">{LINE_ROLE_LABEL[l.role]}</td>
+              <td className="px-2 py-2.5 border-r border-border-primary">{l.staff?.name ?? ''}</td>
+              <td className="px-2 py-2.5 border-r border-border-primary">{LINE_STATE_LABEL[l.state]}</td>
+              <td className="px-2 py-2.5 border-r border-border-primary">{l.acted_at ? new Date(l.acted_at).toLocaleString('ko-KR') : ''}</td>
               <td className="px-2 py-2.5">{l.comment ?? ''}</td>
             </tr>
           ))}

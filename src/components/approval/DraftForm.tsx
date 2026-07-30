@@ -16,7 +16,7 @@ const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 
 
 export default function DraftForm({ reportId }: { reportId?: string }) {
   const router = useRouter()
-  const { staff } = useAuth()
+  const { staff, loading: authLoading } = useAuth()
 
   const [title, setTitle] = useState('')
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY)
@@ -108,6 +108,12 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
     <div className="max-w-4xl mx-auto px-6 py-8">
       <h1 className="text-lg font-medium mb-4">지출결의서</h1>
 
+      {!authLoading && !staff && (
+        <div className="mb-4 text-sm text-danger bg-danger-bg border border-danger-border rounded-lg px-3 py-2.5">
+          로그인 계정과 직원 정보가 연결되어 있지 않습니다. 관리자에게 직원 정보(이메일) 등록을 요청해 주세요.
+        </div>
+      )}
+
       <table className="w-full table-fixed text-xs mb-6">
         <tbody>
           <tr>
@@ -165,9 +171,9 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
-        <button disabled={busy} onClick={() => save(false)}
+        <button disabled={busy || !staff} onClick={() => save(false)}
           className="px-6 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">임시저장</button>
-        <button disabled={busy} onClick={() => save(true)}
+        <button disabled={busy || !staff} onClick={() => save(true)}
           className="px-6 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">상신하기</button>
       </div>
 

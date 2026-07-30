@@ -44,7 +44,7 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
     setChecked(new Set())
   }
 
-  const cell = 'w-full px-2 py-1.5 text-xs bg-transparent outline-none'
+  const cell = 'w-full px-2 py-1.5 text-xs bg-transparent outline-none rounded hover:bg-surface-secondary focus:bg-surface focus:ring-1 focus:ring-accent'
 
   return (
     <div className="border border-border-primary rounded-lg overflow-hidden">
@@ -66,57 +66,57 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
       <table className="w-full table-fixed text-xs">
         <thead className="bg-surface-secondary text-txt-secondary">
           <tr>
-            <th className="w-[6%] px-2 py-2"></th>
-            <th className="w-[18%] px-2 py-2 text-left font-normal">거래처명</th>
-            <th className="w-[13%] px-2 py-2 text-left font-normal">계정</th>
-            <th className="w-[22%] px-2 py-2 text-left font-normal">내용</th>
-            <th className="w-[13%] px-2 py-2 text-left font-normal">부서명</th>
-            <th className="w-[14%] px-2 py-2 text-right font-normal">금액</th>
-            <th className="w-[9%] px-2 py-2 text-left font-normal">비고</th>
+            <th className="w-[6%] px-2 py-2 border-r border-border-primary"></th>
+            <th className="w-[18%] px-2 py-2 text-left font-normal border-r border-border-primary">거래처명</th>
+            <th className="w-[13%] px-2 py-2 text-left font-normal border-r border-border-primary">계정</th>
+            <th className="w-[22%] px-2 py-2 text-left font-normal border-r border-border-primary">내용</th>
+            <th className="w-[13%] px-2 py-2 text-left font-normal border-r border-border-primary">부서명</th>
+            <th className="w-[14%] px-2 py-2 text-right font-normal border-r border-border-primary">금액</th>
+            <th className="w-[9%] px-2 py-2 text-left font-normal border-r border-border-primary">비고</th>
             <th className="w-[5%] px-2 py-2"></th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-t border-border-primary bg-accent-light">
-            <td className="px-2 text-center text-[11px] text-accent-text">일괄</td>
-            <td>
+            <td className="px-2 text-center text-[11px] text-accent-text border-r border-border-primary">일괄</td>
+            <td className="border-r border-border-primary">
               <select className={cell} value={template.vendor_name}
                 onChange={e => setTemplate({ ...template, vendor_name: e.target.value })}>
                 <option value="">선택</option>
                 {vendorOptions.map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </td>
-            <td><input className={cell} value={template.account}
+            <td className="border-r border-border-primary"><input className={cell} value={template.account}
               onChange={e => setTemplate({ ...template, account: e.target.value })} /></td>
-            <td><input className={cell} value={template.content}
+            <td className="border-r border-border-primary"><input className={cell} value={template.content}
               onChange={e => setTemplate({ ...template, content: e.target.value })} /></td>
-            <td><input className={cell} value={template.dept_name}
+            <td className="border-r border-border-primary"><input className={cell} value={template.dept_name}
               onChange={e => setTemplate({ ...template, dept_name: e.target.value })} /></td>
-            <td><input className={`${cell} text-right`} value={template.amount ? formatMoney(template.amount) : ''}
+            <td className="border-r border-border-primary"><input className={`${cell} text-right`} value={template.amount ? formatMoney(template.amount) : ''}
               onChange={e => setTemplate({ ...template, amount: parseMoney(e.target.value) })} /></td>
-            <td><input className={cell} value={template.note}
+            <td className="border-r border-border-primary"><input className={cell} value={template.note}
               onChange={e => setTemplate({ ...template, note: e.target.value })} /></td>
             <td></td>
           </tr>
 
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-border-primary">
-              <td className="px-2 text-center">
+              <td className="px-2 text-center border-r border-border-primary">
                 <input type="checkbox" checked={checked.has(i)} onChange={() => toggle(i)} aria-label={`${i + 1}행 선택`} />
               </td>
-              <td>
+              <td className="border-r border-border-primary">
                 <select className={cell} value={r.vendor_name}
                   onChange={e => set(i, { vendor_name: e.target.value })}>
                   <option value="">선택</option>
                   {vendorOptions.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </td>
-              <td><input className={cell} value={r.account} onChange={e => set(i, { account: e.target.value })} /></td>
-              <td><input className={cell} value={r.content} onChange={e => set(i, { content: e.target.value })} /></td>
-              <td><input className={cell} value={r.dept_name} onChange={e => set(i, { dept_name: e.target.value })} /></td>
-              <td><input className={`${cell} text-right`} value={r.amount ? formatMoney(r.amount) : ''}
+              <td className="border-r border-border-primary"><input className={cell} value={r.account} onChange={e => set(i, { account: e.target.value })} /></td>
+              <td className="border-r border-border-primary"><input className={cell} value={r.content} onChange={e => set(i, { content: e.target.value })} /></td>
+              <td className="border-r border-border-primary"><input className={cell} value={r.dept_name} onChange={e => set(i, { dept_name: e.target.value })} /></td>
+              <td className="border-r border-border-primary"><input className={`${cell} text-right`} value={r.amount ? formatMoney(r.amount) : ''}
                 onChange={e => set(i, { amount: parseMoney(e.target.value) })} /></td>
-              <td><input className={cell} value={r.note} onChange={e => set(i, { note: e.target.value })} /></td>
+              <td className="border-r border-border-primary"><input className={cell} value={r.note} onChange={e => set(i, { note: e.target.value })} /></td>
               <td className="text-center">
                 <button onClick={() => removeRow(i)} aria-label="행 삭제">
                   <Trash2 size={13} className="text-txt-tertiary" />

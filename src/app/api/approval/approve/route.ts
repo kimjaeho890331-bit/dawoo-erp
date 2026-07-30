@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { admin, requireStaff, loadReport } from '@/lib/approval/guard'
+import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import {
   canApprove, canResumeCompletion, currentTurnLine, isFinalApprover,
 } from '@/lib/approval/status'
@@ -174,12 +174,13 @@ async function completeApproval({
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (staff instanceof Response) return staff
-
-  const { id, category, comment } = (await request.json()) as {
-    id: string; category?: string; comment?: string
+  const { id, category, comment, actor_staff_id } = (await request.json()) as {
+    id: string; category?: string; comment?: string; actor_staff_id?: string
   }
+
+  const actor = await resolveActor(actor_staff_id)
+  if (actor instanceof Response) return actor
+  const { staff, authEmail } = actor
 
   const loaded = await loadReport(id)
   if (!loaded) return Response.json({ error: '문서를 찾을 수 없습니다' }, { status: 404 })
@@ -209,7 +210,10 @@ export async function POST(request: NextRequest) {
     // 실제로 갱신된 행을 돌려받는지 확인한다. 동시에 도착한 다른 요청은 여기서 걸러진다.
     const { data: claimed, error: claimError } = await admin
       .from('expense_report_lines')
-      .update({ state: 'approved', acted_at: now, comment: comment ?? null })
+      .update({
+        state: 'approved', acted_at: now, comment: comment ?? null,
+        acted_by_email: authEmail,
+      })
       .eq('id', turn.id)
       .eq('state', 'waiting')
       .select('id')

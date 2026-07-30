@@ -372,3 +372,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_expenses_report_payment
 
 COMMENT ON COLUMN expenses.expense_report_payment_id IS
   '지출결의서 승인으로 생성된 경우 원본 지급정보 행. 부분 유니크 인덱스로 중복 생성을 DB가 차단한다.';
+
+-- ============================================
+-- 25. 지출결의서 결재 행위자 감사 컬럼 (014_approval_actor_audit.sql)
+-- ============================================
+-- 2026-07-30, 행위자 판정 방식 변경(로그인 계정 대신 화면에서 직접 선택)에 대한 보완.
+-- 화면에서 고른 직원과 별개로 실제 조작한 로그인 계정 이메일을 남겨 분쟁 시 추적한다.
+
+ALTER TABLE expense_reports
+  ADD COLUMN IF NOT EXISTS drafted_by_email TEXT;   -- 기안 시점의 로그인 계정 이메일. 기존 행은 NULL
+
+ALTER TABLE expense_report_lines
+  ADD COLUMN IF NOT EXISTS acted_by_email TEXT;      -- 승인/반려 시점의 로그인 계정 이메일. 기존 행은 NULL
+
+COMMENT ON COLUMN expense_reports.drafted_by_email IS
+  '기안 시점의 로그인 계정 이메일(감사용, 화면 비노출). 행위자는 actor_staff_id로 화면에서 고른 사람이다.';
+COMMENT ON COLUMN expense_report_lines.acted_by_email IS
+  '승인/반려 처리 시점의 로그인 계정 이메일(감사용, 화면 비노출). 행위자는 actor_staff_id로 화면에서 고른 사람이다.';

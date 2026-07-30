@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { admin, requireStaff, loadReport } from '@/lib/approval/guard'
+import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { validateApprovalLine, canSubmit } from '@/lib/approval/status'
 
 interface PaymentInput {
@@ -15,6 +15,7 @@ interface FileInput { file_name: string; file_url: string; size: number }
 
 interface Body {
   id?: string
+  actor_staff_id?: string
   title: string
   body_html?: string | null
   payments: PaymentInput[]
@@ -24,10 +25,11 @@ interface Body {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (staff instanceof Response) return staff
-
   const body = (await request.json()) as Body
+
+  const actor = await resolveActor(body.actor_staff_id)
+  if (actor instanceof Response) return actor
+  const { staff, authEmail } = actor
 
   // 요청 본문에 필드가 통째로 누락될 수 있으므로 안전하게 기본값을 둔다
   const payments = body.payments ?? []
@@ -117,7 +119,8 @@ export async function POST(request: NextRequest) {
       title: body.title,
       body_html: body.body_html ?? null,
       status: 'draft',
-      drafter_staff_id: staff.id,   // 클라이언트 값이 아니라 로그인 사용자로 강제
+      drafter_staff_id: staff.id,   // 화면에서 고른 행위자
+      drafted_by_email: authEmail,  // 감사용 — 실제 로그인 계정
       total_amount: total,
     }).select('id').single()
 

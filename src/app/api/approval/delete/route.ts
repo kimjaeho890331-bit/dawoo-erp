@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server'
-import { admin, requireStaff, loadReport } from '@/lib/approval/guard'
+import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { canDelete } from '@/lib/approval/status'
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (staff instanceof Response) return staff
+  const { id, actor_staff_id } = (await request.json()) as { id: string; actor_staff_id?: string }
 
-  const { id } = (await request.json()) as { id: string }
+  const actor = await resolveActor(actor_staff_id)
+  if (actor instanceof Response) return actor
+  const { staff } = actor
 
   const loaded = await loadReport(id)
   if (!loaded) return Response.json({ error: '문서를 찾을 수 없습니다' }, { status: 404 })

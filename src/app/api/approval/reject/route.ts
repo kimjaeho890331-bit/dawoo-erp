@@ -1,12 +1,15 @@
 import { NextRequest } from 'next/server'
-import { admin, requireStaff, loadReport } from '@/lib/approval/guard'
+import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { canApprove, currentTurnLine } from '@/lib/approval/status'
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (staff instanceof Response) return staff
+  const { id, comment, actor_staff_id } = (await request.json()) as {
+    id: string; comment?: string; actor_staff_id?: string
+  }
 
-  const { id, comment } = (await request.json()) as { id: string; comment?: string }
+  const actor = await resolveActor(actor_staff_id)
+  if (actor instanceof Response) return actor
+  const { staff, authEmail } = actor
 
   if (!comment?.trim()) {
     return Response.json({ error: '반려 사유를 입력해 주세요' }, { status: 400 })
@@ -25,7 +28,7 @@ export async function POST(request: NextRequest) {
   // 승인과 마찬가지로 아직 'waiting'일 때만 갱신되도록 조건을 걸고, 실제로
   // 갱신됐는지 확인한다 — 승인과 반려가 동시에 도착하는 경우도 여기서 막힌다.
   const { data: claimed, error: lineError } = await admin.from('expense_report_lines').update({
-    state: 'rejected', acted_at: now, comment,
+    state: 'rejected', acted_at: now, comment, acted_by_email: authEmail,
   }).eq('id', turn.id).eq('state', 'waiting').select('id').maybeSingle()
 
   if (lineError) {

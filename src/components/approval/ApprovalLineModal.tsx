@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Search, GripVertical, Trash2 } from 'lucide-react'
+import { X, Search, ChevronUp, ChevronDown, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { validateApprovalLine } from '@/lib/approval/status'
 import type { LineRole } from '@/types/approval'
@@ -25,7 +25,6 @@ interface Props {
 export default function ApprovalLineModal({ open, drafterStaffId, value, onChange, onClose }: Props) {
   const [staffList, setStaffList] = useState<StaffRow[]>([])
   const [keyword, setKeyword] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
   const [draft, setDraft] = useState<LineDraft[]>(value)
   const [error, setError] = useState<string | null>(null)
   const [syncedValue, setSyncedValue] = useState(value)
@@ -52,11 +51,10 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
     s => s.id !== drafterStaffId && s.name.includes(keyword) && !draft.some(d => d.staff_id === s.id),
   )
 
-  const add = (role: LineRole) => {
-    const s = staffList.find(x => x.id === selected)
+  const add = (staffId: string, role: LineRole) => {
+    const s = staffList.find(x => x.id === staffId)
     if (!s) return
     setDraft([...draft, { staff_id: s.id, name: s.name, role }])
-    setSelected(null)
     setError(null)
   }
 
@@ -101,23 +99,28 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
             </div>
             <div className="border border-border-primary rounded-lg h-64 overflow-y-auto">
               {candidates.map(s => (
-                <button
+                <div
                   key={s.id}
-                  onClick={() => setSelected(s.id)}
-                  className={`w-full text-left px-3 py-2 text-sm ${selected === s.id ? 'bg-surface-secondary' : ''}`}
+                  className="flex items-center gap-2 px-3 py-2 border-b border-border-primary last:border-0"
                 >
-                  {s.name}
-                </button>
+                  <span className="text-sm flex-1 truncate">{s.name}</span>
+                  <button
+                    onClick={() => add(s.id, 'approval')}
+                    className="shrink-0 text-xs px-2 py-1 border border-border-primary rounded-lg text-txt-secondary hover:bg-surface-secondary"
+                  >
+                    결재
+                  </button>
+                  <button
+                    onClick={() => add(s.id, 'cooperation')}
+                    className="shrink-0 text-xs px-2 py-1 border border-border-primary rounded-lg text-txt-secondary hover:bg-surface-secondary"
+                  >
+                    협조
+                  </button>
+                </div>
               ))}
               {candidates.length === 0 && (
                 <div className="px-3 py-4 text-sm text-txt-tertiary">선택할 직원이 없습니다</div>
               )}
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button onClick={() => add('approval')} disabled={!selected}
-                className="flex-1 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">결재</button>
-              <button onClick={() => add('cooperation')} disabled={!selected}
-                className="flex-1 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">협조</button>
             </div>
           </div>
 
@@ -128,9 +131,24 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
             <div className="border border-border-primary rounded-lg h-64 overflow-y-auto">
               {draft.map((d, i) => (
                 <div key={d.staff_id} className="flex items-center gap-2 px-3 py-2 border-b border-border-primary last:border-0">
-                  <button onClick={() => move(i, i - 1)} aria-label="위로">
-                    <GripVertical size={14} className="text-txt-tertiary" />
-                  </button>
+                  <div className="flex flex-col">
+                    <button
+                      onClick={() => move(i, i - 1)}
+                      disabled={i === 0}
+                      aria-label="위로"
+                      className="disabled:opacity-30"
+                    >
+                      <ChevronUp size={14} className="text-txt-tertiary" />
+                    </button>
+                    <button
+                      onClick={() => move(i, i + 1)}
+                      disabled={i === draft.length - 1}
+                      aria-label="아래로"
+                      className="disabled:opacity-30"
+                    >
+                      <ChevronDown size={14} className="text-txt-tertiary" />
+                    </button>
+                  </div>
                   <span className="text-xs px-1.5 py-0.5 rounded bg-surface-secondary text-txt-secondary">
                     {d.role === 'approval' ? '결재' : '협조'}
                   </span>

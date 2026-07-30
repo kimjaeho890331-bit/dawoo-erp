@@ -10,6 +10,19 @@
 
 ## Global Constraints
 
+> **2026-07-30 변경 — 행위자 판정 방식이 바뀌었다.** Task 5~12를 실제로 돌려본 뒤 사용자가 결정한 사항이다. 아래 Task 5~7 본문의 `requireStaff()` 코드는 **당시 기록**이며 현재 코드와 다르다. Task 13 이후는 이 절을 따른다.
+>
+> - 운영 `staff` 테이블에 로그인 이메일이 사실상 비어 있어 아무도 결재를 쓸 수 없었다. 그래서 **행위자를 화면에서 고르는 방식**으로 바꿨다.
+> - `guard.ts`의 `requireStaff()`는 **삭제됐다.** 대신 **`resolveActor(request)`** 가 있다: 로그인 세션을 확인하고(없으면 401), 요청 본문의 **`actor_staff_id`** 로 `staff` 행을 찾아(없으면 400/403) `{ staff, authEmail }`를 돌려준다.
+> - 따라서 **상태를 바꾸는 모든 라우트는 본문에 `actor_staff_id`를 받아야 한다.**
+> - 행위 시점의 로그인 계정을 감사용으로 남긴다: `expense_reports.drafted_by_email`, `expense_report_lines.acted_by_email` (마이그레이션 014).
+> - 로그인 세션 확인(401)은 그대로다. 권한 판정(`status.ts` 순수함수 + `loadReport()`로 DB 재조회)도 그대로다. 고른 사람이 차례가 아니면 여전히 막힌다.
+> - 화면 쪽은 `src/components/approval/ActorPicker.tsx`의 `useActor()` 훅으로 현재 직원을 얻는다. 저장소는 기존 ERP와 같은 `localStorage` 키 `dawoo_current_staff_id`.
+> - 근거와 대가는 스펙의 "행위자를 로그인 계정에서 뽑지 않고 화면에서 고르는 이유 (2026-07-30 변경)" 절 참고.
+>
+> **거래처 자동입력이 추가됐다.** 지급정보의 거래처명은 `src/components/approval/VendorNameCell.tsx`가 담당한다 — `vendors`에서 고르면 은행·계좌·사업자번호가 자동으로 채워지고, 자유 입력도 유지된다. 은행/계좌는 `vendors.bank_name`/`account_number`를 우선하고 없으면 `src/lib/approval/vendorBank.ts`의 `parseBankInfo(bank_info)`로 뽑는다.
+
+
 - 설계 근거는 `docs/superpowers/specs/2026-07-25-expense-approval-design.md`. 충돌하면 스펙이 우선이다.
 - **새 테이블에 RLS를 켜지 않는다.** 프론트가 anon 키로 직접 읽는 현행 구조에서 `authenticated` 전용 정책을 켜면 화면이 통째로 막힌다. `supabase/migrations/010_labor_records.sql`과 같은 주석을 남긴다.
 - 마이그레이션은 `supabase/migrations/NNN_<설명>.sql` 형식. 다음 번호는 **012**. 적용은 `npx supabase db push`(CLI 링크 완료 상태), 롤백 SQL은 파일 하단에 주석으로 남긴다.
@@ -3376,12 +3389,13 @@ npm test -- excel
 - [ ] **Step 5: `src/app/api/approval/excel-template/route.ts` 작성**
 
 ```ts
-import { requireStaff } from '@/lib/approval/guard'
+import { getAuthUser } from '@/lib/auth'
 import { buildTemplate } from '@/lib/approval/excel'
 
+// 양식 다운로드는 행위자를 알 필요가 없다. 로그인 여부만 확인한다.
 export async function GET() {
-  const staff = await requireStaff()
-  if (staff instanceof Response) return staff
+  const user = await getAuthUser()
+  if (!user) return Response.json({ error: '인증이 필요합니다' }, { status: 401 })
 
   const buf = await buildTemplate()
 
@@ -3398,14 +3412,15 @@ export async function GET() {
 
 ```ts
 import { NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/approval/guard'
+import { getAuthUser } from '@/lib/auth'
 import { parseWorkbook } from '@/lib/approval/excel'
 
 export const maxDuration = 30
 
+// 파싱만 하고 DB에 쓰지 않으므로 행위자가 필요 없다. 로그인 여부만 확인한다.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (staff instanceof Response) return staff
+  const user = await getAuthUser()
+  if (!user) return Response.json({ error: '인증이 필요합니다' }, { status: 401 })
 
   const fd = await request.formData()
   const file = fd.get('file') as File | null
@@ -3576,17 +3591,21 @@ export async function sendPush(staffIds: string[], payload: PushPayload): Promis
 
 ```ts
 import { NextRequest } from 'next/server'
-import { admin, requireStaff } from '@/lib/approval/guard'
+import { admin, resolveActor } from '@/lib/approval/guard'
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (staff instanceof Response) return staff
-
-  const { endpoint, keys, userAgent } = (await request.json()) as {
+  const { endpoint, keys, userAgent, actor_staff_id } = (await request.json()) as {
     endpoint: string
     keys: { p256dh: string; auth: string }
     userAgent?: string
+    actor_staff_id?: string
   }
+
+  // 어느 직원의 기기로 등록할지 알아야 하므로 actor_staff_id가 필요하다.
+  // resolveActor는 request가 아니라 id를 받는다 — 본문을 두 번 읽지 않기 위해서다.
+  const actor = await resolveActor(actor_staff_id)
+  if (actor instanceof Response) return actor
+  const { staff } = actor
 
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
     return Response.json({ error: '구독 정보가 올바르지 않습니다' }, { status: 400 })

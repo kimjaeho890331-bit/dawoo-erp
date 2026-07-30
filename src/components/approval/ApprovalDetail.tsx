@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Paperclip } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/components/AuthProvider'
 import { formatMoney } from '@/lib/utils/format'
 import ApprovalLineView, { type LineCard } from './ApprovalLineView'
 import ApproveModal from './ApproveModal'
+import ActorPicker, { useActor } from './ActorPicker'
 import {
   canApprove, canWithdraw, canDelete, canSubmit, canCancel, canResumeCompletion, isFinalApprover,
 } from '@/lib/approval/status'
@@ -23,7 +23,7 @@ type ActionKey = 'withdraw' | 'delete' | 'cancel'
 
 export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const router = useRouter()
-  const { staff, loading: authLoading } = useAuth()
+  const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
 
   const [report, setReport] = useState<ExpenseReport | null>(null)
   const [drafterName, setDrafterName] = useState('')
@@ -62,13 +62,14 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   useEffect(() => { load() }, [load])
 
   const act = async (path: ActionKey) => {
+    if (!actor) { setError('행위자를 선택해 주세요'); return }
     setError(null)
     setActionBusy(path)
     try {
       const res = await fetch(`/api/approval/${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: reportId }),
+        body: JSON.stringify({ id: reportId, actor_staff_id: actor.id }),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? '처리에 실패했습니다'); return }
@@ -81,30 +82,25 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
     }
   }
 
-  if (!authLoading && !staff) {
-    return (
-      <div className="px-8 py-10 text-sm text-danger">
-        로그인 계정과 직원 정보가 연결되어 있지 않습니다. 관리자에게 직원 정보(이메일) 등록을 요청해 주세요.
-      </div>
-    )
-  }
-
-  if (!report || !staff) return <div className="px-8 py-10 text-sm text-txt-tertiary">불러오는 중</div>
+  if (!report) return <div className="px-8 py-10 text-sm text-txt-tertiary">불러오는 중</div>
 
   const cards: LineCard[] = lines.map(l => ({
     staff_id: l.staff_id, name: l.staff?.name ?? '', role: l.role, state: l.state, acted_at: l.acted_at,
   }))
 
-  const canApproveNow = canApprove(report, lines, staff.id)
-  const canResumeNow = canResumeCompletion(report, lines, staff.id)
+  const canApproveNow = actor ? canApprove(report, lines, actor.id) : false
+  const canResumeNow = actor ? canResumeCompletion(report, lines, actor.id) : false
   const showApprove = canApproveNow || canResumeNow
   const resumeOnly = !canApproveNow && canResumeNow
-  const final = isFinalApprover(lines, staff.id)
+  const final = actor ? isFinalApprover(lines, actor.id) : false
   const busy = actionBusy !== null
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
-      <h1 className="text-lg font-medium mb-4">{report.title}</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg font-medium">{report.title}</h1>
+        <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} />
+      </div>
 
       <table className="w-full table-fixed text-xs mb-6">
         <tbody>
@@ -242,24 +238,24 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
         <Link href="/approval" className="px-5 py-2 text-sm border border-border-primary rounded-lg">목록</Link>
 
-        {canSubmit(report, staff.id) && (
+        {actor && canSubmit(report, actor.id) && (
           <Link href={`/approval/${reportId}/edit`} className="px-5 py-2 text-sm border border-border-primary rounded-lg">
             수정
           </Link>
         )}
-        {canWithdraw(report, lines, staff.id) && (
+        {actor && canWithdraw(report, lines, actor.id) && (
           <button onClick={() => act('withdraw')} disabled={busy}
             className="px-5 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">
             {actionBusy === 'withdraw' ? '처리 중' : '회수'}
           </button>
         )}
-        {canDelete(report, staff.id) && (
+        {actor && canDelete(report, actor.id) && (
           <button onClick={() => act('delete')} disabled={busy}
             className="px-5 py-2 text-sm border border-border-primary rounded-lg text-danger disabled:opacity-40">
             {actionBusy === 'delete' ? '처리 중' : '삭제'}
           </button>
         )}
-        {canCancel(report, lines, staff.id) && (
+        {actor && canCancel(report, lines, actor.id) && (
           <button onClick={() => act('cancel')} disabled={busy}
             className="px-5 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">
             {actionBusy === 'cancel' ? '처리 중' : '결재취소'}
@@ -283,6 +279,8 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         isFinal={final}
         resumeOnly={resumeOnly}
         docNo={report.doc_no}
+        actorId={actor?.id ?? ''}
+        actorName={actor?.name ?? ''}
         onClose={() => setModal(false)}
         onDone={() => { setModal(false); load() }}
       />

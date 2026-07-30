@@ -17,10 +17,14 @@ interface Props {
   onClose: () => void
   onDone: () => void
   reportId: string
+  /** 지금 이 결재를 누르는 사람. 서버가 요구하는 actor_staff_id로 그대로 전달된다. */
+  actorId: string
+  actorName: string
 }
 
 export default function ApproveModal({
   open, title, drafterName, totalAmount, paymentCount, isFinal, resumeOnly, docNo, onClose, onDone, reportId,
+  actorId, actorName,
 }: Props) {
   const [mode, setMode] = useState<'approve' | 'reject'>('approve')
   const [category, setCategory] = useState<string>('')
@@ -41,6 +45,10 @@ export default function ApproveModal({
   if (!open) return null
 
   const submit = async () => {
+    if (!actorId) {
+      setError('행위자를 선택해 주세요')
+      return
+    }
     if (mode === 'reject' && !comment.trim()) {
       setError('반려 사유를 입력해 주세요')
       return
@@ -57,7 +65,7 @@ export default function ApproveModal({
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: reportId, category: category || undefined, comment }),
+        body: JSON.stringify({ id: reportId, actor_staff_id: actorId, category: category || undefined, comment }),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? '처리에 실패했습니다'); return }
@@ -81,7 +89,7 @@ export default function ApproveModal({
           <div className="bg-surface-secondary rounded-lg px-3 py-2.5 mb-4">
             <div className="text-xs mb-1">{title}</div>
             <div className="text-xs text-txt-secondary">
-              기안 {drafterName} · 지급 총계 {formatMoney(totalAmount)}원 · {paymentCount}건
+              기안 {drafterName} · 지급 총계 {formatMoney(totalAmount)}원 · {paymentCount}건 · 결재자 {actorName}
             </div>
           </div>
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/components/AuthProvider'
+import { useActor } from './ActorPicker'
 import ApprovalLineModal, { type LineDraft } from './ApprovalLineModal'
 import ApprovalLineView from './ApprovalLineView'
 import PaymentTable from './PaymentTable'
@@ -16,7 +16,7 @@ const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 
 
 export default function DraftForm({ reportId }: { reportId?: string }) {
   const router = useRouter()
-  const { staff, loading: authLoading } = useAuth()
+  const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
 
   const [title, setTitle] = useState('')
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY)
@@ -56,12 +56,12 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
   }, [reportId])
 
   const save = useCallback(async (thenSubmit: boolean) => {
-    if (!staff) return
+    if (!actor) { setError('기안자를 선택해 주세요'); return }
 
     if (thenSubmit) {
       const lineErr = validateApprovalLine(
         lines.map((l, i) => ({ ...l, seq: i, state: 'waiting' as const })),
-        staff.id,
+        actor.id,
       )
       if (lineErr) { setError(lineErr); return }
     }
@@ -73,7 +73,7 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: reportId, title, body_html: bodyHtml,
+          id: reportId, actor_staff_id: actor.id, title, body_html: bodyHtml,
           payments, details,
           lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
           files,
@@ -90,7 +90,7 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
       const sub = await fetch('/api/approval/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: json.id }),
+        body: JSON.stringify({ id: json.id, actor_staff_id: actor.id }),
       })
       const subJson = await sub.json()
       if (!sub.ok) { setError(subJson.error); return }
@@ -100,19 +100,13 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
     } finally {
       setBusy(false)
     }
-  }, [staff, reportId, title, bodyHtml, payments, details, lines, files, router])
+  }, [actor, reportId, title, bodyHtml, payments, details, lines, files, router])
 
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <h1 className="text-lg font-medium mb-4">지출결의서</h1>
-
-      {!authLoading && !staff && (
-        <div className="mb-4 text-sm text-danger bg-danger-bg border border-danger-border rounded-lg px-3 py-2.5">
-          로그인 계정과 직원 정보가 연결되어 있지 않습니다. 관리자에게 직원 정보(이메일) 등록을 요청해 주세요.
-        </div>
-      )}
 
       <table className="w-full table-fixed text-xs mb-6">
         <tbody>
@@ -129,8 +123,20 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
             <td className="px-2 py-2 border-b border-border-primary">주식회사 다우건설</td>
           </tr>
           <tr>
-            <td className="px-2 py-2 text-txt-secondary">기안자</td>
-            <td className="px-2 py-2">{staff?.name ?? ''}</td>
+            <td className="px-2 py-2 text-txt-secondary">기안자 <span className="text-danger">*</span></td>
+            <td className="px-2 py-2">
+              <select
+                value={actorId ?? ''}
+                onChange={e => setActorId(e.target.value)}
+                aria-label="기안자 선택"
+                className="px-2 py-1.5 text-xs border border-border-primary rounded-lg bg-surface text-txt-primary"
+              >
+                <option value="">{actorLoading ? '불러오는 중' : '선택해 주세요'}</option>
+                {staffList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </td>
             <td /><td />
           </tr>
         </tbody>
@@ -143,7 +149,7 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
         </button>
       </div>
       <div className="mb-6">
-        <ApprovalLineView drafterName={staff?.name ?? ''} lines={lines} />
+        <ApprovalLineView drafterName={actor?.name ?? ''} lines={lines} />
       </div>
 
       <div className="bg-accent-light text-accent-text text-xs rounded-lg px-3 py-2.5 mb-6">
@@ -171,15 +177,15 @@ export default function DraftForm({ reportId }: { reportId?: string }) {
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
-        <button disabled={busy || !staff} onClick={() => save(false)}
+        <button disabled={busy || !actor} onClick={() => save(false)}
           className="px-6 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">임시저장</button>
-        <button disabled={busy || !staff} onClick={() => save(true)}
+        <button disabled={busy || !actor} onClick={() => save(true)}
           className="px-6 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">상신하기</button>
       </div>
 
       <ApprovalLineModal
         open={lineOpen}
-        drafterStaffId={staff?.id ?? ''}
+        drafterStaffId={actor?.id ?? ''}
         value={lines}
         onChange={setLines}
         onClose={() => setLineOpen(false)}

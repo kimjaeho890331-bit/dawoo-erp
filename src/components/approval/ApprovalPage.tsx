@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { PenLine } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/components/AuthProvider'
+import ActorPicker, { useActor } from './ActorPicker'
 import { formatMoney } from '@/lib/utils/format'
 import {
   APPROVAL_STATUS_LABEL,
@@ -65,13 +65,13 @@ const MY_DRAFT_STATUS: Record<'draft' | 'submitted' | 'withdrawn' | 'rejected' |
 }
 
 export default function ApprovalPage() {
-  const { staff, loading: authLoading } = useAuth()
+  const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
   const [box, setBox] = useState<BoxKey>('toApprove')
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    if (!staff) return
+    if (!actor) { setRows([]); setLoading(false); return }
     setLoading(true)
 
     // 기안함 — 내가 기안자인 문서. 칸별 status로 구분.
@@ -80,7 +80,7 @@ export default function ApprovalPage() {
       const { data } = await supabase
         .from('expense_reports')
         .select(SELECT)
-        .eq('drafter_staff_id', staff.id)
+        .eq('drafter_staff_id', actor.id)
         .eq('status', status)
         .order('submitted_at', { ascending: false, nullsFirst: false })
       setRows((data ?? []) as unknown as Row[])
@@ -104,7 +104,7 @@ export default function ApprovalPage() {
     const { data: myLines } = await supabase
       .from('expense_report_lines')
       .select('report_id')
-      .eq('staff_id', staff.id)
+      .eq('staff_id', actor.id)
 
     const ids = Array.from(new Set((myLines ?? []).map(l => l.report_id as string)))
     if (ids.length === 0) { setRows([]); setLoading(false); return }
@@ -134,28 +134,21 @@ export default function ApprovalPage() {
     const withLines = (data ?? []) as unknown as (Row & { lines: LineForTurn[] })[]
     const filtered = withLines.filter(r => {
       const turn = currentTurnLine(r.lines)
-      const myTurn = turn !== null && turn.staff_id === staff.id
+      const myTurn = turn !== null && turn.staff_id === actor.id
       return box === 'toApprove' ? myTurn : !myTurn
     })
     setRows(filtered)
     setLoading(false)
-  }, [staff, box])
+  }, [actor, box])
 
   useEffect(() => { load() }, [load])
-
-  if (!authLoading && !staff) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-sm text-danger">
-          로그인 계정과 직원 정보가 연결되어 있지 않습니다. 관리자에게 직원 정보(이메일) 등록을 요청해 주세요.
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex min-h-screen">
       <aside className="w-48 border-r border-border-primary py-6 shrink-0">
+        <div className="mx-4 mb-4">
+          <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} />
+        </div>
         <Link href="/approval/new"
           className="flex items-center gap-2 mx-4 mb-6 px-3 py-2 text-sm border border-border-primary rounded-lg text-txt-primary">
           <PenLine size={14} className="text-txt-tertiary" /> 기안작성
@@ -174,38 +167,44 @@ export default function ApprovalPage() {
       </aside>
 
       <main className="flex-1 px-8 py-6">
-        <div className="text-sm text-txt-secondary mb-4">총 {rows.length}건</div>
-        <table className="w-full table-fixed text-xs">
-          <thead className="bg-surface-secondary text-txt-secondary">
-            <tr>
-              <th className="w-[18%] px-3 py-2.5 text-left font-normal">문서번호</th>
-              <th className="px-3 py-2.5 text-left font-normal">기안제목</th>
-              <th className="w-[12%] px-3 py-2.5 text-left font-normal">기안자</th>
-              <th className="w-[14%] px-3 py-2.5 text-right font-normal">지급총계</th>
-              <th className="w-[14%] px-3 py-2.5 text-left font-normal">상신일시</th>
-              <th className="w-[10%] px-3 py-2.5 text-left font-normal">상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => (
-              <tr key={r.id} className="border-b border-border-primary">
-                <td className="px-3 py-3 text-txt-tertiary">{r.doc_no ?? '-'}</td>
-                <td className="px-3 py-3">
-                  <Link href={`/approval/${r.id}`} className="hover:underline text-txt-primary">{r.title}</Link>
-                </td>
-                <td className="px-3 py-3 text-txt-primary">{r.staff?.name ?? ''}</td>
-                <td className="px-3 py-3 text-right text-txt-primary">{formatMoney(r.total_amount)}</td>
-                <td className="px-3 py-3 text-txt-secondary">
-                  {r.submitted_at ? new Date(r.submitted_at).toLocaleString('ko-KR') : '-'}
-                </td>
-                <td className="px-3 py-3 text-txt-primary">{APPROVAL_STATUS_LABEL[r.status]}</td>
-              </tr>
-            ))}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-10 text-center text-txt-tertiary">문서가 없습니다</td></tr>
-            )}
-          </tbody>
-        </table>
+        {!actor ? (
+          <div className="py-10 text-center text-sm text-txt-tertiary">직원을 선택해 주세요</div>
+        ) : (
+          <>
+            <div className="text-sm text-txt-secondary mb-4">총 {rows.length}건</div>
+            <table className="w-full table-fixed text-xs">
+              <thead className="bg-surface-secondary text-txt-secondary">
+                <tr>
+                  <th className="w-[18%] px-3 py-2.5 text-left font-normal">문서번호</th>
+                  <th className="px-3 py-2.5 text-left font-normal">기안제목</th>
+                  <th className="w-[12%] px-3 py-2.5 text-left font-normal">기안자</th>
+                  <th className="w-[14%] px-3 py-2.5 text-right font-normal">지급총계</th>
+                  <th className="w-[14%] px-3 py-2.5 text-left font-normal">상신일시</th>
+                  <th className="w-[10%] px-3 py-2.5 text-left font-normal">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className="border-b border-border-primary">
+                    <td className="px-3 py-3 text-txt-tertiary">{r.doc_no ?? '-'}</td>
+                    <td className="px-3 py-3">
+                      <Link href={`/approval/${r.id}`} className="hover:underline text-txt-primary">{r.title}</Link>
+                    </td>
+                    <td className="px-3 py-3 text-txt-primary">{r.staff?.name ?? ''}</td>
+                    <td className="px-3 py-3 text-right text-txt-primary">{formatMoney(r.total_amount)}</td>
+                    <td className="px-3 py-3 text-txt-secondary">
+                      {r.submitted_at ? new Date(r.submitted_at).toLocaleString('ko-KR') : '-'}
+                    </td>
+                    <td className="px-3 py-3 text-txt-primary">{APPROVAL_STATUS_LABEL[r.status]}</td>
+                  </tr>
+                ))}
+                {!loading && rows.length === 0 && (
+                  <tr><td colSpan={6} className="px-3 py-10 text-center text-txt-tertiary">문서가 없습니다</td></tr>
+                )}
+              </tbody>
+            </table>
+          </>
+        )}
       </main>
     </div>
   )

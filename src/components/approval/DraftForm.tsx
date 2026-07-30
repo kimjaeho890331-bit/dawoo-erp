@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { Download, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useActor } from './ActorPicker'
 import ApprovalLineModal, { type LineDraft } from './ApprovalLineModal'
@@ -29,6 +30,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [lineOpen, setLineOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [excelBusy, setExcelBusy] = useState(false)
+  const excelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     supabase
@@ -129,6 +132,35 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     }
   }, [actor, reportId, title, bodyHtml, payments, details, lines, files, refs, router])
 
+  const handleExcelUpload = useCallback(async (file: File) => {
+    if (payments.length > 0 || details.length > 0) {
+      const ok = window.confirm('현재 표에 입력된 지급 정보·상세내용이 모두 지워지고 엑셀 내용으로 바뀝니다. 계속할까요?')
+      if (!ok) return
+    }
+
+    setExcelBusy(true); setError(null)
+
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/approval/excel-parse', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error); return }
+
+      setPayments(json.payments)
+      setDetails(json.details)
+      setError(json.errors.length > 0
+        ? json.errors.map((x: { sheet: string; row: number; message: string }) =>
+            `${x.sheet} ${x.row}행: ${x.message}`).join(' / ')
+        : null)
+    } catch {
+      setError('엑셀 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setExcelBusy(false)
+      if (excelInputRef.current) excelInputRef.current.value = ''
+    }
+  }, [payments, details])
+
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
   return (
@@ -223,6 +255,30 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </div>
       </div>
 
+      <div className="flex justify-end gap-2 mb-2">
+        <a
+          href="/api/approval/excel-template"
+          className="flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded hover:bg-surface-secondary"
+        >
+          <Download size={12} /> 양식 받기
+        </a>
+        <label
+          className={`flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded cursor-pointer hover:bg-surface-secondary ${excelBusy ? 'opacity-40 pointer-events-none' : ''}`}
+        >
+          <Upload size={12} /> {excelBusy ? '업로드 중…' : '엑셀 업로드'}
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            disabled={excelBusy}
+            onChange={e => {
+              const f = e.target.files?.[0]
+              if (f) handleExcelUpload(f)
+            }}
+          />
+        </label>
+      </div>
       <div className="mb-5"><PaymentTable rows={payments} onChange={setPayments} /></div>
       <div className="mb-5"><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
 

@@ -331,7 +331,7 @@ pk는 `(form_abbr, year)`. 서버 API에서 `UPDATE ... SET last_no = last_no + 
 
 수신 쪽은 이미 완성돼 있다. `public/sw.js:37`에 `push` 이벤트 핸들러가 있고 `notificationclick`에서 payload의 `url`로 이동한다. 새로 만들 것은 보내는 쪽이다.
 
-1. VAPID 키 발급 → `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` 환경변수
+1. VAPID 키 발급 → `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` 환경변수
 2. `web-push` 패키지 추가
 3. `push_subscriptions` 테이블 + `/api/push/subscribe`
 4. 설정 화면에 "알림 켜기" 토글 (`Notification.requestPermission()` → `pushManager.subscribe()` → 서버 등록)

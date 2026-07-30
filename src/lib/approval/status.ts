@@ -46,6 +46,7 @@ export function canApprove(report: ReportLike, lines: LineLike[], staffId: strin
 export function canResumeCompletion(report: ReportLike, lines: LineLike[], staffId: string): boolean {
   if (report.status !== 'pending') return false
   if (currentTurnLine(lines) !== null) return false
+  if (!lines.every(l => l.state === 'approved')) return false
   return isFinalApprover(lines, staffId)
 }
 

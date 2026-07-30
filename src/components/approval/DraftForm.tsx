@@ -59,8 +59,15 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         supabase.from('expense_report_files').select('*').eq('report_id', sourceId).order('uploaded_at'),
       ])
 
-      setPayments((p ?? []).map(x => ({ ...x, business_no: x.business_no ?? '' })) as PaymentRow[])
-      setDetails((d ?? []) as DetailRow[])
+      setPayments((p ?? []).map(x => ({
+        vendor_name: x.vendor_name, amount: x.amount,
+        pay_request_date: x.pay_request_date, bank: x.bank,
+        account_no: x.account_no, business_no: x.business_no ?? '',
+      })) as PaymentRow[])
+      setDetails((d ?? []).map(x => ({
+        vendor_name: x.vendor_name ?? '', account: x.account ?? '', content: x.content ?? '',
+        dept_name: x.dept_name ?? '', amount: x.amount ?? 0, note: x.note ?? '',
+      })) as DetailRow[])
 
       if (copyFromId) {
         setLines([])

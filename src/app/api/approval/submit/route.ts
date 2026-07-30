@@ -21,20 +21,39 @@ export async function POST(request: NextRequest) {
   const lineErr = validateApprovalLine(loaded.lines, staff.id)
   if (lineErr) return Response.json({ error: lineErr }, { status: 400 })
 
-  const { count, error: countError } = await admin
+  const { data: payments, error: paymentsError } = await admin
     .from('expense_report_payments')
-    .select('id', { count: 'exact', head: true })
+    .select('seq, vendor_name, bank, account_no, pay_request_date')
     .eq('report_id', id)
+    .order('seq')
 
-  if (countError) {
+  if (paymentsError) {
     return Response.json(
-      { error: `지급 정보 확인 실패: ${countError.message}` },
+      { error: `지급 정보 확인 실패: ${paymentsError.message}` },
       { status: 500 },
     )
   }
 
-  if (!count) {
+  if (!payments || payments.length === 0) {
     return Response.json({ error: '지급 정보를 한 행 이상 입력해 주세요' }, { status: 400 })
+  }
+
+  // 임시저장은 빈 값을 허용하지만(작성 중일 수 있으므로), 상신부터는 승인 즉시
+  // expenses 레코드가 생성되므로 필수값이 비어 있으면 여기서 막는다.
+  for (const p of payments) {
+    const rowNo = p.seq + 1
+    if (!p.vendor_name?.trim()) {
+      return Response.json({ error: `지급 정보 ${rowNo}행의 거래처명을 입력해 주세요` }, { status: 400 })
+    }
+    if (!p.bank?.trim()) {
+      return Response.json({ error: `지급 정보 ${rowNo}행의 은행을 입력해 주세요` }, { status: 400 })
+    }
+    if (!p.account_no?.trim()) {
+      return Response.json({ error: `지급 정보 ${rowNo}행의 계좌번호를 입력해 주세요` }, { status: 400 })
+    }
+    if (!p.pay_request_date?.trim()) {
+      return Response.json({ error: `지급 정보 ${rowNo}행의 지급요청일을 입력해 주세요` }, { status: 400 })
+    }
   }
 
   // 재상신: state만 되돌리고 acted_at·comment는 남긴다

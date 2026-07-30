@@ -160,7 +160,16 @@ export async function POST(request: NextRequest) {
 
   if (details.length > 0) {
     const { error: detailsError } = await admin.from('expense_report_details').insert(
-      details.map((d, i) => ({ report_id: reportId, seq: i, ...d })),
+      details.map((d, i) => ({
+        report_id: reportId,
+        seq: i,
+        vendor_name: d.vendor_name ?? null,
+        account: d.account ?? null,
+        content: d.content ?? null,
+        dept_name: d.dept_name ?? null,
+        amount: d.amount ?? null,
+        note: d.note ?? null,
+      })),
     )
     if (detailsError) {
       return Response.json(

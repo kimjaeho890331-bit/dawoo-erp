@@ -137,6 +137,9 @@ ANTHROPIC_API_KEY          # Claude
 ADDRESS_API_KEY            # 도로명주소 (Juso)
 BUILDING_API_KEY           # 건축물대장 (공공데이터포털)
 NEIS_API_KEY               # 학교 (NEIS)
+NEXT_PUBLIC_VAPID_PUBLIC_KEY  # 웹푸시 VAPID 공개키 (지출결의서 결재 알림)
+VAPID_PRIVATE_KEY          # 웹푸시 VAPID 개인키
+VAPID_SUBJECT               # 웹푸시 발신자 (mailto:), 미설정 시 dawooconstr@gmail.com
 ```
 
 ## docs/ 참조표

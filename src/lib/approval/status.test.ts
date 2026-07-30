@@ -141,6 +141,13 @@ describe('canResumeCompletion', () => {
     const lines = [line(1, A, { state: 'approved' }), line(2, B, { state: 'approved' })]
     expect(canResumeCompletion(report(), lines, A)).toBe(false)
   })
+
+  it('결재선에 반려된 행이 있고 문서가 pending이면 최종 결재자도 재개할 수 없다', () => {
+    // 반려 처리는 됐지만(rejected) 뒤이은 문서 상태 갱신이 끊겨 pending으로 남은 상황을 흉내낸다.
+    // 이때 승인 재개가 열리면 반려된 문서가 승인으로 뒤집혀 지출이 생성된다.
+    const lines = [line(1, A, { state: 'approved' }), line(2, B, { state: 'rejected' })]
+    expect(canResumeCompletion(report(), lines, B)).toBe(false)
+  })
 })
 
 describe('validateApprovalLine', () => {

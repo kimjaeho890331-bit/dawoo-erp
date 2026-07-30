@@ -135,7 +135,10 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const handleExcelUpload = useCallback(async (file: File) => {
     if (payments.length > 0 || details.length > 0) {
       const ok = window.confirm('현재 표에 입력된 지급 정보·상세내용이 모두 지워지고 엑셀 내용으로 바뀝니다. 계속할까요?')
-      if (!ok) return
+      if (!ok) {
+        if (excelInputRef.current) excelInputRef.current.value = ''
+        return
+      }
     }
 
     setExcelBusy(true); setError(null)
@@ -151,7 +154,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       setDetails(json.details)
       setError(json.errors.length > 0
         ? json.errors.map((x: { sheet: string; row: number; message: string }) =>
-            `${x.sheet} ${x.row}행: ${x.message}`).join(' / ')
+            x.row > 0 ? `${x.sheet} ${x.row}행: ${x.message}` : `${x.sheet}: ${x.message}`).join(' / ')
         : null)
     } catch {
       setError('엑셀 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
@@ -288,9 +291,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
-        <button disabled={busy || !actor} onClick={() => save(false)}
+        <button disabled={busy || excelBusy || !actor} onClick={() => save(false)}
           className="px-6 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">임시저장</button>
-        <button disabled={busy || !actor} onClick={() => save(true)}
+        <button disabled={busy || excelBusy || !actor} onClick={() => save(true)}
           className="px-6 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">상신하기</button>
       </div>
 

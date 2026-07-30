@@ -75,7 +75,9 @@ export async function parseWorkbook(buffer: Buffer): Promise<{
   const errors: ParseError[] = []
 
   const ps = wb.getWorksheet(PAYMENT_SHEET)
-  if (ps) {
+  if (!ps) {
+    errors.push({ sheet: PAYMENT_SHEET, row: 0, message: `${PAYMENT_SHEET} 시트를 찾을 수 없습니다` })
+  } else {
     ps.eachRow((row, n) => {
       if (n === 1) return
       const vendor = cellText(row, 1)
@@ -105,7 +107,9 @@ export async function parseWorkbook(buffer: Buffer): Promise<{
   }
 
   const ds = wb.getWorksheet(DETAIL_SHEET)
-  if (ds) {
+  if (!ds) {
+    errors.push({ sheet: DETAIL_SHEET, row: 0, message: `${DETAIL_SHEET} 시트를 찾을 수 없습니다` })
+  } else {
     ds.eachRow((row, n) => {
       if (n === 1) return
       const cells = [1, 2, 3, 4, 6].map(c => cellText(row, c))

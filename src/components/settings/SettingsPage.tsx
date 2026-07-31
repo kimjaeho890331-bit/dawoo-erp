@@ -210,11 +210,6 @@ export default function SettingsPage() {
           {tab === 'notification' && (
             <div className="space-y-4">
               <section>
-                <h2 className="text-sm font-medium mb-2 text-txt-primary">내 계정 연결</h2>
-                <AccountLink />
-              </section>
-
-              <section>
                 <h2 className="text-sm font-medium mb-2 text-txt-primary">결재 휴대폰 알림</h2>
                 <PushToggle />
               </section>
@@ -250,6 +245,11 @@ export default function SettingsPage() {
 
           {tab === 'system' && (
             <div className="space-y-4">
+              <section>
+                <h2 className="text-sm font-medium mb-2 text-txt-primary">내 계정 연결</h2>
+                <AccountLink />
+              </section>
+
               <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
                 <div className="px-6 py-4 border-b border-border-tertiary">
                   <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">시스템 설정</h2>

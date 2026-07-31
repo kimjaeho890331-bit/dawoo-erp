@@ -72,7 +72,15 @@ export async function POST(request: NextRequest) {
 
   const { error: upsertError } = await admin
     .from('staff_emails')
-    .upsert({ staff_id, email: sessionEmail }, { onConflict: 'email' })
+    .upsert(
+      {
+        staff_id,
+        email: sessionEmail,
+        linked_by_email: sessionEmail,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'email' },
+    )
 
   if (upsertError) {
     console.error('[link-account] 연결 저장 실패:', upsertError.message)

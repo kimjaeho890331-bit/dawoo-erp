@@ -32,6 +32,7 @@ export default function AccountLink() {
   const [staffList, setStaffList] = useState<StaffOption[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [editing, setEditing] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [msgType, setMsgType] = useState<'info' | 'error'>('info')
@@ -59,8 +60,18 @@ export default function AccountLink() {
   }, [sessionEmail])
 
   const loadStaffList = useCallback(async () => {
-    const { data } = await supabase.from('staff').select('id, name').order('name')
-    setStaffList((data ?? []) as StaffOption[])
+    try {
+      const { data, error } = await supabase.from('staff').select('id, name').order('name')
+      if (error) {
+        setMsgType('error')
+        setMsg('직원 목록을 불러오지 못했습니다')
+        return
+      }
+      setStaffList((data ?? []) as StaffOption[])
+    } catch {
+      setMsgType('error')
+      setMsg('직원 목록을 불러오는 중 오류가 발생했습니다')
+    }
   }, [])
 
   useEffect(() => {
@@ -71,12 +82,26 @@ export default function AccountLink() {
     if (editing && staffList.length === 0) loadStaffList()
   }, [editing, staffList.length, loadStaffList])
 
-  const handleLink = async () => {
+  const selectedStaffName = staffList.find(s => s.id === selectedId)?.name ?? ''
+
+  // 실행 전 확인 단계로 넘어간다 — 실제 연결(fetch)은 handleLink에서 한다.
+  // 드롭다운이 전 직원을 필터 없이 보여주므로, 여기서 "이 계정을 OOO 님으로
+  // 연결합니다"를 한 번 더 보여줘 실수로 다른 사람 이름을 고르는 걸 줄인다.
+  const handleRequestConfirm = () => {
     if (!selectedId) {
       setMsgType('error')
       setMsg('연결할 직원을 선택해 주세요')
       return
     }
+    setMsg(null)
+    setConfirming(true)
+  }
+
+  const handleCancelConfirm = () => {
+    setConfirming(false)
+  }
+
+  const handleLink = async () => {
     setBusy(true)
     setMsg(null)
     try {
@@ -89,10 +114,12 @@ export default function AccountLink() {
       if (!res.ok) {
         setMsgType('error')
         setMsg(json.error || '계정 연결에 실패했습니다')
+        setConfirming(false)
         return
       }
       setLinkedStaffName(json.staff_name)
       setEditing(false)
+      setConfirming(false)
       setSelectedId('')
       setMsgType('info')
       setMsg(
@@ -103,6 +130,7 @@ export default function AccountLink() {
     } catch {
       setMsgType('error')
       setMsg('계정 연결 중 오류가 발생했습니다')
+      setConfirming(false)
     } finally {
       setBusy(false)
     }
@@ -156,7 +184,7 @@ export default function AccountLink() {
         </p>
       )}
 
-      {editing && sessionEmail && (
+      {editing && sessionEmail && !confirming && (
         <div className="mt-3 flex items-center gap-2">
           <select
             value={selectedId}
@@ -171,11 +199,10 @@ export default function AccountLink() {
             ))}
           </select>
           <button
-            onClick={handleLink}
+            onClick={handleRequestConfirm}
             disabled={busy || !selectedId}
             className="px-3 py-1.5 text-xs bg-accent hover:bg-accent-hover disabled:opacity-40 text-white rounded-lg flex items-center gap-1"
           >
-            {busy ? <Loader2 size={12} className="animate-spin" /> : null}
             연결하기
           </button>
           <button
@@ -185,6 +212,40 @@ export default function AccountLink() {
           >
             취소
           </button>
+        </div>
+      )}
+
+      {editing && sessionEmail && confirming && (
+        <div className="mt-3 rounded-lg border border-accent bg-accent-light px-3 py-3">
+          <p className="text-[13px] text-txt-primary">
+            이 계정({sessionEmail})을{' '}
+            <span className="font-semibold text-accent-text">&quot;{selectedStaffName}&quot;</span>{' '}
+            님으로 연결합니다. 맞습니까?
+          </p>
+          {linkedStaffName && linkedStaffName !== selectedStaffName && (
+            <p className="mt-1.5 text-xs text-txt-secondary">
+              현재 이 계정은 <span className="font-medium text-txt-primary">&quot;{linkedStaffName}&quot;</span>님으로
+              연결되어 있습니다. 확인하면 <span className="font-medium text-txt-primary">&quot;{selectedStaffName}&quot;</span>님으로
+              변경됩니다.
+            </p>
+          )}
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              onClick={handleLink}
+              disabled={busy}
+              className="px-3 py-1.5 text-xs bg-accent hover:bg-accent-hover disabled:opacity-40 text-white rounded-lg flex items-center gap-1"
+            >
+              {busy ? <Loader2 size={12} className="animate-spin" /> : null}
+              확인, 연결합니다
+            </button>
+            <button
+              onClick={handleCancelConfirm}
+              disabled={busy}
+              className="px-3 py-1.5 text-xs text-txt-secondary border border-border-primary rounded-lg disabled:opacity-40"
+            >
+              다시 선택
+            </button>
+          </div>
         </div>
       )}
 

@@ -391,17 +391,20 @@ COMMENT ON COLUMN expense_report_lines.acted_by_email IS
   '승인/반려 처리 시점의 로그인 계정 이메일(감사용, 화면 비노출). 행위자는 actor_staff_id로 화면에서 고른 사람이다.';
 
 -- ============================================
--- 26. 로그인 계정 ↔ 직원 다중 이메일 매핑 (015_staff_emails.sql)
+-- 26. 로그인 계정 ↔ 직원 다중 이메일 매핑 (015_staff_emails.sql, 016_staff_emails_audit.sql)
 -- ============================================
 -- 카카오/네이버 등 로그인 계정과 staff.email(단일)이 거의 안 맞고, 한 사람이
 -- 계정을 여러 개 섞어 써서 1:N 매핑 테이블을 둔다. staff.email은 그대로 유지
 -- ("대표 이메일" 표시용). RLS 미적용 — 다른 테이블과 동일 방침.
+-- 016: linked_by_email/updated_at 추가 — "누가 언제 이 매핑을 걸었나" 이력용.
 
 CREATE TABLE IF NOT EXISTS staff_emails (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   staff_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   email TEXT NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  linked_by_email TEXT,        -- 016: 이 매핑을 실행한 로그인 계정(연결 이력 추적용)
+  updated_at TIMESTAMPTZ        -- 016: 마지막 생성/갱신 시각
 );
 
 CREATE INDEX IF NOT EXISTS idx_staff_emails_staff ON staff_emails(staff_id);

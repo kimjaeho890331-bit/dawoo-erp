@@ -64,13 +64,34 @@ export default function OnboardPage() {
       }
 
       // 코드 맞음 → 미연결 직원 목록 조회
-      const { data: staff } = await supabase
+      // staff.email이 비어 있어도 "내 계정 연결"(설정 화면)로 이미 staff_emails에
+      // 매핑이 걸려 있으면 이미 연결된 사람이다 — 두 경로가 서로 몰라 어긋나면
+      // 다른 사람이 같은 직원을 또 연결해버릴 수 있으므로 여기서 걸러낸다.
+      const { data: linkedRows, error: linkedError } = await supabase
+        .from('staff_emails')
+        .select('staff_id')
+
+      if (linkedError) {
+        setError('연결 상태를 확인하지 못했습니다')
+        setLoading(false)
+        return
+      }
+
+      const linkedStaffIds = new Set((linkedRows || []).map(r => r.staff_id))
+
+      const { data: staff, error: staffError } = await supabase
         .from('staff')
         .select('id, name, role, phone')
         .or('email.is.null,email.eq.')
         .order('name')
 
-      setStaffList(staff || [])
+      if (staffError) {
+        setError('직원 목록을 불러오지 못했습니다')
+        setLoading(false)
+        return
+      }
+
+      setStaffList((staff || []).filter(s => !linkedStaffIds.has(s.id)))
       setStep('select')
     } catch {
       setError('서버 오류가 발생했습니다')

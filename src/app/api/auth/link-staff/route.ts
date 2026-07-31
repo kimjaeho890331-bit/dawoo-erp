@@ -56,17 +56,21 @@ export async function POST(request: NextRequest) {
   // 케이스), staff.email만 보고 덮어쓰면 두 테이블이 서로 다른 계정을 가리키게
   // 된다. 매핑이 있고 그 이메일이 지금 로그인 계정과 다르면 막는다. 본인이
   // 이미 연결한 계정으로 다시 온보딩을 시도하는 경우(같은 이메일)는 통과시킨다.
-  const { data: existingMapping, error: mappingError } = await adminSupabase
+  //
+  // staff_emails는 한 직원이 여러 계정을 가질 수 있는 1:N 테이블이라
+  // maybeSingle()을 쓰면 안 된다(2행 이상이면 에러) — 전체 행을 조회해서
+  // 세션 이메일과 다른 행이 하나라도 있는지로 판정한다.
+  const { data: existingMappings, error: mappingError } = await adminSupabase
     .from('staff_emails')
     .select('email')
     .eq('staff_id', staffId)
-    .maybeSingle()
 
   if (mappingError) {
     return NextResponse.json({ error: '계정 연결 상태를 확인하지 못했습니다' }, { status: 500 })
   }
 
-  if (existingMapping && existingMapping.email !== user.email) {
+  const hasConflictingMapping = (existingMappings ?? []).some((row) => row.email !== user.email)
+  if (hasConflictingMapping) {
     return NextResponse.json(
       { error: '이미 다른 계정이 이 직원으로 연결되어 있습니다. 관리자에게 문의해주세요' },
       { status: 409 },
@@ -85,6 +89,12 @@ export async function POST(request: NextRequest) {
 
   // staff_emails에도 같은 매핑을 남긴다 — "내 계정 연결" 경로와 온보딩 경로가
   // 같은 사실을 보게 하기 위함. email UNIQUE라 onConflict로 최신화한다.
+  //
+  // 이 upsert가 실패해도 위 staff UPDATE는 이미 성공했다 — 즉 계정 연결 자체는
+  // 끝났다. 여기서 500을 반환해 사용자를 실패로 되돌리면 staff.email은 이미
+  // 갱신됐는데 사용자만 재시도를 포기하는 상황이 된다. 실패는 감사 이력
+  // (linked_by_email/updated_at)이 비는 정도로 그치므로, 성공 응답에 경고만
+  // 실어 보낸다.
   const { error: staffEmailsError } = await adminSupabase
     .from('staff_emails')
     .upsert(
@@ -98,7 +108,11 @@ export async function POST(request: NextRequest) {
     )
 
   if (staffEmailsError) {
-    return NextResponse.json({ error: '계정 연결 기록 저장에 실패했습니다' }, { status: 500 })
+    console.error('[link-staff] staff_emails 기록 실패:', staffEmailsError.message)
+    return NextResponse.json({
+      success: true,
+      warning: '계정 연결은 완료됐지만 연결 이력 기록에 실패했습니다.',
+    })
   }
 
   return NextResponse.json({ success: true })

@@ -124,6 +124,10 @@ export default function OnboardPage() {
         return
       }
 
+      if (data.warning) {
+        window.alert(data.warning)
+      }
+
       router.push('/dashboard')
     } catch {
       setError('서버 오류가 발생했습니다')

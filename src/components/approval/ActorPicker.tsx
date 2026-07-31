@@ -72,10 +72,15 @@ interface Props {
   onChange: (id: string) => void
   loading?: boolean
   className?: string
+  /**
+   * 모바일에서만 남는 가로폭을 select가 채우고 높이를 44px로 키운다.
+   * md 이상에서는 기본 모양으로 되돌아가므로, 이 값을 켜도 데스크톱은 변하지 않는다.
+   */
+  fullWidth?: boolean
 }
 
 /** 현재 직원 선택 드롭다운. useActor()의 결과를 그대로 넘겨 쓴다. */
-export default function ActorPicker({ actorId, staffList, onChange, loading, className }: Props) {
+export default function ActorPicker({ actorId, staffList, onChange, loading, className, fullWidth }: Props) {
   return (
     <div className={`flex items-center gap-2 ${className ?? ''}`}>
       <span className="text-xs text-txt-secondary shrink-0">현재 직원</span>
@@ -83,7 +88,11 @@ export default function ActorPicker({ actorId, staffList, onChange, loading, cla
         value={actorId ?? ''}
         onChange={e => onChange(e.target.value)}
         aria-label="현재 직원 선택"
-        className="px-3 py-1.5 text-sm border border-border-primary rounded-lg bg-surface text-txt-primary"
+        className={`px-3 border border-border-primary rounded-lg bg-surface text-txt-primary ${
+          fullWidth
+            ? 'flex-1 min-w-0 h-11 text-base md:flex-none md:h-auto md:py-1.5 md:text-sm'
+            : 'py-1.5 text-sm'
+        }`}
       >
         <option value="">{loading ? '불러오는 중' : '직원을 선택해 주세요'}</option>
         {staffList.map(s => (

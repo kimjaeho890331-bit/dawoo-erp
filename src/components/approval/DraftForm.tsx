@@ -10,10 +10,22 @@ import ApprovalLineView from './ApprovalLineView'
 import PaymentTable from './PaymentTable'
 import DetailTable from './DetailTable'
 import FileAttach, { type AttachedFile } from './FileAttach'
+import MobileField from './MobileField'
 import type { PaymentRow, DetailRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
+import { formatMoney } from '@/lib/utils/format'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
+
+/**
+ * 모바일 기안 작성은 단계별로 나눈다. 한 화면에 다 넣으면 폰에서 끝없이 스크롤해야 하고,
+ * 어디까지 채웠는지 알 수 없다.
+ *
+ * 데스크톱은 이 단계를 무시하고 전부 한 화면에 그린다 — 지금 쓰고 있는 화면을 바꾸지 않는다.
+ * 그래서 단계는 "데이터"가 아니라 "모바일에서 무엇을 보여줄지 고르는 필터"일 뿐이다.
+ */
+const STEPS = ['기안 정보', '지급 정보', '상세 내용', '첨부·참조', '결재선', '확인'] as const
+const LAST_STEP = STEPS.length - 1
 
 export default function DraftForm({ reportId, copyFromId }: { reportId?: string; copyFromId?: string }) {
   const router = useRouter()
@@ -31,6 +43,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [excelBusy, setExcelBusy] = useState(false)
+  /** 모바일 단계. 데스크톱에서는 이 값이 바뀌지 않고, 화면도 이 값을 보지 않는다. */
+  const [step, setStep] = useState(0)
   const excelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -173,11 +187,82 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
 
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
-  return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
-      <h1 className="text-lg font-medium mb-4">지출결의서</h1>
+  // 단계 이동 시 위로 올려준다. 긴 단계를 지나온 뒤 다음 단계의 중간부터 보이면
+  // 무엇을 입력해야 하는지 알 수 없다.
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [step])
 
-      <table className="w-full table-fixed text-xs mb-6">
+  const goNext = () => {
+    // 그 단계에서 확인할 수 있는 것만 본다. 전체 검증은 상신할 때 서버가 다시 한다.
+    if (step === 0 && !actor) { setError('기안자를 선택해 주세요'); return }
+    if (step === 0 && !title.trim()) { setError('기안제목을 입력해 주세요'); return }
+    if (step === 1 && payments.length === 0) { setError('지급 정보를 한 건 이상 입력해 주세요'); return }
+    setError(null)
+    setStep(s => Math.min(s + 1, LAST_STEP))
+  }
+
+  // 아래 세 함수는 "이 단계에서 이 덩어리를 보일지"를 정한다.
+  // 데스크톱(md 이상)은 언제나 전부 보인다. Tailwind가 소스에서 클래스 문자열을 찾아야 하므로
+  // 문자열을 조합하지 않고 통째로 적는다.
+  const stepBlock = (n: number) => (step === n ? 'md:block' : 'hidden md:block')
+  const stepFlex = (n: number) => (step === n ? 'flex md:flex' : 'hidden md:flex')
+  const mobileOnly = (n: number) => (step === n ? 'md:hidden' : 'hidden')
+
+  const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0)
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-5 pb-28 md:px-6 md:py-8 md:pb-8">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg font-medium">지출결의서</h1>
+        {/* 임시저장은 어느 단계에서든 눌릴 수 있어야 한다. 폰 작업은 중간에 끊기기 쉽다. */}
+        <button
+          onClick={() => save(false)}
+          disabled={busy || excelBusy || !actor}
+          className="md:hidden px-3 h-9 text-sm border border-border-primary rounded-lg text-txt-primary disabled:opacity-40"
+        >
+          임시저장
+        </button>
+      </div>
+
+      {/* 진행 표시 — 모바일 전용 */}
+      <div className="md:hidden mb-4">
+        <div className="flex gap-1 mb-2">
+          {STEPS.map((s, i) => (
+            <div key={s} className={`flex-1 h-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-border-primary'}`} />
+          ))}
+        </div>
+        <div className="flex items-baseline justify-between">
+          <span className="text-[15px] text-txt-primary">{STEPS[step]}</span>
+          <span className="text-xs text-txt-tertiary">{step + 1}/{STEPS.length}</span>
+        </div>
+      </div>
+
+      {/* 기안정보 — 모바일 */}
+      <div className={`${mobileOnly(0)} mb-5 border border-border-primary rounded-lg px-3 py-2.5`}>
+        <MobileField label="기안양식" value="지출결의서" />
+        <MobileField label="문서번호" value="완료 시 부여" />
+        <MobileField label="보존연한" value="5년" />
+        <MobileField label="기안부서" value="주식회사 다우건설" />
+        <div className="pt-2">
+          <label className="block mb-1 text-xs text-txt-secondary">
+            기안자 <span className="text-danger">*</span>
+          </label>
+          <select
+            value={actorId ?? ''}
+            onChange={e => setActorId(e.target.value)}
+            aria-label="기안자 선택"
+            className="w-full h-11 px-3 text-base border border-border-primary rounded-lg bg-surface text-txt-primary"
+          >
+            <option value="">{actorLoading ? '불러오는 중' : '선택해 주세요'}</option>
+            {staffList.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <table className="hidden md:table w-full table-fixed text-xs mb-6">
         <tbody>
           <tr>
             <td className="w-[18%] px-2 py-2 text-txt-secondary border-b border-border-primary">기안양식</td>
@@ -211,34 +296,34 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </tbody>
       </table>
 
-      <div className="flex items-center justify-between mb-2">
+      <div className={`${stepFlex(4)} items-center justify-between mb-2`}>
         <span className="text-sm font-medium">결재선 <span className="text-danger">*</span></span>
-        <button onClick={() => setLineOpen(true)} className="px-3 py-1.5 text-xs border border-border-primary rounded">
+        <button onClick={() => setLineOpen(true)} className="px-3 h-11 text-sm border border-border-primary rounded md:h-auto md:py-1.5 md:text-xs">
           결재선 설정
         </button>
       </div>
-      <div className="mb-6">
+      <div className={`${stepBlock(4)} mb-6`}>
         <ApprovalLineView drafterName={actor?.name ?? ''} lines={lines} />
       </div>
 
-      <div className="bg-accent-light text-accent-text text-xs rounded-lg px-3 py-2.5 mb-6">
+      <div className={`${stepBlock(0)} bg-accent-light text-accent-text text-xs rounded-lg px-3 py-2.5 mb-6`}>
         결제 관련 지출결의서 입니다.
       </div>
 
-      <div className="text-sm font-medium mb-2">기안내용</div>
-      <div className="flex items-center gap-3 mb-3">
+      <div className={`${stepBlock(0)} text-sm font-medium mb-2`}>기안내용</div>
+      <div className={`${stepFlex(0)} flex-col gap-1 mb-3 md:flex-row md:items-center md:gap-3`}>
         <span className="w-16 text-xs text-txt-secondary">기안제목 <span className="text-danger">*</span></span>
         <input value={title} onChange={e => setTitle(e.target.value.slice(0, 50))}
-          className="flex-1 px-3 py-2 text-sm border border-border-primary rounded-lg" placeholder="기안제목 입력" />
-        <span className="text-xs text-txt-tertiary">{title.length}/50</span>
+          className="flex-1 h-11 px-3 text-base border border-border-primary rounded-lg md:h-auto md:py-2 md:text-sm" placeholder="기안제목 입력" />
+        <span className="text-xs text-txt-tertiary self-end md:self-auto">{title.length}/50</span>
       </div>
-      <div className="flex gap-3 mb-6">
-        <span className="w-16 text-xs text-txt-secondary pt-1.5">파일첨부</span>
+      <div className={`${stepFlex(3)} flex-col gap-1 mb-6 md:flex-row md:gap-3`}>
+        <span className="w-16 text-xs text-txt-secondary md:pt-1.5">파일첨부</span>
         <div className="flex-1"><FileAttach files={files} onChange={setFiles} /></div>
       </div>
 
-      <div className="flex gap-3 mb-6">
-        <span className="w-16 text-xs text-txt-secondary pt-1.5">참조문서</span>
+      <div className={`${stepFlex(3)} flex-col gap-1 mb-6 md:flex-row md:gap-3`}>
+        <span className="w-16 text-xs text-txt-secondary md:pt-1.5">참조문서</span>
         <div className="flex-1">
           <div className="flex flex-wrap gap-2 mb-2">
             {refs.map(r => (
@@ -255,7 +340,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
               if (found && !refs.some(x => x.id === found.id)) setRefs([...refs, found])
             }}
             aria-label="참조문서 추가"
-            className="px-3 py-1.5 text-xs border border-border-primary rounded-lg bg-surface text-txt-primary"
+            className="w-full h-11 px-3 text-base border border-border-primary rounded-lg bg-surface text-txt-primary md:w-auto md:h-auto md:py-1.5 md:text-xs"
           >
             <option value="">완료된 문서 추가</option>
             {refPool.filter(r => r.id !== reportId).map(r => (
@@ -265,7 +350,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 mb-2">
+      <div className={`${stepFlex(1)} justify-end gap-2 mb-2`}>
         <a
           href="/api/approval/excel-template"
           className="flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded hover:bg-surface-secondary"
@@ -289,19 +374,73 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           />
         </label>
       </div>
-      <div className="mb-5"><PaymentTable rows={payments} onChange={setPayments} /></div>
-      <div className="mb-5"><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
+      <div className={`${stepBlock(1)} mb-5`}><PaymentTable rows={payments} onChange={setPayments} /></div>
+      <div className={`${stepBlock(2)} mb-5`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
 
-      <textarea value={bodyHtml} onChange={e => setBodyHtml(e.target.value)}
-        className="w-full min-h-32 px-3 py-3 text-sm border border-border-primary rounded-lg mb-6" />
+      <div className={`${stepBlock(2)} mb-6`}>
+        <textarea value={bodyHtml} onChange={e => setBodyHtml(e.target.value)}
+          className="w-full min-h-32 px-3 py-3 text-base border border-border-primary rounded-lg md:text-sm" />
+      </div>
+
+      {/* 확인 단계 — 모바일 전용. 단계별의 약점인 "중간 수정이 번거롭다"를 여기서 보완한다.
+          항목마다 해당 단계로 바로 돌아갈 수 있다. */}
+      <div className={`${mobileOnly(LAST_STEP)} mb-5`}>
+        {[
+          { label: '기안자', to: 0, value: actor?.name ?? '선택 안 됨' },
+          { label: '기안제목', to: 0, value: title || '입력 안 됨' },
+          { label: '지급 정보', to: 1, value: `${payments.length}건 · ${formatMoney(totalAmount)}원` },
+          { label: '상세 내용', to: 2, value: details.length > 0 ? `${details.length}건` : '없음' },
+          { label: '첨부·참조', to: 3, value: `첨부 ${files.length}건 · 참조 ${refs.length}건` },
+          { label: '결재선', to: 4, value: lines.length > 0 ? lines.map(l => l.name).join(' → ') : '지정 안 됨' },
+        ].map(item => (
+          <div key={item.label} className="flex items-start justify-between gap-3 py-3 border-b border-border-primary">
+            <span className="shrink-0 text-xs text-txt-secondary w-16">{item.label}</span>
+            <span className="flex-1 text-sm text-txt-primary break-all">{item.value}</span>
+            <button onClick={() => { setError(null); setStep(item.to) }} className="shrink-0 text-xs text-accent-text">
+              수정
+            </button>
+          </div>
+        ))}
+      </div>
 
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
+      {/* 데스크톱 액션 — 지금 모양 그대로 */}
+      <div className="hidden md:flex justify-center gap-2 border-t border-border-primary pt-5">
         <button disabled={busy || excelBusy || !actor} onClick={() => save(false)}
           className="px-6 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">임시저장</button>
         <button disabled={busy || excelBusy || !actor} onClick={() => save(true)}
           className="px-6 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">상신하기</button>
+      </div>
+
+      {/* 모바일 단계 이동 — 화면 아래 고정 */}
+      <div
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex gap-2 px-4 py-3 bg-surface border-t border-border-primary
+                   pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+      >
+        <button
+          onClick={() => { setError(null); setStep(s => Math.max(s - 1, 0)) }}
+          disabled={step === 0}
+          className="w-24 min-h-11 flex items-center justify-center text-sm border border-border-primary rounded-lg disabled:opacity-40"
+        >
+          이전
+        </button>
+        {step < LAST_STEP ? (
+          <button
+            onClick={goNext}
+            className="flex-1 min-h-11 flex items-center justify-center text-sm rounded-lg bg-accent text-txt-inverse"
+          >
+            다음
+          </button>
+        ) : (
+          <button
+            disabled={busy || excelBusy || !actor}
+            onClick={() => save(true)}
+            className="flex-1 min-h-11 flex items-center justify-center text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40"
+          >
+            {busy ? '처리 중' : '상신하기'}
+          </button>
+        )}
       </div>
 
       <ApprovalLineModal

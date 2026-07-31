@@ -78,14 +78,17 @@ export default function ApproveModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface w-full max-w-md rounded-xl border border-border-primary overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
+    // 모바일에서는 아래에서 올라오는 시트. dvh를 쓰는 이유는 주소창이 접힐 때 vh가 튀기 때문이다.
+    <div className="fixed inset-0 bg-black/45 flex items-end justify-center z-50 md:items-center md:p-4">
+      <div className="bg-surface w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-t-xl border border-border-primary md:max-h-none md:overflow-hidden md:rounded-xl">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border-primary md:px-5">
           <span className="text-base font-medium">결재하기</span>
-          <button onClick={onClose} aria-label="닫기"><X size={17} className="text-txt-tertiary" /></button>
+          <button onClick={onClose} aria-label="닫기" className="-mr-2 w-11 h-11 flex items-center justify-center md:w-auto md:h-auto md:mr-0">
+            <X size={17} className="text-txt-tertiary" />
+          </button>
         </div>
 
-        <div className="px-5 py-4">
+        <div className="px-4 py-4 md:px-5">
           <div className="bg-surface-secondary rounded-lg px-3 py-2.5 mb-4">
             <div className="text-xs mb-1">{title}</div>
             <div className="text-xs text-txt-secondary">
@@ -95,12 +98,12 @@ export default function ApproveModal({
 
           <div className="flex gap-2 mb-4">
             <button onClick={() => setMode('approve')}
-              className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'approve' ? 'border-accent border-2' : 'border-border-primary text-txt-secondary'}`}>
+              className={`flex-1 min-h-11 text-sm rounded-lg border md:min-h-0 md:py-2 ${mode === 'approve' ? 'border-accent border-2' : 'border-border-primary text-txt-secondary'}`}>
               승인
             </button>
             {!resumeOnly && (
               <button onClick={() => setMode('reject')}
-                className={`flex-1 py-2 text-sm rounded-lg border ${mode === 'reject' ? 'border-danger border-2' : 'border-border-primary text-txt-secondary'}`}>
+                className={`flex-1 min-h-11 text-sm rounded-lg border md:min-h-0 md:py-2 ${mode === 'reject' ? 'border-danger border-2' : 'border-border-primary text-txt-secondary'}`}>
                 반려
               </button>
             )}
@@ -117,7 +120,7 @@ export default function ApproveModal({
               <div className="text-xs text-txt-secondary mb-1.5">계정과목 <span className="text-danger">*</span></div>
               <select value={category} onChange={e => setCategory(e.target.value)}
                 aria-label="계정과목"
-                className="w-full px-3 py-2 text-sm border border-border-primary rounded-lg mb-1.5">
+                className="w-full h-11 px-3 text-base border border-border-primary rounded-lg mb-1.5 md:h-auto md:py-2 md:text-sm">
                 <option value="">선택</option>
                 {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -134,16 +137,16 @@ export default function ApproveModal({
             결재의견 {mode === 'reject' && <span className="text-danger">*</span>}
           </div>
           <textarea value={comment} onChange={e => setComment(e.target.value)}
-            className="w-full h-20 px-3 py-2 text-sm border border-border-primary rounded-lg" />
+            className="w-full h-20 px-3 py-2 text-base border border-border-primary rounded-lg md:text-sm" />
 
           {error && <div className="mt-3 text-sm text-danger">{error}</div>}
         </div>
 
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-border-primary">
+        <div className="flex gap-2 px-4 py-4 border-t border-border-primary pb-[calc(1rem+env(safe-area-inset-bottom))] md:justify-end md:px-5 md:pb-4">
           <button onClick={onClose} disabled={busy}
-            className="px-5 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">취소</button>
+            className="flex-1 min-h-11 text-sm border border-border-primary rounded-lg disabled:opacity-40 md:flex-none md:min-h-0 md:px-5 md:py-2">취소</button>
           <button onClick={submit} disabled={busy}
-            className="px-5 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">결재</button>
+            className="flex-1 min-h-11 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40 md:flex-none md:min-h-0 md:px-5 md:py-2">결재</button>
         </div>
       </div>
     </div>

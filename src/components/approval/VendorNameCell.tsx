@@ -30,20 +30,48 @@ interface Props {
  * 목록에 없는 이름을 그냥 타이핑해서 쓰는 것도 항상 가능해야 한다 (강제 선택 아님).
  */
 export default function VendorNameCell({ value, vendors, onInput, onSelect, className, placeholder }: Props) {
+  /**
+   * 후보 목록의 위치. 아래 공간이 모자라면 입력칸 위로 띄운다(`bottom` 사용).
+   * 폰에서는 입력칸이 화면 하단에 오는 일이 잦은데, 그때 아래로만 띄우면
+   * 목록이 화면 밖으로 나가 후보를 못 고른다.
+   */
+  interface Placement {
+    left: number
+    width: number
+    maxHeight: number
+    top?: number
+    bottom?: number
+  }
+
   const [open, setOpen] = useState(false)
-  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [rect, setRect] = useState<Placement | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const query = value.trim()
   const filtered = query ? vendors.filter(v => v.name.includes(query)) : vendors
 
-  const openList = () => {
+  const measure = (): Placement | null => {
     const el = inputRef.current
-    if (el) {
-      const r = el.getBoundingClientRect()
-      setRect({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 220) })
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const below = window.innerHeight - r.bottom
+    const above = r.top
+    // 아래가 좁고 위가 더 넓을 때만 뒤집는다. 어중간하면 아래로 두는 편이 덜 놀랍다.
+    const flipUp = below < 200 && above > below
+    const space = (flipUp ? above : below) - 12
+    return {
+      left: r.left,
+      width: Math.max(r.width, 220),
+      maxHeight: Math.max(140, Math.min(space, 320)),
+      top: flipUp ? undefined : r.bottom + 4,
+      bottom: flipUp ? window.innerHeight - r.top + 4 : undefined,
     }
+  }
+
+  const openList = () => {
+    const p = measure()
+    if (p) setRect(p)
     setOpen(true)
   }
 
@@ -59,7 +87,8 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
       const r = el.getBoundingClientRect()
       const offscreen = r.bottom < 0 || r.top > window.innerHeight
       if (offscreen) { setOpen(false); return }
-      setRect({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 220) })
+      const p = measure()
+      if (p) setRect(p)
     }
     const close = () => setOpen(false)
 
@@ -102,8 +131,15 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
           ref={listRef}
           // 스크롤바를 잡을 때 input이 blur되어 목록이 닫히는 것을 막는다.
           onMouseDown={e => e.preventDefault()}
-          style={{ position: 'fixed', top: rect.top, left: rect.left, width: rect.width }}
-          className="z-50 max-h-56 overflow-y-auto bg-surface border border-border-primary rounded-lg shadow-lg"
+          style={{
+            position: 'fixed',
+            top: rect.top,
+            bottom: rect.bottom,
+            left: rect.left,
+            width: rect.width,
+            maxHeight: rect.maxHeight,
+          }}
+          className="z-50 overflow-y-auto bg-surface border border-border-primary rounded-lg shadow-lg"
         >
           {filtered.map(v => (
             <button
@@ -111,10 +147,10 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => pick(v)}
-              className="w-full text-left px-3 py-2 text-xs hover:bg-surface-secondary text-txt-primary"
+              className="w-full text-left px-3 py-3 text-sm hover:bg-surface-secondary text-txt-primary md:py-2 md:text-xs"
             >
               <div className="font-medium">{v.name}</div>
-              {v.business_number && <div className="text-txt-tertiary">{v.business_number}</div>}
+              {v.business_number && <div className="text-txt-tertiary text-xs">{v.business_number}</div>}
             </button>
           ))}
         </div>,

@@ -13,6 +13,7 @@ import {
   type LineState,
 } from '@/types/approval'
 import { currentTurnLine } from '@/lib/approval/status'
+import { APPROVAL_STATUS_BADGE, shortDateTime } from '@/lib/approval/statusStyle'
 
 type BoxKey =
   | 'draft' | 'submitted' | 'withdrawn' | 'rejected' | 'completed'
@@ -178,7 +179,7 @@ export default function ApprovalPage() {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-48 border-r border-border-primary py-6 shrink-0">
+      <aside className="hidden md:block w-48 border-r border-border-primary py-6 shrink-0">
         <div className="mx-4 mb-4">
           <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} />
         </div>
@@ -204,13 +205,84 @@ export default function ApprovalPage() {
         ))}
       </aside>
 
-      <main className="flex-1 px-8 py-6">
+      <main className="flex-1 min-w-0 px-4 py-4 md:px-8 md:py-6">
+        {/*
+          모바일 머리말. 데스크톱은 왼쪽 사이드바가 같은 역할을 하므로 숨긴다.
+          직원 선택이 이 안에 있어야 한다 — 사이드바를 숨긴 폰에서 직원을 아직 안 골랐을 때,
+          아래 "직원을 선택해 주세요" 분기에 갇혀 고를 방법이 없어지면 안 된다.
+        */}
+        <div className="md:hidden mb-4 flex flex-col gap-2">
+          <ActorPicker
+            actorId={actorId}
+            staffList={staffList}
+            onChange={setActorId}
+            loading={actorLoading}
+            fullWidth
+          />
+          <div className="flex items-center gap-2">
+            <select
+              value={box}
+              onChange={e => setBox(e.target.value as BoxKey)}
+              aria-label="문서함 선택"
+              className="flex-1 min-w-0 h-11 px-3 text-base border border-border-primary rounded-lg bg-surface text-txt-primary"
+            >
+              {/* 칸 이름 앞에 그룹을 붙인다. 기안함에도 결재함에도 "반려된/완료된"이 있어
+                  이름만 보여주면 어느 쪽인지 알 수 없다. */}
+              {BOXES.map(g =>
+                g.items.map(it => (
+                  <option key={it.key} value={it.key}>{`${g.group} · ${it.label}`}</option>
+                )),
+              )}
+            </select>
+            {pendingCount > 0 && (
+              <span className="shrink-0 px-2.5 py-1 text-xs leading-none rounded-full bg-accent text-txt-inverse">
+                {pendingCount}
+              </span>
+            )}
+          </div>
+          <Link
+            href="/approval/new"
+            className="flex items-center justify-center gap-2 h-11 text-sm border border-border-primary rounded-lg text-txt-primary"
+          >
+            <PenLine size={15} className="text-txt-tertiary" /> 기안작성
+          </Link>
+        </div>
+
         {!actor ? (
           <div className="py-10 text-center text-sm text-txt-tertiary">직원을 선택해 주세요</div>
         ) : (
           <>
             <div className="text-sm text-txt-secondary mb-4">총 {rows.length}건</div>
-            <table className="w-full table-fixed text-xs">
+
+            {/* 모바일 목록 — 6칸 표를 폰에서 그리면 한 칸이 30px이 되어 글자가 세로로 접힌다.
+                카드 한 장이 문서 한 건이고, 카드 전체가 탭 영역이다. */}
+            <div className="md:hidden">
+              {rows.map(r => (
+                <Link
+                  key={r.id}
+                  href={`/approval/${r.id}`}
+                  className="block py-3.5 border-b border-border-primary"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span className="text-[15px] leading-snug text-txt-primary line-clamp-2">{r.title}</span>
+                    <span
+                      className={`shrink-0 px-2 py-0.5 text-[11px] leading-tight rounded ${APPROVAL_STATUS_BADGE[r.status]}`}
+                    >
+                      {APPROVAL_STATUS_LABEL[r.status]}
+                    </span>
+                  </div>
+                  <div className="text-lg text-txt-primary mb-1">{formatMoney(r.total_amount)}원</div>
+                  <div className="text-xs text-txt-secondary">
+                    {r.staff?.name ?? '-'} · {shortDateTime(r.submitted_at)}
+                  </div>
+                </Link>
+              ))}
+              {!loading && rows.length === 0 && (
+                <div className="py-10 text-center text-sm text-txt-tertiary">문서가 없습니다</div>
+              )}
+            </div>
+
+            <table className="hidden md:table w-full table-fixed text-xs">
               <thead className="bg-surface-secondary text-txt-secondary">
                 <tr>
                   <th className="w-[18%] px-3 py-2.5 text-left font-normal">문서번호</th>

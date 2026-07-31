@@ -9,6 +9,7 @@ import { formatMoney } from '@/lib/utils/format'
 import ApprovalLineView, { type LineCard } from './ApprovalLineView'
 import ApproveModal from './ApproveModal'
 import ActorPicker, { useActor } from './ActorPicker'
+import MobileField, { MobileCard } from './MobileField'
 import {
   canApprove, canWithdraw, canDelete, canSubmit, canCancel, canResumeCompletion, isFinalApprover,
 } from '@/lib/approval/status'
@@ -20,6 +21,11 @@ import {
 
 type LineWithStaff = ExpenseReportLine & { staff: { name: string } | null }
 type ActionKey = 'withdraw' | 'delete' | 'cancel'
+
+// 하단 액션 버튼. 모바일에서는 남는 폭을 나눠 갖고 높이를 44px로 키워 손가락에 맞춘다.
+// md 이상에서는 예전 크기(px-5 py-2)로 되돌아간다.
+const ACTION_BTN =
+  'flex-1 min-h-11 flex items-center justify-center rounded-lg text-sm md:flex-none md:min-h-0 md:px-5 md:py-2'
 
 // 저장 경로는 한글을 못 쓰므로(Storage 제약) 파일명이 밑줄로 바뀌어 있다.
 // 브라우저에서 바로 볼 수 없는 형식은 ?download=로 원래 파일명을 되살려 내려받게 한다.
@@ -111,13 +117,23 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const busy = actionBusy !== null
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-4">
+    // 모바일은 액션 바가 화면 아래에 고정되므로, 마지막 내용이 가리지 않도록 아래 여백을 둔다.
+    <div className="max-w-4xl mx-auto px-4 py-5 pb-28 md:px-6 md:py-8 md:pb-8">
+      <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between">
         <h1 className="text-lg font-medium">{report.title}</h1>
-        <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} />
+        <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} fullWidth />
       </div>
 
-      <table className="w-full table-fixed text-xs mb-6">
+      {/* 기안정보 — 모바일 */}
+      <div className="md:hidden mb-6 border border-border-primary rounded-lg px-3 py-2.5">
+        <MobileField label="문서번호" value={report.doc_no ?? '-'} />
+        <MobileField label="상태" value={APPROVAL_STATUS_LABEL[report.status]} />
+        <MobileField label="기안자" value={drafterName} />
+        <MobileField label="기안양식" value="지출결의서" />
+        <MobileField label="보존연한" value={`${report.retention_years}년`} />
+      </div>
+
+      <table className="hidden md:table w-full table-fixed text-xs mb-6">
         <tbody>
           <tr>
             <td className="w-[18%] px-2 py-2 text-txt-secondary border-b border-border-primary">기안양식</td>
@@ -151,7 +167,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <div className="flex flex-col gap-1">
             {files.map(f => (
               <a key={f.id} href={attachHref(f)} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1.5 text-xs text-accent-text hover:underline">
+                className="flex items-center gap-1.5 py-2 text-sm text-accent-text hover:underline md:py-0 md:text-xs">
                 <Paperclip size={12} /> {f.file_name}
               </a>
             ))}
@@ -164,7 +180,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <div className="text-sm font-medium mb-2">참조문서</div>
           <div className="flex flex-col gap-1">
             {refs.map(r => (
-              <Link key={r.id} href={`/approval/${r.id}`} className="text-xs text-accent-text hover:underline">
+              <Link key={r.id} href={`/approval/${r.id}`} className="py-2 text-sm text-accent-text hover:underline md:py-0 md:text-xs">
                 {r.doc_no ?? ''} {r.title}
               </Link>
             ))}
@@ -177,7 +193,26 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <span className="text-xs text-txt-secondary">지급 총계(원)</span>
           <span className="text-lg font-medium">{formatMoney(report.total_amount)}</span>
         </div>
-        <table className="w-full table-fixed text-xs">
+        {/* 지급정보 — 모바일. 거래처와 금액을 카드 머리에 두고 나머지는 라벨과 함께 아래에 둔다. */}
+        <div className="md:hidden px-3 py-3">
+          {payments.map(p => (
+            <MobileCard key={p.id}>
+              <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                <span className="text-[15px] text-txt-primary">{p.vendor_name}</span>
+                <span className="text-base text-txt-primary shrink-0">{formatMoney(p.amount)}</span>
+              </div>
+              <MobileField label="지급요청일" value={p.pay_request_date} />
+              <MobileField label="은행" value={p.bank} />
+              <MobileField label="계좌번호" value={p.account_no} />
+              <MobileField label="사업자번호" value={p.business_no ?? ''} />
+            </MobileCard>
+          ))}
+          {payments.length === 0 && (
+            <div className="py-3 text-center text-xs text-txt-tertiary">지급 정보가 없습니다</div>
+          )}
+        </div>
+
+        <table className="hidden md:table w-full table-fixed text-xs">
           <thead className="bg-surface-secondary text-txt-secondary">
             <tr>
               <th className="w-[18%] px-2 py-2 text-left font-normal border-r border-border-primary">거래처명</th>
@@ -206,7 +241,26 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       {details.length > 0 && (
         <div className="border border-border-primary rounded-lg overflow-hidden mb-5">
           <div className="px-3 py-2 border-b border-border-primary text-xs font-medium">상세 내용</div>
-          <table className="w-full table-fixed text-xs">
+
+          {/* 상세내용 — 모바일 */}
+          <div className="md:hidden px-3 py-3">
+            {details.map(d => (
+              <MobileCard key={d.id}>
+                <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                  <span className="text-[15px] text-txt-primary">{d.content || d.vendor_name || '내용 없음'}</span>
+                  {d.amount ? (
+                    <span className="text-base text-txt-primary shrink-0">{formatMoney(d.amount)}</span>
+                  ) : null}
+                </div>
+                <MobileField label="거래처명" value={d.vendor_name ?? ''} />
+                <MobileField label="계정" value={d.account ?? ''} />
+                <MobileField label="부서명" value={d.dept_name ?? ''} />
+                <MobileField label="비고" value={d.note ?? ''} />
+              </MobileCard>
+            ))}
+          </div>
+
+          <table className="hidden md:table w-full table-fixed text-xs">
             <thead className="bg-surface-secondary text-txt-secondary">
               <tr>
                 <th className="px-2 py-2 text-left font-normal border-r border-border-primary">거래처명</th>
@@ -238,7 +292,27 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       )}
 
       <div className="text-sm font-medium mb-2">결재의견</div>
-      <table className="w-full table-fixed text-xs mb-6">
+
+      {/* 결재의견 — 모바일 */}
+      <div className="md:hidden mb-6">
+        {lines.filter(l => l.acted_at).map(l => (
+          <MobileCard key={l.id}>
+            <div className="flex items-baseline justify-between gap-2 mb-1">
+              <span className="text-[15px] text-txt-primary">{l.staff?.name ?? ''}</span>
+              <span className="text-xs text-txt-secondary shrink-0">
+                {LINE_ROLE_LABEL[l.role]} · {LINE_STATE_LABEL[l.state]}
+              </span>
+            </div>
+            <MobileField label="일시" value={l.acted_at ? new Date(l.acted_at).toLocaleString('ko-KR') : ''} />
+            <MobileField label="의견" value={l.comment ?? ''} />
+          </MobileCard>
+        ))}
+        {lines.filter(l => l.acted_at).length === 0 && (
+          <div className="py-3 text-xs text-txt-tertiary">아직 결재한 사람이 없습니다</div>
+        )}
+      </div>
+
+      <table className="hidden md:table w-full table-fixed text-xs mb-6">
         <thead className="bg-surface-secondary text-txt-secondary">
           <tr>
             <th className="w-[12%] px-2 py-2 text-left font-normal border-r border-border-primary">결재구분</th>
@@ -263,40 +337,49 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
 
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      <div className="flex justify-center gap-2 border-t border-border-primary pt-5">
-        <Link href="/approval" className="px-5 py-2 text-sm border border-border-primary rounded-lg">목록</Link>
+      {/*
+        모바일에서는 화면 아래에 고정한다 — 문서가 길어도 승인·반려가 엄지에 닿아야 한다.
+        아이폰 홈바에 가리지 않도록 safe-area만큼 아래 여백을 더한다.
+        md 이상에서는 static으로 되돌아가 지금 데스크톱 모양 그대로다.
+      */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 flex gap-2 px-4 py-3 bg-surface border-t border-border-primary
+                   pb-[calc(0.75rem+env(safe-area-inset-bottom))]
+                   md:static md:z-auto md:justify-center md:bg-transparent md:px-0 md:py-0 md:pt-5 md:pb-0"
+      >
+        <Link href="/approval" className={`${ACTION_BTN} border border-border-primary`}>목록</Link>
 
         {report.status === 'approved' && (
-          <Link href={`/approval/${reportId}/reissue`} className="px-5 py-2 text-sm border border-border-primary rounded-lg">
+          <Link href={`/approval/${reportId}/reissue`} className={`${ACTION_BTN} border border-border-primary`}>
             재기안
           </Link>
         )}
         {actor && canSubmit(report, actor.id) && (
-          <Link href={`/approval/${reportId}/edit`} className="px-5 py-2 text-sm border border-border-primary rounded-lg">
+          <Link href={`/approval/${reportId}/edit`} className={`${ACTION_BTN} border border-border-primary`}>
             수정
           </Link>
         )}
         {actor && canWithdraw(report, lines, actor.id) && (
           <button onClick={() => act('withdraw')} disabled={busy}
-            className="px-5 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">
+            className={`${ACTION_BTN} border border-border-primary disabled:opacity-40`}>
             {actionBusy === 'withdraw' ? '처리 중' : '회수'}
           </button>
         )}
         {actor && canDelete(report, actor.id) && (
           <button onClick={() => act('delete')} disabled={busy}
-            className="px-5 py-2 text-sm border border-border-primary rounded-lg text-danger disabled:opacity-40">
+            className={`${ACTION_BTN} border border-border-primary text-danger disabled:opacity-40`}>
             {actionBusy === 'delete' ? '처리 중' : '삭제'}
           </button>
         )}
         {actor && canCancel(report, lines, actor.id) && (
           <button onClick={() => act('cancel')} disabled={busy}
-            className="px-5 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">
+            className={`${ACTION_BTN} border border-border-primary disabled:opacity-40`}>
             {actionBusy === 'cancel' ? '처리 중' : '결재취소'}
           </button>
         )}
         {showApprove && (
           <button onClick={() => setModal(true)} disabled={busy}
-            className="px-5 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">
+            className={`${ACTION_BTN} bg-accent text-txt-inverse disabled:opacity-40`}>
             결재
           </button>
         )}

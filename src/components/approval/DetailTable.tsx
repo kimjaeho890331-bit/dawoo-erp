@@ -46,11 +46,21 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
 
   const cell = 'w-full px-2 py-1.5 text-xs bg-transparent outline-none rounded hover:bg-surface-secondary focus:bg-surface focus:ring-1 focus:ring-accent'
 
+  // 모바일 입력칸 — 아이폰 자동 확대를 막으려 16px, 손가락에 맞춰 44px.
+  const mCell =
+    'w-full h-11 px-3 text-base bg-surface border border-border-primary rounded-lg outline-none focus:ring-1 focus:ring-accent text-txt-primary'
+  const mLabel = 'block mb-1 text-xs text-txt-secondary'
+
   return (
     <div className="border border-border-primary rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-primary">
         <span className="text-xs font-medium">상세 내용</span>
-        <div className="flex items-center gap-2">
+        {/*
+          일괄 적용은 데스크톱에만 둔다. 첫 행에 값을 넣고 체크한 행에 복사하는 방식이라
+          체크박스 열과 템플릿 행이 함께 있어야 뜻이 통하는데, 폰에서 카드마다 체크박스를
+          붙이면 무엇에 적용되는지 알기 어렵다. 폰에서는 보통 한두 건만 넣는다.
+        */}
+        <div className="hidden md:flex items-center gap-2">
           <span className="text-xs text-txt-tertiary">
             첫 행에 값을 넣고 적용할 행을 체크한 뒤 일괄 적용 — 첫 행은 저장되지 않습니다
           </span>
@@ -63,7 +73,72 @@ export default function DetailTable({ rows, vendors, onChange }: Props) {
         </div>
       </div>
 
-      <table className="w-full table-fixed text-xs">
+      {/* 모바일 — 한 건이 카드 한 장 */}
+      <div className="md:hidden px-3 py-3">
+        {rows.map((r, i) => (
+          <div key={i} className="border border-border-primary rounded-lg p-3 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-txt-secondary">{i + 1}번째</span>
+              <button
+                onClick={() => removeRow(i)}
+                aria-label={`${i + 1}번째 상세 내용 삭제`}
+                className="-mr-2 -mt-1 w-11 h-11 flex items-center justify-center"
+              >
+                <Trash2 size={18} className="text-txt-tertiary" />
+              </button>
+            </div>
+
+            <label className={mLabel}>거래처명</label>
+            <select className={`${mCell} mb-2.5`} value={r.vendor_name} onChange={e => set(i, { vendor_name: e.target.value })}>
+              <option value="">선택</option>
+              {vendorOptions.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+
+            <label className={mLabel}>내용</label>
+            <input className={`${mCell} mb-2.5`} value={r.content} onChange={e => set(i, { content: e.target.value })} />
+
+            <div className="flex gap-2 mb-2.5">
+              <div className="flex-1 min-w-0">
+                <label className={mLabel}>계정</label>
+                <input className={mCell} value={r.account} onChange={e => set(i, { account: e.target.value })} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <label className={mLabel}>금액</label>
+                <input
+                  className={`${mCell} text-right`}
+                  inputMode="numeric"
+                  value={r.amount ? formatMoney(r.amount) : ''}
+                  onChange={e => set(i, { amount: parseMoney(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <label className={mLabel}>부서명</label>
+                <input className={mCell} value={r.dept_name} onChange={e => set(i, { dept_name: e.target.value })} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <label className={mLabel}>비고</label>
+                <input className={mCell} value={r.note} onChange={e => set(i, { note: e.target.value })} />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {rows.length === 0 && (
+          <p className="mb-3 text-xs text-txt-tertiary">비워두고 상신해도 됩니다</p>
+        )}
+
+        <button
+          onClick={() => onChange([...rows, { ...EMPTY_DETAIL }])}
+          className="w-full h-11 flex items-center justify-center gap-1.5 text-sm text-txt-secondary border border-dashed border-border-primary rounded-lg"
+        >
+          <Plus size={16} /> 상세 내용 추가
+        </button>
+      </div>
+
+      <table className="hidden md:table w-full table-fixed text-xs">
         <thead className="bg-surface-secondary text-txt-secondary">
           <tr>
             <th className="w-[6%] px-2 py-2 border-r border-border-primary"></th>

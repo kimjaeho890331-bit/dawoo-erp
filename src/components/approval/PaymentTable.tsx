@@ -38,25 +38,111 @@ export default function PaymentTable({ rows, onChange }: Props) {
 
   const cell = 'w-full px-2 py-1.5 text-xs bg-transparent outline-none rounded hover:bg-surface-secondary focus:bg-surface focus:ring-1 focus:ring-accent'
 
+  // 모바일 입력칸. 글자를 16px로 두는 이유는 아이폰 사파리가 그보다 작은 입력칸을 누르면
+  // 화면을 자동 확대해버리기 때문이다. 높이 44px는 손가락에 맞춘 최소 크기다.
+  const mCell =
+    'w-full h-11 px-3 text-base bg-surface border border-border-primary rounded-lg outline-none focus:ring-1 focus:ring-accent text-txt-primary'
+  const mLabel = 'block mb-1 text-xs text-txt-secondary'
+
   return (
     <div className="border border-border-primary rounded-lg overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-3 border-b border-border-primary">
         <span className="text-xs text-txt-secondary">지급 총계(원)</span>
         <span className="text-lg font-medium">{formatMoney(total)}</span>
-        <span className="text-xs text-txt-tertiary">지급 정보 합계 자동계산</span>
+        <span className="hidden md:inline text-xs text-txt-tertiary">지급 정보 합계 자동계산</span>
       </div>
 
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-primary">
         <span className="text-xs font-medium">지급 정보</span>
         <button
           onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded"
+          className="hidden md:flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded"
         >
           <Plus size={12} /> 추가
         </button>
       </div>
 
-      <table className="w-full table-fixed text-xs">
+      {/* 모바일 — 한 건이 카드 한 장. 7칸 표를 폰에 그리면 칸마다 40px도 안 남는다. */}
+      <div className="md:hidden px-3 py-3">
+        {rows.map((r, i) => (
+          <div key={i} className="border border-border-primary rounded-lg p-3 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-txt-secondary">{i + 1}번째 지급 건</span>
+              <button
+                onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
+                aria-label={`${i + 1}번째 지급 건 삭제`}
+                className="-mr-2 -mt-1 w-11 h-11 flex items-center justify-center"
+              >
+                <Trash2 size={18} className="text-txt-tertiary" />
+              </button>
+            </div>
+
+            <label className={mLabel}>거래처명 *</label>
+            <div className="mb-2.5">
+              <VendorNameCell
+                value={r.vendor_name}
+                vendors={vendors}
+                onInput={v => set(i, { vendor_name: v })}
+                onSelect={patch => set(i, patch)}
+                className={mCell}
+                placeholder="거래처명"
+              />
+            </div>
+
+            <label className={mLabel}>지급금액 *</label>
+            <input
+              className={`${mCell} text-right mb-2.5`}
+              inputMode="numeric"
+              value={r.amount ? formatMoney(r.amount) : ''}
+              onChange={e => set(i, { amount: parseMoney(e.target.value) })}
+              placeholder="0"
+            />
+
+            <label className={mLabel}>지급요청일 *</label>
+            <input
+              className={`${mCell} mb-2.5`}
+              type="date"
+              value={r.pay_request_date}
+              onChange={e => set(i, { pay_request_date: e.target.value })}
+            />
+
+            <div className="flex gap-2 mb-2.5">
+              <div className="flex-1 min-w-0">
+                <label className={mLabel}>은행 *</label>
+                <input className={mCell} value={r.bank} onChange={e => set(i, { bank: e.target.value })} placeholder="은행명" />
+              </div>
+              <div className="flex-[1.4] min-w-0">
+                <label className={mLabel}>계좌번호 *</label>
+                <input
+                  className={mCell}
+                  inputMode="numeric"
+                  value={r.account_no}
+                  onChange={e => set(i, { account_no: e.target.value })}
+                  placeholder="계좌번호"
+                />
+              </div>
+            </div>
+
+            <label className={mLabel}>사업자번호</label>
+            <input
+              className={mCell}
+              inputMode="numeric"
+              value={r.business_no}
+              onChange={e => set(i, { business_no: e.target.value })}
+              placeholder="선택"
+            />
+          </div>
+        ))}
+
+        <button
+          onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
+          className="w-full h-11 flex items-center justify-center gap-1.5 text-sm text-txt-secondary border border-dashed border-border-primary rounded-lg"
+        >
+          <Plus size={16} /> 지급 건 추가
+        </button>
+      </div>
+
+      <table className="hidden md:table w-full table-fixed text-xs">
         <thead className="bg-surface-secondary text-txt-secondary">
           <tr>
             <th className="w-[17%] px-2 py-2 text-left font-normal border-r border-border-primary">거래처명 *</th>

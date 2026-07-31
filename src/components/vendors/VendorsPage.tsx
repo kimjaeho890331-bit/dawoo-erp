@@ -257,14 +257,18 @@ export default function VendorsPage() {
     setModalOpen(true)
   }
 
-  // 파일 업로드
+  // 파일 업로드 — /api/storage/upload(service_role) 경유로만 한다.
+  // 프론트 anon 키에는 Storage 쓰기 권한이 없어서 직접 올리면 실패한다.
   const uploadFile = async (file: File, field: string) => {
     const ext = file.name.split('.').pop()
-    const path = `vendors/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-    const { data, error } = await supabase.storage.from('attachments').upload(path, file)
-    if (error) { alert('파일 업로드 실패'); return }
-    const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(data.path)
-    setForm(prev => ({ ...prev, [field]: urlData.publicUrl }))
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('storagePath', `vendors/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`)
+
+    const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
+    const json = await res.json()
+    if (!res.ok) { alert(`파일 업로드 실패: ${json.error ?? `HTTP ${res.status}`}`); return }
+    setForm(prev => ({ ...prev, [field]: json.url }))
   }
 
   const removeFile = (field: string) => setForm(prev => ({ ...prev, [field]: null }))

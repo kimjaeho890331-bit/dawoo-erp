@@ -536,14 +536,21 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
     if (!file.name.endsWith('.pdf')) { alert('PDF 파일만 업로드 가능합니다'); return }
     setUploading(true); setUploadResult(null)
     try {
-      const path = `card-statements/${Date.now()}_${file.name}`
-      const { error } = await supabase.storage.from('attachments').upload(path, file)
-      if (error) throw error
+      // 업로드는 /api/storage/upload(service_role)로만 한다 — 프론트 anon 키에는
+      // Storage 쓰기 권한이 없다. 라우트가 경로 정규화(한글 파일명)와 형식 검증도 맡는다.
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('storagePath', `card-statements/${Date.now()}_${file.name}`)
+
+      const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
       // TODO: AI 파싱 → card_transactions 자동 등록
       // 현재는 파일 저장만 하고 수동 등록 안내
       setUploadResult(`"${file.name}" 업로드 완료. AI 분석 후 카드내역이 자동 등록됩니다.`)
     } catch (err) {
-      setUploadResult('업로드 실패. 다시 시도해주세요.')
+      // 실패 이유를 삼키면 이번처럼 원인을 못 찾는다 — 서버가 준 메시지를 그대로 보여준다
+      setUploadResult(`업로드 실패: ${err instanceof Error ? err.message : '다시 시도해 주세요'}`)
     }
     setUploading(false)
   }

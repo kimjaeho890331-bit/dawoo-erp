@@ -26,7 +26,10 @@ const ALLOWED_MIME_TYPES = [
   'text/csv', 'text/plain',
 ]
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
-const ALLOWED_PATH_PREFIXES = ['projects/', 'templates/', 'attachments/', 'sites/', 'approval/']
+const ALLOWED_PATH_PREFIXES = [
+  'projects/', 'templates/', 'attachments/', 'sites/', 'approval/',
+  'card-statements/', 'staff/', 'vendors/',
+]
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()

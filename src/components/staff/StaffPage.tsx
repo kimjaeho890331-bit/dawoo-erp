@@ -480,10 +480,16 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
     setUploadingType(docType)
     try {
       const ext = file.name.split('.').pop() || 'bin'
-      const path = `staff/${staffId}/${docType}_${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
-      if (upErr) { alert('업로드 실패: ' + upErr.message); return }
-      const { data: pub } = supabase.storage.from('attachments').getPublicUrl(path)
+      // 업로드는 /api/storage/upload(service_role) 경유로만 한다 — 프론트 anon 키에는
+      // Storage 쓰기 권한이 없어서 클라이언트에서 직접 올리면 실패한다.
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('storagePath', `staff/${staffId}/${docType}_${Date.now()}.${ext}`)
+
+      const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) { alert('업로드 실패: ' + (json.error ?? `HTTP ${res.status}`)); return }
+
       // 기존 같은 타입 있으면 삭제 후 교체
       const existing = atts.find(a => a.doc_type === docType)
       if (existing) {
@@ -491,7 +497,7 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
       }
       await supabase.from('staff_attachments').insert({
         staff_id: staffId, doc_type: docType,
-        file_url: pub.publicUrl, file_name: file.name,
+        file_url: json.url, file_name: file.name,
       })
       load()
     } finally {

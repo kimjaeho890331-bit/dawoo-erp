@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/lib/auth'
 import { uploadFile, ensureProjectFolder, findOrCreateFolder } from '@/lib/google-drive'
+import { safeStoragePath } from '@/lib/utils/storagePath'
 
 export const maxDuration = 30
 
@@ -52,8 +53,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: '허용되지 않는 파일 형식입니다' }, { status: 400 })
     }
 
-    // 경로 검증 (Path Traversal 방지)
-    const safePath = storagePath.replace(/\.\./g, '').replace(/^\//, '')
+    // 경로 검증 (Path Traversal 방지 + Storage가 거부하는 문자 치환)
+    const safePath = safeStoragePath(storagePath)
     if (!ALLOWED_PATH_PREFIXES.some(prefix => safePath.startsWith(prefix))) {
       return Response.json({ error: '허용되지 않는 저장 경로입니다' }, { status: 403 })
     }

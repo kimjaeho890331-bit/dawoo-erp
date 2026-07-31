@@ -21,6 +21,14 @@ import {
 type LineWithStaff = ExpenseReportLine & { staff: { name: string } | null }
 type ActionKey = 'withdraw' | 'delete' | 'cancel'
 
+// 저장 경로는 한글을 못 쓰므로(Storage 제약) 파일명이 밑줄로 바뀌어 있다.
+// 브라우저에서 바로 볼 수 없는 형식은 ?download=로 원래 파일명을 되살려 내려받게 한다.
+const PREVIEWABLE = /\.(jpe?g|png|gif|webp|pdf)$/i
+const attachHref = (f: ExpenseReportFile) =>
+  PREVIEWABLE.test(f.file_name)
+    ? f.file_url
+    : `${f.file_url}?download=${encodeURIComponent(f.file_name)}`
+
 export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const router = useRouter()
   const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
@@ -142,7 +150,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <div className="text-sm font-medium mb-2">파일첨부</div>
           <div className="flex flex-col gap-1">
             {files.map(f => (
-              <a key={f.id} href={f.file_url} target="_blank" rel="noreferrer"
+              <a key={f.id} href={attachHref(f)} target="_blank" rel="noreferrer"
                 className="flex items-center gap-1.5 text-xs text-accent-text hover:underline">
                 <Paperclip size={12} /> {f.file_name}
               </a>

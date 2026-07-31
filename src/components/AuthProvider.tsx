@@ -49,11 +49,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchStaff = useCallback(
     async (email: string) => {
       try {
-        const { data } = await supabase
-          .from('staff')
-          .select('id, name, role, phone')
+        // staff_emails(다중 이메일 매핑)를 먼저 본다 — 직원이 "내 계정 연결"로 등록한
+        // 로그인 계정(카카오/네이버 등)은 여기에 있다. 아직 아무도 연결 안 했으면
+        // staff.email(기존 단일 칼럼)로 폴백한다 — 기존 동작을 그대로 유지하기 위함.
+        const { data: mapped } = await supabase
+          .from('staff_emails')
+          .select('staff:staff_id(id, name, role, phone)')
           .eq('email', email)
           .maybeSingle()
+
+        const mappedStaff = mapped?.staff as unknown as StaffInfo | null
+
+        const data =
+          mappedStaff ??
+          (
+            await supabase
+              .from('staff')
+              .select('id, name, role, phone')
+              .eq('email', email)
+              .maybeSingle()
+          ).data
 
         if (data) {
           setStaff(data as StaffInfo)

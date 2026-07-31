@@ -74,12 +74,25 @@ export default function StaffPage() {
   const [editItem, setEditItem] = useState<Staff | null>(null)
   const [detailItem, setDetailItem] = useState<Staff | null>(null)
   const [tab, setTab] = useState<Tab>('info')
+  // 직원별 연결된 로그인 계정 이메일 목록 ("내 계정 연결" 현황). 조회 실패해도
+  // 빈 맵으로 두면 화면은 "미연결"로만 보이고 나머지 기능은 그대로 동작한다.
+  const [linkedEmails, setLinkedEmails] = useState<Record<string, string[]>>({})
 
   const loadData = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase.from('staff').select('*').order('created_at')
     if (!error && data) setStaffList(data)
     setLoading(false)
+
+    const { data: emailRows } = await supabase.from('staff_emails').select('staff_id, email')
+    if (emailRows) {
+      const map: Record<string, string[]> = {}
+      for (const row of emailRows as { staff_id: string; email: string }[]) {
+        if (!map[row.staff_id]) map[row.staff_id] = []
+        map[row.staff_id].push(row.email)
+      }
+      setLinkedEmails(map)
+    }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -138,6 +151,7 @@ export default function StaffPage() {
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직급</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연락처</th>
                     <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">📱</th>
+                    <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">계정연결</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">입사일</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">근속</th>
                     <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연차</th>
@@ -172,6 +186,13 @@ export default function StaffPage() {
                             <span className="text-[11px] text-txt-quaternary" title="미연결">—</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center text-[12px]">
+                          {(linkedEmails[s.id]?.length ?? 0) > 0 ? (
+                            <span className="text-accent-text font-medium">{linkedEmails[s.id].length}개</span>
+                          ) : (
+                            <span className="text-txt-quaternary">미연결</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.join_date || '-'}</td>
                         <td className="px-4 py-3 text-[13px] text-txt-tertiary">{calcYearsMonths(s.join_date)}</td>
                         <td className="px-4 py-3 text-center text-[13px] text-txt-secondary">{isResigned ? '-' : `${calcTotalLeave(s.join_date)}일`}</td>
@@ -198,7 +219,7 @@ export default function StaffPage() {
 
           {/* 상세 패널 */}
           {detailItem && (
-            <DetailPanel staff={detailItem} onClose={() => setDetailItem(null)}
+            <DetailPanel staff={detailItem} linkedEmails={linkedEmails[detailItem.id] ?? []} onClose={() => setDetailItem(null)}
               onEdit={() => { setEditItem(detailItem); setShowModal(true) }} />
           )}
         </>
@@ -331,7 +352,7 @@ export default function StaffPage() {
 }
 
 // ===== 상세 패널 =====
-function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => void; onEdit: () => void }) {
+function DetailPanel({ staff, linkedEmails, onClose, onEdit }: { staff: Staff; linkedEmails: string[]; onClose: () => void; onEdit: () => void }) {
   const totalLeave = calcTotalLeave(staff.join_date)
   const Row = ({ label, value }: { label: string; value: string | null | undefined }) => (
     <div className="flex py-2 border-b border-surface-secondary">
@@ -372,6 +393,20 @@ function DetailPanel({ staff, onClose, onEdit }: { staff: Staff; onClose: () => 
           <Row label="업무 연락처" value={staff.work_phone || staff.phone} />
           <Row label="개인 연락처" value={staff.personal_phone} />
           <Row label="이메일" value={staff.email} />
+          <div className="flex py-2 border-b border-surface-secondary">
+            <span className="w-24 shrink-0 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연결된 계정</span>
+            <div className="text-[13px] text-txt-primary">
+              {linkedEmails.length > 0 ? (
+                <div className="flex flex-col gap-0.5">
+                  {linkedEmails.map(email => (
+                    <span key={email}>{email}</span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-txt-quaternary">아직 연결 안 됨 — 설정 &gt; 내 계정 연결에서 직접 연결</span>
+              )}
+            </div>
+          </div>
           <Row label="생년월일" value={staff.birth_date} />
           <Row label="주소" value={staff.address} />
           <div className="flex py-2 border-b border-surface-secondary">

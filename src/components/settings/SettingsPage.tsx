@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Building2, Users, Bell, Shield, Database, Save, Check, Loader2, Smartphone } from 'lucide-react'
 import InstallPanel from '@/components/pwa/InstallPanel'
 import PushToggle from '@/components/settings/PushToggle'
+import AccountLink from '@/components/settings/AccountLink'
 
 // --- 타입 ---
 interface CompanyInfo {
@@ -208,6 +209,11 @@ export default function SettingsPage() {
           {/* 알림 설정 */}
           {tab === 'notification' && (
             <div className="space-y-4">
+              <section>
+                <h2 className="text-sm font-medium mb-2 text-txt-primary">내 계정 연결</h2>
+                <AccountLink />
+              </section>
+
               <section>
                 <h2 className="text-sm font-medium mb-2 text-txt-primary">결재 휴대폰 알림</h2>
                 <PushToggle />

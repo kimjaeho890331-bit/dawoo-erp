@@ -1,16 +1,3 @@
 {
-  "crons": [
-    {
-      "path": "/api/notifications/cron/morning",
-      "schedule": "30 23 * * *"
-    },
-    {
-      "path": "/api/notifications/cron/afternoon",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/notifications/cron/evening",
-      "schedule": "0 9 * * *"
-    }
-  ]
+  "crons": []
 }

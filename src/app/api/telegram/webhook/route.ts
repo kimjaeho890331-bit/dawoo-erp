@@ -9,11 +9,6 @@ import {
   type TelegramMessage,
   type SendMessageOptions,
 } from '@/lib/telegram/bot'
-import {
-  buildMorningBrief,
-  buildAfternoonRemind,
-  buildEveningRecap,
-} from '@/lib/notifications/digest'
 import { applyDepositAndAdvanceStatus, formatDepositMessage } from '@/lib/payments'
 
 export const maxDuration = 30
@@ -726,55 +721,20 @@ async function handleStart(chatId: number, text: string, fromUserId?: number) {
   await sendMessage(
     chatId,
     `*${staffName}님 연결 완료!*\n\n` +
-    `이제 ERP 알림을 여기로 받습니다.\n` +
-    `/help 입력하면 명령어 목록이 보입니다.`,
+    `이제 여기서 AI 비서와 대화할 수 있습니다.\n` +
+    `/help 입력하면 사용법이 보입니다.`,
   )
 }
 
 // ============================================
 // 슬래시 명령 처리
 // ============================================
-async function handleCommand(chatId: number, staffId: string, text: string) {
+async function handleCommand(chatId: number, _staffId: string, text: string) {
   const cmd = text.split(/\s+/)[0].toLowerCase().replace(/@\w+/, '') // @봇이름 제거
-  const args = text.slice(text.split(/\s+/)[0].length).trim()
 
   switch (cmd) {
     case '/help':
       await sendMessage(chatId, HELP_TEXT)
-      return
-    case '/오늘':
-    case '/today': {
-      const msg = await buildMorningBrief(staffId)
-      await sendMessage(chatId, msg || '오늘 예정된 일정/업무가 없습니다.')
-      return
-    }
-    case '/이번주':
-    case '/week': {
-      const msg = await buildEveningRecap(staffId)
-      await sendMessage(chatId, msg || '이번 주 예정이 없습니다.')
-      return
-    }
-    case '/브리핑':
-    case '/brief': {
-      const msg = await buildMorningBrief(staffId)
-      await sendMessage(chatId, msg || '현재 브리핑할 항목이 없습니다.')
-      return
-    }
-    case '/마감':
-    case '/deadline': {
-      const msg = await buildAfternoonRemind(staffId)
-      await sendMessage(chatId, msg || '오늘 마감 항목이 없습니다.')
-      return
-    }
-    case '/끄기':
-    case '/off':
-      await supabaseAdmin.from('staff').update({ notify_telegram: false }).eq('id', staffId)
-      await sendMessage(chatId, '알림이 일시 중단되었습니다. `/켜기`로 재개하세요.')
-      return
-    case '/켜기':
-    case '/on':
-      await supabaseAdmin.from('staff').update({ notify_telegram: true }).eq('id', staffId)
-      await sendMessage(chatId, '알림이 재개되었습니다.')
       return
     default:
       await sendMessage(chatId, `알 수 없는 명령어입니다. /help 입력하면 명령어 목록이 보입니다.`)
@@ -828,12 +788,9 @@ async function handleFreeText(chatId: number, staffId: string, text: string) {
 
 ## 컨텍스트
 - 다우건설은 경기도 15개 시 대상 정부 지원사업 접수/현장관리 회사
-- 직원 6명, 텔레그램으로 자동 알림 + 양방향 AI 비서
+- 직원 6명, 텔레그램 양방향 AI 비서
 
 ## 할 수 있는 것
-- 오늘 일정/업무 조회 → /오늘 명령 안내
-- 브리핑 → /브리핑 명령 안내
-- 마감 → /마감 명령 안내
 - 자유 대화 → 여기서 직접 답변
 
 ※ 실제 DB 조회/등록이 필요한 요청은 "아직 슬래시 명령에서만 지원됩니다"라고 안내.
@@ -882,21 +839,11 @@ async function handleFreeText(chatId: number, staffId: string, text: string) {
   }
 }
 
-const HELP_TEXT = `*다우건설 ERP 알리미 명령어*
-
-*조회*
-/오늘 — 오늘 일정/업무 요약
-/이번주 — 이번 주 일정 미리보기
-/브리핑 — AI 긴급 체크
-/마감 — 오늘 마감 남은 것
-
-*설정*
-/끄기 — 알림 일시 중단
-/켜기 — 알림 재개
+const HELP_TEXT = `*다우건설 ERP 봇*
 
 *자유 대화*
 궁금한 것을 자연어로 물어보세요.
 예: "오늘 내 일정 뭐야?"
 예: "신한빌라 상태 어때?"
 
-자동 알림은 매일 08:30, 15:00, 18:00에 전송됩니다.`
+입금 확인·사진 업로드는 메시지를 보내면 자동으로 처리됩니다.`

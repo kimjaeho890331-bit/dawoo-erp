@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
+import { getRegionFromAddress } from '@/lib/utils/region'
+import { resolveCityId } from '@/lib/api/cities'
 import { useAuth } from '@/components/AuthProvider'
 import type { DBProject } from '@/components/register/RegisterPage'
 
@@ -146,7 +148,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           note: editProject.note || '',
           work_type_id: editProject.work_type_id || typesData[0]?.id || '',
           staff_id: editProject.staff_id || staffData[0]?.id || '',
-          city_id: editProject.city_id || citiesData[0]?.id || '',
+          // 지역은 자동 폴백 금지 — 미지정이면 빈 값 유지(과천 오분류 방지)
+          city_id: editProject.city_id || '',
           support_program: editProject.support_program || '',
           building_use: editProject.building_use || '',
           unit_count: editProject.unit_count?.toString() || '',
@@ -222,20 +225,30 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     setShowAddressDropdown(false)
     setAddressKeyword('')
 
-    // 주소 + 건물명 + 시 한번에 세팅
-    const cityNames = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남', '광주', '서산']
-    const matchedCity = cityNames.find(c => addr.roadAddr.includes(c) || addr.jibunAddr.includes(c))
-    const matchedCityData = matchedCity ? cities.find(c => c.name === matchedCity) : null
-
+    // 주소 + 건물명 먼저 세팅
     setForm(prev => ({
       ...prev,
       road_address: addr.roadAddr,
       jibun_address: addr.jibunAddr,
       building_name: addr.bdNm || prev.building_name || '',
-      ...(matchedCityData ? { city_id: matchedCityData.id } : {}),
     }))
     if (errors.road_address) {
       setErrors(prev => ({ ...prev, road_address: false }))
+    }
+
+    // 주소에서 지역(시/군) 추출 → 기존 city 조회, 없으면 생성해 연결 (전국 대응)
+    const region = getRegionFromAddress(addr.roadAddr, addr.jibunAddr)
+    if (region) {
+      const existing = cities.find(c => c.name === region)
+      if (existing) {
+        setForm(prev => ({ ...prev, city_id: existing.id }))
+      } else {
+        const newId = await resolveCityId(region)
+        if (newId) {
+          setCities(prev => (prev.some(c => c.id === newId) ? prev : [...prev, { id: newId, name: region }]))
+          setForm(prev => ({ ...prev, city_id: newId }))
+        }
+      }
     }
 
     // 건축물대장 + 전유부 동시 호출

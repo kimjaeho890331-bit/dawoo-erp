@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/lib/auth'
 import { ensureProjectFolder, ensureSiteFolder, uploadFile, listFiles, testConnection } from '@/lib/google-drive'
 import { applyDepositAndAdvanceStatus, formatDepositMessage } from '@/lib/payments'
+import { getRegionFromAddress } from '@/lib/utils/region'
 
 export const maxDuration = 60
 
@@ -612,18 +613,25 @@ async function registerProject(input: Record<string, unknown>): Promise<string> 
       }
     }
 
-    // 2. city_id 조회 (주소에서 시 추출)
+    // 2. city_id 조회 (주소에서 지역 추출 → 없으면 생성, 전국 대응)
     let cityId: string | null = null
-    const cityNames = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남']
-    const addr = `${road_address || ''} ${jibun_address || ''}`
-    const matchedCity = cityNames.find(c => addr.includes(c))
-    if (matchedCity) {
+    const region = getRegionFromAddress(road_address as string, jibun_address as string)
+    if (region) {
       const { data: cityData } = await supabaseAdmin
         .from('cities')
         .select('id')
-        .eq('name', matchedCity)
-        .single()
-      cityId = cityData?.id || null
+        .eq('name', region)
+        .maybeSingle()
+      if (cityData) {
+        cityId = (cityData as { id: string }).id
+      } else {
+        const { data: createdCity } = await supabaseAdmin
+          .from('cities')
+          .insert({ name: region })
+          .select('id')
+          .single()
+        cityId = (createdCity as { id: string } | null)?.id || null
+      }
     }
 
     // 3. 기본 담당자 (첫 번째 직원)
@@ -663,10 +671,10 @@ async function registerProject(input: Record<string, unknown>): Promise<string> 
     // 5. 구글드라이브 폴더 자동 생성
     const projectId = data?.[0]?.id
     let driveFolderInfo = null
-    if (projectId && matchedCity && category && building_name) {
+    if (projectId && region && category && building_name) {
       try {
         const folderId = await ensureProjectFolder(
-          matchedCity + '시',
+          region + '시',
           category as '소규모' | '수도',
           String(building_name)
         )
@@ -676,7 +684,7 @@ async function registerProject(input: Record<string, unknown>): Promise<string> 
       } catch { /* 드라이브 실패해도 접수는 성공 */ }
     }
 
-    return JSON.stringify({ success: true, project: data?.[0], city: matchedCity, drive: driveFolderInfo })
+    return JSON.stringify({ success: true, project: data?.[0], city: region, drive: driveFolderInfo })
   } catch (err) {
     return JSON.stringify({ error: `등록 실패: ${err}` })
   }

@@ -48,6 +48,10 @@ self.addEventListener('push', (event) => {
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       tag: payload.tag || 'dawoo-erp',
+      // 배너는 기본값이면 5초쯤 뒤 사라진다. 결재 요청은 자리를 비운 사이에
+      // 지나가면 그대로 묻히므로(직원 3명이 실제로 놓쳤다), 직접 닫을 때까지
+      // 화면에 남긴다. 모바일은 이 옵션을 무시하지만 원래 트레이에 쌓인다.
+      requireInteraction: true,
       data: { url: payload.url || '/dashboard' },
     })
   )

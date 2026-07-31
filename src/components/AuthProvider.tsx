@@ -97,15 +97,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (cancelled) return
 
-        const session = result && 'data' in result ? result.data.session : null
-        const currentUser = session?.user ?? null
-        setUser(currentUser)
+        // 타임아웃으로 이겼을 때(result === null)는 아무것도 덮어쓰지 않는다.
+        // onAuthStateChange가 이미 세션을 채워뒀을 수 있는데 여기서 null을 쓰면
+        // 로그인이 풀린 것처럼 보인다. "아직 모른다"와 "로그아웃"은 다르다.
+        if (result && 'data' in result) {
+          const currentUser = result.data.session?.user ?? null
+          setUser(currentUser)
 
-        if (currentUser?.email) {
-          await fetchStaff(currentUser.email)
+          if (currentUser?.email) {
+            await fetchStaff(currentUser.email)
+          }
         }
-      } catch {
-        // 세션 확인 실패 → 로그인 안 된 것으로 처리
+      } catch (e) {
+        // 세션 확인 실패 → 로그인 상태를 알 수 없음. 여기서도 user를 건드리지 않는다.
+        // 조용히 삼키면 "로그인했는데 화면만 로그아웃"인 상태를 추적할 수 없어 로그는 남긴다.
+        console.error('[auth] 세션 확인 실패:', e)
       } finally {
         if (!cancelled) setLoading(false)
       }

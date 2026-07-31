@@ -7,13 +7,6 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
-    },
-    {
-      "name": "dev-preview",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["--env-file-if-exists=.env.preview", "node_modules/next/dist/bin/next", "dev"],
-      "port": 3000,
-      "autoPort": true
     }
   ]
 }

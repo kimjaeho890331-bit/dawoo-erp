@@ -21,40 +21,11 @@ export async function POST(request: NextRequest) {
   const lineErr = validateApprovalLine(loaded.lines, staff.id)
   if (lineErr) return Response.json({ error: lineErr }, { status: 400 })
 
-  const { data: payments, error: paymentsError } = await admin
-    .from('expense_report_payments')
-    .select('seq, vendor_name, bank, account_no, pay_request_date')
-    .eq('report_id', id)
-    .order('seq')
-
-  if (paymentsError) {
-    return Response.json(
-      { error: `지급 정보 확인 실패: ${paymentsError.message}` },
-      { status: 500 },
-    )
-  }
-
-  if (!payments || payments.length === 0) {
-    return Response.json({ error: '지급 정보를 한 행 이상 입력해 주세요' }, { status: 400 })
-  }
-
-  // 임시저장은 빈 값을 허용하지만(작성 중일 수 있으므로), 상신부터는 승인 즉시
-  // expenses 레코드가 생성되므로 필수값이 비어 있으면 여기서 막는다.
-  for (const p of payments) {
-    const rowNo = p.seq + 1
-    if (!p.vendor_name?.trim()) {
-      return Response.json({ error: `지급 정보 ${rowNo}행의 거래처명을 입력해 주세요` }, { status: 400 })
-    }
-    if (!p.bank?.trim()) {
-      return Response.json({ error: `지급 정보 ${rowNo}행의 은행을 입력해 주세요` }, { status: 400 })
-    }
-    if (!p.account_no?.trim()) {
-      return Response.json({ error: `지급 정보 ${rowNo}행의 계좌번호를 입력해 주세요` }, { status: 400 })
-    }
-    if (!p.pay_request_date?.trim()) {
-      return Response.json({ error: `지급 정보 ${rowNo}행의 지급요청일을 입력해 주세요` }, { status: 400 })
-    }
-  }
+  // 지급 정보는 상신을 막지 않는다. 계좌·거래처가 아직 안 나온 상태에서도 결재를
+  // 먼저 올려야 하는 실무가 있어서, 예전에 여기서 하던 필수값 검사를 걷어냈다.
+  // 빈 값으로 승인되면 그만큼 비어 있는 expenses가 생기므로, 채우는 책임은 결재자에게 있다.
+  // (지급요청일만은 expense_report_payments.pay_request_date가 DATE NOT NULL이라
+  //  DB가 저장 단계에서 이미 막는다 — 여기서 다시 볼 필요가 없다.)
 
   // 재상신: state만 되돌리고 acted_at·comment는 남긴다
   // → 결재자가 자기가 왜 반려했는지(누가, 언제, 무슨 의견) 다시 볼 수 있어야 한다

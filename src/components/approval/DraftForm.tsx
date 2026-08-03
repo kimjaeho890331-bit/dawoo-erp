@@ -197,7 +197,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     // 그 단계에서 확인할 수 있는 것만 본다. 전체 검증은 상신할 때 서버가 다시 한다.
     if (step === 0 && !actor) { setError('기안자를 선택해 주세요'); return }
     if (step === 0 && !title.trim()) { setError('기안제목을 입력해 주세요'); return }
-    if (step === 1 && payments.length === 0) { setError('지급 정보를 한 건 이상 입력해 주세요'); return }
+    // 지급 정보는 비워둔 채로도 다음 단계·상신이 가능하다 — 계좌가 아직 안 나온
+    // 상태에서 결재를 먼저 올리는 실무가 있어서 막지 않는다.
     setError(null)
     setStep(s => Math.min(s + 1, LAST_STEP))
   }

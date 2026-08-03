@@ -98,9 +98,10 @@ function RateInput({ value, onSave }: { value: number; onSave: (v: string, flush
 // 올려서, 숫자를 치고 합계만 쳐다보거나 다른 창으로 넘어가면 입력이 조용히 사라졌다.
 // 편집 중에는 사용자가 친 원문(draft)을 그대로 두고, 칸을 벗어나면 정규화된
 // 표시값("-5,000")으로 돌아간다. 타이핑 도중 표시값이 끼어들면 커서가 튀기 때문.
-function CellInput({ value, onSave, className = '', align = 'left', placeholder = '' }: {
+function CellInput({ value, onSave, onReset, className = '', align = 'left', placeholder = '' }: {
   value: string
   onSave: (v: string, flush?: boolean) => void
+  onReset?: () => void   // Esc — 수기값을 버리고 요율 자동계산으로 되돌린다
   className?: string
   align?: 'left' | 'center' | 'right'
   placeholder?: string
@@ -111,7 +112,11 @@ function CellInput({ value, onSave, className = '', align = 'left', placeholder 
       type="text" value={draft ?? value} placeholder={placeholder}
       onChange={e => { setDraft(e.target.value); onSave(e.target.value) }}
       onBlur={e => { const typed = draft !== null; setDraft(null); if (typed) onSave(e.target.value, true) }}
-      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        // draft를 비워 두면 이후 blur가 저장을 건너뛰므로 되돌린 값이 그대로 남는다
+        else if (e.key === 'Escape' && onReset) { setDraft(null); onReset() }
+      }}
       className={`w-full bg-transparent outline-none text-[12px] px-1 py-0.5 focus:bg-accent-light rounded text-${align} ${className}`}
     />
   )
@@ -284,10 +289,16 @@ export default function LaborPage() {
     patchRecord(r.id, { day_values: next }, flush)
   }
 
-  // 공제 수동값 (빈 값으로 지우면 자동계산 복귀)
+  // 공제 수동값. 칸을 비우면 요율과 무관하게 0(공제 안 함)으로 확정한다.
+  // 요율 자동계산으로 되돌리려면 그 칸에서 Esc (→ resetDeduction).
   const setDeduction = (r: LaborRecord, field: keyof LaborRecord, raw: string, flush = false) => {
-    const v = raw.trim() === '' ? null : Number(raw.replace(/[^\d]/g, ''))
+    const v = Number(raw.replace(/[^\d]/g, ''))   // '' → 0
     patchRecord(r.id, { [field]: v } as Partial<LaborRecord>, flush)
+  }
+
+  // 수기값을 버리고 요율 자동계산으로 복귀 (null = 자동)
+  const resetDeduction = (r: LaborRecord, field: keyof LaborRecord) => {
+    patchRecord(r.id, { [field]: null } as Partial<LaborRecord>, true)
   }
 
   const toggleCheck = (id: string) => {
@@ -457,7 +468,7 @@ export default function LaborPage() {
                     tdCls={tdCls} checked={checked.has(r.id)} toggleCheck={toggleCheck}
                     nameDropdown={nameDropdown} setNameDropdown={setNameDropdown} dropdownRef={dropdownRef}
                     workers={workers} pickWorker={pickWorker} patchRecord={patchRecord}
-                    setDayValue={setDayValue} setDeduction={setDeduction} deleteRow={deleteRow} />
+                    setDayValue={setDayValue} setDeduction={setDeduction} resetDeduction={resetDeduction} deleteRow={deleteRow} />
                 )
               })}
             </tbody>
@@ -474,7 +485,8 @@ export default function LaborPage() {
         · 공제 6종은 표 머리글의 <b>요율을 직접 수정</b>할 수 있고(해당 월에 저장됨), 입력한 요율대로 자동 산출되어 -금액으로 표시됩니다.<br />
         · 요율로 바꾸든 칸에 금액을 직접 치든 <b>타이핑하는 즉시</b> 공제합계·실지급액·상단 합계가 다시 계산되고 저장됩니다.<br />
         · 소득세는 일급 15만원 초과분 × 요율(일 세액 1,000원 미만 소액부징수), 주민세는 소득세 × 요율, 장기요양은 건강보험 × 요율, 나머지는 총지급액 × 요율 기준입니다.<br />
-        · 공제 대상이 아닌 근무자는 해당 칸에 0을 입력하세요. 셀 값을 지우면 다시 자동계산으로 돌아갑니다.<br />
+        · 공제 대상이 아닌 근무자는 <b>해당 칸을 비우고 Enter</b>(또는 0 입력) → 요율과 무관하게 0으로 확정됩니다.<br />
+        · 그 칸에서 <b>Esc</b>를 누르면 수기값을 버리고 다시 요율 자동계산으로 돌아갑니다(회색 글씨 = 자동, 진한 글씨 = 수기).<br />
         · 근무자 이름을 클릭하면 이전에 등록한 작업자를 선택할 수 있고, 주민등록번호/연락처/은행/계좌가 자동 입력됩니다.
       </p>
     </div>
@@ -482,7 +494,7 @@ export default function LaborPage() {
 }
 
 // --- 근무자 2줄 행 ---
-function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCheck, nameDropdown, setNameDropdown, dropdownRef, workers, pickWorker, patchRecord, setDayValue, setDeduction, deleteRow }: {
+function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCheck, nameDropdown, setNameDropdown, dropdownRef, workers, pickWorker, patchRecord, setDayValue, setDeduction, resetDeduction, deleteRow }: {
   r: LaborRecord
   c: ReturnType<typeof calcRow>
   daysInMonth: number
@@ -499,6 +511,7 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
   patchRecord: (id: string, patch: Partial<LaborRecord>, flush?: boolean) => void
   setDayValue: (r: LaborRecord, day: number, raw: string, flush?: boolean) => void
   setDeduction: (r: LaborRecord, field: keyof LaborRecord, raw: string, flush?: boolean) => void
+  resetDeduction: (r: LaborRecord, field: keyof LaborRecord) => void
   deleteRow: (id: string) => void
 }) {
   const dayCell = (d: number) => (
@@ -516,7 +529,8 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
       <td className={`${tdCls} min-w-[60px]`}>
         <CellInput value={effectiveVal ? `-${effectiveVal.toLocaleString()}` : (isManual ? '0' : '')}
           align="right" className={isManual ? 'font-medium text-txt-primary' : 'text-txt-tertiary'}
-          onSave={(v, f) => setDeduction(r, field, v, f)} />
+          onSave={(v, f) => setDeduction(r, field, v, f)}
+          onReset={() => resetDeduction(r, field)} />
       </td>
     )
   }

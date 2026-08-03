@@ -73,16 +73,18 @@ export function calcRow(r: LaborRecord, rates: LaborRates) {
 
 const fmt = (n: number) => (n ? n.toLocaleString() : '')
 
+// 타이핑이 멎고 이만큼 지나면 DB에 쓴다 (키 입력마다 쏘지 않으려고)
+const SAVE_DELAY = 600
+
 // --- 요율 헤더 input (직접 수정 → 월별 저장) ---
-function RateInput({ value, onSave }: { value: number; onSave: (v: string) => void }) {
-  const [v, setV] = useState(String(value))
-  useEffect(() => { setV(String(value)) }, [value])
+function RateInput({ value, onSave }: { value: number; onSave: (v: string, flush?: boolean) => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
   return (
     <span className="inline-flex items-center justify-center gap-px">
       <input
-        type="text" value={v}
-        onChange={e => setV(e.target.value)}
-        onBlur={() => { if (v !== String(value)) onSave(v) }}
+        type="text" value={draft ?? String(value)}
+        onChange={e => { setDraft(e.target.value); onSave(e.target.value) }}
+        onBlur={e => { const typed = draft !== null; setDraft(null); if (typed) onSave(e.target.value, true) }}
         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
         className="w-[34px] bg-transparent outline-none text-[9px] text-center text-accent-text font-semibold border-b border-dashed border-border-secondary focus:border-accent"
       />
@@ -92,20 +94,23 @@ function RateInput({ value, onSave }: { value: number; onSave: (v: string) => vo
 }
 
 // --- 공용 셀 input ---
+// 타이핑하는 즉시 상위로 올려보낸다(=합계가 바로 따라온다). 예전에는 blur에서만
+// 올려서, 숫자를 치고 합계만 쳐다보거나 다른 창으로 넘어가면 입력이 조용히 사라졌다.
+// 편집 중에는 사용자가 친 원문(draft)을 그대로 두고, 칸을 벗어나면 정규화된
+// 표시값("-5,000")으로 돌아간다. 타이핑 도중 표시값이 끼어들면 커서가 튀기 때문.
 function CellInput({ value, onSave, className = '', align = 'left', placeholder = '' }: {
   value: string
-  onSave: (v: string) => void
+  onSave: (v: string, flush?: boolean) => void
   className?: string
   align?: 'left' | 'center' | 'right'
   placeholder?: string
 }) {
-  const [v, setV] = useState(value)
-  useEffect(() => { setV(value) }, [value])
+  const [draft, setDraft] = useState<string | null>(null)
   return (
     <input
-      type="text" value={v} placeholder={placeholder}
-      onChange={e => setV(e.target.value)}
-      onBlur={() => { if (v !== value) onSave(v) }}
+      type="text" value={draft ?? value} placeholder={placeholder}
+      onChange={e => { setDraft(e.target.value); onSave(e.target.value) }}
+      onBlur={e => { const typed = draft !== null; setDraft(null); if (typed) onSave(e.target.value, true) }}
       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
       className={`w-full bg-transparent outline-none text-[12px] px-1 py-0.5 focus:bg-accent-light rounded text-${align} ${className}`}
     />
@@ -126,6 +131,9 @@ export default function LaborPage() {
   const [exporting, setExporting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const pendingPatch = useRef(new Map<string, Partial<LaborRecord>>())
+  const rateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const daysInMonth = new Date(year, month, 0).getDate()
 
@@ -162,15 +170,21 @@ export default function LaborPage() {
     setRates(latest?.rates ? { ...DEFAULT_RATES, ...latest.rates } : DEFAULT_RATES)
   }, [year, month])
 
-  // 요율 수정 → 해당 월에 저장
-  const saveRate = async (field: keyof LaborRates, raw: string) => {
+  // 요율 수정 → 화면은 즉시(전 행 재산출), DB 저장은 타이핑이 멎으면 한 번
+  const saveRate = (field: keyof LaborRates, raw: string, flush = false) => {
     const v = parseFloat(raw)
     if (isNaN(v) || v < 0) return
     const next = { ...rates, [field]: v }
     setRates(next)
-    const { error } = await supabase.from('labor_rates')
-      .upsert({ year, month, rates: next, updated_at: new Date().toISOString() })
-    if (error) alert(`요율 저장 실패: ${error.message}`)
+    if (rateTimer.current) clearTimeout(rateTimer.current)
+    const write = async () => {
+      rateTimer.current = null
+      const { error } = await supabase.from('labor_rates')
+        .upsert({ year, month, rates: next, updated_at: new Date().toISOString() })
+      if (error) alert(`요율 저장 실패: ${error.message}`)
+    }
+    if (flush) write()
+    else rateTimer.current = setTimeout(write, SAVE_DELAY)
   }
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
@@ -186,12 +200,51 @@ export default function LaborPage() {
     return () => document.removeEventListener('mousedown', close)
   }, [])
 
-  // --- 저장 (낙관적 갱신 + DB update) ---
-  const patchRecord = async (id: string, patch: Partial<LaborRecord>) => {
+  // --- 저장 (화면 즉시 갱신 + DB write는 묶어서) ---
+  // 화면 값(=합계)은 타이핑 즉시 바뀌고, DB 쓰기만 SAVE_DELAY 만큼 모았다 보낸다.
+  // 셀에서 포커스가 빠지면(flush) 기다리지 않고 바로 쓴다.
+  const patchRecord = useCallback((id: string, patch: Partial<LaborRecord>, flush = false) => {
     setRecords(prev => prev.map(r => (r.id === id ? { ...r, ...patch } : r)))
-    const { error } = await supabase.from('labor_records').update(patch).eq('id', id)
-    if (error) alert(`저장 실패: ${error.message}`)
-  }
+    pendingPatch.current.set(id, { ...(pendingPatch.current.get(id) || {}), ...patch })
+
+    const write = async () => {
+      saveTimers.current.delete(id)
+      const body = pendingPatch.current.get(id)
+      pendingPatch.current.delete(id)
+      if (!body || Object.keys(body).length === 0) return
+      const { error } = await supabase.from('labor_records').update(body).eq('id', id)
+      if (error) alert(`저장 실패: ${error.message}`)
+    }
+
+    const timer = saveTimers.current.get(id)
+    if (timer) clearTimeout(timer)
+    if (flush) write()
+    else saveTimers.current.set(id, setTimeout(write, SAVE_DELAY))
+  }, [])
+
+  // 남은 저장분을 즉시 밀어낸다 (탭 전환·페이지 이탈·언마운트).
+  const flushPending = useCallback(() => {
+    saveTimers.current.forEach(t => clearTimeout(t))
+    saveTimers.current.clear()
+    pendingPatch.current.forEach((body, id) => {
+      if (body && Object.keys(body).length > 0) {
+        supabase.from('labor_records').update(body).eq('id', id)
+          .then(({ error }) => { if (error) console.error('노무비 저장 실패:', error) })
+      }
+    })
+    pendingPatch.current.clear()
+  }, [])
+
+  useEffect(() => {
+    const onHidden = () => { if (document.visibilityState === 'hidden') flushPending() }
+    document.addEventListener('visibilitychange', onHidden)
+    window.addEventListener('pagehide', flushPending)
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden)
+      window.removeEventListener('pagehide', flushPending)
+      flushPending()
+    }
+  }, [flushPending])
 
   const addRow = async () => {
     const { data, error } = await supabase.from('labor_records')
@@ -203,6 +256,11 @@ export default function LaborPage() {
 
   const deleteRow = async (id: string) => {
     if (!confirm('이 근무자 행을 삭제하시겠습니까?')) return
+    // 삭제한 행에 밀린 저장분이 남아 뒤늦게 나가지 않도록 먼저 버린다
+    const timer = saveTimers.current.get(id)
+    if (timer) clearTimeout(timer)
+    saveTimers.current.delete(id)
+    pendingPatch.current.delete(id)
     const { error } = await supabase.from('labor_records').delete().eq('id', id)
     if (error) { alert(`삭제 실패: ${error.message}`); return }
     setRecords(prev => prev.filter(r => r.id !== id))
@@ -213,23 +271,23 @@ export default function LaborPage() {
     patchRecord(id, {
       worker_name: w.worker_name, resident_id: w.resident_id, phone: w.phone,
       bank_name: w.bank_name, account_number: w.account_number,
-    })
+    }, true)
     setNameDropdown(null)
   }
 
   // 날짜 셀 값 변경
-  const setDayValue = (r: LaborRecord, day: number, raw: string) => {
+  const setDayValue = (r: LaborRecord, day: number, raw: string, flush = false) => {
     const v = parseFloat(raw)
     const next = { ...(r.day_values || {}) }
     if (!raw.trim() || isNaN(v) || v === 0) delete next[String(day)]
     else next[String(day)] = v
-    patchRecord(r.id, { day_values: next })
+    patchRecord(r.id, { day_values: next }, flush)
   }
 
   // 공제 수동값 (빈 값으로 지우면 자동계산 복귀)
-  const setDeduction = (r: LaborRecord, field: keyof LaborRecord, raw: string) => {
+  const setDeduction = (r: LaborRecord, field: keyof LaborRecord, raw: string, flush = false) => {
     const v = raw.trim() === '' ? null : Number(raw.replace(/[^\d]/g, ''))
-    patchRecord(r.id, { [field]: v } as Partial<LaborRecord>)
+    patchRecord(r.id, { [field]: v } as Partial<LaborRecord>, flush)
   }
 
   const toggleCheck = (id: string) => {
@@ -369,9 +427,9 @@ export default function LaborPage() {
                 {days1.map(d => <th key={d} className={`${thCls} w-7`}>{d}</th>)}
                 <th className={thCls}>일수</th>
                 <th className={`${thCls} min-w-[80px]`} rowSpan={2}>총지급액</th>
-                <th className={thCls}>소득세<br /><RateInput value={rates.income} onSave={v => saveRate('income', v)} /></th>
-                <th className={thCls}>국민연금<br /><RateInput value={rates.pension} onSave={v => saveRate('pension', v)} /></th>
-                <th className={thCls}>건강보험<br /><RateInput value={rates.health} onSave={v => saveRate('health', v)} /></th>
+                <th className={thCls}>소득세<br /><RateInput value={rates.income} onSave={(v, f) => saveRate('income', v, f)} /></th>
+                <th className={thCls}>국민연금<br /><RateInput value={rates.pension} onSave={(v, f) => saveRate('pension', v, f)} /></th>
+                <th className={thCls}>건강보험<br /><RateInput value={rates.health} onSave={(v, f) => saveRate('health', v, f)} /></th>
                 <th className={`${thCls} min-w-[70px]`} rowSpan={2}>공제합계</th>
                 <th className={`${thCls} min-w-[80px]`} rowSpan={2}>실 지급액</th>
                 <th className={`${thCls} min-w-[90px]`} rowSpan={2}>지급일</th>
@@ -384,9 +442,9 @@ export default function LaborPage() {
                 <th className={thCls}>계좌번호</th>
                 {days2.map(d => <th key={d} className={`${thCls} w-7 ${d > daysInMonth ? 'opacity-30' : ''}`}>{d}</th>)}
                 <th className={thCls}>일급</th>
-                <th className={thCls}>주민세<br /><RateInput value={rates.resident} onSave={v => saveRate('resident', v)} /></th>
-                <th className={thCls}>고용보험<br /><RateInput value={rates.employment} onSave={v => saveRate('employment', v)} /></th>
-                <th className={thCls}>장기요양<br /><RateInput value={rates.longterm} onSave={v => saveRate('longterm', v)} /></th>
+                <th className={thCls}>주민세<br /><RateInput value={rates.resident} onSave={(v, f) => saveRate('resident', v, f)} /></th>
+                <th className={thCls}>고용보험<br /><RateInput value={rates.employment} onSave={(v, f) => saveRate('employment', v, f)} /></th>
+                <th className={thCls}>장기요양<br /><RateInput value={rates.longterm} onSave={(v, f) => saveRate('longterm', v, f)} /></th>
               </tr>
             </thead>
             <tbody>
@@ -414,6 +472,7 @@ export default function LaborPage() {
 
       <p className="text-xs text-txt-quaternary leading-relaxed">
         · 공제 6종은 표 머리글의 <b>요율을 직접 수정</b>할 수 있고(해당 월에 저장됨), 입력한 요율대로 자동 산출되어 -금액으로 표시됩니다.<br />
+        · 요율로 바꾸든 칸에 금액을 직접 치든 <b>타이핑하는 즉시</b> 공제합계·실지급액·상단 합계가 다시 계산되고 저장됩니다.<br />
         · 소득세는 일급 15만원 초과분 × 요율(일 세액 1,000원 미만 소액부징수), 주민세는 소득세 × 요율, 장기요양은 건강보험 × 요율, 나머지는 총지급액 × 요율 기준입니다.<br />
         · 공제 대상이 아닌 근무자는 해당 칸에 0을 입력하세요. 셀 값을 지우면 다시 자동계산으로 돌아갑니다.<br />
         · 근무자 이름을 클릭하면 이전에 등록한 작업자를 선택할 수 있고, 주민등록번호/연락처/은행/계좌가 자동 입력됩니다.
@@ -437,16 +496,16 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
   dropdownRef: React.RefObject<HTMLDivElement | null>
   workers: WorkerInfo[]
   pickWorker: (id: string, w: WorkerInfo) => void
-  patchRecord: (id: string, patch: Partial<LaborRecord>) => void
-  setDayValue: (r: LaborRecord, day: number, raw: string) => void
-  setDeduction: (r: LaborRecord, field: keyof LaborRecord, raw: string) => void
+  patchRecord: (id: string, patch: Partial<LaborRecord>, flush?: boolean) => void
+  setDayValue: (r: LaborRecord, day: number, raw: string, flush?: boolean) => void
+  setDeduction: (r: LaborRecord, field: keyof LaborRecord, raw: string, flush?: boolean) => void
   deleteRow: (id: string) => void
 }) {
   const dayCell = (d: number) => (
     <td key={d} className={`${tdCls} w-7 ${d > daysInMonth ? 'bg-surface-secondary' : ''}`}>
       {d <= daysInMonth && (
         <CellInput value={r.day_values?.[String(d)]?.toString() || ''} align="center"
-          onSave={v => setDayValue(r, d, v)} />
+          onSave={(v, f) => setDayValue(r, d, v, f)} />
       )}
     </td>
   )
@@ -457,7 +516,7 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
       <td className={`${tdCls} min-w-[60px]`}>
         <CellInput value={effectiveVal ? `-${effectiveVal.toLocaleString()}` : (isManual ? '0' : '')}
           align="right" className={isManual ? 'font-medium text-txt-primary' : 'text-txt-tertiary'}
-          onSave={v => setDeduction(r, field, v)} />
+          onSave={(v, f) => setDeduction(r, field, v, f)} />
       </td>
     )
   }
@@ -471,7 +530,7 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
         <td className={`${tdCls} relative`} rowSpan={2}>
           <div className="flex items-center">
             <CellInput value={r.worker_name} placeholder="이름"
-              onSave={v => patchRecord(r.id, { worker_name: v })} />
+              onSave={(v, f) => patchRecord(r.id, { worker_name: v }, f)} />
             <button onClick={() => setNameDropdown(nameDropdown === r.id ? null : r.id)}
               className="shrink-0 text-txt-quaternary hover:text-txt-secondary">
               <ChevronDown size={13} />
@@ -494,15 +553,15 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
         </td>
         <td className={`${tdCls}`} rowSpan={2}>
           <CellInput value={r.resident_id || ''} placeholder="000000-0000000" align="center"
-            onSave={v => patchRecord(r.id, { resident_id: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { resident_id: v || null }, f)} />
         </td>
         <td className={`${tdCls}`} rowSpan={2}>
           <CellInput value={r.phone || ''} placeholder="010-" align="center"
-            onSave={v => patchRecord(r.id, { phone: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { phone: v || null }, f)} />
         </td>
         <td className={tdCls}>
           <CellInput value={r.bank_name || ''} placeholder="은행명(예금주)"
-            onSave={v => patchRecord(r.id, { bank_name: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { bank_name: v || null }, f)} />
         </td>
         {days1.map(dayCell)}
         <td className={`${tdCls} text-center text-txt-secondary tabular-nums`}>{c.workDays || ''}</td>
@@ -514,19 +573,19 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
         <td className={`${tdCls} text-right font-semibold text-accent-text tabular-nums pr-1.5`} rowSpan={2}>{fmt(c.netPay)}</td>
         <td className={tdCls} rowSpan={2}>
           <CellInput value={r.payment_date || ''} placeholder="지급일"
-            onSave={v => patchRecord(r.id, { payment_date: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { payment_date: v || null }, f)} />
         </td>
         <td className={tdCls} rowSpan={2}>
           <CellInput value={r.site_name || ''} placeholder="현장명"
-            onSave={v => patchRecord(r.id, { site_name: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { site_name: v || null }, f)} />
         </td>
         <td className={tdCls} rowSpan={2}>
           <CellInput value={r.work_type || ''} placeholder="공종"
-            onSave={v => patchRecord(r.id, { work_type: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { work_type: v || null }, f)} />
         </td>
         <td className={tdCls} rowSpan={2}>
           <CellInput value={r.note || ''} placeholder="비고"
-            onSave={v => patchRecord(r.id, { note: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { note: v || null }, f)} />
         </td>
         <td className={`${tdCls} text-center`} rowSpan={2}>
           <button onClick={() => deleteRow(r.id)} className="text-txt-quaternary hover:text-red-500 transition">
@@ -537,14 +596,14 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
       <tr>
         <td className={tdCls}>
           <CellInput value={r.account_number || ''} placeholder="계좌번호"
-            onSave={v => patchRecord(r.id, { account_number: v || null })} />
+            onSave={(v, f) => patchRecord(r.id, { account_number: v || null }, f)} />
         </td>
         {days2.map(dayCell)}
         <td className={`${tdCls} min-w-[70px]`}>
           <CellInput value={r.daily_wage != null ? String(r.daily_wage) : ''} placeholder="일급" align="right"
-            onSave={v => {
+            onSave={(v, f) => {
               const n = Number(v.replace(/[^\d]/g, ''))
-              patchRecord(r.id, { daily_wage: v.trim() === '' ? null : n })
+              patchRecord(r.id, { daily_wage: v.trim() === '' ? null : n }, f)
             }} />
         </td>
         {dedCell('ded_resident_tax', c.resident)}

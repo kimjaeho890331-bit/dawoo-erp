@@ -166,10 +166,15 @@ export default function TabReception({ project, category, getVal, onChange, onRe
           </div>
         )}
         {category === '수도' && (
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
-            <FormInput label="세대 비밀번호" placeholder="예: 1234#" value={getVal('unit_password') as string} onChange={v => onChange('unit_password', v || null)} />
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <FormInput label="접수일" type="date" value={getVal('receipt_date') as string} onChange={v => onChange('receipt_date', v || null)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <FormInput label="세입자 연락처" type="tel" value={getVal('tenant_phone') as string} onChange={v => onChange('tenant_phone', formatPhone(v) || null)} />
+              <FormInput label="세대 비밀번호" placeholder="예: 1234#" value={getVal('unit_password') as string} onChange={v => onChange('unit_password', v || null)} />
+            </div>
+          </>
         )}
         <div className="mt-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">실측사진</p>

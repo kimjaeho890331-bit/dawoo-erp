@@ -377,6 +377,14 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
       return
     }
 
+    // 지역(시) 미지정 경고 — 지역 없이 저장하면 지역 탭·통계에서 누락됨
+    if (!form.city_id) {
+      const proceed = window.confirm(
+        '지역(시)이 지정되지 않았습니다.\n주소 검색으로 자동 매칭되지 않았거나 비어 있습니다.\n\n이대로 저장하면 지역 탭·집계에서 누락됩니다. 그래도 등록할까요?'
+      )
+      if (!proceed) return
+    }
+
     setSaving(true)
     try {
       const payload = {

@@ -74,20 +74,21 @@ export default function FileAttach({ files, onChange }: Props) {
     <div onDrop={onDrop} onDragOver={e => e.preventDefault()}>
       <div className="flex flex-wrap gap-2">
         {files.map((f, i) => (
-          <span key={i} className="flex items-center gap-1.5 px-2 py-1 text-xs bg-surface-secondary rounded">
-            <Paperclip size={12} className="text-txt-tertiary" />
+          <span key={i} className="flex items-center gap-2 rounded-lg bg-surface-secondary px-3 py-1.5 text-[13px]">
+            <Paperclip size={14} className="text-txt-tertiary" />
             {f.file_name}
-            <button onClick={() => onChange(files.filter((_, idx) => idx !== i))} aria-label={`${f.file_name} 삭제`}>
-              <X size={12} className="text-txt-tertiary" />
+            <button onClick={() => onChange(files.filter((_, idx) => idx !== i))} aria-label={`${f.file_name} 삭제`}
+              className="inline-flex h-6 w-6 items-center justify-center">
+              <X size={14} className="text-txt-tertiary" />
             </button>
           </span>
         ))}
-        <label className="flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded cursor-pointer">
-          <Plus size={12} /> {busy ? '올리는 중' : '추가'}
+        <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-border-primary px-3 text-[13px]">
+          <Plus size={14} className="text-txt-tertiary" /> {busy ? '올리는 중' : '추가'}
           <input type="file" multiple className="hidden" onChange={e => upload(e.target.files)} />
         </label>
       </div>
-      <p className="mt-1.5 text-xs text-txt-tertiary">
+      <p className="mt-3 text-[12px] text-txt-tertiary">
         20MB 미만 이미지(jpg, jpeg, png, gif) 또는 문서(doc, docx, ppt, pptx, xls, xlsx, pdf, hwp), 최대 10개.
         드래그해서 놓아도 됩니다.
       </p>

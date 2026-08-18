@@ -81,17 +81,17 @@ export default function ApproveModal({
     // 모바일에서는 아래에서 올라오는 시트. dvh를 쓰는 이유는 주소창이 접힐 때 vh가 튀기 때문이다.
     <div className="fixed inset-0 bg-black/45 flex items-end justify-center z-50 md:items-center md:p-4">
       <div className="bg-surface w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-t-xl border border-border-primary md:max-h-none md:overflow-hidden md:rounded-xl">
-        <div className="flex items-center justify-between px-4 py-4 border-b border-border-primary md:px-5">
-          <span className="text-base font-medium">결재하기</span>
+        <div className="flex items-center justify-between border-b border-border-primary px-5 py-4">
+          <h2>결재하기</h2>
           <button onClick={onClose} aria-label="닫기" className="-mr-2 w-11 h-11 flex items-center justify-center md:w-auto md:h-auto md:mr-0">
             <X size={17} className="text-txt-tertiary" />
           </button>
         </div>
 
-        <div className="px-4 py-4 md:px-5">
-          <div className="bg-surface-secondary rounded-lg px-3 py-2.5 mb-4">
-            <div className="text-xs mb-1">{title}</div>
-            <div className="text-xs text-txt-secondary">
+        <div className="px-5 py-5">
+          <div className="mb-5 rounded-lg bg-surface-secondary px-4 py-3.5">
+            <div className="mb-1.5 text-[13px] font-medium">{title}</div>
+            <div className="text-[12px] text-txt-secondary">
               기안 {drafterName} · 지급 총계 {formatMoney(totalAmount)}원 · {paymentCount}건 · 결재자 {actorName}
             </div>
           </div>
@@ -117,7 +117,7 @@ export default function ApproveModal({
 
           {mode === 'approve' && isFinal && (
             <>
-              <div className="text-xs text-txt-secondary mb-1.5">계정과목 <span className="text-danger">*</span></div>
+              <div className="mb-2 text-label">계정과목 <span className="text-danger">*</span></div>
               <select value={category} onChange={e => setCategory(e.target.value)}
                 aria-label="계정과목"
                 className="w-full h-11 px-3 text-base border border-border-primary rounded-lg mb-1.5 md:h-auto md:py-2 md:text-sm">
@@ -133,7 +133,7 @@ export default function ApproveModal({
             </>
           )}
 
-          <div className="text-xs text-txt-secondary mb-1.5">
+          <div className="mb-2 text-label">
             결재의견 {mode === 'reject' && <span className="text-danger">*</span>}
           </div>
           <textarea value={comment} onChange={e => setComment(e.target.value)}

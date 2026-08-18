@@ -13,8 +13,8 @@ import type { ReactNode } from 'react'
 export default function MobileField({ label, value }: { label: string; value: ReactNode }) {
   if (value === null || value === undefined || value === '') return null
   return (
-    <div className="flex justify-between gap-3 py-1 text-[13px]">
-      <span className="shrink-0 text-txt-secondary">{label}</span>
+    <div className="flex justify-between gap-4 py-2 text-[13px] leading-relaxed">
+      <span className="shrink-0 text-label">{label}</span>
       <span className="text-right text-txt-primary break-all">{value}</span>
     </div>
   )
@@ -23,6 +23,8 @@ export default function MobileField({ label, value }: { label: string; value: Re
 /** 모바일에서 표의 한 행을 대신하는 카드. */
 export function MobileCard({ children }: { children: ReactNode }) {
   return (
-    <div className="border border-border-primary rounded-lg px-3 py-2.5 mb-2 last:mb-0">{children}</div>
+    <div className="rounded-lg border border-border-primary bg-surface px-5 py-4 mb-3 last:mb-0">
+      {children}
+    </div>
   )
 }

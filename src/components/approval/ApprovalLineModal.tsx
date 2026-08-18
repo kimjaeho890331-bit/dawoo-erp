@@ -83,14 +83,14 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
     // 높이 단위로 dvh를 쓰는 이유는 모바일 브라우저 주소창이 접혔다 펴질 때 vh가 튀기 때문이다.
     <div className="fixed inset-0 bg-black/45 flex items-end justify-center z-50 md:items-center md:p-4">
       <div className="bg-surface w-full max-w-3xl max-h-[85dvh] overflow-y-auto rounded-t-xl border border-border-primary md:max-h-none md:overflow-hidden md:rounded-xl">
-        <div className="flex items-center justify-between px-4 py-4 border-b border-border-primary md:px-5">
-          <span className="text-base font-medium">결재선 설정</span>
+        <div className="flex items-center justify-between border-b border-border-primary px-5 py-4">
+          <h2>결재선 설정</h2>
           <button onClick={onClose} aria-label="닫기" className="-mr-2 w-11 h-11 flex items-center justify-center md:w-auto md:h-auto md:mr-0">
             <X size={18} className="text-txt-tertiary" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 md:p-5">
+        <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
           <div>
             <div className="relative mb-3">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-tertiary" />
@@ -105,7 +105,7 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
               {candidates.map(s => (
                 <div
                   key={s.id}
-                  className="flex items-center gap-2 px-3 py-1.5 border-b border-border-primary last:border-0 md:py-2"
+                  className="flex items-center gap-2 border-b border-border-primary px-4 py-2.5 last:border-0"
                 >
                   <span className="text-sm flex-1 truncate">{s.name}</span>
                   <button
@@ -134,7 +134,7 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
             </div>
             <div className="border border-border-primary rounded-lg h-52 overflow-y-auto md:h-64">
               {draft.map((d, i) => (
-                <div key={d.staff_id} className="flex items-center gap-2 px-3 py-1.5 border-b border-border-primary last:border-0 md:py-2">
+                <div key={d.staff_id} className="flex items-center gap-2 border-b border-border-primary px-4 py-2.5 last:border-0">
                   <div className="flex flex-col">
                     <button
                       onClick={() => move(i, i - 1)}

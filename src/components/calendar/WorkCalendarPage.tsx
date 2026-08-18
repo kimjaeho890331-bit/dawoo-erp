@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
 import StaffColorPopover from './StaffColorPopover'
+import { todayKST, todayMonthKST, todayDowKST } from '@/lib/utils/date'
+import { useTodayKST } from '@/lib/utils/useTodayKST'
 
 // --- 타입 ---
 interface Schedule {
@@ -81,7 +83,7 @@ const CITIES_WATER = ['수원', '성남', '안양', '부천', '안산', '시흥'
 // ============================================================
 export default function WorkCalendarPage() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'promo'>('calendar')
-  const [month, setMonth] = useState(() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() } })
+  const [month, setMonth] = useState(() => todayMonthKST())
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
@@ -91,7 +93,18 @@ export default function WorkCalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showDailyLog, setShowDailyLog] = useState(false)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = useTodayKST()
+  // 이번 달을 보고 있는 상태에서 자정을 넘겨 달이 바뀌면 새 달로 이동
+  // (다른 달을 일부러 보고 있던 경우에는 그대로 둔다)
+  const prevToday = useRef(today)
+  useEffect(() => {
+    const prev = prevToday.current
+    prevToday.current = today
+    if (prev === today) return
+    const [py, pm] = prev.split('-').map(Number)
+    setMonth(m => (m.year === py && m.month === pm - 1) ? todayMonthKST() : m)
+  }, [today])
+
   const daysInMonth = new Date(month.year, month.month + 1, 0).getDate()
   const firstDow = new Date(month.year, month.month, 1).getDay()
   const monthLabel = `${month.year}년 ${month.month + 1}월`
@@ -133,7 +146,7 @@ export default function WorkCalendarPage() {
 
   const prevMonth = () => setMonth(m => m.month === 0 ? { year: m.year - 1, month: 11 } : { year: m.year, month: m.month - 1 })
   const nextMonth = () => setMonth(m => m.month === 11 ? { year: m.year + 1, month: 0 } : { year: m.year, month: m.month + 1 })
-  const goToday = () => { const n = new Date(); setMonth({ year: n.getFullYear(), month: n.getMonth() }) }
+  const goToday = () => setMonth(todayMonthKST())
 
   const toggleStaff = (id: string) => setActiveStaff(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
@@ -481,6 +494,7 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
   const [expandedCity, setExpandedCity] = useState<string | null>(null)
   const [schools, setSchools] = useState<SchoolInfo[]>([])
   const [schoolsLoaded, setSchoolsLoaded] = useState(false)
+  const today = useTodayKST()
 
   const cities = promoType === 'small' ? CITIES_SMALL : promoType === 'water' ? CITIES_WATER : ['수원', '화성', '안양']
 
@@ -512,7 +526,6 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
 
   // 시별 집계 + 동별 상세
   const cityData = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
     return cities.map(cityName => {
       const cityRecords = promoRecords.filter(r => r.cities?.name === cityName)
       const dongMap = new Map<string, { visitCount: number; lastVisit: string; staffNames: string[] }>()
@@ -539,7 +552,7 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
         dongs: Array.from(dongMap.entries()).map(([dong, info]) => ({ dong, ...info })).sort((a, b) => b.visitCount - a.visitCount),
       }
     })
-  }, [cities, promoRecords, staffList])
+  }, [cities, promoRecords, staffList, today])
 
   // 학교 시별 그룹
   const schoolsByCity = useMemo(() => {
@@ -692,7 +705,7 @@ function MobileCalendarView({
   onAddSchedule: (date: string) => void
   onOpenDailyLog: () => void
 }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = useTodayKST()
   const [selectedDate, setSelectedDate] = useState(today)
 
   const daysInMonth = new Date(month.year, month.month + 1, 0).getDate()
@@ -703,9 +716,8 @@ function MobileCalendarView({
   const prevMonth = () => onMonthChange(month.month === 0 ? { year: month.year - 1, month: 11 } : { year: month.year, month: month.month - 1 })
   const nextMonth = () => onMonthChange(month.month === 11 ? { year: month.year + 1, month: 0 } : { year: month.year, month: month.month + 1 })
   const goToday = () => {
-    const n = new Date()
-    onMonthChange({ year: n.getFullYear(), month: n.getMonth() })
-    setSelectedDate(n.toISOString().slice(0, 10))
+    onMonthChange(todayMonthKST())
+    setSelectedDate(todayKST())
   }
 
   // Build calendar grid weeks
@@ -953,9 +965,9 @@ function TodaySection({
   onOpenDailyLog?: () => void
 }) {
   const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = useTodayKST()
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
-  const todayDay = dayNames[new Date().getDay()]
+  const todayDay = dayNames[todayDowKST()]
 
   // 오늘 일정 필터 (오늘에 걸쳐있는 모든 일정)
   const todaySchedules = useMemo(() =>
@@ -1188,7 +1200,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
   // 시작일 변경 시: 오늘 이후 + 종료일이 시작일 이전이면 종료일 자동 동기화
   const setStartDate = (next: string) => {
     setStartDateRaw(next)
-    const todayISO = new Date().toISOString().slice(0, 10)
+    const todayISO = todayKST()
     if (next > todayISO && endDate < next) {
       setEndDate(next)
     }
@@ -1572,7 +1584,7 @@ function DailyLogModal({
   staffList: Staff[]
   onClose: () => void
 }) {
-  const [logDate, setLogDate] = useState(new Date().toISOString().slice(0, 10))
+  const [logDate, setLogDate] = useState(todayKST())
   const [memo, setMemo] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)

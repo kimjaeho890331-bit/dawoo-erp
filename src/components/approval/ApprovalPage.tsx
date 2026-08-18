@@ -14,6 +14,7 @@ import {
 } from '@/types/approval'
 import { currentTurnLine } from '@/lib/approval/status'
 import { APPROVAL_STATUS_BADGE, shortDateTime } from '@/lib/approval/statusStyle'
+import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
 type BoxKey =
   | 'draft' | 'submitted' | 'withdrawn' | 'rejected' | 'completed'
@@ -37,7 +38,7 @@ const BOXES: { group: string; items: { key: BoxKey; label: string }[] }[] = [
   { group: '문서대장', items: [{ key: 'ledger', label: '전체' }] },
 ]
 
-const SELECT = 'id, doc_no, title, status, total_amount, submitted_at, staff:drafter_staff_id(name)'
+const SELECT = 'id, doc_no, title, status, total_amount, submitted_at, site_id, project_id, staff:drafter_staff_id(name)'
 
 interface Row {
   id: string
@@ -46,6 +47,8 @@ interface Row {
   status: ApprovalStatus
   total_amount: number
   submitted_at: string | null
+  site_id: string | null
+  project_id: string | null
   staff: { name: string } | null
 }
 
@@ -71,6 +74,27 @@ export default function ApprovalPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
+  const [siteNames, setSiteNames] = useState<Record<string, string>>({})
+  const [projectNames, setProjectNames] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    supabase.from('sites').select('id, name').then(({ data }) => {
+      const m: Record<string, string> = {}
+      for (const s of data ?? []) m[s.id] = s.name
+      setSiteNames(m)
+    })
+    supabase.from('projects').select('id, building_name, ho, dong').then(({ data }) => {
+      const m: Record<string, string> = {}
+      for (const p of data ?? []) m[p.id] = projectLabel(p)
+      setProjectNames(m)
+    })
+  }, [])
+
+  const targetOf = (r: Row) => workTargetLabel({
+    siteId: r.site_id, projectId: r.project_id,
+    siteName: r.site_id ? siteNames[r.site_id] : null,
+    projectName: r.project_id ? projectNames[r.project_id] : null,
+  })
 
   // 사이드 배지 "결재전" 건수 — load()의 toApprove 판정과 반드시 같은 기준을 써야 한다.
   // (문서가 pending이고, 내 앞 순번이 전부 처리돼 지금이 내 차례인 것만 센다.)
@@ -272,6 +296,9 @@ export default function ApprovalPage() {
                     </span>
                   </div>
                   <div className="text-lg text-txt-primary mb-1">{formatMoney(r.total_amount)}원</div>
+                  <div className={`text-xs mb-1 ${targetOf(r).missing ? 'text-[#b53333] font-medium' : 'text-txt-secondary'}`}>
+                    {targetOf(r).text}
+                  </div>
                   <div className="text-xs text-txt-secondary">
                     {r.staff?.name ?? '-'} · {shortDateTime(r.submitted_at)}
                   </div>
@@ -287,6 +314,7 @@ export default function ApprovalPage() {
                 <tr>
                   <th className="w-[18%] px-3 py-2.5 text-left font-normal">문서번호</th>
                   <th className="px-3 py-2.5 text-left font-normal">기안제목</th>
+                  <th className="w-[14%] px-3 py-2.5 text-left font-normal">현장</th>
                   <th className="w-[12%] px-3 py-2.5 text-left font-normal">기안자</th>
                   <th className="w-[14%] px-3 py-2.5 text-right font-normal">지급총계</th>
                   <th className="w-[14%] px-3 py-2.5 text-left font-normal">상신일시</th>
@@ -300,6 +328,9 @@ export default function ApprovalPage() {
                     <td className="px-3 py-3">
                       <Link href={`/approval/${r.id}`} className="hover:underline text-txt-primary">{r.title}</Link>
                     </td>
+                    <td className={`px-3 py-3 ${targetOf(r).missing ? 'text-[#b53333] font-medium' : 'text-txt-primary'}`}>
+                      {targetOf(r).text}
+                    </td>
                     <td className="px-3 py-3 text-txt-primary">{r.staff?.name ?? ''}</td>
                     <td className="px-3 py-3 text-right text-txt-primary">{formatMoney(r.total_amount)}</td>
                     <td className="px-3 py-3 text-txt-secondary">
@@ -309,7 +340,7 @@ export default function ApprovalPage() {
                   </tr>
                 ))}
                 {!loading && rows.length === 0 && (
-                  <tr><td colSpan={6} className="px-3 py-10 text-center text-txt-tertiary">문서가 없습니다</td></tr>
+                  <tr><td colSpan={7} className="px-3 py-10 text-center text-txt-tertiary">문서가 없습니다</td></tr>
                 )}
               </tbody>
             </table>

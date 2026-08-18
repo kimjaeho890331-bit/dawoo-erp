@@ -1,13 +1,14 @@
 import type { ExpenseReport, ExpenseReportPayment } from '@/types/approval'
 
-/** expenses 테이블에 넣을 행. site_id는 항상 null — 양식에 현장 칸이 없다. */
+/** expenses 테이블에 넣을 행. 현장/접수는 결의서에 고른 값을 그대로 옮긴다. 비어 있으면 비운다. */
 export interface ExpenseInsert {
   title: string
   amount: number
   expense_date: string
   category: string
   staff_id: string
-  site_id: null
+  site_id: string | null
+  project_id: string | null
   receipt_url: string | null
   memo: string
   /** 원본 지급정보 행 id. expenses(expense_report_payment_id)의 부분 유니크 인덱스가
@@ -16,7 +17,7 @@ export interface ExpenseInsert {
 }
 
 interface Args {
-  report: Pick<ExpenseReport, 'title' | 'doc_no' | 'drafter_staff_id'>
+  report: Pick<ExpenseReport, 'title' | 'doc_no' | 'drafter_staff_id' | 'site_id' | 'project_id'>
   /** 해당 문서의 지급정보 전체. expense_id가 이미 채워진 행도 반드시 포함해야 한다 —
    *  제목의 거래처명 접미사 여부를 필터링 전 행 수로 판정하기 때문이다.
    *  만약 DB에서 expense_id IS NULL 조건으로 걸러서 넘기면 제목 형식이 달라져 지출의 일관성이 깨진다. */
@@ -44,7 +45,8 @@ export function paymentsToExpenses({
         expense_date: p.pay_request_date,
         category,
         staff_id: report.drafter_staff_id,
-        site_id: null,
+        site_id: report.site_id ?? null,
+        project_id: report.project_id ?? null,
         receipt_url: firstFileUrl,
         memo: `[${report.doc_no ?? ''}] ${p.vendor_name} / ${p.bank} ${p.account_no}`,
         expense_report_payment_id: p.id,

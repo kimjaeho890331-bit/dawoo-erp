@@ -4,11 +4,14 @@ import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 're
 import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle, Upload, Table } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, parseMoney } from '@/lib/utils/format'
+import WorkTargetPicker from '@/components/common/WorkTargetPicker'
+import { projectLabel, workKindFromIds, workTargetLabel, type WorkKind } from '@/lib/workTarget'
 
 // --- 타입 ---
 interface Expense {
   id: string
   site_id: string | null
+  project_id: string | null
   staff_id: string | null
   category: string
   title: string
@@ -53,6 +56,7 @@ interface CardMapping {
 
 interface Staff { id: string; name: string }
 interface Site { id: string; name: string }
+interface Project { id: string; building_name: string | null; ho: string | null; dong: string | null }
 
 // 이상 탐지 규칙
 interface Anomaly {
@@ -191,6 +195,7 @@ export default function ExpensesPage() {
   const [cardMappings, setCardMappings] = useState<CardMapping[]>([])
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [siteList, setSiteList] = useState<Site[]>([])
+  const [projectList, setProjectList] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editItem, setEditItem] = useState<any>(null)
@@ -199,13 +204,14 @@ export default function ExpensesPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [expR, fixR, cardR, mapR, stfR, sitR] = await Promise.all([
+    const [expR, fixR, cardR, mapR, stfR, sitR, projR] = await Promise.all([
       supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
       supabase.from('fixed_expenses').select('*').order('pay_day'),
       supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
       supabase.from('card_mappings').select('*'),
       supabase.from('staff').select('id, name'),
       supabase.from('sites').select('id, name'),
+      supabase.from('projects').select('id, building_name, ho, dong').order('created_at', { ascending: false }),
     ])
     if (!expR.error) setExpenses(expR.data || [])
     if (!fixR.error) setFixedExpenses(fixR.data || [])
@@ -213,13 +219,19 @@ export default function ExpensesPage() {
     if (!mapR.error) setCardMappings(mapR.data || [])
     if (!stfR.error) setStaffList(stfR.data || [])
     if (!sitR.error) setSiteList(sitR.data || [])
+    if (!projR.error) setProjectList((projR.data || []) as Project[])
     setLoading(false)
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
   const staffName = (id: string | null) => !id ? '-' : staffList.find(s => s.id === id)?.name || '-'
-  const siteName = (id: string | null) => !id ? '-' : siteList.find(s => s.id === id)?.name || '-'
+  const targetOf = (e: Expense) => workTargetLabel({
+    siteId: e.site_id,
+    projectId: e.project_id,
+    siteName: e.site_id ? siteList.find(s => s.id === e.site_id)?.name : null,
+    projectName: e.project_id ? projectLabel(projectList.find(p => p.id === e.project_id) || {}) : null,
+  })
   const getCardStaff = (cardName: string) => {
     const m = cardMappings.find(cm => cm.card_name === cardName)
     return m?.staff_id ? staffName(m.staff_id) : null
@@ -330,7 +342,7 @@ export default function ExpensesPage() {
                       <td className="px-4 py-2.5"><span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span></td>
                       <td className="px-4 py-2.5 text-txt-primary text-[13px]">{e.title}{e.memo && <span className="text-txt-tertiary ml-1 text-[11px]">{e.memo}</span>}</td>
                       <td className="px-4 py-2.5 text-right font-medium text-txt-primary text-[13px] tabular-nums">{e.amount.toLocaleString()}원</td>
-                      <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{siteName(e.site_id)}</td>
+                      <td className={`px-4 py-2.5 text-[13px] ${targetOf(e).missing ? 'text-[#b53333] font-medium' : 'text-txt-secondary'}`}>{targetOf(e).text}</td>
                       <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{staffName(e.staff_id)}</td>
                       <td className="px-4 py-2.5 text-center">
                         <button onClick={() => openEdit(e)} className="btn-inline">수정</button>
@@ -398,7 +410,7 @@ export default function ExpensesPage() {
 
       {/* 모달 */}
       {showModal && (
-        <UnifiedModal tab={tab} item={editItem} staffList={staffList} siteList={siteList}
+        <UnifiedModal tab={tab} item={editItem} staffList={staffList} siteList={siteList} projectList={projectList}
           onClose={() => { setShowModal(false); setEditItem(null) }}
           onSaved={() => { setShowModal(false); setEditItem(null); loadData() }} />
       )}
@@ -905,8 +917,8 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
 }
 
 // ===== 통합 모달 =====
-function UnifiedModal({ tab, item, staffList, siteList, onClose, onSaved }: {
-  tab: Tab; item: any; staffList: Staff[]; siteList: Site[]; onClose: () => void; onSaved: () => void
+function UnifiedModal({ tab, item, staffList, siteList, projectList, onClose, onSaved }: {
+  tab: Tab; item: any; staffList: Staff[]; siteList: Site[]; projectList: Project[]; onClose: () => void; onSaved: () => void
 }) {
   const isEdit = !!item
   const [title, setTitle] = useState(item?.title || item?.merchant || '')
@@ -914,7 +926,9 @@ function UnifiedModal({ tab, item, staffList, siteList, onClose, onSaved }: {
   const [category, setCategory] = useState(item?.category || '')
   const [memo, setMemo] = useState(item?.memo || '')
   const [expDate, setExpDate] = useState(item?.expense_date || new Date().toISOString().slice(0, 10))
+  const [workKind, setWorkKind] = useState<WorkKind>(workKindFromIds(item?.site_id, item?.project_id))
   const [siteId, setSiteId] = useState(item?.site_id || '')
+  const [projectId, setProjectId] = useState(item?.project_id || '')
   const [staffId, setStaffId] = useState(item?.staff_id || '')
   const [payDay, setPayDay] = useState(item?.pay_day?.toString() || '1')
   const [autoPay, setAutoPay] = useState(item?.auto_pay ?? false)
@@ -927,7 +941,7 @@ function UnifiedModal({ tab, item, staffList, siteList, onClose, onSaved }: {
     if (!title.trim() || !amount) return
     setSaving(true)
     if (tab === 'expense') {
-      const p = { category, title: title.trim(), amount: parseInt(amount), expense_date: expDate, site_id: siteId || null, staff_id: staffId || null, receipt_url: null, memo: memo || null, project_id: null }
+      const p = { category, title: title.trim(), amount: parseInt(amount), expense_date: expDate, site_id: siteId || null, staff_id: staffId || null, receipt_url: null, memo: memo || null, project_id: projectId || null }
       if (isEdit) await supabase.from('expenses').update(p).eq('id', item.id)
       else await supabase.from('expenses').insert(p)
     } else if (tab === 'fixed') {
@@ -988,14 +1002,17 @@ function UnifiedModal({ tab, item, staffList, siteList, onClose, onSaved }: {
             </label>
           )}
           {tab === 'expense' && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div>
                 <label className="label-field">현장</label>
-                <select value={siteId} onChange={e => setSiteId(e.target.value)}
-                  className="input-field w-full">
-                  <option value="">선택 안함</option>
-                  {siteList.map((s: Site) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <WorkTargetPicker
+                  kind={workKind}
+                  siteId={siteId}
+                  projectId={projectId}
+                  sites={siteList}
+                  projects={projectList}
+                  onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+                />
               </div>
               <div>
                 <label className="label-field">작성자</label>

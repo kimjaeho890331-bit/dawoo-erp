@@ -19,7 +19,7 @@ async function completeApproval({
   id, report, category, now,
 }: {
   id: string
-  report: Pick<ExpenseReport, 'doc_no' | 'title' | 'drafter_staff_id'>
+  report: Pick<ExpenseReport, 'doc_no' | 'title' | 'drafter_staff_id' | 'site_id' | 'project_id'>
   category: string
   now: string
 }): Promise<Response> {

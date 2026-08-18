@@ -18,6 +18,8 @@ interface Body {
   actor_staff_id?: string
   title: string
   body_html?: string | null
+  site_id?: string | null
+  project_id?: string | null
   payments: PaymentInput[]
   details: DetailInput[]
   lines: LineInput[]
@@ -56,6 +58,8 @@ export async function POST(request: NextRequest) {
   }
 
   const total = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+  const siteId = body.site_id || null
+  const projectId = body.project_id || null
 
   let reportId = body.id
 
@@ -71,6 +75,8 @@ export async function POST(request: NextRequest) {
       title: body.title,
       body_html: body.body_html ?? null,
       total_amount: total,
+      site_id: siteId,
+      project_id: projectId,
       updated_at: new Date().toISOString(),
     }).eq('id', reportId)
 
@@ -133,6 +139,8 @@ export async function POST(request: NextRequest) {
       drafter_staff_id: staff.id,   // 화면에서 고른 행위자
       drafted_by_email: authEmail,  // 감사용 — 실제 로그인 계정
       total_amount: total,
+      site_id: siteId,
+      project_id: projectId,
     }).select('id').single()
 
     if (error || !data) {

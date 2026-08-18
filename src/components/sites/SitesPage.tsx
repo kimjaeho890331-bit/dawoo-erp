@@ -11,6 +11,8 @@ import {
   contractTypeLabel,
   isContractTypeChosen,
 } from '@/lib/siteContract'
+import { sumExpensesBySite } from '@/lib/siteSpend'
+import { formatMoney } from '@/lib/utils/format'
 
 // --- 타입 ---
 interface Site {
@@ -147,6 +149,8 @@ function ContractTypePicker({
 // --- 메인 ---
 export default function SitesPage() {
   const [sites, setSites] = useState<Site[]>([])
+  const [spentBySite, setSpentBySite] = useState<Record<string, number>>({})
+  const [statusFilter, setStatusFilter] = useState<'진행중' | '정산완료' | '전체'>('진행중')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showRegister, setShowRegister] = useState(false)
@@ -164,12 +168,20 @@ export default function SitesPage() {
         .select('*')
         .order('created_at', { ascending: false })
       if (!error) setSites((data as Site[]) || [])
+      const exp = await supabase.from('expenses').select('site_id, amount')
+      if (!exp.error) setSpentBySite(sumExpensesBySite(exp.data || []))
     } catch { /* 테이블 미생성 시 무시 */ }
     initialLoadedRef.current = true
     setLoading(false)
   }, [])
 
   useEffect(() => { loadSites() }, [loadSites])
+
+  const visibleSites = useMemo(() => {
+    if (statusFilter === '전체') return sites
+    if (statusFilter === '정산완료') return sites.filter(s => s.status === '정산완료')
+    return sites.filter(s => s.status !== '정산완료')
+  }, [sites, statusFilter])
 
   const handleDelete = async (site: Site) => {
     if (!confirm(`"${site.name}" 현장을 삭제하시겠습니까?`)) return
@@ -182,7 +194,21 @@ export default function SitesPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-[22px] font-semibold text-txt-primary">현장관리</h1>
-          <span className="text-[13px] text-txt-tertiary">{sites.length}개 현장</span>
+          <span className="text-[13px] text-txt-tertiary">{visibleSites.length}개 현장</span>
+          <div className="flex bg-surface-secondary rounded-lg p-0.5">
+            {(['진행중', '정산완료', '전체'] as const).map(key => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setStatusFilter(key)}
+                className={`px-3 py-1.5 text-[12px] rounded-md transition ${
+                  statusFilter === key ? 'bg-surface shadow-sm font-medium text-txt-primary' : 'text-txt-secondary'
+                }`}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
         </div>
         <button
           onClick={() => { setEditSite(null); setShowRegister(true) }}
@@ -194,10 +220,16 @@ export default function SitesPage() {
 
       {loading ? (
         <div className="text-center py-20 text-txt-quaternary">불러오는 중...</div>
-      ) : sites.length === 0 ? (
+      ) : visibleSites.length === 0 ? (
         <div className="text-center py-20 text-txt-quaternary">
-          등록된 현장이 없습니다.<br />
-          <span className="text-[11px]">{`'+ 현장 등록' 버튼으로 새 현장을 추가하세요.`}</span>
+          {sites.length === 0 ? (
+            <>등록된 현장이 없습니다.<br />
+            <span className="text-[11px]">{`'+ 현장 등록' 버튼으로 새 현장을 추가하세요.`}</span></>
+          ) : statusFilter === '진행중' ? (
+            <>진행 중인 현장이 없습니다. 정산완료 필터에서 확인할 수 있습니다.</>
+          ) : (
+            <>이 필터에 해당하는 현장이 없습니다.</>
+          )}
         </div>
       ) : (
         <div>
@@ -209,13 +241,15 @@ export default function SitesPage() {
             <span className="w-20 text-center">상태</span>
             <span className="w-20 text-center">소장</span>
             <span className="w-24 text-center">공정률</span>
-            <span className="w-28 text-right">예산</span>
+            <span className="w-28 text-right">계약금액</span>
+            <span className="w-28 text-right">지출</span>
           </div>
           <div className="space-y-0">
-          {sites.map(s => (
+          {visibleSites.map(s => (
             <SiteAccordion
               key={s.id}
               site={s}
+              spent={spentBySite[s.id] ?? 0}
               expanded={expandedId === s.id}
               onToggle={() => setExpandedId(prev => prev === s.id ? null : s.id)}
               onEdit={() => { setEditSite(s); setShowRegister(true) }}
@@ -364,9 +398,9 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
 //   아코디언 항목
 // ===========================
 function SiteAccordion({
-  site, expanded, onToggle, onEdit, onDelete, onRefresh,
+  site, spent, expanded, onToggle, onEdit, onDelete, onRefresh,
 }: {
-  site: Site; expanded: boolean; onToggle: () => void
+  site: Site; spent: number; expanded: boolean; onToggle: () => void
   onEdit: () => void; onDelete: () => void; onRefresh: () => void
 }) {
   return (
@@ -393,7 +427,10 @@ function SiteAccordion({
           </div>
         </div>
         <div className="w-28 text-right shrink-0">
-          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{site.budget.toLocaleString()}원</div>
+          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(site.budget)}원</div>
+        </div>
+        <div className="w-28 text-right shrink-0">
+          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(spent)}원</div>
         </div>
       </button>
 
@@ -1054,10 +1091,48 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
 //   탭 3: 지출
 // ===========================
 function TabExpenses({ siteId }: { siteId: string }) {
+  const [rows, setRows] = useState<{ id: string; expense_date: string | null; title: string | null; amount: number | null }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('expenses').select('id, expense_date, title, amount').eq('site_id', siteId).order('expense_date', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (!error) setRows((data as typeof rows) || [])
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [siteId])
+
+  const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
+
+  if (loading) return <div className="py-8 text-center text-[13px] text-txt-quaternary">불러오는 중...</div>
+  if (rows.length === 0) {
+    return <div className="py-8 text-center text-[13px] text-txt-quaternary">이 현장에 붙은 지출이 없습니다</div>
+  }
+
   return (
-    <div className="text-center py-8 text-txt-quaternary text-[13px]">
-      지출결의서 연동 예정<br />
-      <span className="text-[11px]">(지출결의서 페이지에서 등록한 내역이 여기에 자동 표시됩니다)</span>
+    <div>
+      <div className="flex justify-end mb-2 text-[12px] text-txt-secondary">합계 <span className="ml-2 font-semibold text-txt-primary tabular-nums">{formatMoney(total)}원</span></div>
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="text-[11px] text-txt-tertiary">
+            <th className="py-1.5 text-left font-medium">날짜</th>
+            <th className="py-1.5 text-left font-medium">내용</th>
+            <th className="py-1.5 text-right font-medium">금액</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.id} className="border-t border-border-tertiary">
+              <td className="py-2 text-txt-secondary">{r.expense_date || '-'}</td>
+              <td className="py-2 text-txt-primary">{r.title || '-'}</td>
+              <td className="py-2 text-right tabular-nums">{formatMoney(r.amount || 0)}원</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

@@ -18,6 +18,7 @@ import {
   type ExpenseReport, type ExpenseReportPayment, type ExpenseReportDetail,
   type ExpenseReportLine, type ExpenseReportFile,
 } from '@/types/approval'
+import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
 type LineWithStaff = ExpenseReportLine & { staff: { name: string } | null }
 type ActionKey = 'withdraw' | 'delete' | 'cancel'
@@ -49,6 +50,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const [modal, setModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState<ActionKey | null>(null)
+  const [targetText, setTargetText] = useState({ text: '현장 없음', missing: true })
 
   const load = useCallback(async () => {
     const { data: r } = await supabase
@@ -61,6 +63,20 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
     const { staff: drafter, ...rest } = r as ExpenseReport & { staff: { name: string } | null }
     setReport(rest as ExpenseReport)
     setDrafterName(drafter?.name ?? '')
+
+    let siteName: string | null = null
+    let projectName: string | null = null
+    if (rest.site_id) {
+      const { data: site } = await supabase.from('sites').select('name').eq('id', rest.site_id).maybeSingle()
+      siteName = site?.name ?? null
+    }
+    if (rest.project_id) {
+      const { data: proj } = await supabase.from('projects').select('building_name, ho, dong').eq('id', rest.project_id).maybeSingle()
+      projectName = proj ? projectLabel(proj) : null
+    }
+    setTargetText(workTargetLabel({
+      siteId: rest.site_id, projectId: rest.project_id, siteName, projectName,
+    }))
 
     const [{ data: p }, { data: d }, { data: l }, { data: f }, { data: rf }] = await Promise.all([
       supabase.from('expense_report_payments').select('*').eq('report_id', reportId).order('seq'),
@@ -130,6 +146,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         <MobileField label="상태" value={APPROVAL_STATUS_LABEL[report.status]} />
         <MobileField label="기안자" value={drafterName} />
         <MobileField label="기안양식" value="지출결의서" />
+        <MobileField label="현장" value={targetText.text} />
         <MobileField label="보존연한" value={`${report.retention_years}년`} />
       </div>
 
@@ -150,8 +167,8 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <tr>
             <td className="px-2 py-2 text-txt-secondary">기안자</td>
             <td className="px-2 py-2">{drafterName}</td>
-            <td className="px-2 py-2 text-txt-secondary">기안부서</td>
-            <td className="px-2 py-2">주식회사 다우건설</td>
+            <td className="px-2 py-2 text-txt-secondary">현장</td>
+            <td className={`px-2 py-2 ${targetText.missing ? 'text-[#b53333] font-medium' : ''}`}>{targetText.text}</td>
           </tr>
         </tbody>
       </table>

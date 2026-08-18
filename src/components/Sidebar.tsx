@@ -1,8 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import { HIDDEN_MENU_PATHS, UI_HIDDEN } from '@/lib/uiHidden'
+import { canSeeLedger } from '@/lib/ledgerAccess'
 
 const menuGroups = [
   {
@@ -39,6 +41,7 @@ const menuGroups = [
     name: '세무/회계',
     items: [
       { name: '회계달력', path: '/accounting-cal', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
+      { name: '경리', path: '/ledger', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
     ]
   },
   {
@@ -79,11 +82,31 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [ledgerOk, setLedgerOk] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const id = localStorage.getItem('dawoo_current_staff_id')
+      if (!id) {
+        if (!cancelled) setLedgerOk(false)
+        return
+      }
+      const { data } = await supabase.from('staff').select('role').eq('id', id).maybeSingle()
+      if (!cancelled) setLedgerOk(canSeeLedger(data?.role))
+    })()
+    return () => { cancelled = true }
+  }, [pathname])
+
   const hiddenPaths = new Set<string>(HIDDEN_MENU_PATHS)
   const visibleGroups = menuGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !hiddenPaths.has(item.path)),
+      items: group.items.filter((item) => {
+        if (hiddenPaths.has(item.path)) return false
+        if (item.path === '/ledger' && !ledgerOk) return false
+        return true
+      }),
     }))
     .filter((group) => group.items.length > 0)
 

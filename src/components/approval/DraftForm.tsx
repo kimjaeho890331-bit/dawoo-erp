@@ -23,7 +23,7 @@ const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 
 
 /**
  * 모바일 기안 작성은 단계별로 나눈다. 한 화면에 다 넣으면 폰에서 끝없이 스크롤해야 하고,
- * 어디까지 채였는지 알 수 없다.
+ * 어디까지 채웠는지 알 수 없다.
  *
  * 데스크톱은 이 단계를 무시하고 전부 한 화면에 그린다 — 지금 쓰고 있는 화면을 바꾸지 않는다.
  * 그래서 단계는 "데이터"가 아니라 "모바일에서 무엇을 보여줄지 고르는 필터"일 뿐이다.
@@ -56,13 +56,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   /** 모바일 단계. 데스크톱에서는 이 값이 바뀌지 않고, 화면도 이 값을 보지 않는다. */
   const [step, setStep] = useState(0)
   const excelInputRef = useRef<HTMLInputElement>(null)
-  const [taxBlank1, setTaxBlank1] = useState('')
-  const [taxBlank2, setTaxBlank2] = useState('')
+  const [taxBlank, setTaxBlank] = useState('')
 
   const handleVendorPick = (v: VendorOption) => {
     setFiles(prev => attachDailyWorkerFiles(prev, v))
   }
-
 
   useEffect(() => {
     supabase
@@ -98,28 +96,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         supabase.from('expense_report_files').select('*').eq('report_id', sourceId).order('uploaded_at'),
       ])
 
-      const mapped = (p ?? []).map(x => ({
+      setPayments((p ?? []).map(x => ({
         vendor_name: x.vendor_name, amount: x.amount,
         pay_request_date: x.pay_request_date, bank: x.bank,
         account_no: x.account_no, business_no: x.business_no ?? '',
-      })) as PaymentRow[]
-      const names = [...new Set(mapped.map(x => x.vendor_name).filter(Boolean))]
-      if (names.length > 0) {
-        const { data: vs } = await supabase
-          .from('vendors')
-          .select('name, vendor_type, phone, resident_id')
-          .eq('vendor_type', '일용직')
-          .in('name', names)
-        const byName = new Map((vs ?? []).map(v => [v.name as string, v]))
-        for (const row of mapped) {
-          const v = byName.get(row.vendor_name)
-          if (!v) continue
-          row.vendor_type = '일용직'
-          row.phone = (v.phone as string) || ''
-          row.resident_id = (v.resident_id as string) || row.business_no
-        }
-      }
-      setPayments(mapped)
+      })) as PaymentRow[])
       setDetails((d ?? []).map(x => ({
         vendor_name: x.vendor_name ?? '', account: x.account ?? '', content: x.content ?? '',
         dept_name: x.dept_name ?? '', amount: x.amount ?? 0, note: x.note ?? '',
@@ -167,13 +148,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         body: JSON.stringify({
           id: reportId, actor_staff_id: actor.id, title, body_html: bodyHtml,
           site_id: siteId || null, project_id: projectId || null,
-          payments: payments.map(p => ({
-            vendor_name: p.vendor_name, amount: p.amount,
-            pay_request_date: p.pay_request_date, bank: p.bank,
-            account_no: p.account_no,
-            business_no: p.vendor_type === '일용직' ? (p.resident_id || p.business_no) : p.business_no,
-          })),
-          details,
+          payments, details,
           lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
           files,
           refs: refs.map(r => r.id),
@@ -182,7 +157,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       const json = await res.json()
       if (!res.ok) { setError(json.error); return }
 
-      // 이미 상신된 문서는 내용만 고친다. 다시 상신하면 서버가 막는다.
       if (!thenSubmit || existingStatus === 'pending') {
         router.push(`/approval/${json.id}`)
         return
@@ -448,14 +422,12 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
 
       <div className={`${stepBlock(2)} mb-8`}>
         <h2 className="mb-3">세금요율</h2>
-        <div className="flex flex-col gap-3 md:flex-row">
-          <input value={taxBlank1} onChange={e => setTaxBlank1(e.target.value)}
-            className="h-11 flex-1 rounded-lg border border-border-primary px-3 text-base md:h-9 md:text-[13px]"
-            aria-label="세금요율" />
-          <input value={taxBlank2} onChange={e => setTaxBlank2(e.target.value)}
-            className="h-11 flex-1 rounded-lg border border-border-primary px-3 text-base md:h-9 md:text-[13px]"
-            aria-label="세금요율 추가" />
-        </div>
+        <input
+          value={taxBlank}
+          onChange={e => setTaxBlank(e.target.value)}
+          className="h-11 w-full rounded-lg border border-border-primary px-3 text-base md:h-9 md:text-[13px]"
+          aria-label="세금요율"
+        />
       </div>
 
       <div className={`${mobileOnly(LAST_STEP)} mb-5`}>

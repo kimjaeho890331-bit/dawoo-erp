@@ -11,7 +11,7 @@ import ApproveModal from './ApproveModal'
 import ActorPicker, { useActor } from './ActorPicker'
 import MobileField, { MobileCard } from './MobileField'
 import {
-  canApprove, canWithdraw, canDelete, canSubmit, canCancel, canResumeCompletion, isFinalApprover,
+  canApprove, canDelete, canEdit, canCancel, canResumeCompletion, isFinalApprover,
 } from '@/lib/approval/status'
 import {
   APPROVAL_STATUS_LABEL, LINE_ROLE_LABEL, LINE_STATE_LABEL,
@@ -21,7 +21,7 @@ import {
 import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
 type LineWithStaff = ExpenseReportLine & { staff: { name: string } | null }
-type ActionKey = 'withdraw' | 'delete' | 'cancel'
+type ActionKey = 'delete' | 'cancel'
 
 // 하단 액션 버튼. 모바일에서는 남는 폭을 나눠 갖고 높이를 44px로 키워 손가락에 맞춘다.
 // md 이상에서는 예전 크기(px-5 py-2)로 되돌아간다.
@@ -371,16 +371,10 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
             재기안
           </Link>
         )}
-        {actor && canSubmit(report, actor.id) && (
+        {actor && canEdit(report, actor.id) && (
           <Link href={`/approval/${reportId}/edit`} className={`${ACTION_BTN} border border-border-primary`}>
             수정
           </Link>
-        )}
-        {actor && canWithdraw(report, lines, actor.id) && (
-          <button onClick={() => act('withdraw')} disabled={busy}
-            className={`${ACTION_BTN} border border-border-primary disabled:opacity-40`}>
-            {actionBusy === 'withdraw' ? '처리 중' : '회수'}
-          </button>
         )}
         {actor && canDelete(report, actor.id) && (
           <button onClick={() => act('delete')} disabled={busy}

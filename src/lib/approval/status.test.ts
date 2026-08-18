@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  currentTurnLine, canSubmit, canWithdraw, canDelete,
+  currentTurnLine, canSubmit, canWithdraw, canDelete, canEdit,
   canApprove, canCancel, isFinalApprover, validateApprovalLine,
   canResumeCompletion,
 } from './status'
@@ -66,35 +66,45 @@ describe('isFinalApprover', () => {
 })
 
 describe('canWithdraw', () => {
-  it('아무도 처리하지 않았으면 기안자가 회수할 수 있다', () => {
-    expect(canWithdraw(report(), [line(1, A)], DRAFTER)).toBe(true)
-  })
-
-  it('1차 결재자가 이미 처리했으면 회수할 수 없다', () => {
-    const lines = [line(1, A, { state: 'approved' }), line(2, B)]
-    expect(canWithdraw(report(), lines, DRAFTER)).toBe(false)
-  })
-
-  it('기안자가 아니면 회수할 수 없다', () => {
+  it('회수는 어떤 상태에서도 할 수 없다', () => {
+    expect(canWithdraw(report(), [line(1, A)], DRAFTER)).toBe(false)
+    expect(canWithdraw(report({ status: 'draft' }), [line(1, A)], DRAFTER)).toBe(false)
     expect(canWithdraw(report(), [line(1, A)], A)).toBe(false)
   })
 })
 
 describe('canDelete', () => {
-  it('저장된·회수된·반려된만 삭제할 수 있다', () => {
+  it('작성중·상신·회수된·반려된은 기안자가 삭제할 수 있다', () => {
     expect(canDelete(report({ status: 'draft' }), DRAFTER)).toBe(true)
+    expect(canDelete(report({ status: 'pending' }), DRAFTER)).toBe(true)
     expect(canDelete(report({ status: 'withdrawn' }), DRAFTER)).toBe(true)
     expect(canDelete(report({ status: 'rejected' }), DRAFTER)).toBe(true)
   })
 
-  it('진행중과 완료는 삭제할 수 없다', () => {
-    expect(canDelete(report({ status: 'pending' }), DRAFTER)).toBe(false)
+  it('완료는 삭제할 수 없다', () => {
     expect(canDelete(report({ status: 'approved' }), DRAFTER)).toBe(false)
+  })
+
+  it('기안자가 아니면 삭제할 수 없다', () => {
+    expect(canDelete(report({ status: 'pending' }), A)).toBe(false)
+  })
+})
+
+describe('canEdit', () => {
+  it('작성중·상신·회수된·반려된은 기안자가 수정할 수 있다', () => {
+    expect(canEdit(report({ status: 'draft' }), DRAFTER)).toBe(true)
+    expect(canEdit(report({ status: 'pending' }), DRAFTER)).toBe(true)
+    expect(canEdit(report({ status: 'withdrawn' }), DRAFTER)).toBe(true)
+    expect(canEdit(report({ status: 'rejected' }), DRAFTER)).toBe(true)
+  })
+
+  it('완료는 수정할 수 없다', () => {
+    expect(canEdit(report({ status: 'approved' }), DRAFTER)).toBe(false)
   })
 })
 
 describe('canSubmit', () => {
-  it('기안자가 저장된·회수된·반려된 문서를 상신한다', () => {
+  it('기안자가 작성중·회수된·반려된 문서를 상신한다', () => {
     expect(canSubmit(report({ status: 'draft' }), DRAFTER)).toBe(true)
     expect(canSubmit(report({ status: 'rejected' }), DRAFTER)).toBe(true)
   })

@@ -11,7 +11,7 @@ import PaymentTable from './PaymentTable'
 import DetailTable from './DetailTable'
 import FileAttach, { type AttachedFile } from './FileAttach'
 import MobileField from './MobileField'
-import type { PaymentRow, DetailRow } from '@/types/approval'
+import type { ApprovalStatus, PaymentRow, DetailRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
@@ -46,6 +46,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [error, setError] = useState<string | null>(null)
   const [excelBusy, setExcelBusy] = useState(false)
   const [workKind, setWorkKind] = useState<WorkKind>('')
+  const [existingStatus, setExistingStatus] = useState<ApprovalStatus | null>(null)
   const [siteId, setSiteId] = useState('')
   const [projectId, setProjectId] = useState('')
   const [sites, setSites] = useState<{ id: string; name: string }[]>([])
@@ -74,6 +75,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     const load = async () => {
       const { data: r } = await supabase.from('expense_reports').select('*').eq('id', sourceId).maybeSingle()
       if (!r) return
+      if (reportId) setExistingStatus(r.status as ApprovalStatus)
       setTitle(r.title)
       setBodyHtml(r.body_html ?? DEFAULT_BODY)
       setSiteId((r.site_id as string) || '')
@@ -148,7 +150,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       const json = await res.json()
       if (!res.ok) { setError(json.error); return }
 
-      if (!thenSubmit) {
+      // 이미 상신된 문서는 내용만 고친다. 다시 상신하면 서버가 막는다.
+      if (!thenSubmit || existingStatus === 'pending') {
         router.push(`/approval/${json.id}`)
         return
       }
@@ -166,7 +169,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     } finally {
       setBusy(false)
     }
-  }, [actor, reportId, title, bodyHtml, siteId, projectId, payments, details, lines, files, refs, router])
+  }, [actor, reportId, existingStatus, title, bodyHtml, siteId, projectId, payments, details, lines, files, refs, router])
 
   const handleExcelUpload = useCallback(async (file: File) => {
     if (payments.length > 0 || details.length > 0) {

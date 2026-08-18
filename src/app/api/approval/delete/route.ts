@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
   if (!canDelete(loaded.report, staff.id)) {
     return Response.json(
-      { error: '저장된·회수된·반려된 문서만 삭제할 수 있습니다' },
+      { error: '완료된 문서는 삭제할 수 없습니다' },
       { status: 403 },
     )
   }

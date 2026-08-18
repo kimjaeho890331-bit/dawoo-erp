@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
   if (!canWithdraw(loaded.report, loaded.lines, staff.id)) {
     return Response.json(
-      { error: '결재자가 이미 처리한 문서는 회수할 수 없습니다' },
+      { error: '회수는 할 수 없습니다. 상신한 문서는 수정하거나 삭제해 주세요' },
       { status: 403 },
     )
   }

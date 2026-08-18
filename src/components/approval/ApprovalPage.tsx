@@ -17,17 +17,15 @@ import { APPROVAL_STATUS_BADGE, shortDateTime } from '@/lib/approval/statusStyle
 import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
 type BoxKey =
-  | 'draft' | 'submitted' | 'withdrawn' | 'rejected' | 'completed'
+  | 'draft' | 'submitted' | 'completed'
   | 'toApprove' | 'inProgress' | 'myRejected' | 'myCompleted'
   | 'ledger'
 
 const BOXES: { group: string; items: { key: BoxKey; label: string }[] }[] = [
   { group: '기안함', items: [
-    { key: 'draft', label: '저장된' },
-    { key: 'submitted', label: '상신한' },
-    { key: 'withdrawn', label: '회수된' },
-    { key: 'rejected', label: '반려된' },
-    { key: 'completed', label: '완료된' },
+    { key: 'draft', label: '작성중' },
+    { key: 'submitted', label: '상신' },
+    { key: 'completed', label: '완료' },
   ]},
   { group: '결재함', items: [
     { key: 'toApprove', label: '결재전' },
@@ -60,13 +58,12 @@ interface LineForTurn {
   state: LineState
 }
 
-const MY_DRAFT_STATUS: Record<'draft' | 'submitted' | 'withdrawn' | 'rejected' | 'completed', ApprovalStatus> = {
+const MY_DRAFT_STATUS: Record<'draft' | 'completed', ApprovalStatus> = {
   draft: 'draft',
-  submitted: 'pending',
-  withdrawn: 'withdrawn',
-  rejected: 'rejected',
   completed: 'approved',
 }
+
+const SUBMITTED_STATUSES: ApprovalStatus[] = ['pending', 'withdrawn', 'rejected']
 
 export default function ApprovalPage() {
   const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
@@ -132,7 +129,19 @@ export default function ApprovalPage() {
     if (!actor) { setRows([]); setLoading(false); return }
     setLoading(true)
 
-    // 기안함 — 내가 기안자인 문서. 칸별 status로 구분.
+    // 기안함 — 내가 기안자인 문서. 작성중/완료는 한 상태, 상신은 진행·회수·반려를 한 목록.
+    if (box === 'submitted') {
+      const { data } = await supabase
+        .from('expense_reports')
+        .select(SELECT)
+        .eq('drafter_staff_id', actor.id)
+        .in('status', SUBMITTED_STATUSES)
+        .order('submitted_at', { ascending: false, nullsFirst: false })
+      setRows((data ?? []) as unknown as Row[])
+      setLoading(false)
+      return
+    }
+
     if (box in MY_DRAFT_STATUS) {
       const status = MY_DRAFT_STATUS[box as keyof typeof MY_DRAFT_STATUS]
       const { data } = await supabase
@@ -250,7 +259,7 @@ export default function ApprovalPage() {
               aria-label="문서함 선택"
               className="flex-1 min-w-0 h-11 px-3 text-base border border-border-primary rounded-lg bg-surface text-txt-primary"
             >
-              {/* 칸 이름 앞에 그룹을 붙인다. 기안함에도 결재함에도 "반려된/완료된"이 있어
+              {/* 칸 이름 앞에 그룹을 붙인다. 기안함 완료와 결재함 완료된처럼
                   이름만 보여주면 어느 쪽인지 알 수 없다. */}
               {BOXES.map(g =>
                 g.items.map(it => (

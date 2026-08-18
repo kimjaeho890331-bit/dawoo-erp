@@ -240,7 +240,9 @@ CREATE TABLE IF NOT EXISTS expense_reports (
   body_html TEXT,                              -- 본문 에디터
   retention_years INT NOT NULL DEFAULT 5,      -- 보존연한 (표시용)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  site_id UUID REFERENCES sites(id) ON DELETE SET NULL,       -- 입찰/수의 현장. 비우면 현장 없음
+  project_id UUID REFERENCES projects(id) ON DELETE SET NULL  -- 지원사업 접수 건. 비우면 현장 없음
 );
 
 CREATE TABLE IF NOT EXISTS expense_report_payments (

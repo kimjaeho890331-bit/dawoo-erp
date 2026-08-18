@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import Sidebar from "@/components/Sidebar"
 import AIAssistant from "@/components/AIAssistant"
 import Toaster from "@/components/common/Toaster"
+import { UI_HIDDEN } from "@/lib/uiHidden"
 import { AuthProvider, useAuth } from "@/components/AuthProvider"
 import { Menu } from 'lucide-react'
 import ServiceWorkerRegistrar from "@/components/pwa/ServiceWorkerRegistrar"
@@ -41,7 +42,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
-      <AIAssistant />
+      {!UI_HIDDEN.aiAssistant && <AIAssistant />}
       <Toaster />
     </>
   )

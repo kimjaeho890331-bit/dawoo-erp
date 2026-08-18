@@ -11,7 +11,13 @@ function payment(over: Partial<ExpenseReportPayment> = {}): ExpenseReportPayment
   }
 }
 
-const report = { title: '잠원초 인방보수공사 계약금 30%', doc_no: 'CDV-26-000158', drafter_staff_id: 'staff-kim' }
+const report = {
+  title: '잠원초 인방보수공사 계약금 30%',
+  doc_no: 'CDV-26-000158',
+  drafter_staff_id: 'staff-kim',
+  site_id: null as string | null,
+  project_id: null as string | null,
+}
 
 describe('paymentsToExpenses', () => {
   it('지급정보 1행을 지출 1건으로 바꾼다', () => {
@@ -25,6 +31,7 @@ describe('paymentsToExpenses', () => {
       category: '자재비',
       staff_id: 'staff-kim',
       site_id: null,
+      project_id: null,
       receipt_url: null,
       memo: '[CDV-26-000158] 나래이앤씨 / 농협은행 352-0373-7807-13',
       expense_report_payment_id: 'p1',
@@ -51,6 +58,21 @@ describe('paymentsToExpenses', () => {
   it('전부 이미 만들어졌으면 빈 배열', () => {
     const payments = [payment({ expense_id: 'exp-1' })]
     expect(paymentsToExpenses({ report, payments, category: '자재비', firstFileUrl: null })).toEqual([])
+  })
+
+  it('결의서에 고른 현장/접수를 지출로 옮긴다. 비어 있으면 비운다', () => {
+    const withSite = paymentsToExpenses({
+      report: { ...report, site_id: 'site-1' },
+      payments: [payment()], category: '자재비', firstFileUrl: null,
+    })
+    expect(withSite[0].expense.site_id).toBe('site-1')
+    expect(withSite[0].expense.project_id).toBeNull()
+
+    const empty = paymentsToExpenses({
+      report, payments: [payment()], category: '자재비', firstFileUrl: null,
+    })
+    expect(empty[0].expense.site_id).toBeNull()
+    expect(empty[0].expense.project_id).toBeNull()
   })
 
   it('첫 번째 첨부파일을 영수증으로 붙인다', () => {

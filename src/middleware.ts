@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isHiddenMenuPath } from '@/lib/uiHidden'
 
 // Rate limiting (in-memory, 서버리스 환경에서는 인스턴스별)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
@@ -23,6 +24,12 @@ function checkRateLimit(ip: string, path: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  if (isHiddenMenuPath(pathname)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
 
   // /login, 정적 리소스는 인증 불필요 — 바로 통과
   // PWA 자원(매니페스트·워커·아이콘)은 크롬이 로그인 전에 읽어

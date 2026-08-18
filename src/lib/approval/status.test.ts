@@ -15,7 +15,7 @@ function report(over: Partial<ExpenseReport> = {}): ExpenseReport {
     id: 'r1', doc_no: null, title: '테스트', status: 'pending',
     drafter_staff_id: DRAFTER, submitted_at: null, completed_at: null,
     total_amount: 0, category: null, body_html: null, retention_years: 5,
-    created_at: '', updated_at: '', ...over,
+    created_at: '', updated_at: '', site_id: null, project_id: null, ...over,
   }
 }
 

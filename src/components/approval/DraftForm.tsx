@@ -14,6 +14,8 @@ import MobileField from './MobileField'
 import type { PaymentRow, DetailRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
+import WorkTargetPicker from '@/components/common/WorkTargetPicker'
+import { workKindFromIds, type WorkKind } from '@/lib/workTarget'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
 
@@ -43,6 +45,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [excelBusy, setExcelBusy] = useState(false)
+  const [workKind, setWorkKind] = useState<WorkKind>('')
+  const [siteId, setSiteId] = useState('')
+  const [projectId, setProjectId] = useState('')
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([])
+  const [projects, setProjects] = useState<{ id: string; building_name: string | null; ho: string | null; dong: string | null }[]>([])
   /** 모바일 단계. 데스크톱에서는 이 값이 바뀌지 않고, 화면도 이 값을 보지 않는다. */
   const [step, setStep] = useState(0)
   const excelInputRef = useRef<HTMLInputElement>(null)
@@ -55,6 +62,10 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       .order('completed_at', { ascending: false })
       .limit(50)
       .then(({ data }) => setRefPool(data ?? []))
+    supabase.from('sites').select('id, name').order('name').then(({ data }) => setSites((data ?? []) as { id: string; name: string }[]))
+    supabase.from('projects').select('id, building_name, ho, dong').order('created_at', { ascending: false }).then(({ data }) => {
+      setProjects((data ?? []) as { id: string; building_name: string | null; ho: string | null; dong: string | null }[])
+    })
   }, [])
 
   useEffect(() => {
@@ -65,6 +76,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       if (!r) return
       setTitle(r.title)
       setBodyHtml(r.body_html ?? DEFAULT_BODY)
+      setSiteId((r.site_id as string) || '')
+      setProjectId((r.project_id as string) || '')
+      setWorkKind(workKindFromIds(r.site_id as string | null, r.project_id as string | null))
 
       const [{ data: p }, { data: d }, { data: l }, { data: f }] = await Promise.all([
         supabase.from('expense_report_payments').select('*').eq('report_id', sourceId).order('seq'),
@@ -124,6 +138,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: reportId, actor_staff_id: actor.id, title, body_html: bodyHtml,
+          site_id: siteId || null, project_id: projectId || null,
           payments, details,
           lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
           files,
@@ -151,7 +166,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     } finally {
       setBusy(false)
     }
-  }, [actor, reportId, title, bodyHtml, payments, details, lines, files, refs, router])
+  }, [actor, reportId, title, bodyHtml, siteId, projectId, payments, details, lines, files, refs, router])
 
   const handleExcelUpload = useCallback(async (file: File) => {
     if (payments.length > 0 || details.length > 0) {
@@ -261,6 +276,17 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
             ))}
           </select>
         </div>
+        <div className="pt-2">
+          <label className="block mb-1 text-xs text-txt-secondary">현장</label>
+          <WorkTargetPicker
+            kind={workKind}
+            siteId={siteId}
+            projectId={projectId}
+            sites={sites}
+            projects={projects}
+            onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+          />
+        </div>
       </div>
 
       <table className="hidden md:table w-full table-fixed text-xs mb-6">
@@ -292,7 +318,18 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                 ))}
               </select>
             </td>
-            <td /><td />
+            <td className="px-2 py-2 text-txt-secondary">현장</td>
+            <td className="px-2 py-2">
+              <WorkTargetPicker
+                compact
+                kind={workKind}
+                siteId={siteId}
+                projectId={projectId}
+                sites={sites}
+                projects={projects}
+                onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+              />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -388,6 +425,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       <div className={`${mobileOnly(LAST_STEP)} mb-5`}>
         {[
           { label: '기안자', to: 0, value: actor?.name ?? '선택 안 됨' },
+          { label: '현장', to: 0, value: workKind === 'site' ? (sites.find(s => s.id === siteId)?.name || '미선택') : workKind === 'project' ? (projects.find(p => p.id === projectId)?.building_name || '미선택') : '현장 없음' },
           { label: '기안제목', to: 0, value: title || '입력 안 됨' },
           { label: '지급 정보', to: 1, value: `${payments.length}건 · ${formatMoney(totalAmount)}원` },
           { label: '상세 내용', to: 2, value: details.length > 0 ? `${details.length}건` : '없음' },

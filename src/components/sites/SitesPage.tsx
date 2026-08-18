@@ -4,6 +4,15 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import ImageViewer from '@/components/common/ImageViewer'
 import ProcessCalendar from '@/components/sites/ProcessCalendar'
+import {
+  CONTRACT_TYPE_BID,
+  CONTRACT_TYPE_PRIVATE,
+  contractTypeKind,
+  contractTypeLabel,
+  isContractTypeChosen,
+} from '@/lib/siteContract'
+import { sumExpensesBySite } from '@/lib/siteSpend'
+import { formatMoney } from '@/lib/utils/format'
 
 // --- 타입 ---
 interface Site {
@@ -91,9 +100,57 @@ const STATUS_COLOR: Record<string, string> = {
   '정산완료': 'bg-status-done-bg text-status-done-text',
 }
 
+const CONTRACT_BADGE_CLASS: Record<'bid' | 'private' | 'empty' | 'other', string> = {
+  bid: 'bg-[#e0e7ff] text-[#3730a3]',
+  private: 'bg-[#ffedd5] text-[#9a3412]',
+  empty: 'bg-surface-secondary text-txt-tertiary',
+  other: 'bg-surface-secondary text-txt-secondary',
+}
+
+function ContractTypeBadge({ value }: { value: string | null | undefined }) {
+  const kind = contractTypeKind(value)
+  const label = contractTypeLabel(value) || '미지정'
+  return (
+    <span className={`inline-flex items-center justify-center min-w-[44px] px-2 py-0.5 text-[11px] font-medium rounded-full ${CONTRACT_BADGE_CLASS[kind]}`}>
+      {label}
+    </span>
+  )
+}
+
+function ContractTypePicker({
+  value,
+  onChange,
+  required,
+}: {
+  value: string
+  onChange: (v: string) => void
+  required?: boolean
+}) {
+  const kind = contractTypeKind(value)
+    const btn = (active: boolean) =>
+    `h-9 px-3 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${
+      active
+        ? 'bg-accent-light text-accent border-accent'
+        : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+    }`
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className={btn(kind === 'bid')} onClick={() => onChange(CONTRACT_TYPE_BID)}>입찰</button>
+        <button type="button" className={btn(kind === 'private')} onClick={() => onChange(CONTRACT_TYPE_PRIVATE)}>수의</button>
+      </div>
+      {required && !isContractTypeChosen(value) && (
+        <p className="mt-1 text-[11px] text-txt-tertiary">입찰 또는 수의를 고르세요</p>
+      )}
+    </div>
+  )
+}
+
 // --- 메인 ---
 export default function SitesPage() {
   const [sites, setSites] = useState<Site[]>([])
+  const [spentBySite, setSpentBySite] = useState<Record<string, number>>({})
+  const [statusFilter, setStatusFilter] = useState<'진행중' | '정산완료' | '전체'>('진행중')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showRegister, setShowRegister] = useState(false)
@@ -111,12 +168,20 @@ export default function SitesPage() {
         .select('*')
         .order('created_at', { ascending: false })
       if (!error) setSites((data as Site[]) || [])
+      const exp = await supabase.from('expenses').select('site_id, amount')
+      if (!exp.error) setSpentBySite(sumExpensesBySite(exp.data || []))
     } catch { /* 테이블 미생성 시 무시 */ }
     initialLoadedRef.current = true
     setLoading(false)
   }, [])
 
   useEffect(() => { loadSites() }, [loadSites])
+
+  const visibleSites = useMemo(() => {
+    if (statusFilter === '전체') return sites
+    if (statusFilter === '정산완료') return sites.filter(s => s.status === '정산완료')
+    return sites.filter(s => s.status !== '정산완료')
+  }, [sites, statusFilter])
 
   const handleDelete = async (site: Site) => {
     if (!confirm(`"${site.name}" 현장을 삭제하시겠습니까?`)) return
@@ -129,7 +194,21 @@ export default function SitesPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-[22px] font-semibold text-txt-primary">현장관리</h1>
-          <span className="text-[13px] text-txt-tertiary">{sites.length}개 현장</span>
+          <span className="text-[13px] text-txt-tertiary">{visibleSites.length}개 현장</span>
+          <div className="flex bg-surface-secondary rounded-lg p-0.5">
+            {(['진행중', '정산완료', '전체'] as const).map(key => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setStatusFilter(key)}
+                className={`px-3 py-1.5 text-[12px] rounded-md transition ${
+                  statusFilter === key ? 'bg-surface shadow-sm font-medium text-txt-primary' : 'text-txt-secondary'
+                }`}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
         </div>
         <button
           onClick={() => { setEditSite(null); setShowRegister(true) }}
@@ -141,10 +220,16 @@ export default function SitesPage() {
 
       {loading ? (
         <div className="text-center py-20 text-txt-quaternary">불러오는 중...</div>
-      ) : sites.length === 0 ? (
+      ) : visibleSites.length === 0 ? (
         <div className="text-center py-20 text-txt-quaternary">
-          등록된 현장이 없습니다.<br />
-          <span className="text-[11px]">{`'+ 현장 등록' 버튼으로 새 현장을 추가하세요.`}</span>
+          {sites.length === 0 ? (
+            <>등록된 현장이 없습니다.<br />
+            <span className="text-[11px]">{`'+ 현장 등록' 버튼으로 새 현장을 추가하세요.`}</span></>
+          ) : statusFilter === '진행중' ? (
+            <>진행 중인 현장이 없습니다. 정산완료 필터에서 확인할 수 있습니다.</>
+          ) : (
+            <>이 필터에 해당하는 현장이 없습니다.</>
+          )}
         </div>
       ) : (
         <div>
@@ -152,16 +237,19 @@ export default function SitesPage() {
           <div className="flex items-center gap-4 px-5 py-2.5 bg-surface-secondary rounded-t-[10px] border border-border-primary text-[11px] font-medium text-txt-tertiary uppercase tracking-wider">
             <span className="w-4" />
             <span className="flex-1 min-w-0">현장명 / 주소</span>
+            <span className="w-16 text-center">계약</span>
             <span className="w-20 text-center">상태</span>
             <span className="w-20 text-center">소장</span>
             <span className="w-24 text-center">공정률</span>
-            <span className="w-28 text-right">예산</span>
+            <span className="w-28 text-right">계약금액</span>
+            <span className="w-28 text-right">지출</span>
           </div>
           <div className="space-y-0">
-          {sites.map(s => (
+          {visibleSites.map(s => (
             <SiteAccordion
               key={s.id}
               site={s}
+              spent={spentBySite[s.id] ?? 0}
               expanded={expandedId === s.id}
               onToggle={() => setExpandedId(prev => prev === s.id ? null : s.id)}
               onEdit={() => { setEditSite(s); setShowRegister(true) }}
@@ -206,12 +294,14 @@ function SiteRegisterModal({
   const [startDate, setStartDate] = useState(site?.start_date || '')
   const [endDate, setEndDate] = useState(site?.end_date || '')
   const [status, setStatus] = useState(site?.status || '계약')
+  const [contractType, setContractType] = useState(site?.contract_type || '')
   const [budget, setBudget] = useState(site?.budget?.toString() || '0')
   const [memo, setMemo] = useState(site?.memo || '')
   const [saving, setSaving] = useState(false)
+  const canSave = name.trim().length > 0 && isContractTypeChosen(contractType)
 
   const handleSubmit = async () => {
-    if (!name.trim()) return
+    if (!canSave) return
     setSaving(true)
     const payload = {
       name: name.trim(),
@@ -223,13 +313,19 @@ function SiteRegisterModal({
       start_date: startDate || null,
       end_date: endDate || null,
       status,
+      contract_type: contractType,
       budget: parseInt(budget) || 0,
       memo: memo || null,
     }
-    if (isEdit) {
-      await supabase.from('sites').update(payload).eq('id', site!.id)
-    } else {
-      await supabase.from('sites').insert(payload)
+    const write = isEdit
+      ? () => supabase.from('sites').update(payload).eq('id', site!.id)
+      : () => supabase.from('sites').insert(payload)
+    const { error } = await write()
+    if (error && /contract_type/.test(error.message)) {
+      const fallback = { ...payload } as Record<string, unknown>
+      delete fallback.contract_type
+      if (isEdit) await supabase.from('sites').update(fallback).eq('id', site!.id)
+      else await supabase.from('sites').insert(fallback)
     }
     setSaving(false)
     onSaved()
@@ -257,6 +353,10 @@ function SiteRegisterModal({
             <Field label="착공예정일" value={startDate} onChange={setStartDate} type="date" />
             <Field label="준공예정일" value={endDate} onChange={setEndDate} type="date" />
           </div>
+          <div>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">계약 종류 *</label>
+            <ContractTypePicker value={contractType} onChange={setContractType} required />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-txt-tertiary mb-1">상태</label>
@@ -273,7 +373,7 @@ function SiteRegisterModal({
         </div>
         <div className="modal-footer">
           <button onClick={onClose} className="btn-secondary">취소</button>
-          <button onClick={handleSubmit} disabled={saving || !name.trim()} className="btn-primary disabled:opacity-50">
+          <button onClick={handleSubmit} disabled={saving || !canSave} className="btn-primary disabled:opacity-50">
             {saving ? '저장 중...' : isEdit ? '수정' : '등록'}
           </button>
         </div>
@@ -298,9 +398,9 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
 //   아코디언 항목
 // ===========================
 function SiteAccordion({
-  site, expanded, onToggle, onEdit, onDelete, onRefresh,
+  site, spent, expanded, onToggle, onEdit, onDelete, onRefresh,
 }: {
-  site: Site; expanded: boolean; onToggle: () => void
+  site: Site; spent: number; expanded: boolean; onToggle: () => void
   onEdit: () => void; onDelete: () => void; onRefresh: () => void
 }) {
   return (
@@ -311,6 +411,9 @@ function SiteAccordion({
           <div className="text-[14px] font-semibold text-txt-primary truncate">{site.name}</div>
           <div className="text-[12px] text-txt-secondary truncate">{site.address || '-'}</div>
         </div>
+        <span className="w-16 shrink-0 flex justify-center">
+          <ContractTypeBadge value={site.contract_type} />
+        </span>
         <span className={`w-20 text-center px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_COLOR[site.status] || 'bg-surface-secondary text-txt-secondary'}`}>
           {site.status}
         </span>
@@ -324,7 +427,10 @@ function SiteAccordion({
           </div>
         </div>
         <div className="w-28 text-right shrink-0">
-          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{site.budget.toLocaleString()}원</div>
+          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(site.budget)}원</div>
+        </div>
+        <div className="w-28 text-right shrink-0">
+          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(spent)}원</div>
         </div>
       </button>
 
@@ -362,9 +468,12 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
   return (
     <div className="bg-surface-secondary p-5">
       {/* 수정/삭제 버튼 */}
-      <div className="flex justify-end gap-2 mb-3">
-        <button onClick={onEdit} className="btn-inline">수정</button>
-        <button onClick={onDelete} className="btn-inline-danger">삭제</button>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <ContractTypeBadge value={site.contract_type} />
+        <div className="flex gap-2">
+          <button onClick={onEdit} className="btn-inline">수정</button>
+          <button onClick={onDelete} className="btn-inline-danger">삭제</button>
+        </div>
       </div>
 
       {/* 공정 캘린더 */}
@@ -542,12 +651,8 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
             {SITE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Box>
-        <Box label="계약 종류">
-          <select className={inputCls} value={form.contract_type} onChange={e => u('contract_type', e.target.value)}>
-            <option value="">선택</option>
-            <option value="수의계약">수의계약</option>
-            <option value="입찰">입찰</option>
-          </select>
+        <Box label="계약 종류 *">
+          <ContractTypePicker value={form.contract_type} onChange={v => u('contract_type', v)} />
         </Box>
       </div>
 
@@ -986,10 +1091,48 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
 //   탭 3: 지출
 // ===========================
 function TabExpenses({ siteId }: { siteId: string }) {
+  const [rows, setRows] = useState<{ id: string; expense_date: string | null; title: string | null; amount: number | null }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('expenses').select('id, expense_date, title, amount').eq('site_id', siteId).order('expense_date', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (!error) setRows((data as typeof rows) || [])
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [siteId])
+
+  const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
+
+  if (loading) return <div className="py-8 text-center text-[13px] text-txt-quaternary">불러오는 중...</div>
+  if (rows.length === 0) {
+    return <div className="py-8 text-center text-[13px] text-txt-quaternary">이 현장에 붙은 지출이 없습니다</div>
+  }
+
   return (
-    <div className="text-center py-8 text-txt-quaternary text-[13px]">
-      지출결의서 연동 예정<br />
-      <span className="text-[11px]">(지출결의서 페이지에서 등록한 내역이 여기에 자동 표시됩니다)</span>
+    <div>
+      <div className="flex justify-end mb-2 text-[12px] text-txt-secondary">합계 <span className="ml-2 font-semibold text-txt-primary tabular-nums">{formatMoney(total)}원</span></div>
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="text-[11px] text-txt-tertiary">
+            <th className="py-1.5 text-left font-medium">날짜</th>
+            <th className="py-1.5 text-left font-medium">내용</th>
+            <th className="py-1.5 text-right font-medium">금액</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.id} className="border-t border-border-tertiary">
+              <td className="py-2 text-txt-secondary">{r.expense_date || '-'}</td>
+              <td className="py-2 text-txt-primary">{r.title || '-'}</td>
+              <td className="py-2 text-right tabular-nums">{formatMoney(r.amount || 0)}원</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

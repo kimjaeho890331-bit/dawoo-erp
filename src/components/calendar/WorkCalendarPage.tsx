@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
 import StaffColorPopover from './StaffColorPopover'
+import { UI_HIDDEN } from '@/lib/uiHidden'
 import { todayKST, todayMonthKST, todayDowKST } from '@/lib/utils/date'
 import { useTodayKST } from '@/lib/utils/useTodayKST'
 
@@ -268,20 +269,22 @@ export default function WorkCalendarPage() {
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-4">
           <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary hidden md:block">업무 캘린더</h1>
-          <div className="flex bg-surface-secondary rounded-lg p-0.5">
-            <button onClick={() => setActiveTab('calendar')}
-              className={`px-4 py-1.5 text-sm rounded-md transition ${activeTab === 'calendar' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>캘린더</button>
-            <button onClick={() => setActiveTab('promo')}
-              className={`px-4 py-1.5 text-sm rounded-md transition ${activeTab === 'promo' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>홍보현황</button>
-          </div>
+          {!UI_HIDDEN.promo && (
+            <div className="flex bg-surface-secondary rounded-lg p-0.5">
+              <button onClick={() => setActiveTab('calendar')}
+                className={`px-4 py-1.5 text-sm rounded-md transition ${activeTab === 'calendar' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>캘린더</button>
+              <button onClick={() => setActiveTab('promo')}
+                className={`px-4 py-1.5 text-sm rounded-md transition ${activeTab === 'promo' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>홍보현황</button>
+            </div>
+          )}
         </div>
-        {activeTab === 'calendar' && (
+        {(activeTab === 'calendar' || UI_HIDDEN.promo) && (
           <button onClick={() => { setEditSchedule(null); setSelectedDate(today); setShowModal(true) }}
             className="px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shadow-sm">+ 일정 추가</button>
         )}
       </div>
 
-      {activeTab === 'calendar' ? (
+      {activeTab === 'calendar' || UI_HIDDEN.promo ? (
         <>
           {/* Mobile calendar view */}
           <div className="md:hidden">

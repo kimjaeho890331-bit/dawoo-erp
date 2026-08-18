@@ -706,6 +706,7 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
                 <label className={labelCls}>직책</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className={inputCls}>
                   <option value="관리자">관리자</option>
+                  <option value="경리">경리</option>
                   <option value="직원">직원</option>
                   <option value="현장소장">현장소장</option>
                 </select>
@@ -940,6 +941,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                 <label className="block text-[11px] font-medium text-txt-tertiary mb-1">직책</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
                   <option value="관리자">관리자</option>
+                  <option value="경리">경리</option>
                   <option value="직원">직원</option>
                   <option value="현장소장">현장소장</option>
                 </select>

@@ -53,6 +53,8 @@ export interface ExpenseReport {
   retention_years: number
   created_at: string
   updated_at: string
+  site_id: string | null
+  project_id: string | null
 }
 
 export interface ExpenseReportPayment {

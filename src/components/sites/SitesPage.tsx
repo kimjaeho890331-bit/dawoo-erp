@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import ImageViewer from '@/components/common/ImageViewer'
 import ProcessCalendar from '@/components/sites/ProcessCalendar'
+import {
+  CONTRACT_TYPE_BID,
+  CONTRACT_TYPE_PRIVATE,
+  contractTypeKind,
+  contractTypeLabel,
+  isContractTypeChosen,
+} from '@/lib/siteContract'
 
 // --- 타입 ---
 interface Site {
@@ -91,6 +98,52 @@ const STATUS_COLOR: Record<string, string> = {
   '정산완료': 'bg-status-done-bg text-status-done-text',
 }
 
+const CONTRACT_BADGE_CLASS: Record<'bid' | 'private' | 'empty' | 'other', string> = {
+  bid: 'bg-[#e0e7ff] text-[#3730a3]',
+  private: 'bg-[#ffedd5] text-[#9a3412]',
+  empty: 'bg-surface-secondary text-txt-tertiary',
+  other: 'bg-surface-secondary text-txt-secondary',
+}
+
+function ContractTypeBadge({ value }: { value: string | null | undefined }) {
+  const kind = contractTypeKind(value)
+  const label = contractTypeLabel(value) || '미지정'
+  return (
+    <span className={`inline-flex items-center justify-center min-w-[44px] px-2 py-0.5 text-[11px] font-medium rounded-full ${CONTRACT_BADGE_CLASS[kind]}`}>
+      {label}
+    </span>
+  )
+}
+
+function ContractTypePicker({
+  value,
+  onChange,
+  required,
+}: {
+  value: string
+  onChange: (v: string) => void
+  required?: boolean
+}) {
+  const kind = contractTypeKind(value)
+    const btn = (active: boolean) =>
+    `h-9 px-3 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${
+      active
+        ? 'bg-accent-light text-accent border-accent'
+        : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+    }`
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className={btn(kind === 'bid')} onClick={() => onChange(CONTRACT_TYPE_BID)}>입찰</button>
+        <button type="button" className={btn(kind === 'private')} onClick={() => onChange(CONTRACT_TYPE_PRIVATE)}>수의</button>
+      </div>
+      {required && !isContractTypeChosen(value) && (
+        <p className="mt-1 text-[11px] text-txt-tertiary">입찰 또는 수의를 고르세요</p>
+      )}
+    </div>
+  )
+}
+
 // --- 메인 ---
 export default function SitesPage() {
   const [sites, setSites] = useState<Site[]>([])
@@ -152,6 +205,7 @@ export default function SitesPage() {
           <div className="flex items-center gap-4 px-5 py-2.5 bg-surface-secondary rounded-t-[10px] border border-border-primary text-[11px] font-medium text-txt-tertiary uppercase tracking-wider">
             <span className="w-4" />
             <span className="flex-1 min-w-0">현장명 / 주소</span>
+            <span className="w-16 text-center">계약</span>
             <span className="w-20 text-center">상태</span>
             <span className="w-20 text-center">소장</span>
             <span className="w-24 text-center">공정률</span>
@@ -206,12 +260,14 @@ function SiteRegisterModal({
   const [startDate, setStartDate] = useState(site?.start_date || '')
   const [endDate, setEndDate] = useState(site?.end_date || '')
   const [status, setStatus] = useState(site?.status || '계약')
+  const [contractType, setContractType] = useState(site?.contract_type || '')
   const [budget, setBudget] = useState(site?.budget?.toString() || '0')
   const [memo, setMemo] = useState(site?.memo || '')
   const [saving, setSaving] = useState(false)
+  const canSave = name.trim().length > 0 && isContractTypeChosen(contractType)
 
   const handleSubmit = async () => {
-    if (!name.trim()) return
+    if (!canSave) return
     setSaving(true)
     const payload = {
       name: name.trim(),
@@ -223,13 +279,19 @@ function SiteRegisterModal({
       start_date: startDate || null,
       end_date: endDate || null,
       status,
+      contract_type: contractType,
       budget: parseInt(budget) || 0,
       memo: memo || null,
     }
-    if (isEdit) {
-      await supabase.from('sites').update(payload).eq('id', site!.id)
-    } else {
-      await supabase.from('sites').insert(payload)
+    const write = isEdit
+      ? () => supabase.from('sites').update(payload).eq('id', site!.id)
+      : () => supabase.from('sites').insert(payload)
+    const { error } = await write()
+    if (error && /contract_type/.test(error.message)) {
+      const fallback = { ...payload } as Record<string, unknown>
+      delete fallback.contract_type
+      if (isEdit) await supabase.from('sites').update(fallback).eq('id', site!.id)
+      else await supabase.from('sites').insert(fallback)
     }
     setSaving(false)
     onSaved()
@@ -257,6 +319,10 @@ function SiteRegisterModal({
             <Field label="착공예정일" value={startDate} onChange={setStartDate} type="date" />
             <Field label="준공예정일" value={endDate} onChange={setEndDate} type="date" />
           </div>
+          <div>
+            <label className="block text-[11px] font-medium text-txt-tertiary mb-1">계약 종류 *</label>
+            <ContractTypePicker value={contractType} onChange={setContractType} required />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-txt-tertiary mb-1">상태</label>
@@ -273,7 +339,7 @@ function SiteRegisterModal({
         </div>
         <div className="modal-footer">
           <button onClick={onClose} className="btn-secondary">취소</button>
-          <button onClick={handleSubmit} disabled={saving || !name.trim()} className="btn-primary disabled:opacity-50">
+          <button onClick={handleSubmit} disabled={saving || !canSave} className="btn-primary disabled:opacity-50">
             {saving ? '저장 중...' : isEdit ? '수정' : '등록'}
           </button>
         </div>
@@ -311,6 +377,9 @@ function SiteAccordion({
           <div className="text-[14px] font-semibold text-txt-primary truncate">{site.name}</div>
           <div className="text-[12px] text-txt-secondary truncate">{site.address || '-'}</div>
         </div>
+        <span className="w-16 shrink-0 flex justify-center">
+          <ContractTypeBadge value={site.contract_type} />
+        </span>
         <span className={`w-20 text-center px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_COLOR[site.status] || 'bg-surface-secondary text-txt-secondary'}`}>
           {site.status}
         </span>
@@ -362,9 +431,12 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
   return (
     <div className="bg-surface-secondary p-5">
       {/* 수정/삭제 버튼 */}
-      <div className="flex justify-end gap-2 mb-3">
-        <button onClick={onEdit} className="btn-inline">수정</button>
-        <button onClick={onDelete} className="btn-inline-danger">삭제</button>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <ContractTypeBadge value={site.contract_type} />
+        <div className="flex gap-2">
+          <button onClick={onEdit} className="btn-inline">수정</button>
+          <button onClick={onDelete} className="btn-inline-danger">삭제</button>
+        </div>
       </div>
 
       {/* 공정 캘린더 */}
@@ -542,12 +614,8 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
             {SITE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Box>
-        <Box label="계약 종류">
-          <select className={inputCls} value={form.contract_type} onChange={e => u('contract_type', e.target.value)}>
-            <option value="">선택</option>
-            <option value="수의계약">수의계약</option>
-            <option value="입찰">입찰</option>
-          </select>
+        <Box label="계약 종류 *">
+          <ContractTypePicker value={form.contract_type} onChange={v => u('contract_type', v)} />
         </Box>
       </div>
 

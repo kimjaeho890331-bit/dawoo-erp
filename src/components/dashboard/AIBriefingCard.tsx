@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Sparkles, ArrowRight, RefreshCw, ChevronDown, FileBarChart } from 'lucide-react'
 import BriefingItem from './BriefingItem'
 import { openAI } from '@/lib/openAI'
+import { UI_HIDDEN } from '@/lib/uiHidden'
 import type { BriefingItem as BriefingItemType, BriefingCategory, BriefingAction, WeeklyReport } from '@/types'
 
 interface Props {
@@ -44,7 +45,7 @@ export default function AIBriefingCard({ items, summary, narrative, actions, loa
           {loading ? 'AI가 오늘 상황을 정리하는 중...' : headline}
         </p>
         {/* 오늘 챙길 일 — 클릭하면 AI 비서가 처리 */}
-        {!loading && actions && actions.length > 0 && (
+        {!UI_HIDDEN.aiAssistant && !loading && actions && actions.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {actions.map((a, i) => (
               <button

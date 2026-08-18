@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 'react'
 import { Check, Paperclip, FileText, Landmark, CreditCard, HardHat, Building2, User, Phone, Hash, Plus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { parseBankInfo } from '@/lib/approval/vendorBank'
 
+// --- 타입 ---
 interface Vendor {
   id: string
   name: string
@@ -16,9 +16,7 @@ interface Vendor {
   address: string
   business_number: string
   bank_info: string
-  bank_name: string | null
-  account_number: string | null
-  resident_id: string | null
+  resident_id: string
   rating: number
   note: string
   biz_license_url: string | null
@@ -42,8 +40,7 @@ const UNCATEGORIZED = '미분류'
 
 const EMPTY_VENDOR = {
   name: '', vendor_type: '협력업체' as VendorType, category: '', contact_person: '', phone: '', email: '',
-  address: '', business_number: '', bank_info: '', bank_name: '', account_number: '', resident_id: '',
-  rating: 0, note: '',
+  address: '', business_number: '', bank_info: '', resident_id: '', rating: 0, note: '',
   biz_license_url: null as string | null, bankbook_url: null as string | null,
   id_card_url: null as string | null, safety_cert_url: null as string | null,
 }
@@ -52,12 +49,6 @@ const TABS: { key: VendorType; label: string }[] = [
   { key: '협력업체', label: '협력업체' },
   { key: '일용직', label: '일용직' },
 ]
-
-const formatResidentId = (value: string) => {
-  const digits = value.replace(/\D/g, '').slice(0, 13)
-  if (digits.length <= 6) return digits
-  return `${digits.slice(0, 6)}-${digits.slice(6)}`
-}
 
 function StarRating({ value, onChange, size = 'md' }: { value: number; onChange?: (v: number) => void; size?: 'sm' | 'md' }) {
   const [hover, setHover] = useState(0)
@@ -83,6 +74,7 @@ function FileDropZone({ label, fileUrl, onUpload, onRemove }: {
   label: string; fileUrl: string | null; onUpload: (file: File) => void; onRemove: () => void
 }) {
   const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleDrop = (e: DragEvent) => {
@@ -117,10 +109,14 @@ function FileDropZone({ label, fileUrl, onUpload, onRemove }: {
           className={`flex flex-col items-center justify-center border-[1.5px] border-dashed rounded-[10px] px-6 py-6 cursor-pointer transition-colors ${
             dragging ? 'border-accent bg-accent-light text-accent-text' : 'border-border-secondary hover:border-accent hover:bg-accent-light hover:text-accent-text'
           }`}>
-          <>
-            <Paperclip size={20} className="text-txt-tertiary mb-1" />
-            <span className="text-xs text-txt-tertiary">드래그하거나 클릭하여 업로드</span>
-          </>
+          {uploading ? (
+            <span className="text-sm text-txt-tertiary">업로드 중...</span>
+          ) : (
+            <>
+              <Paperclip size={20} className="text-txt-tertiary mb-1" />
+              <span className="text-xs text-txt-tertiary">드래그하거나 클릭하여 업로드</span>
+            </>
+          )}
           <input ref={inputRef} type="file" className="hidden" accept="image/*,.pdf" onChange={handleSelect} />
         </div>
       )}
@@ -239,16 +235,12 @@ export default function VendorsPage() {
   }
 
   const openEditModal = (vendor: Vendor) => {
-    const parsed = (!vendor.bank_name || !vendor.account_number) ? parseBankInfo(vendor.bank_info) : null
     setEditingVendor(vendor)
     setForm({
       name: vendor.name, vendor_type: vendor.vendor_type, category: vendor.category || '',
       contact_person: vendor.contact_person || '', phone: vendor.phone || '', email: vendor.email || '',
       address: vendor.address || '', business_number: vendor.business_number || '', bank_info: vendor.bank_info || '',
-      bank_name: vendor.bank_name || parsed?.bank || '',
-      account_number: vendor.account_number || parsed?.account || '',
-      resident_id: vendor.resident_id || '',
-      rating: vendor.rating || 0,
+      resident_id: (vendor as Vendor).resident_id || '', rating: vendor.rating || 0,
       note: vendor.note || '', biz_license_url: vendor.biz_license_url, bankbook_url: vendor.bankbook_url,
       id_card_url: vendor.id_card_url, safety_cert_url: vendor.safety_cert_url,
     })
@@ -272,26 +264,26 @@ export default function VendorsPage() {
 
   const removeFile = (field: string) => setForm(prev => ({ ...prev, [field]: null }))
 
+  const formatResidentId = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 13)
+    if (digits.length <= 6) return digits
+    return `${digits.slice(0, 6)}-${digits.slice(6)}`
+  }
+
   const handleSave = async () => {
     if (!form.name.trim()) return
     if (form.vendor_type === '일용직') {
-      if (!form.resident_id.trim()) { alert('주민번호를 입력해 주세요'); return }
-      if (!form.phone.trim()) { alert('연락처를 입력해 주세요'); return }
-      if (!form.bank_name.trim()) { alert('은행을 입력해 주세요'); return }
-      if (!form.account_number.trim()) { alert('계좌번호를 입력해 주세요'); return }
-      if (!form.id_card_url || !form.bankbook_url || !form.safety_cert_url) {
-        alert('신분증, 통장사본, 안전교육이수증을 모두 첨부해 주세요')
+      const missing = !form.resident_id.trim() || !form.phone.trim() || !form.bank_info.trim()
+        || !form.id_card_url || !form.bankbook_url || !form.safety_cert_url
+      if (missing) {
+        alert('일용직은 주민번호·연락처·계좌와 신분증·통장사본·안전교육이수증이 필요합니다.')
         return
       }
     }
     setSaving(true)
     try {
       const payload = { ...form }
-      if (form.vendor_type === '일용직') {
-        payload.email = ''
-        payload.business_number = ''
-        payload.bank_info = [form.bank_name, form.account_number, form.name].filter(Boolean).join(' ')
-      }
+      if (form.vendor_type === '일용직') { payload.email = ''; payload.business_number = '' }
       if (editingVendor) {
         const { error } = await supabase.from('vendors').update(payload).eq('id', editingVendor.id)
         if (error) throw error
@@ -326,10 +318,6 @@ export default function VendorsPage() {
   const updateForm = (field: string, value: string | number) => setForm(prev => ({ ...prev, [field]: value }))
 
   const isWorker = form.vendor_type === '일용직'
-  const dailyReady = !isWorker || (
-    !!form.resident_id.trim() && !!form.phone.trim() && !!form.bank_name.trim()
-    && !!form.account_number.trim() && !!form.id_card_url && !!form.bankbook_url && !!form.safety_cert_url
-  )
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -619,28 +607,14 @@ export default function VendorsPage() {
                     <input type="tel" value={form.phone} onChange={e => updateForm('phone', e.target.value)}
                       placeholder="010-0000-0000" className="input-field w-full" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="label-field">은행 <span className="text-red-500">*</span></label>
-                      <input type="text" value={form.bank_name} onChange={e => updateForm('bank_name', e.target.value)}
-                        placeholder="은행명" className="input-field w-full" />
-                    </div>
-                    <div>
-                      <label className="label-field">계좌번호 <span className="text-red-500">*</span></label>
-                      <input type="text" value={form.account_number} onChange={e => updateForm('account_number', e.target.value)}
-                        placeholder="계좌번호" className="input-field w-full" />
-                    </div>
-                  </div>
                 </>
               )}
 
-              {!isWorker && (
-                <div>
-                  <label className="label-field">계좌정보</label>
-                  <input type="text" value={form.bank_info} onChange={e => updateForm('bank_info', e.target.value)}
-                    placeholder="은행명 계좌번호 예금주" className="input-field w-full" />
-                </div>
-              )}
+              <div>
+                <label className="label-field">은행·계좌 {isWorker && <span className="text-red-500">*</span>}</label>
+                <input type="text" value={form.bank_info} onChange={e => updateForm('bank_info', e.target.value)}
+                  placeholder="은행명 계좌번호" className="input-field w-full" />
+              </div>
 
               <div>
                 <label className="block text-[14px] font-semibold tracking-[-0.1px] text-txt-secondary mb-2">
@@ -698,7 +672,7 @@ export default function VendorsPage() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setModalOpen(false)} className="btn-secondary">취소</button>
-                <button onClick={handleSave} disabled={!form.name.trim() || saving || !dailyReady}
+                <button onClick={handleSave} disabled={!form.name.trim() || saving || (isWorker && (!form.resident_id.trim() || !form.phone.trim() || !form.bank_info.trim() || !form.id_card_url || !form.bankbook_url || !form.safety_cert_url))}
                   className="btn-primary disabled:opacity-50">
                   {saving ? '저장 중...' : editingVendor ? '수정' : '등록'}
                 </button>

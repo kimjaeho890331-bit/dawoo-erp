@@ -4,9 +4,12 @@ interface AttachedFileLike {
   size: number
 }
 
-interface DailyVendorLike {
+export interface DailyVendorLike {
+  id?: string
   name: string
   vendor_type: string | null
+  phone?: string | null
+  resident_id?: string | null
   id_card_url: string | null
   bankbook_url: string | null
   safety_cert_url: string | null
@@ -29,4 +32,32 @@ export function attachDailyWorkerFiles<T extends AttachedFileLike>(files: T[], v
   const urls = new Set(files.map(f => f.file_url))
   const added = extra.filter(f => !urls.has(f.file_url)) as T[]
   return [...files, ...added]
+}
+
+export interface DailyPaymentLike {
+  vendor_name: string
+  vendor_id?: string
+  vendor_type?: string
+  phone?: string
+  resident_id?: string
+  business_no?: string
+}
+
+/** 저장된 지급행에 일용직 주민번호·연락처를 거래처에서 다시 붙인다. 빈 값은 추측하지 않는다. */
+export function hydrateDailyPayments<T extends DailyPaymentLike>(rows: T[], vendors: DailyVendorLike[]): T[] {
+  const byName = new Map(
+    vendors.filter(v => v.vendor_type === '일용직').map(v => [v.name, v]),
+  )
+  return rows.map(r => {
+    const v = byName.get(r.vendor_name)
+    if (!v) return r
+    return {
+      ...r,
+      vendor_id: r.vendor_id || v.id || '',
+      vendor_type: '일용직',
+      phone: r.phone || v.phone || '',
+      resident_id: r.resident_id || v.resident_id || '',
+      business_no: r.business_no || v.resident_id || '',
+    }
+  })
 }

@@ -231,47 +231,47 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0)
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-5 pb-28 md:px-6 md:py-8 md:pb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-medium">지출결의서</h1>
+    <div className="mx-auto max-w-4xl pb-28 md:py-2 md:pb-10">
+      <div className="mb-6 flex items-center justify-between md:mb-8">
+        <h1>지출결의서</h1>
         {/* 임시저장은 어느 단계에서든 눌릴 수 있어야 한다. 폰 작업은 중간에 끊기기 쉽다. */}
         <button
           onClick={() => save(false)}
           disabled={busy || excelBusy || !actor}
-          className="md:hidden px-3 h-9 text-sm border border-border-primary rounded-lg text-txt-primary disabled:opacity-40"
+          className="h-9 rounded-lg border border-border-primary px-3 text-sm text-txt-primary disabled:opacity-40 md:hidden"
         >
           임시저장
         </button>
       </div>
 
       {/* 진행 표시 — 모바일 전용 */}
-      <div className="md:hidden mb-4">
-        <div className="flex gap-1 mb-2">
+      <div className="mb-6 md:hidden">
+        <div className="mb-3 flex gap-1.5">
           {STEPS.map((s, i) => (
-            <div key={s} className={`flex-1 h-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-border-primary'}`} />
+            <div key={s} className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-border-primary'}`} />
           ))}
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="text-[15px] text-txt-primary">{STEPS[step]}</span>
-          <span className="text-xs text-txt-tertiary">{step + 1}/{STEPS.length}</span>
+          <span className="text-[15px] font-medium text-txt-primary">{STEPS[step]}</span>
+          <span className="text-[12px] text-txt-tertiary">{step + 1}/{STEPS.length}</span>
         </div>
       </div>
 
       {/* 기안정보 — 모바일 */}
-      <div className={`${mobileOnly(0)} mb-5 border border-border-primary rounded-lg px-3 py-2.5`}>
+      <div className={`${mobileOnly(0)} mb-6 rounded-lg border border-border-primary bg-surface px-5 py-4`}>
         <MobileField label="기안양식" value="지출결의서" />
         <MobileField label="문서번호" value="완료 시 부여" />
         <MobileField label="보존연한" value="5년" />
         <MobileField label="기안부서" value="주식회사 다우건설" />
-        <div className="pt-2">
-          <label className="block mb-1 text-xs text-txt-secondary">
+        <div className="pt-3">
+          <label className="mb-1.5 block text-label">
             기안자 <span className="text-danger">*</span>
           </label>
           <select
             value={actorId ?? ''}
             onChange={e => setActorId(e.target.value)}
             aria-label="기안자 선택"
-            className="w-full h-11 px-3 text-base border border-border-primary rounded-lg bg-surface text-txt-primary"
+            className="h-11 w-full rounded-lg border border-border-primary bg-surface px-3 text-base text-txt-primary"
           >
             <option value="">{actorLoading ? '불러오는 중' : '선택해 주세요'}</option>
             {staffList.map(s => (
@@ -279,8 +279,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
             ))}
           </select>
         </div>
-        <div className="pt-2">
-          <label className="block mb-1 text-xs text-txt-secondary">현장</label>
+        <div className="pt-3">
+          <label className="mb-1.5 block text-label">현장</label>
           <WorkTargetPicker
             kind={workKind}
             siteId={siteId}
@@ -292,83 +292,85 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </div>
       </div>
 
-      <table className="hidden md:table w-full table-fixed text-xs mb-6">
-        <tbody>
-          <tr>
-            <td className="w-[18%] px-2 py-2 text-txt-secondary border-b border-border-primary">기안양식</td>
-            <td className="w-[32%] px-2 py-2 border-b border-border-primary">지출결의서</td>
-            <td className="w-[18%] px-2 py-2 text-txt-secondary border-b border-border-primary">문서번호</td>
-            <td className="px-2 py-2 text-txt-tertiary border-b border-border-primary">완료 시 부여</td>
-          </tr>
-          <tr>
-            <td className="px-2 py-2 text-txt-secondary border-b border-border-primary">보존연한</td>
-            <td className="px-2 py-2 border-b border-border-primary">5년</td>
-            <td className="px-2 py-2 text-txt-secondary border-b border-border-primary">기안부서</td>
-            <td className="px-2 py-2 border-b border-border-primary">주식회사 다우건설</td>
-          </tr>
-          <tr>
-            <td className="px-2 py-2 text-txt-secondary">기안자 <span className="text-danger">*</span></td>
-            <td className="px-2 py-2">
-              <select
-                value={actorId ?? ''}
-                onChange={e => setActorId(e.target.value)}
-                aria-label="기안자 선택"
-                className="px-2 py-1.5 text-xs border border-border-primary rounded-lg bg-surface text-txt-primary"
-              >
-                <option value="">{actorLoading ? '불러오는 중' : '선택해 주세요'}</option>
-                {staffList.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </td>
-            <td className="px-2 py-2 text-txt-secondary">현장</td>
-            <td className="px-2 py-2">
-              <WorkTargetPicker
-                compact
-                kind={workKind}
-                siteId={siteId}
-                projectId={projectId}
-                sites={sites}
-                projects={projects}
-                onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div className="mb-8 hidden overflow-hidden rounded-lg border border-border-primary bg-surface md:block">
+        <table className="w-full table-fixed">
+          <tbody>
+            <tr>
+              <td className="w-[18%] border-b border-border-primary px-5 py-3.5 text-label">기안양식</td>
+              <td className="w-[32%] border-b border-border-primary px-5 py-3.5">지출결의서</td>
+              <td className="w-[18%] border-b border-border-primary px-5 py-3.5 text-label">문서번호</td>
+              <td className="border-b border-border-primary px-5 py-3.5 text-txt-tertiary">완료 시 부여</td>
+            </tr>
+            <tr>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">보존연한</td>
+              <td className="border-b border-border-primary px-5 py-3.5">5년</td>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">기안부서</td>
+              <td className="border-b border-border-primary px-5 py-3.5">주식회사 다우건설</td>
+            </tr>
+            <tr>
+              <td className="px-5 py-3.5 text-label">기안자 <span className="text-danger">*</span></td>
+              <td className="px-5 py-3.5">
+                <select
+                  value={actorId ?? ''}
+                  onChange={e => setActorId(e.target.value)}
+                  aria-label="기안자 선택"
+                  className="h-9 rounded-lg border border-border-primary bg-surface px-3 text-[13px] text-txt-primary"
+                >
+                  <option value="">{actorLoading ? '불러오는 중' : '선택해 주세요'}</option>
+                  {staffList.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </td>
+              <td className="px-5 py-3.5 text-label">현장</td>
+              <td className="px-5 py-3.5">
+                <WorkTargetPicker
+                  compact
+                  kind={workKind}
+                  siteId={siteId}
+                  projectId={projectId}
+                  sites={sites}
+                  projects={projects}
+                  onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-      <div className={`${stepFlex(4)} items-center justify-between mb-2`}>
-        <span className="text-sm font-medium">결재선 <span className="text-danger">*</span></span>
-        <button onClick={() => setLineOpen(true)} className="px-3 h-11 text-sm border border-border-primary rounded md:h-auto md:py-1.5 md:text-xs">
+      <div className={`${stepFlex(4)} mb-3 items-center justify-between`}>
+        <h2>결재선 <span className="text-danger">*</span></h2>
+        <button onClick={() => setLineOpen(true)} className="h-11 rounded-lg border border-border-primary px-4 text-sm md:h-9 md:text-[13px]">
           결재선 설정
         </button>
       </div>
-      <div className={`${stepBlock(4)} mb-6`}>
+      <div className={`${stepBlock(4)} mb-8`}>
         <ApprovalLineView drafterName={actor?.name ?? ''} lines={lines} />
       </div>
 
-      <div className={`${stepBlock(0)} bg-accent-light text-accent-text text-xs rounded-lg px-3 py-2.5 mb-6`}>
+      <div className={`${stepBlock(0)} mb-8 rounded-lg bg-accent-light px-5 py-3.5 text-[13px] text-accent-text`}>
         결제 관련 지출결의서 입니다.
       </div>
 
-      <div className={`${stepBlock(0)} text-sm font-medium mb-2`}>기안내용</div>
-      <div className={`${stepFlex(0)} flex-col gap-1 mb-3 md:flex-row md:items-center md:gap-3`}>
-        <span className="w-16 text-xs text-txt-secondary">기안제목 <span className="text-danger">*</span></span>
+      <h2 className={`${stepBlock(0)} mb-4`}>기안내용</h2>
+      <div className={`${stepFlex(0)} mb-5 flex-col gap-2 md:flex-row md:items-center md:gap-4`}>
+        <span className="w-20 text-label">기안제목 <span className="text-danger">*</span></span>
         <input value={title} onChange={e => setTitle(e.target.value.slice(0, 50))}
-          className="flex-1 h-11 px-3 text-base border border-border-primary rounded-lg md:h-auto md:py-2 md:text-sm" placeholder="기안제목 입력" />
-        <span className="text-xs text-txt-tertiary self-end md:self-auto">{title.length}/50</span>
+          className="h-11 flex-1 rounded-lg border border-border-primary px-3 text-base md:h-9 md:text-[13px]" placeholder="기안제목 입력" />
+        <span className="self-end text-[12px] text-txt-tertiary md:self-auto">{title.length}/50</span>
       </div>
-      <div className={`${stepFlex(3)} flex-col gap-1 mb-6 md:flex-row md:gap-3`}>
-        <span className="w-16 text-xs text-txt-secondary md:pt-1.5">파일첨부</span>
+      <div className={`${stepFlex(3)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>
+        <span className="w-20 text-label md:pt-2">파일첨부</span>
         <div className="flex-1"><FileAttach files={files} onChange={setFiles} /></div>
       </div>
 
-      <div className={`${stepFlex(3)} flex-col gap-1 mb-6 md:flex-row md:gap-3`}>
-        <span className="w-16 text-xs text-txt-secondary md:pt-1.5">참조문서</span>
+      <div className={`${stepFlex(3)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>
+        <span className="w-20 text-label md:pt-2">참조문서</span>
         <div className="flex-1">
-          <div className="flex flex-wrap gap-2 mb-2">
+          <div className="mb-3 flex flex-wrap gap-2">
             {refs.map(r => (
-              <span key={r.id} className="flex items-center gap-1.5 px-2 py-1 text-xs bg-surface-secondary rounded">
+              <span key={r.id} className="flex items-center gap-2 rounded-lg bg-surface-secondary px-3 py-1.5 text-[13px]">
                 {r.doc_no ?? ''} {r.title}
                 <button onClick={() => setRefs(refs.filter(x => x.id !== r.id))} aria-label="참조 해제" className="text-txt-tertiary">×</button>
               </span>
@@ -381,7 +383,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
               if (found && !refs.some(x => x.id === found.id)) setRefs([...refs, found])
             }}
             aria-label="참조문서 추가"
-            className="w-full h-11 px-3 text-base border border-border-primary rounded-lg bg-surface text-txt-primary md:w-auto md:h-auto md:py-1.5 md:text-xs"
+            className="h-11 w-full rounded-lg border border-border-primary bg-surface px-3 text-base text-txt-primary md:h-9 md:w-auto md:text-[13px]"
           >
             <option value="">완료된 문서 추가</option>
             {refPool.filter(r => r.id !== reportId).map(r => (
@@ -391,17 +393,17 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </div>
       </div>
 
-      <div className={`${stepFlex(1)} justify-end gap-2 mb-2`}>
+      <div className={`${stepFlex(1)} mb-3 justify-end gap-2`}>
         <a
           href="/api/approval/excel-template"
-          className="flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded hover:bg-surface-secondary"
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-border-primary px-3 text-[13px] hover:bg-surface-secondary"
         >
-          <Download size={12} /> 양식 받기
+          <Download size={14} className="text-txt-tertiary" /> 양식 받기
         </a>
         <label
-          className={`flex items-center gap-1 px-2.5 py-1 text-xs border border-border-primary rounded cursor-pointer hover:bg-surface-secondary ${excelBusy ? 'opacity-40 pointer-events-none' : ''}`}
+          className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-border-primary px-3 text-[13px] hover:bg-surface-secondary ${excelBusy ? 'pointer-events-none opacity-40' : ''}`}
         >
-          <Upload size={12} /> {excelBusy ? '업로드 중…' : '엑셀 업로드'}
+          <Upload size={14} className="text-txt-tertiary" /> {excelBusy ? '업로드 중…' : '엑셀 업로드'}
           <input
             ref={excelInputRef}
             type="file"
@@ -415,12 +417,12 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           />
         </label>
       </div>
-      <div className={`${stepBlock(1)} mb-5`}><PaymentTable rows={payments} onChange={setPayments} /></div>
-      <div className={`${stepBlock(2)} mb-5`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
+      <div className={`${stepBlock(1)} mb-8`}><PaymentTable rows={payments} onChange={setPayments} /></div>
+      <div className={`${stepBlock(2)} mb-8`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
 
-      <div className={`${stepBlock(2)} mb-6`}>
+      <div className={`${stepBlock(2)} mb-8`}>
         <textarea value={bodyHtml} onChange={e => setBodyHtml(e.target.value)}
-          className="w-full min-h-32 px-3 py-3 text-base border border-border-primary rounded-lg md:text-sm" />
+          className="min-h-36 w-full rounded-lg border border-border-primary px-4 py-3 text-base leading-relaxed md:text-[13px]" />
       </div>
 
       {/* 확인 단계 — 모바일 전용. 단계별의 약점인 "중간 수정이 번거롭다"를 여기서 보완한다.
@@ -435,10 +437,10 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           { label: '첨부·참조', to: 3, value: `첨부 ${files.length}건 · 참조 ${refs.length}건` },
           { label: '결재선', to: 4, value: lines.length > 0 ? lines.map(l => l.name).join(' → ') : '지정 안 됨' },
         ].map(item => (
-          <div key={item.label} className="flex items-start justify-between gap-3 py-3 border-b border-border-primary">
-            <span className="shrink-0 text-xs text-txt-secondary w-16">{item.label}</span>
-            <span className="flex-1 text-sm text-txt-primary break-all">{item.value}</span>
-            <button onClick={() => { setError(null); setStep(item.to) }} className="shrink-0 text-xs text-accent-text">
+          <div key={item.label} className="flex items-start justify-between gap-4 border-b border-border-primary py-4">
+            <span className="w-16 shrink-0 text-label">{item.label}</span>
+            <span className="flex-1 break-all text-[13px] text-txt-primary">{item.value}</span>
+            <button onClick={() => { setError(null); setStep(item.to) }} className="shrink-0 text-[13px] text-accent-text">
               수정
             </button>
           </div>
@@ -448,11 +450,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
       {/* 데스크톱 액션 — 지금 모양 그대로 */}
-      <div className="hidden md:flex justify-center gap-2 border-t border-border-primary pt-5">
+      <div className="hidden justify-center gap-3 border-t border-border-primary pt-8 md:flex">
         <button disabled={busy || excelBusy || !actor} onClick={() => save(false)}
-          className="px-6 py-2 text-sm border border-border-primary rounded-lg disabled:opacity-40">임시저장</button>
+          className="h-9 rounded-lg border border-border-primary px-6 text-sm disabled:opacity-40">임시저장</button>
         <button disabled={busy || excelBusy || !actor} onClick={() => save(true)}
-          className="px-6 py-2 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40">상신하기</button>
+          className="h-9 rounded-lg bg-accent px-6 text-sm text-txt-inverse disabled:opacity-40">상신하기</button>
       </div>
 
       {/* 모바일 단계 이동 — 화면 아래 고정 */}

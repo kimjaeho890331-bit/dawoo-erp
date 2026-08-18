@@ -18,6 +18,7 @@ import {
   type ExpenseReport, type ExpenseReportPayment, type ExpenseReportDetail,
   type ExpenseReportLine, type ExpenseReportFile,
 } from '@/types/approval'
+import { APPROVAL_STATUS_BADGE } from '@/lib/approval/statusStyle'
 import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
 type LineWithStaff = ExpenseReportLine & { staff: { name: string } | null }
@@ -134,14 +135,19 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
 
   return (
     // 모바일은 액션 바가 화면 아래에 고정되므로, 마지막 내용이 가리지 않도록 아래 여백을 둔다.
-    <div className="max-w-4xl mx-auto px-4 py-5 pb-28 md:px-6 md:py-8 md:pb-8">
-      <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-lg font-medium">{report.title}</h1>
+    <div className="mx-auto max-w-4xl pb-28 md:py-2 md:pb-10">
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h1>{report.title}</h1>
+          <span className={`mt-3 inline-block ${APPROVAL_STATUS_BADGE[report.status]}`}>
+            {APPROVAL_STATUS_LABEL[report.status]}
+          </span>
+        </div>
         <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} fullWidth />
       </div>
 
       {/* 기안정보 — 모바일 */}
-      <div className="md:hidden mb-6 border border-border-primary rounded-lg px-3 py-2.5">
+      <div className="mb-8 rounded-lg border border-border-primary bg-surface px-5 py-4 md:hidden">
         <MobileField label="문서번호" value={report.doc_no ?? '-'} />
         <MobileField label="상태" value={APPROVAL_STATUS_LABEL[report.status]} />
         <MobileField label="기안자" value={drafterName} />
@@ -150,42 +156,48 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         <MobileField label="보존연한" value={`${report.retention_years}년`} />
       </div>
 
-      <table className="hidden md:table w-full table-fixed text-xs mb-6">
-        <tbody>
-          <tr>
-            <td className="w-[18%] px-2 py-2 text-txt-secondary border-b border-border-primary">기안양식</td>
-            <td className="w-[32%] px-2 py-2 border-b border-border-primary">지출결의서</td>
-            <td className="w-[18%] px-2 py-2 text-txt-secondary border-b border-border-primary">문서번호</td>
-            <td className="px-2 py-2 border-b border-border-primary">{report.doc_no ?? '-'}</td>
-          </tr>
-          <tr>
-            <td className="px-2 py-2 text-txt-secondary border-b border-border-primary">보존연한</td>
-            <td className="px-2 py-2 border-b border-border-primary">{report.retention_years}년</td>
-            <td className="px-2 py-2 text-txt-secondary border-b border-border-primary">상태</td>
-            <td className="px-2 py-2 border-b border-border-primary">{APPROVAL_STATUS_LABEL[report.status]}</td>
-          </tr>
-          <tr>
-            <td className="px-2 py-2 text-txt-secondary">기안자</td>
-            <td className="px-2 py-2">{drafterName}</td>
-            <td className="px-2 py-2 text-txt-secondary">현장</td>
-            <td className={`px-2 py-2 ${targetText.missing ? 'text-[#b53333] font-medium' : ''}`}>{targetText.text}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div className="mb-8 hidden overflow-hidden rounded-lg border border-border-primary bg-surface md:block">
+        <table className="w-full table-fixed">
+          <tbody>
+            <tr>
+              <td className="w-[18%] border-b border-border-primary px-5 py-3.5 text-label">기안양식</td>
+              <td className="w-[32%] border-b border-border-primary px-5 py-3.5">지출결의서</td>
+              <td className="w-[18%] border-b border-border-primary px-5 py-3.5 text-label">문서번호</td>
+              <td className="border-b border-border-primary px-5 py-3.5">{report.doc_no ?? '-'}</td>
+            </tr>
+            <tr>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">보존연한</td>
+              <td className="border-b border-border-primary px-5 py-3.5">{report.retention_years}년</td>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">상태</td>
+              <td className="border-b border-border-primary px-5 py-3.5">
+                <span className={`inline-block ${APPROVAL_STATUS_BADGE[report.status]}`}>
+                  {APPROVAL_STATUS_LABEL[report.status]}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td className="px-5 py-3.5 text-label">기안자</td>
+              <td className="px-5 py-3.5">{drafterName}</td>
+              <td className="px-5 py-3.5 text-label">현장</td>
+              <td className={`px-5 py-3.5 ${targetText.missing ? 'font-medium text-danger' : ''}`}>{targetText.text}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-      <div className="text-sm font-medium mb-2">결재선</div>
-      <div className="mb-6">
+      <h2 className="mb-3">결재선</h2>
+      <div className="mb-8">
         <ApprovalLineView drafterName={drafterName} drafterActedAt={report.submitted_at} lines={cards} />
       </div>
 
       {files.length > 0 && (
-        <div className="mb-6">
-          <div className="text-sm font-medium mb-2">파일첨부</div>
+        <div className="mb-8">
+          <h2 className="mb-3">파일첨부</h2>
           <div className="flex flex-col gap-1">
             {files.map(f => (
               <a key={f.id} href={attachHref(f)} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1.5 py-2 text-sm text-accent-text hover:underline md:py-0 md:text-xs">
-                <Paperclip size={12} /> {f.file_name}
+                className="flex items-center gap-2 py-2.5 text-[13px] text-accent-text hover:underline md:py-1.5">
+                <Paperclip size={14} className="text-txt-tertiary" /> {f.file_name}
               </a>
             ))}
           </div>
@@ -193,11 +205,11 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       )}
 
       {refs.length > 0 && (
-        <div className="mb-6">
-          <div className="text-sm font-medium mb-2">참조문서</div>
+        <div className="mb-8">
+          <h2 className="mb-3">참조문서</h2>
           <div className="flex flex-col gap-1">
             {refs.map(r => (
-              <Link key={r.id} href={`/approval/${r.id}`} className="py-2 text-sm text-accent-text hover:underline md:py-0 md:text-xs">
+              <Link key={r.id} href={`/approval/${r.id}`} className="py-2.5 text-[13px] text-accent-text hover:underline md:py-1.5">
                 {r.doc_no ?? ''} {r.title}
               </Link>
             ))}
@@ -205,18 +217,18 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         </div>
       )}
 
-      <div className="border border-border-primary rounded-lg overflow-hidden mb-5">
-        <div className="flex items-center gap-3 px-3 py-3 border-b border-border-primary">
-          <span className="text-xs text-txt-secondary">지급 총계(원)</span>
-          <span className="text-lg font-medium">{formatMoney(report.total_amount)}</span>
+      <div className="mb-8 overflow-hidden rounded-lg border border-border-primary bg-surface">
+        <div className="flex items-center gap-3 border-b border-border-primary px-5 py-4">
+          <span className="text-label">지급 총계(원)</span>
+          <span className="text-money text-[15px]">{formatMoney(report.total_amount)}</span>
         </div>
         {/* 지급정보 — 모바일. 거래처와 금액을 카드 머리에 두고 나머지는 라벨과 함께 아래에 둔다. */}
-        <div className="md:hidden px-3 py-3">
+        <div className="px-4 py-4 md:hidden">
           {payments.map(p => (
             <MobileCard key={p.id}>
-              <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                <span className="text-[15px] text-txt-primary">{p.vendor_name}</span>
-                <span className="text-base text-txt-primary shrink-0">{formatMoney(p.amount)}</span>
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <span className="text-[15px] font-medium text-txt-primary">{p.vendor_name}</span>
+                <span className="text-money shrink-0 text-[15px] text-txt-primary">{formatMoney(p.amount)}</span>
               </div>
               <MobileField label="지급요청일" value={p.pay_request_date} />
               <MobileField label="은행" value={p.bank} />
@@ -225,30 +237,30 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
             </MobileCard>
           ))}
           {payments.length === 0 && (
-            <div className="py-3 text-center text-xs text-txt-tertiary">지급 정보가 없습니다</div>
+            <div className="py-6 text-center text-[13px] text-txt-tertiary">지급 정보가 없습니다</div>
           )}
         </div>
 
-        <table className="hidden md:table w-full table-fixed text-xs">
-          <thead className="bg-surface-secondary text-txt-secondary">
+        <table className="hidden w-full table-fixed md:table">
+          <thead>
             <tr>
-              <th className="w-[18%] px-2 py-2 text-left font-normal border-r border-border-primary">거래처명</th>
-              <th className="w-[16%] px-2 py-2 text-right font-normal border-r border-border-primary">지급금액</th>
-              <th className="w-[14%] px-2 py-2 text-left font-normal border-r border-border-primary">지급요청일</th>
-              <th className="w-[13%] px-2 py-2 text-left font-normal border-r border-border-primary">은행</th>
-              <th className="w-[22%] px-2 py-2 text-left font-normal border-r border-border-primary">계좌번호</th>
-              <th className="w-[17%] px-2 py-2 text-left font-normal">사업자번호</th>
+              <th className="w-[18%] border-r border-border-primary px-4 py-3 text-left">거래처명</th>
+              <th className="w-[16%] border-r border-border-primary px-4 py-3 text-right">지급금액</th>
+              <th className="w-[14%] border-r border-border-primary px-4 py-3 text-left">지급요청일</th>
+              <th className="w-[13%] border-r border-border-primary px-4 py-3 text-left">은행</th>
+              <th className="w-[22%] border-r border-border-primary px-4 py-3 text-left">계좌번호</th>
+              <th className="w-[17%] px-4 py-3 text-left">사업자번호</th>
             </tr>
           </thead>
           <tbody>
             {payments.map(p => (
               <tr key={p.id} className="border-t border-border-primary">
-                <td className="px-2 py-2.5 border-r border-border-primary">{p.vendor_name}</td>
-                <td className="px-2 py-2.5 text-right border-r border-border-primary">{formatMoney(p.amount)}</td>
-                <td className="px-2 py-2.5 border-r border-border-primary">{p.pay_request_date}</td>
-                <td className="px-2 py-2.5 border-r border-border-primary">{p.bank}</td>
-                <td className="px-2 py-2.5 border-r border-border-primary">{p.account_no}</td>
-                <td className="px-2 py-2.5">{p.business_no ?? ''}</td>
+                <td className="border-r border-border-primary px-4 py-3">{p.vendor_name}</td>
+                <td className="text-money border-r border-border-primary px-4 py-3 text-right">{formatMoney(p.amount)}</td>
+                <td className="border-r border-border-primary px-4 py-3">{p.pay_request_date}</td>
+                <td className="border-r border-border-primary px-4 py-3">{p.bank}</td>
+                <td className="border-r border-border-primary px-4 py-3">{p.account_no}</td>
+                <td className="px-4 py-3">{p.business_no ?? ''}</td>
               </tr>
             ))}
           </tbody>
@@ -256,17 +268,17 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       </div>
 
       {details.length > 0 && (
-        <div className="border border-border-primary rounded-lg overflow-hidden mb-5">
-          <div className="px-3 py-2 border-b border-border-primary text-xs font-medium">상세 내용</div>
+        <div className="mb-8 overflow-hidden rounded-lg border border-border-primary bg-surface">
+          <div className="border-b border-border-primary px-5 py-4 text-card-title">상세 내용</div>
 
           {/* 상세내용 — 모바일 */}
-          <div className="md:hidden px-3 py-3">
+          <div className="px-4 py-4 md:hidden">
             {details.map(d => (
               <MobileCard key={d.id}>
-                <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                  <span className="text-[15px] text-txt-primary">{d.content || d.vendor_name || '내용 없음'}</span>
+                <div className="mb-2 flex items-baseline justify-between gap-3">
+                  <span className="text-[15px] font-medium text-txt-primary">{d.content || d.vendor_name || '내용 없음'}</span>
                   {d.amount ? (
-                    <span className="text-base text-txt-primary shrink-0">{formatMoney(d.amount)}</span>
+                    <span className="text-money shrink-0 text-[15px] text-txt-primary">{formatMoney(d.amount)}</span>
                   ) : null}
                 </div>
                 <MobileField label="거래처명" value={d.vendor_name ?? ''} />
@@ -277,26 +289,26 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
             ))}
           </div>
 
-          <table className="hidden md:table w-full table-fixed text-xs">
-            <thead className="bg-surface-secondary text-txt-secondary">
+          <table className="hidden w-full table-fixed md:table">
+            <thead>
               <tr>
-                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">거래처명</th>
-                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">계정</th>
-                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">내용</th>
-                <th className="px-2 py-2 text-left font-normal border-r border-border-primary">부서명</th>
-                <th className="px-2 py-2 text-right font-normal border-r border-border-primary">금액</th>
-                <th className="px-2 py-2 text-left font-normal">비고</th>
+                <th className="border-r border-border-primary px-4 py-3 text-left">거래처명</th>
+                <th className="border-r border-border-primary px-4 py-3 text-left">계정</th>
+                <th className="border-r border-border-primary px-4 py-3 text-left">내용</th>
+                <th className="border-r border-border-primary px-4 py-3 text-left">부서명</th>
+                <th className="border-r border-border-primary px-4 py-3 text-right">금액</th>
+                <th className="px-4 py-3 text-left">비고</th>
               </tr>
             </thead>
             <tbody>
               {details.map(d => (
                 <tr key={d.id} className="border-t border-border-primary">
-                  <td className="px-2 py-2.5 border-r border-border-primary">{d.vendor_name ?? ''}</td>
-                  <td className="px-2 py-2.5 border-r border-border-primary">{d.account ?? ''}</td>
-                  <td className="px-2 py-2.5 border-r border-border-primary">{d.content ?? ''}</td>
-                  <td className="px-2 py-2.5 border-r border-border-primary">{d.dept_name ?? ''}</td>
-                  <td className="px-2 py-2.5 text-right border-r border-border-primary">{d.amount ? formatMoney(d.amount) : ''}</td>
-                  <td className="px-2 py-2.5">{d.note ?? ''}</td>
+                  <td className="border-r border-border-primary px-4 py-3">{d.vendor_name ?? ''}</td>
+                  <td className="border-r border-border-primary px-4 py-3">{d.account ?? ''}</td>
+                  <td className="border-r border-border-primary px-4 py-3">{d.content ?? ''}</td>
+                  <td className="border-r border-border-primary px-4 py-3">{d.dept_name ?? ''}</td>
+                  <td className="text-money border-r border-border-primary px-4 py-3 text-right">{d.amount ? formatMoney(d.amount) : ''}</td>
+                  <td className="px-4 py-3">{d.note ?? ''}</td>
                 </tr>
               ))}
             </tbody>
@@ -305,18 +317,18 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       )}
 
       {report.body_html && (
-        <div className="border border-border-primary rounded-lg px-3 py-3 text-xs mb-6">{report.body_html}</div>
+        <div className="mb-8 rounded-lg border border-border-primary bg-surface px-5 py-4 text-[13px] leading-relaxed">{report.body_html}</div>
       )}
 
-      <div className="text-sm font-medium mb-2">결재의견</div>
+      <h2 className="mb-3">결재의견</h2>
 
       {/* 결재의견 — 모바일 */}
-      <div className="md:hidden mb-6">
+      <div className="mb-8 md:hidden">
         {lines.filter(l => l.acted_at).map(l => (
           <MobileCard key={l.id}>
-            <div className="flex items-baseline justify-between gap-2 mb-1">
-              <span className="text-[15px] text-txt-primary">{l.staff?.name ?? ''}</span>
-              <span className="text-xs text-txt-secondary shrink-0">
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <span className="text-[15px] font-medium text-txt-primary">{l.staff?.name ?? ''}</span>
+              <span className="shrink-0 text-[12px] text-txt-secondary">
                 {LINE_ROLE_LABEL[l.role]} · {LINE_STATE_LABEL[l.state]}
               </span>
             </div>
@@ -325,32 +337,34 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           </MobileCard>
         ))}
         {lines.filter(l => l.acted_at).length === 0 && (
-          <div className="py-3 text-xs text-txt-tertiary">아직 결재한 사람이 없습니다</div>
+          <div className="py-4 text-[13px] text-txt-tertiary">아직 결재한 사람이 없습니다</div>
         )}
       </div>
 
-      <table className="hidden md:table w-full table-fixed text-xs mb-6">
-        <thead className="bg-surface-secondary text-txt-secondary">
-          <tr>
-            <th className="w-[12%] px-2 py-2 text-left font-normal border-r border-border-primary">결재구분</th>
-            <th className="w-[18%] px-2 py-2 text-left font-normal border-r border-border-primary">결재자</th>
-            <th className="w-[12%] px-2 py-2 text-left font-normal border-r border-border-primary">상태</th>
-            <th className="w-[20%] px-2 py-2 text-left font-normal border-r border-border-primary">일시</th>
-            <th className="px-2 py-2 text-left font-normal">결재의견</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.filter(l => l.acted_at).map(l => (
-            <tr key={l.id} className="border-t border-border-primary">
-              <td className="px-2 py-2.5 border-r border-border-primary">{LINE_ROLE_LABEL[l.role]}</td>
-              <td className="px-2 py-2.5 border-r border-border-primary">{l.staff?.name ?? ''}</td>
-              <td className="px-2 py-2.5 border-r border-border-primary">{LINE_STATE_LABEL[l.state]}</td>
-              <td className="px-2 py-2.5 border-r border-border-primary">{l.acted_at ? new Date(l.acted_at).toLocaleString('ko-KR') : ''}</td>
-              <td className="px-2 py-2.5">{l.comment ?? ''}</td>
+      <div className="mb-8 hidden overflow-hidden rounded-lg border border-border-primary bg-surface md:block">
+        <table className="w-full table-fixed">
+          <thead>
+            <tr>
+              <th className="w-[12%] border-r border-border-primary px-4 py-3 text-left">결재구분</th>
+              <th className="w-[18%] border-r border-border-primary px-4 py-3 text-left">결재자</th>
+              <th className="w-[12%] border-r border-border-primary px-4 py-3 text-left">상태</th>
+              <th className="w-[22%] border-r border-border-primary px-4 py-3 text-left">일시</th>
+              <th className="px-4 py-3 text-left">결재의견</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {lines.filter(l => l.acted_at).map(l => (
+              <tr key={l.id} className="border-t border-border-primary">
+                <td className="border-r border-border-primary px-4 py-3">{LINE_ROLE_LABEL[l.role]}</td>
+                <td className="border-r border-border-primary px-4 py-3">{l.staff?.name ?? ''}</td>
+                <td className="border-r border-border-primary px-4 py-3">{LINE_STATE_LABEL[l.state]}</td>
+                <td className="border-r border-border-primary px-4 py-3">{l.acted_at ? new Date(l.acted_at).toLocaleString('ko-KR') : ''}</td>
+                <td className="px-4 py-3">{l.comment ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 

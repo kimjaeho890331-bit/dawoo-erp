@@ -36,6 +36,8 @@ const BOXES: { group: string; items: { key: BoxKey; label: string }[] }[] = [
   { group: '문서대장', items: [{ key: 'ledger', label: '전체' }] },
 ]
 
+const BOX_META = BOXES.flatMap(g => g.items.map(it => ({ ...it, group: g.group })))
+
 const SELECT = 'id, doc_no, title, status, total_amount, submitted_at, site_id, project_id, staff:drafter_staff_id(name)'
 
 interface Row {
@@ -210,25 +212,27 @@ export default function ApprovalPage() {
 
   useEffect(() => { load() }, [load])
 
+  const currentBox = BOX_META.find(it => it.key === box)
+
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden md:block w-48 border-r border-border-primary py-6 shrink-0">
-        <div className="mx-4 mb-4">
+    <div className="-mx-4 -my-4 flex min-h-[calc(100vh-2rem)] md:-mx-8 md:-my-6 md:min-h-[calc(100vh-3rem)]">
+      <aside className="hidden w-52 shrink-0 border-r border-border-primary bg-surface py-8 md:block">
+        <div className="mx-5 mb-5">
           <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} />
         </div>
         <Link href="/approval/new"
-          className="flex items-center gap-2 mx-4 mb-6 px-3 py-2 text-sm border border-border-primary rounded-lg text-txt-primary">
+          className="mx-5 mb-8 flex h-9 items-center justify-center gap-2 rounded-lg border border-border-primary text-sm text-txt-primary hover:bg-surface-secondary">
           <PenLine size={14} className="text-txt-tertiary" /> 기안작성
         </Link>
         {BOXES.map(g => (
-          <div key={g.group} className="mb-5">
-            <div className="px-4 mb-1.5 text-xs text-txt-tertiary">{g.group}</div>
+          <div key={g.group} className="mb-7">
+            <div className="mb-2 px-5 text-label">{g.group}</div>
             {g.items.map(it => (
               <button key={it.key} onClick={() => setBox(it.key)}
-                className={`w-full flex items-center px-4 py-1.5 text-sm ${box === it.key ? 'bg-surface-secondary font-medium text-txt-primary' : 'text-txt-secondary'}`}>
+                className={`flex w-full items-center px-5 py-2.5 text-[13px] ${box === it.key ? 'bg-surface-secondary font-medium text-txt-primary' : 'text-txt-secondary hover:bg-surface-tertiary'}`}>
                 {it.label}
                 {it.key === 'toApprove' && pendingCount > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-[11px] leading-none rounded-full bg-accent text-txt-inverse">
+                  <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] leading-none text-txt-inverse">
                     {pendingCount}
                   </span>
                 )}
@@ -238,13 +242,13 @@ export default function ApprovalPage() {
         ))}
       </aside>
 
-      <main className="flex-1 min-w-0 px-4 py-4 md:px-8 md:py-6">
+      <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">
         {/*
           모바일 머리말. 데스크톱은 왼쪽 사이드바가 같은 역할을 하므로 숨긴다.
           직원 선택이 이 안에 있어야 한다 — 사이드바를 숨긴 폰에서 직원을 아직 안 골랐을 때,
           아래 "직원을 선택해 주세요" 분기에 갇혀 고를 방법이 없어지면 안 된다.
         */}
-        <div className="md:hidden mb-4 flex flex-col gap-2">
+        <div className="mb-6 flex flex-col gap-3 md:hidden">
           <ActorPicker
             actorId={actorId}
             staffList={staffList}
@@ -252,12 +256,12 @@ export default function ApprovalPage() {
             loading={actorLoading}
             fullWidth
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <select
               value={box}
               onChange={e => setBox(e.target.value as BoxKey)}
               aria-label="문서함 선택"
-              className="flex-1 min-w-0 h-11 px-3 text-base border border-border-primary rounded-lg bg-surface text-txt-primary"
+              className="h-11 min-w-0 flex-1 rounded-lg border border-border-primary bg-surface px-3 text-base text-txt-primary"
             >
               {/* 칸 이름 앞에 그룹을 붙인다. 기안함 완료와 결재함 완료된처럼
                   이름만 보여주면 어느 쪽인지 알 수 없다. */}
@@ -268,91 +272,101 @@ export default function ApprovalPage() {
               )}
             </select>
             {pendingCount > 0 && (
-              <span className="shrink-0 px-2.5 py-1 text-xs leading-none rounded-full bg-accent text-txt-inverse">
+              <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-xs leading-none text-txt-inverse">
                 {pendingCount}
               </span>
             )}
           </div>
           <Link
             href="/approval/new"
-            className="flex items-center justify-center gap-2 h-11 text-sm border border-border-primary rounded-lg text-txt-primary"
+            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-border-primary text-sm text-txt-primary"
           >
             <PenLine size={15} className="text-txt-tertiary" /> 기안작성
           </Link>
         </div>
 
         {!actor ? (
-          <div className="py-10 text-center text-sm text-txt-tertiary">직원을 선택해 주세요</div>
+          <div className="py-16 text-center text-[13px] text-txt-tertiary">직원을 선택해 주세요</div>
         ) : (
           <>
-            <div className="text-sm text-txt-secondary mb-4">총 {rows.length}건</div>
+            <div className="mb-5 md:mb-6">
+              <h1 className="hidden md:block">지출결의</h1>
+              <p className="text-[13px] text-txt-secondary md:mt-2">
+                {currentBox ? `${currentBox.group} · ${currentBox.label} · ` : ''}
+                총 {rows.length}건
+              </p>
+            </div>
 
             {/* 모바일 목록 — 6칸 표를 폰에서 그리면 한 칸이 30px이 되어 글자가 세로로 접힌다.
                 카드 한 장이 문서 한 건이고, 카드 전체가 탭 영역이다. */}
-            <div className="md:hidden">
+            <div className="flex flex-col gap-3 md:hidden">
               {rows.map(r => (
                 <Link
                   key={r.id}
                   href={`/approval/${r.id}`}
-                  className="block py-3.5 border-b border-border-primary"
+                  className="block rounded-lg border border-border-primary bg-surface px-5 py-4"
                 >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className="text-[15px] leading-snug text-txt-primary line-clamp-2">{r.title}</span>
-                    <span
-                      className={`shrink-0 px-2 py-0.5 text-[11px] leading-tight rounded ${APPROVAL_STATUS_BADGE[r.status]}`}
-                    >
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <span className="line-clamp-2 text-[15px] font-medium leading-snug text-txt-primary">{r.title}</span>
+                    <span className={`shrink-0 ${APPROVAL_STATUS_BADGE[r.status]}`}>
                       {APPROVAL_STATUS_LABEL[r.status]}
                     </span>
                   </div>
-                  <div className="text-lg text-txt-primary mb-1">{formatMoney(r.total_amount)}원</div>
-                  <div className={`text-xs mb-1 ${targetOf(r).missing ? 'text-[#b53333] font-medium' : 'text-txt-secondary'}`}>
+                  <div className="text-money mb-2 text-[15px] text-txt-primary">{formatMoney(r.total_amount)}원</div>
+                  <div className={`mb-1.5 text-[12px] ${targetOf(r).missing ? 'font-medium text-danger' : 'text-txt-secondary'}`}>
                     {targetOf(r).text}
                   </div>
-                  <div className="text-xs text-txt-secondary">
+                  <div className="text-[12px] text-txt-secondary">
                     {r.staff?.name ?? '-'} · {shortDateTime(r.submitted_at)}
                   </div>
                 </Link>
               ))}
               {!loading && rows.length === 0 && (
-                <div className="py-10 text-center text-sm text-txt-tertiary">문서가 없습니다</div>
+                <div className="py-16 text-center text-[13px] text-txt-tertiary">문서가 없습니다</div>
               )}
             </div>
 
-            <table className="hidden md:table w-full table-fixed text-xs">
-              <thead className="bg-surface-secondary text-txt-secondary">
-                <tr>
-                  <th className="w-[18%] px-3 py-2.5 text-left font-normal">문서번호</th>
-                  <th className="px-3 py-2.5 text-left font-normal">기안제목</th>
-                  <th className="w-[14%] px-3 py-2.5 text-left font-normal">현장</th>
-                  <th className="w-[12%] px-3 py-2.5 text-left font-normal">기안자</th>
-                  <th className="w-[14%] px-3 py-2.5 text-right font-normal">지급총계</th>
-                  <th className="w-[14%] px-3 py-2.5 text-left font-normal">상신일시</th>
-                  <th className="w-[10%] px-3 py-2.5 text-left font-normal">상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => (
-                  <tr key={r.id} className="border-b border-border-primary">
-                    <td className="px-3 py-3 text-txt-tertiary">{r.doc_no ?? '-'}</td>
-                    <td className="px-3 py-3">
-                      <Link href={`/approval/${r.id}`} className="hover:underline text-txt-primary">{r.title}</Link>
-                    </td>
-                    <td className={`px-3 py-3 ${targetOf(r).missing ? 'text-[#b53333] font-medium' : 'text-txt-primary'}`}>
-                      {targetOf(r).text}
-                    </td>
-                    <td className="px-3 py-3 text-txt-primary">{r.staff?.name ?? ''}</td>
-                    <td className="px-3 py-3 text-right text-txt-primary">{formatMoney(r.total_amount)}</td>
-                    <td className="px-3 py-3 text-txt-secondary">
-                      {r.submitted_at ? new Date(r.submitted_at).toLocaleString('ko-KR') : '-'}
-                    </td>
-                    <td className="px-3 py-3 text-txt-primary">{APPROVAL_STATUS_LABEL[r.status]}</td>
+            <div className="hidden overflow-hidden rounded-lg border border-border-primary bg-surface md:block">
+              <table className="w-full table-fixed">
+                <thead>
+                  <tr>
+                    <th className="w-[16%] px-4 py-3 text-left">문서번호</th>
+                    <th className="px-4 py-3 text-left">기안제목</th>
+                    <th className="w-[14%] px-4 py-3 text-left">현장</th>
+                    <th className="w-[12%] px-4 py-3 text-left">기안자</th>
+                    <th className="w-[14%] px-4 py-3 text-right">지급총계</th>
+                    <th className="w-[16%] px-4 py-3 text-left">상신일시</th>
+                    <th className="w-[10%] px-4 py-3 text-left">상태</th>
                   </tr>
-                ))}
-                {!loading && rows.length === 0 && (
-                  <tr><td colSpan={7} className="px-3 py-10 text-center text-txt-tertiary">문서가 없습니다</td></tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.id} className="border-t border-border-primary">
+                      <td className="px-4 py-3 text-txt-tertiary">{r.doc_no ?? '-'}</td>
+                      <td className="px-4 py-3">
+                        <Link href={`/approval/${r.id}`} className="text-txt-primary hover:underline">{r.title}</Link>
+                      </td>
+                      <td className={`px-4 py-3 ${targetOf(r).missing ? 'font-medium text-danger' : 'text-txt-primary'}`}>
+                        {targetOf(r).text}
+                      </td>
+                      <td className="px-4 py-3 text-txt-primary">{r.staff?.name ?? ''}</td>
+                      <td className="text-money px-4 py-3 text-right text-txt-primary">{formatMoney(r.total_amount)}</td>
+                      <td className="px-4 py-3 text-txt-secondary">
+                        {r.submitted_at ? new Date(r.submitted_at).toLocaleString('ko-KR') : '-'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block ${APPROVAL_STATUS_BADGE[r.status]}`}>
+                          {APPROVAL_STATUS_LABEL[r.status]}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {!loading && rows.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-16 text-center text-txt-tertiary">문서가 없습니다</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </main>

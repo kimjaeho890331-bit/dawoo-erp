@@ -38,19 +38,19 @@ export default function ApprovalLineView({ drafterName, drafterActedAt, lines }:
         모바일 결재선 — 가로로 늘어놓은 112px 카드는 폰에서 두세 개마다 줄이 바뀌어
         결재 순서가 눈에 들어오지 않는다. 위에서 아래로 흐르는 목록이 순서를 그대로 보여준다.
       */}
-      <div className="md:hidden flex flex-col">
-        <div className="flex items-center gap-2.5 py-2 border-b border-border-primary">
-          <CheckCircle2 size={18} className="text-accent-text shrink-0" />
-          <span className="text-sm text-txt-primary">{drafterName}</span>
-          <span className="text-xs text-txt-secondary ml-auto">
+      <div className="flex flex-col rounded-lg border border-border-primary bg-surface px-5 py-2 md:hidden">
+        <div className="flex items-center gap-3 border-b border-border-primary py-3">
+          <CheckCircle2 size={18} className="shrink-0 text-accent-text" />
+          <span className="text-[13px] font-medium text-txt-primary">{drafterName}</span>
+          <span className="ml-auto text-[12px] text-txt-secondary">
             기안 {drafterActedAt ? `· ${shortDateTime(drafterActedAt)}` : ''}
           </span>
         </div>
         {lines.map(l => (
-          <div key={l.staff_id} className="flex items-center gap-2.5 py-2 border-b border-border-primary last:border-b-0">
+          <div key={l.staff_id} className="flex items-center gap-3 border-b border-border-primary py-3 last:border-b-0">
             <StateIcon state={l.state ?? 'waiting'} />
-            <span className="text-sm text-txt-primary">{l.name}</span>
-            <span className="text-xs text-txt-secondary ml-auto">
+            <span className="text-[13px] font-medium text-txt-primary">{l.name}</span>
+            <span className="ml-auto text-[12px] text-txt-secondary">
               {LINE_ROLE_LABEL[l.role]} · {LINE_STATE_LABEL[l.state ?? 'waiting']}
               {l.acted_at ? ` · ${shortDateTime(l.acted_at)}` : ''}
             </span>
@@ -58,27 +58,27 @@ export default function ApprovalLineView({ drafterName, drafterActedAt, lines }:
         ))}
       </div>
 
-      <div className="hidden md:flex flex-wrap gap-2">
-      <div className="w-28 border border-border-primary rounded-lg overflow-hidden">
-        <div className="bg-surface-secondary text-xs text-center py-1.5 text-txt-secondary border-b border-border-primary">
+      <div className="hidden flex-wrap gap-3 md:flex">
+      <div className="w-32 overflow-hidden rounded-lg border border-border-primary bg-surface">
+        <div className="border-b border-border-primary bg-surface-secondary py-2 text-center text-label">
           기안
         </div>
-        <div className="py-3 px-2 text-center">
-          <div className="text-sm">{drafterName}</div>
-          <div className="text-xs text-txt-tertiary mt-1">
+        <div className="px-3 py-4 text-center">
+          <div className="text-[13px] font-medium">{drafterName}</div>
+          <div className="mt-1.5 text-[12px] text-txt-tertiary">
             {drafterActedAt ? new Date(drafterActedAt).toLocaleString('ko-KR') : ' '}
           </div>
         </div>
       </div>
 
       {lines.map(l => (
-        <div key={l.staff_id} className="w-28 border border-border-primary rounded-lg overflow-hidden">
-          <div className="bg-surface-secondary text-xs text-center py-1.5 text-txt-secondary border-b border-border-primary">
+        <div key={l.staff_id} className="w-32 overflow-hidden rounded-lg border border-border-primary bg-surface">
+          <div className="border-b border-border-primary bg-surface-secondary py-2 text-center text-label">
             {LINE_ROLE_LABEL[l.role]}
           </div>
-          <div className="py-3 px-2 text-center">
-            <div className="text-sm">{l.name}</div>
-            <div className={`text-xs mt-1 ${STATE_COLOR[l.state ?? 'waiting']}`}>
+          <div className="px-3 py-4 text-center">
+            <div className="text-[13px] font-medium">{l.name}</div>
+            <div className={`mt-1.5 text-[12px] ${STATE_COLOR[l.state ?? 'waiting']}`}>
               {LINE_STATE_LABEL[l.state ?? 'waiting']}
             </div>
           </div>

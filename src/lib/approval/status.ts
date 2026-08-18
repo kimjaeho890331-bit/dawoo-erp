@@ -3,7 +3,11 @@ import type { ExpenseReport, ExpenseReportLine } from '@/types/approval'
 type LineLike = Pick<ExpenseReportLine, 'seq' | 'staff_id' | 'role' | 'state'>
 type ReportLike = Pick<ExpenseReport, 'status' | 'drafter_staff_id'>
 
-const EDITABLE: ExpenseReport['status'][] = ['draft', 'withdrawn', 'rejected']
+/** 작성중·회수된·반려된. 아직 상신 전이라 다시 올릴 수 있다. */
+const SUBMITTABLE: ExpenseReport['status'][] = ['draft', 'withdrawn', 'rejected']
+
+/** 상신한 건도 기안자가 내용을 고치거나 지울 수 있다. 완료만 막는다. */
+const EDITABLE: ExpenseReport['status'][] = ['draft', 'pending', 'withdrawn', 'rejected']
 
 /** 지금 결재할 차례인 행. 대기 중인 행 가운데 seq가 가장 작은 것. */
 export function currentTurnLine<T extends LineLike>(lines: T[]): T | null {
@@ -19,6 +23,10 @@ export function isFinalApprover(lines: LineLike[], staffId: string): boolean {
 }
 
 export function canSubmit(report: ReportLike, staffId: string): boolean {
+  return report.drafter_staff_id === staffId && SUBMITTABLE.includes(report.status)
+}
+
+export function canEdit(report: ReportLike, staffId: string): boolean {
   return report.drafter_staff_id === staffId && EDITABLE.includes(report.status)
 }
 
@@ -26,11 +34,9 @@ export function canDelete(report: ReportLike, staffId: string): boolean {
   return report.drafter_staff_id === staffId && EDITABLE.includes(report.status)
 }
 
-/** 회수는 아무도 결재를 처리하지 않았을 때만 가능하다. */
-export function canWithdraw(report: ReportLike, lines: LineLike[], staffId: string): boolean {
-  if (report.status !== 'pending') return false
-  if (report.drafter_staff_id !== staffId) return false
-  return lines.every(l => l.state === 'waiting')
+/** 회수는 쓰지 않는다. 상신한 건은 수정·삭제로 처리한다. */
+export function canWithdraw(_report: ReportLike, _lines: LineLike[], _staffId: string): boolean {
+  return false
 }
 
 export function canApprove(report: ReportLike, lines: LineLike[], staffId: string): boolean {

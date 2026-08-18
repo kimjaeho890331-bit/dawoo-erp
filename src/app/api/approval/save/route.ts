@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
-import { validateApprovalLine, canSubmit } from '@/lib/approval/status'
+import { validateApprovalLine, canEdit } from '@/lib/approval/status'
 
 interface PaymentInput {
   vendor_name: string; amount: number; pay_request_date: string
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     // 기존 문서 수정 — 본인이 기안자이고 편집 가능한 상태여야 한다
     const loaded = await loadReport(reportId)
     if (!loaded) return Response.json({ error: '문서를 찾을 수 없습니다' }, { status: 404 })
-    if (!canSubmit(loaded.report, staff.id)) {
+    if (!canEdit(loaded.report, staff.id)) {
       return Response.json({ error: '수정할 수 없는 문서입니다' }, { status: 403 })
     }
 

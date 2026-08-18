@@ -7,7 +7,7 @@ export const APPROVAL_STATUSES = ['draft', 'pending', 'approved', 'rejected', 'w
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number]
 
 export const APPROVAL_STATUS_LABEL: Record<ApprovalStatus, string> = {
-  draft: '저장된',
+  draft: '작성중',
   pending: '진행중',
   approved: '완료',
   rejected: '반려된',

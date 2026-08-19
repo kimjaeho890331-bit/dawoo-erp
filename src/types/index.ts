@@ -165,6 +165,30 @@ export interface Project {
   work_types?: Pick<WorkType, 'name' | 'work_categories'> | null;
 }
 
+// --- 건축물대장 발급 대기열 ---
+export const BUILDING_LEDGER_STATUSES = ['requested', 'issued', 'confirmed'] as const
+export type BuildingLedgerStatus = (typeof BUILDING_LEDGER_STATUSES)[number]
+
+export interface BuildingLedgerRequest {
+  id: string
+  project_id: string
+  status: BuildingLedgerStatus
+  address_used: string | null
+  drive_folder_id: string | null
+  drive_folder_url: string | null
+  drive_file_id: string | null
+  drive_file_url: string | null
+  batch_key: string | null
+  requested_at: string
+  requested_by: string | null
+  issued_at: string | null
+  confirmed_at: string | null
+  confirmed_by: string | null
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
 // --- 복수 입금 ---
 export interface Payment {
   id: string;

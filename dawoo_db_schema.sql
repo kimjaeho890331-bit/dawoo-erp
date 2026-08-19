@@ -413,3 +413,37 @@ CREATE INDEX IF NOT EXISTS idx_staff_emails_staff ON staff_emails(staff_id);
 
 COMMENT ON TABLE staff_emails IS
   '로그인 계정 이메일 ↔ 직원 매핑(1:N). email은 UNIQUE — 한 계정이 두 사람에게 붙지 않는다.';
+
+-- ============================================
+-- 27. 건축물대장 발급 대기열 (019_building_ledger_requests.sql)
+-- ============================================
+-- 접수대장(projects)과 별도 테이블. 직원 신청 → 세움터 발급 → 직원 확인.
+-- projects 컬럼 추가 없음. 기존 RLS 변경 없음.
+
+CREATE TABLE IF NOT EXISTS building_ledger_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'requested'
+    CHECK (status IN ('requested', 'issued', 'confirmed')),
+  address_used TEXT,
+  drive_folder_id TEXT,
+  drive_folder_url TEXT,
+  drive_file_id TEXT,
+  drive_file_url TEXT,
+  batch_key TEXT,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  requested_by UUID REFERENCES staff(id) ON DELETE SET NULL,
+  issued_at TIMESTAMPTZ,
+  confirmed_at TIMESTAMPTZ,
+  confirmed_by UUID REFERENCES staff(id) ON DELETE SET NULL,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS building_ledger_requests_one_open_per_project
+  ON building_ledger_requests (project_id)
+  WHERE status IN ('requested', 'issued');
+
+CREATE INDEX IF NOT EXISTS building_ledger_requests_status_requested_at_idx
+  ON building_ledger_requests (status, requested_at);

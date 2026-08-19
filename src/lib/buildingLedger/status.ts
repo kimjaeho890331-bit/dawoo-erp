@@ -104,6 +104,21 @@ export function buildIssueUpdate(
   return patch
 }
 
+export function buildRequestInsert(
+  project: { id: string; road_address?: string | null; jibun_address?: string | null },
+  staffId: string,
+  now: string,
+): Record<string, unknown> {
+  return {
+    project_id: project.id,
+    status: 'requested',
+    address_used: snapshotAddress(project),
+    requested_by: staffId,
+    requested_at: now,
+    updated_at: now,
+  }
+}
+
 export function buildConfirmUpdate(
   staffId: string | null | undefined,
   now: string,

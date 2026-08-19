@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildConfirmUpdate,
   buildIssueUpdate,
+  buildRequestInsert,
   canCancelRequest,
   canQueueProject,
   canTransition,
@@ -80,6 +81,31 @@ describe('queue API helpers', () => {
     expect(parseQueueStatus('issued')).toBe('issued')
     expect(parseQueueStatus('confirmed')).toBeNull()
     expect(parseQueueStatus('requested')).toBe('requested')
+  })
+})
+
+describe('buildRequestInsert', () => {
+  it('신청 행에 직원과 주소 스냅샷을 남긴다', () => {
+    const now = '2026-08-19T00:00:00.000Z'
+    const staff = '11111111-1111-1111-1111-111111111111'
+    expect(buildRequestInsert({
+      id: 'p1',
+      road_address: '팔달로 1',
+      jibun_address: '인계동 1',
+    }, staff, now)).toEqual({
+      project_id: 'p1',
+      status: 'requested',
+      address_used: '팔달로 1',
+      requested_by: staff,
+      requested_at: now,
+      updated_at: now,
+    })
+  })
+
+  it('주소가 없으면 address_used를 비운다', () => {
+    const now = '2026-08-19T00:00:00.000Z'
+    const row = buildRequestInsert({ id: 'p2', road_address: null, jibun_address: null }, '11111111-1111-1111-1111-111111111111', now)
+    expect(row.address_used).toBeNull()
   })
 })
 

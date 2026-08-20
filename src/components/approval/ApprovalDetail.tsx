@@ -23,14 +23,11 @@ import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
 type LineWithStaff = ExpenseReportLine & { staff: { name: string } | null }
 type ActionKey = 'delete' | 'cancel'
+type DailyInfo = { phone: string; resident_id: string }
 
-// 하단 액션 버튼. 모바일에서는 남는 폭을 나눠 갖고 높이를 44px로 키워 손가락에 맞춘다.
-// md 이상에서는 예전 크기(px-5 py-2)로 되돌아간다.
 const ACTION_BTN =
   'flex-1 min-h-11 flex items-center justify-center rounded-lg text-sm md:flex-none md:min-h-0 md:px-5 md:py-2'
 
-// 저장 경로는 한글을 못 쓰므로(Storage 제약) 파일명이 밑줄로 바뀌어 있다.
-// 브라우저에서 바로 볼 수 없는 형식은 ?download=로 원래 파일명을 되살려 내려받게 한다.
 const PREVIEWABLE = /\.(jpe?g|png|gif|webp|pdf)$/i
 const attachHref = (f: ExpenseReportFile) =>
   PREVIEWABLE.test(f.file_name)
@@ -52,6 +49,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const [error, setError] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState<ActionKey | null>(null)
   const [targetText, setTargetText] = useState({ text: '현장 없음', missing: true })
+  const [dailyInfo, setDailyInfo] = useState<Record<string, DailyInfo>>({})
 
   const load = useCallback(async () => {
     const { data: r } = await supabase
@@ -89,12 +87,32 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         .select('ref_report_id, expense_reports!expense_report_refs_ref_report_id_fkey(id, doc_no, title)')
         .eq('report_id', reportId),
     ])
-    setPayments((p ?? []) as ExpenseReportPayment[])
+    const pay = (p ?? []) as ExpenseReportPayment[]
+    setPayments(pay)
     setDetails((d ?? []) as ExpenseReportDetail[])
     setLines((l ?? []) as LineWithStaff[])
     setFiles((f ?? []) as ExpenseReportFile[])
     setRefs((rf ?? []).map((x: Record<string, unknown>) =>
       x.expense_reports as { id: string; doc_no: string | null; title: string }))
+
+    const names = [...new Set(pay.map(x => x.vendor_name).filter(Boolean))]
+    if (names.length > 0) {
+      const { data: vs } = await supabase
+        .from('vendors')
+        .select('name, phone, resident_id')
+        .eq('vendor_type', '일용직')
+        .in('name', names)
+      const m: Record<string, DailyInfo> = {}
+      for (const v of vs ?? []) {
+        m[v.name as string] = {
+          phone: (v.phone as string) || '',
+          resident_id: (v.resident_id as string) || '',
+        }
+      }
+      setDailyInfo(m)
+    } else {
+      setDailyInfo({})
+    }
   }, [reportId])
 
   useEffect(() => { load() }, [load])
@@ -134,7 +152,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const busy = actionBusy !== null
 
   return (
-    // 모바일은 액션 바가 화면 아래에 고정되므로, 마지막 내용이 가리지 않도록 아래 여백을 둔다.
     <div className="mx-auto max-w-4xl pb-28 md:py-2 md:pb-10">
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
@@ -146,7 +163,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} fullWidth />
       </div>
 
-      {/* 기안정보 — 모바일 */}
       <div className="mb-8 rounded-lg border border-border-primary bg-surface px-5 py-4 md:hidden">
         <MobileField label="문서번호" value={report.doc_no ?? '-'} />
         <MobileField label="상태" value={APPROVAL_STATUS_LABEL[report.status]} />
@@ -222,20 +238,29 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           <span className="text-label">지급 총계(원)</span>
           <span className="text-money text-[15px]">{formatMoney(report.total_amount)}</span>
         </div>
-        {/* 지급정보 — 모바일. 거래처와 금액을 카드 머리에 두고 나머지는 라벨과 함께 아래에 둔다. */}
         <div className="px-4 py-4 md:hidden">
-          {payments.map(p => (
-            <MobileCard key={p.id}>
-              <div className="mb-2 flex items-baseline justify-between gap-3">
-                <span className="text-[15px] font-medium text-txt-primary">{p.vendor_name}</span>
-                <span className="text-money shrink-0 text-[15px] text-txt-primary">{formatMoney(p.amount)}</span>
-              </div>
-              <MobileField label="지급요청일" value={p.pay_request_date} />
-              <MobileField label="은행" value={p.bank} />
-              <MobileField label="계좌번호" value={p.account_no} />
-              <MobileField label="사업자번호" value={p.business_no ?? ''} />
-            </MobileCard>
-          ))}
+          {payments.map(p => {
+            const daily = dailyInfo[p.vendor_name]
+            return (
+              <MobileCard key={p.id}>
+                <div className="mb-2 flex items-baseline justify-between gap-3">
+                  <span className="text-[15px] font-medium text-txt-primary">{p.vendor_name}</span>
+                  <span className="text-money shrink-0 text-[15px] text-txt-primary">{formatMoney(p.amount)}</span>
+                </div>
+                <MobileField label="지급요청일" value={p.pay_request_date} />
+                <MobileField label="은행" value={p.bank} />
+                <MobileField label="계좌번호" value={p.account_no} />
+                {daily ? (
+                  <>
+                    <MobileField label="주민번호" value={daily.resident_id || p.business_no || ''} />
+                    <MobileField label="연락처" value={daily.phone} />
+                  </>
+                ) : (
+                  <MobileField label="사업자번호" value={p.business_no ?? ''} />
+                )}
+              </MobileCard>
+            )
+          })}
           {payments.length === 0 && (
             <div className="py-6 text-center text-[13px] text-txt-tertiary">지급 정보가 없습니다</div>
           )}
@@ -249,20 +274,26 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
               <th className="w-[14%] border-r border-border-primary px-4 py-3 text-left">지급요청일</th>
               <th className="w-[13%] border-r border-border-primary px-4 py-3 text-left">은행</th>
               <th className="w-[22%] border-r border-border-primary px-4 py-3 text-left">계좌번호</th>
-              <th className="w-[17%] px-4 py-3 text-left">사업자번호</th>
+              <th className="w-[17%] px-4 py-3 text-left">사업자·주민번호</th>
             </tr>
           </thead>
           <tbody>
-            {payments.map(p => (
-              <tr key={p.id} className="border-t border-border-primary">
-                <td className="border-r border-border-primary px-4 py-3">{p.vendor_name}</td>
-                <td className="text-money border-r border-border-primary px-4 py-3 text-right">{formatMoney(p.amount)}</td>
-                <td className="border-r border-border-primary px-4 py-3">{p.pay_request_date}</td>
-                <td className="border-r border-border-primary px-4 py-3">{p.bank}</td>
-                <td className="border-r border-border-primary px-4 py-3">{p.account_no}</td>
-                <td className="px-4 py-3">{p.business_no ?? ''}</td>
-              </tr>
-            ))}
+            {payments.map(p => {
+              const daily = dailyInfo[p.vendor_name]
+              return (
+                <tr key={p.id} className="border-t border-border-primary">
+                  <td className="border-r border-border-primary px-4 py-3">
+                    <div>{p.vendor_name}</div>
+                    {daily?.phone && <div className="mt-1 text-[12px] text-txt-tertiary">{daily.phone}</div>}
+                  </td>
+                  <td className="text-money border-r border-border-primary px-4 py-3 text-right">{formatMoney(p.amount)}</td>
+                  <td className="border-r border-border-primary px-4 py-3">{p.pay_request_date}</td>
+                  <td className="border-r border-border-primary px-4 py-3">{p.bank}</td>
+                  <td className="border-r border-border-primary px-4 py-3">{p.account_no}</td>
+                  <td className="px-4 py-3">{daily ? (daily.resident_id || p.business_no || '') : (p.business_no ?? '')}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -270,8 +301,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       {details.length > 0 && (
         <div className="mb-8 overflow-hidden rounded-lg border border-border-primary bg-surface">
           <div className="border-b border-border-primary px-5 py-4 text-card-title">상세 내용</div>
-
-          {/* 상세내용 — 모바일 */}
           <div className="px-4 py-4 md:hidden">
             {details.map(d => (
               <MobileCard key={d.id}>
@@ -288,7 +317,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
               </MobileCard>
             ))}
           </div>
-
           <table className="hidden w-full table-fixed md:table">
             <thead>
               <tr>
@@ -322,7 +350,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
 
       <h2 className="mb-3">결재의견</h2>
 
-      {/* 결재의견 — 모바일 */}
       <div className="mb-8 md:hidden">
         {lines.filter(l => l.acted_at).map(l => (
           <MobileCard key={l.id}>
@@ -368,11 +395,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
 
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      {/*
-        모바일에서는 화면 아래에 고정한다 — 문서가 길어도 승인·반려가 엄지에 닿아야 한다.
-        아이폰 홈바에 가리지 않도록 safe-area만큼 아래 여백을 더한다.
-        md 이상에서는 static으로 되돌아가 지금 데스크톱 모양 그대로다.
-      */}
       <div
         className="fixed bottom-0 left-0 right-0 z-30 flex gap-2 px-4 py-3 bg-surface border-t border-border-primary
                    pb-[calc(0.75rem+env(safe-area-inset-bottom))]

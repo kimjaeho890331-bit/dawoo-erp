@@ -13,7 +13,9 @@ import FileAttach, { type AttachedFile } from './FileAttach'
 import MobileField from './MobileField'
 import type { ApprovalStatus, PaymentRow, DetailRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
+import { attachDailyWorkerFiles, hydrateDailyPayments } from '@/lib/approval/dailyWorker'
 import { formatMoney } from '@/lib/utils/format'
+import type { VendorOption } from './VendorNameCell'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { workKindFromIds, type WorkKind } from '@/lib/workTarget'
 
@@ -54,6 +56,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   /** 모바일 단계. 데스크톱에서는 이 값이 바뀌지 않고, 화면도 이 값을 보지 않는다. */
   const [step, setStep] = useState(0)
   const excelInputRef = useRef<HTMLInputElement>(null)
+  const [taxBlank, setTaxBlank] = useState('')
+
+  const handleVendorPick = (v: VendorOption) => {
+    setFiles(prev => attachDailyWorkerFiles(prev, v))
+  }
 
   useEffect(() => {
     supabase
@@ -89,15 +96,32 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         supabase.from('expense_report_files').select('*').eq('report_id', sourceId).order('uploaded_at'),
       ])
 
-      setPayments((p ?? []).map(x => ({
+      const mapped = (p ?? []).map(x => ({
         vendor_name: x.vendor_name, amount: x.amount,
         pay_request_date: x.pay_request_date, bank: x.bank,
         account_no: x.account_no, business_no: x.business_no ?? '',
-      })) as PaymentRow[])
+      })) as PaymentRow[]
       setDetails((d ?? []).map(x => ({
         vendor_name: x.vendor_name ?? '', account: x.account ?? '', content: x.content ?? '',
         dept_name: x.dept_name ?? '', amount: x.amount ?? 0, note: x.note ?? '',
       })) as DetailRow[])
+
+      const names = [...new Set(mapped.map(x => x.vendor_name).filter(Boolean))]
+      let nextFiles = copyFromId ? [] : ((f ?? []) as AttachedFile[])
+      if (names.length > 0) {
+        const { data: vs } = await supabase
+          .from('vendors')
+          .select('id, name, vendor_type, phone, resident_id, id_card_url, bankbook_url, safety_cert_url')
+          .eq('vendor_type', '일용직')
+          .in('name', names)
+        const list = vs ?? []
+        setPayments(hydrateDailyPayments(mapped, list))
+        if (!copyFromId) {
+          for (const v of list) nextFiles = attachDailyWorkerFiles(nextFiles, v)
+        }
+      } else {
+        setPayments(mapped)
+      }
 
       if (copyFromId) {
         setLines([])
@@ -108,7 +132,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           name: (x.staff as { name: string })?.name ?? '',
           role: x.role as LineDraft['role'],
         })))
-        setFiles((f ?? []) as AttachedFile[])
+        setFiles(nextFiles)
 
         const { data: rf } = await supabase
           .from('expense_report_refs')
@@ -150,7 +174,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       const json = await res.json()
       if (!res.ok) { setError(json.error); return }
 
-      // 이미 상신된 문서는 내용만 고친다. 다시 상신하면 서버가 막는다.
       if (!thenSubmit || existingStatus === 'pending') {
         router.push(`/approval/${json.id}`)
         return
@@ -205,25 +228,17 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
 
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
-  // 단계 이동 시 위로 올려준다. 긴 단계를 지나온 뒤 다음 단계의 중간부터 보이면
-  // 무엇을 입력해야 하는지 알 수 없다.
   useEffect(() => {
     window.scrollTo({ top: 0 })
   }, [step])
 
   const goNext = () => {
-    // 그 단계에서 확인할 수 있는 것만 본다. 전체 검증은 상신할 때 서버가 다시 한다.
     if (step === 0 && !actor) { setError('기안자를 선택해 주세요'); return }
     if (step === 0 && !title.trim()) { setError('기안제목을 입력해 주세요'); return }
-    // 지급 정보는 비워둔 채로도 다음 단계·상신이 가능하다 — 계좌가 아직 안 나온
-    // 상태에서 결재를 먼저 올리는 실무가 있어서 막지 않는다.
     setError(null)
     setStep(s => Math.min(s + 1, LAST_STEP))
   }
 
-  // 아래 세 함수는 "이 단계에서 이 덩어리를 보일지"를 정한다.
-  // 데스크톱(md 이상)은 언제나 전부 보인다. Tailwind가 소스에서 클래스 문자열을 찾아야 하므로
-  // 문자열을 조합하지 않고 통째로 적는다.
   const stepBlock = (n: number) => (step === n ? 'md:block' : 'hidden md:block')
   const stepFlex = (n: number) => (step === n ? 'flex md:flex' : 'hidden md:flex')
   const mobileOnly = (n: number) => (step === n ? 'md:hidden' : 'hidden')
@@ -234,7 +249,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     <div className="mx-auto max-w-4xl pb-28 md:py-2 md:pb-10">
       <div className="mb-6 flex items-center justify-between md:mb-8">
         <h1>지출결의서</h1>
-        {/* 임시저장은 어느 단계에서든 눌릴 수 있어야 한다. 폰 작업은 중간에 끊기기 쉽다. */}
         <button
           onClick={() => save(false)}
           disabled={busy || excelBusy || !actor}
@@ -244,7 +258,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </button>
       </div>
 
-      {/* 진행 표시 — 모바일 전용 */}
       <div className="mb-6 md:hidden">
         <div className="mb-3 flex gap-1.5">
           {STEPS.map((s, i) => (
@@ -257,7 +270,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </div>
       </div>
 
-      {/* 기안정보 — 모바일 */}
       <div className={`${mobileOnly(0)} mb-6 rounded-lg border border-border-primary bg-surface px-5 py-4`}>
         <MobileField label="기안양식" value="지출결의서" />
         <MobileField label="문서번호" value="완료 시 부여" />
@@ -417,7 +429,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           />
         </label>
       </div>
-      <div className={`${stepBlock(1)} mb-8`}><PaymentTable rows={payments} onChange={setPayments} /></div>
+      <div className={`${stepBlock(1)} mb-8`}><PaymentTable rows={payments} onChange={setPayments} onVendorPick={handleVendorPick} /></div>
       <div className={`${stepBlock(2)} mb-8`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
 
       <div className={`${stepBlock(2)} mb-8`}>
@@ -425,8 +437,16 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           className="min-h-36 w-full rounded-lg border border-border-primary px-4 py-3 text-base leading-relaxed md:text-[13px]" />
       </div>
 
-      {/* 확인 단계 — 모바일 전용. 단계별의 약점인 "중간 수정이 번거롭다"를 여기서 보완한다.
-          항목마다 해당 단계로 바로 돌아갈 수 있다. */}
+      <div className={`${stepBlock(2)} mb-8`}>
+        <h2 className="mb-3">세금요율</h2>
+        <input
+          value={taxBlank}
+          onChange={e => setTaxBlank(e.target.value)}
+          className="h-11 w-full rounded-lg border border-border-primary px-3 text-base md:h-9 md:text-[13px]"
+          aria-label="세금요율"
+        />
+      </div>
+
       <div className={`${mobileOnly(LAST_STEP)} mb-5`}>
         {[
           { label: '기안자', to: 0, value: actor?.name ?? '선택 안 됨' },
@@ -449,7 +469,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
 
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
 
-      {/* 데스크톱 액션 — 지금 모양 그대로 */}
       <div className="hidden justify-center gap-3 border-t border-border-primary pt-8 md:flex">
         <button disabled={busy || excelBusy || !actor} onClick={() => save(false)}
           className="h-9 rounded-lg border border-border-primary px-6 text-sm disabled:opacity-40">임시저장</button>
@@ -457,7 +476,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           className="h-9 rounded-lg bg-accent px-6 text-sm text-txt-inverse disabled:opacity-40">상신하기</button>
       </div>
 
-      {/* 모바일 단계 이동 — 화면 아래 고정 */}
       <div
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex gap-2 px-4 py-3 bg-surface border-t border-border-primary
                    pb-[calc(0.75rem+env(safe-area-inset-bottom))]"

@@ -119,6 +119,10 @@ export interface PaymentRow {
   bank: string
   account_no: string
   business_no: string
+  vendor_id?: string
+  vendor_type?: string
+  phone?: string
+  resident_id?: string
 }
 
 export interface DetailRow {

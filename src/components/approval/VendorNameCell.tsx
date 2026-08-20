@@ -8,10 +8,16 @@ import type { PaymentRow } from '@/types/approval'
 export interface VendorOption {
   id: string
   name: string
+  vendor_type: string | null
   business_number: string | null
   bank_name: string | null
   account_number: string | null
   bank_info: string | null
+  phone: string | null
+  resident_id: string | null
+  id_card_url: string | null
+  bankbook_url: string | null
+  safety_cert_url: string | null
 }
 
 interface Props {
@@ -19,6 +25,7 @@ interface Props {
   vendors: VendorOption[]
   onInput: (value: string) => void
   onSelect: (patch: Partial<PaymentRow>) => void
+  onPickVendor?: (vendor: VendorOption) => void
   className: string
   placeholder?: string
 }
@@ -29,7 +36,7 @@ interface Props {
  * 후보 목록은 표(overflow-hidden) 바깥으로 잘리면 안 되므로 document.body에 포탈로 띄운다.
  * 목록에 없는 이름을 그냥 타이핑해서 쓰는 것도 항상 가능해야 한다 (강제 선택 아님).
  */
-export default function VendorNameCell({ value, vendors, onInput, onSelect, className, placeholder }: Props) {
+export default function VendorNameCell({ value, vendors, onInput, onSelect, onPickVendor, className, placeholder }: Props) {
   /**
    * 후보 목록의 위치. 아래 공간이 모자라면 입력칸 위로 띄운다(`bottom` 사용).
    * 폰에서는 입력칸이 화면 하단에 오는 일이 잦은데, 그때 아래로만 띄우면
@@ -57,7 +64,6 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
     const r = el.getBoundingClientRect()
     const below = window.innerHeight - r.bottom
     const above = r.top
-    // 아래가 좁고 위가 더 넓을 때만 뒤집는다. 어중간하면 아래로 두는 편이 덜 놀랍다.
     const flipUp = below < 200 && above > below
     const space = (flipUp ? above : below) - 12
     return {
@@ -77,9 +83,6 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
 
   useEffect(() => {
     if (!open) return
-
-    // 후보 목록 자신을 스크롤하는 것까지 닫아버리면 목록을 내려볼 수가 없다.
-    // 바깥이 스크롤될 때는 닫는 대신 input 위치를 다시 재서 따라가게 한다.
     const onScroll = (e: Event) => {
       if (listRef.current?.contains(e.target as Node)) return
       const el = inputRef.current
@@ -91,7 +94,6 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
       if (p) setRect(p)
     }
     const close = () => setOpen(false)
-
     window.addEventListener('scroll', onScroll, true)
     window.addEventListener('resize', close)
     return () => {
@@ -101,6 +103,7 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
   }, [open])
 
   const pick = (v: VendorOption) => {
+    const isDaily = v.vendor_type === '일용직'
     const resolved = v.bank_name && v.account_number
       ? { bank: v.bank_name, account: v.account_number }
       : parseBankInfo(v.bank_info)
@@ -109,8 +112,13 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
       vendor_name: v.name,
       bank: resolved?.bank ?? '',
       account_no: resolved?.account ?? '',
-      business_no: v.business_number ?? '',
+      business_no: isDaily ? (v.resident_id ?? '') : (v.business_number ?? ''),
+      vendor_id: v.id,
+      vendor_type: v.vendor_type ?? '',
+      phone: v.phone ?? '',
+      resident_id: v.resident_id ?? '',
     })
+    onPickVendor?.(v)
     setOpen(false)
   }
 
@@ -129,7 +137,6 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
       {open && filtered.length > 0 && rect && createPortal(
         <div
           ref={listRef}
-          // 스크롤바를 잡을 때 input이 blur되어 목록이 닫히는 것을 막는다.
           onMouseDown={e => e.preventDefault()}
           style={{
             position: 'fixed',
@@ -149,8 +156,15 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
               onClick={() => pick(v)}
               className="w-full text-left px-3 py-3 text-sm hover:bg-surface-secondary text-txt-primary md:py-2 md:text-xs"
             >
-              <div className="font-medium">{v.name}</div>
-              {v.business_number && <div className="text-txt-tertiary text-xs">{v.business_number}</div>}
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{v.name}</span>
+                {v.vendor_type === '일용직' && (
+                  <span className="rounded-full bg-surface-secondary px-1.5 py-0.5 text-[10px] text-txt-tertiary">일용직</span>
+                )}
+              </div>
+              {v.vendor_type === '일용직'
+                ? (v.phone && <div className="text-txt-tertiary text-xs">{v.phone}</div>)
+                : (v.business_number && <div className="text-txt-tertiary text-xs">{v.business_number}</div>)}
             </button>
           ))}
         </div>,

@@ -10,19 +10,20 @@ import VendorNameCell, { type VendorOption } from './VendorNameCell'
 interface Props {
   rows: PaymentRow[]
   onChange: (rows: PaymentRow[]) => void
+  onVendorPick?: (vendor: VendorOption) => void
 }
 
-export default function PaymentTable({ rows, onChange }: Props) {
+export default function PaymentTable({ rows, onChange, onVendorPick }: Props) {
   const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
 
-  // 거래처DB 후보 목록. 조회 전용 — vendors 테이블에는 쓰지 않는다.
   const [vendors, setVendors] = useState<VendorOption[]>([])
+  const [dailyOnly, setDailyOnly] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     supabase
       .from('vendors')
-      .select('id, name, business_number, bank_name, account_number, bank_info')
+      .select('id, name, vendor_type, business_number, bank_name, account_number, bank_info, phone, resident_id, id_card_url, bankbook_url, safety_cert_url')
       .order('name')
       .then(({ data }) => {
         if (cancelled) return
@@ -36,13 +37,21 @@ export default function PaymentTable({ rows, onChange }: Props) {
   const set = (i: number, patch: Partial<PaymentRow>) =>
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
 
-  const cell = 'w-full px-3 py-2 text-[13px] bg-transparent outline-none rounded hover:bg-surface-secondary focus:bg-surface focus:ring-1 focus:ring-accent'
+  const listedVendors = dailyOnly ? vendors.filter(v => v.vendor_type === '일용직') : vendors
 
-  // 모바일 입력칸. 글자를 16px로 두는 이유는 아이폰 사파리가 그보다 작은 입력칸을 누르면
-  // 화면을 자동 확대해버리기 때문이다. 높이 44px는 손가락에 맞춘 최소 크기다.
+  const isDailyRow = (r: PaymentRow) =>
+    r.vendor_type === '일용직' || vendors.find(v => v.name === r.vendor_name)?.vendor_type === '일용직'
+
+  const cell = 'w-full px-3 py-2 text-[13px] bg-transparent outline-none rounded hover:bg-surface-secondary focus:bg-surface focus:ring-1 focus:ring-accent'
   const mCell =
     'w-full h-11 px-3 text-base bg-surface border border-border-primary rounded-lg outline-none focus:ring-1 focus:ring-accent text-txt-primary'
   const mLabel = 'mb-1.5 block text-label'
+
+  const pickVendor = (i: number, patch: Partial<PaymentRow>) => {
+    set(i, patch)
+    const v = patch.vendor_id ? vendors.find(x => x.id === patch.vendor_id) : undefined
+    if (v) onVendorPick?.(v)
+  }
 
   return (
     <div className="overflow-hidden rounded-lg border border-border-primary bg-surface">
@@ -54,15 +63,27 @@ export default function PaymentTable({ rows, onChange }: Props) {
 
       <div className="flex items-center justify-between border-b border-border-primary px-5 py-3">
         <span className="text-card-title">지급 정보</span>
-        <button
-          onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
-          className="hidden h-8 items-center gap-1 rounded-lg border border-border-primary px-3 text-[13px] md:flex"
-        >
-          <Plus size={14} className="text-txt-tertiary" /> 추가
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDailyOnly(v => !v)}
+            className={`h-8 rounded-lg border px-3 text-[13px] ${
+              dailyOnly
+                ? 'border-accent bg-accent-light text-accent-text'
+                : 'border-border-primary text-txt-secondary'
+            }`}
+          >
+            일용직만
+          </button>
+          <button
+            onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
+            className="hidden h-8 items-center gap-1 rounded-lg border border-border-primary px-3 text-[13px] md:flex"
+          >
+            <Plus size={14} className="text-txt-tertiary" /> 추가
+          </button>
+        </div>
       </div>
 
-      {/* 모바일 — 한 건이 카드 한 장. 7칸 표를 폰에 그리면 칸마다 40px도 안 남는다. */}
       <div className="px-4 py-4 md:hidden">
         {rows.map((r, i) => (
           <div key={i} className="mb-4 rounded-lg border border-border-primary bg-surface px-5 py-4 last:mb-0">
@@ -81,13 +102,32 @@ export default function PaymentTable({ rows, onChange }: Props) {
             <div className="mb-3">
               <VendorNameCell
                 value={r.vendor_name}
-                vendors={vendors}
-                onInput={v => set(i, { vendor_name: v })}
-                onSelect={patch => set(i, patch)}
+                vendors={listedVendors}
+                onInput={v => set(i, { vendor_name: v, vendor_type: '', vendor_id: '', phone: '', resident_id: '' })}
+                onSelect={patch => pickVendor(i, patch)}
                 className={mCell}
-                placeholder="거래처명"
+                placeholder={dailyOnly ? '일용직 이름' : '거래처명'}
               />
             </div>
+
+            {isDailyRow(r) && (
+              <>
+                <label className={mLabel}>주민번호</label>
+                <input
+                  className={`${mCell} mb-3`}
+                  value={r.resident_id || r.business_no}
+                  onChange={e => set(i, { resident_id: e.target.value, business_no: e.target.value })}
+                  placeholder="주민번호"
+                />
+                <label className={mLabel}>연락처</label>
+                <input
+                  className={`${mCell} mb-3`}
+                  value={r.phone ?? ''}
+                  onChange={e => set(i, { phone: e.target.value })}
+                  placeholder="연락처"
+                />
+              </>
+            )}
 
             <label className={mLabel}>지급금액 *</label>
             <input
@@ -123,14 +163,18 @@ export default function PaymentTable({ rows, onChange }: Props) {
               </div>
             </div>
 
-            <label className={mLabel}>사업자번호</label>
-            <input
-              className={mCell}
-              inputMode="numeric"
-              value={r.business_no}
-              onChange={e => set(i, { business_no: e.target.value })}
-              placeholder="선택"
-            />
+            {!isDailyRow(r) && (
+              <>
+                <label className={mLabel}>사업자번호</label>
+                <input
+                  className={mCell}
+                  inputMode="numeric"
+                  value={r.business_no}
+                  onChange={e => set(i, { business_no: e.target.value })}
+                  placeholder="선택"
+                />
+              </>
+            )}
           </div>
         ))}
 
@@ -150,7 +194,7 @@ export default function PaymentTable({ rows, onChange }: Props) {
             <th className="w-[14%] border-r border-border-primary px-3 py-3 text-left">지급요청일 *</th>
             <th className="w-[12%] border-r border-border-primary px-3 py-3 text-left">은행 *</th>
             <th className="w-[20%] border-r border-border-primary px-3 py-3 text-left">계좌번호 *</th>
-            <th className="w-[16%] border-r border-border-primary px-3 py-3 text-left">사업자번호</th>
+            <th className="w-[16%] border-r border-border-primary px-3 py-3 text-left">사업자·주민번호</th>
             <th className="w-[6%] px-3 py-3"></th>
           </tr>
         </thead>
@@ -160,12 +204,21 @@ export default function PaymentTable({ rows, onChange }: Props) {
               <td className="border-r border-border-primary">
                 <VendorNameCell
                   value={r.vendor_name}
-                  vendors={vendors}
-                  onInput={v => set(i, { vendor_name: v })}
-                  onSelect={patch => set(i, patch)}
+                  vendors={listedVendors}
+                  onInput={v => set(i, { vendor_name: v, vendor_type: '', vendor_id: '', phone: '', resident_id: '' })}
+                  onSelect={patch => pickVendor(i, patch)}
                   className={cell}
-                  placeholder="거래처명"
+                  placeholder={dailyOnly ? '일용직 이름' : '거래처명'}
                 />
+                {isDailyRow(r) && (
+                  <input
+                    className={cell}
+                    value={r.phone ?? ''}
+                    onChange={e => set(i, { phone: e.target.value })}
+                    placeholder="연락처"
+                    aria-label="연락처"
+                  />
+                )}
               </td>
               <td className="border-r border-border-primary"><input className={`${cell} text-money text-right`} value={r.amount ? formatMoney(r.amount) : ''}
                 onChange={e => set(i, { amount: parseMoney(e.target.value) })} placeholder="0" /></td>
@@ -175,8 +228,12 @@ export default function PaymentTable({ rows, onChange }: Props) {
                 onChange={e => set(i, { bank: e.target.value })} placeholder="은행명" /></td>
               <td className="border-r border-border-primary"><input className={cell} value={r.account_no}
                 onChange={e => set(i, { account_no: e.target.value })} placeholder="계좌번호" /></td>
-              <td className="border-r border-border-primary"><input className={cell} value={r.business_no}
-                onChange={e => set(i, { business_no: e.target.value })} placeholder="선택" /></td>
+              <td className="border-r border-border-primary"><input className={cell}
+                value={isDailyRow(r) ? (r.resident_id || r.business_no) : r.business_no}
+                onChange={e => set(i, isDailyRow(r)
+                  ? { resident_id: e.target.value, business_no: e.target.value }
+                  : { business_no: e.target.value })}
+                placeholder={isDailyRow(r) ? '주민번호' : '선택'} /></td>
               <td className="text-center">
                 <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} aria-label="행 삭제"
                   className="inline-flex h-9 w-9 items-center justify-center">

@@ -9,7 +9,7 @@ import NewProjectModal from '@/components/register/NewProjectModal'
 import { WaterPublicEmptyCount } from '@/components/register/WaterPublicReadiness'
 import { useWaterPublicEvidence } from '@/components/register/useWaterPublicEvidence'
 import {
-  countEmptyHumanReadiness,
+  countEmptyReadiness,
   evaluateWaterPublicReadiness,
   isWaterPublicRow,
 } from '@/lib/register/waterPublicReadiness'
@@ -284,9 +284,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     })
   }, [getEvidence])
 
-  const humanEmptyCount = useCallback((project: DBProject) => {
+  const leftoverCount = useCallback((project: DBProject) => {
     if (!isWaterPublicRow({ category, water_work_type: project.water_work_type })) return 0
-    return countEmptyHumanReadiness(projectReadiness(project))
+    return countEmptyReadiness(projectReadiness(project))
   }, [category, projectReadiness])
 
   // 데이터 로드
@@ -671,7 +671,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                     'bg-orange-100 text-orange-700'
                   }`}>{project.water_work_type}</span>
                 )}
-                <WaterPublicEmptyCount count={humanEmptyCount(project)} />
+                <WaterPublicEmptyCount count={leftoverCount(project)} />
                 <span className="text-[10px] text-txt-tertiary truncate">{project.note || ''}</span>
               </div>
             </div>
@@ -754,7 +754,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                           }`}>
                             {project.water_work_type || project.work_types?.name || '-'}
                           </span>
-                          <WaterPublicEmptyCount count={humanEmptyCount(project)} />
+                          <WaterPublicEmptyCount count={leftoverCount(project)} />
                         </span>
                       )}
                     </td>

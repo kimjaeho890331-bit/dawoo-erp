@@ -430,3 +430,10 @@ table tbody tr:hover {
   background: #faf0eb;              /* Accent Light */
   color: #c96442;                   /* Terracotta Brand */
 }
+
+/* 준비 필 클릭 시 해당 입력 잠깐 강조 */
+[data-ready-flash="1"] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}

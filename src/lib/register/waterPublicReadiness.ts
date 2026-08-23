@@ -52,24 +52,64 @@ export type ReadinessKey = HumanReadinessKey | SystemReadinessKey
 
 export type WaterPublicReadinessChecks = Record<ReadinessKey, boolean>
 
-/** 접수 탭 1~5에 붙는 준비도 키. 계산은 evaluateWaterPublicReadiness 만 쓴다. */
-export const RECEPTION_STEP_READINESS_KEYS = {
-  1: ['owner', 'phone'],
-  2: ['estimate'],
-  3: ['meeting', 'smsConsent'],
-  4: ['bank', 'bankbook'],
-  5: ['applicationDate', 'constructionStart', 'constructionEnd', 'ledger'],
-} as const satisfies Record<1 | 2 | 3 | 4 | 5, readonly ReadinessKey[]>
+/** 준비 블록 필. 짧은 라벨만. 계산 키는 evaluateWaterPublicReadiness 와 같다. */
+export const READINESS_PILL_ITEMS = [
+  { key: 'owner', label: '대표자' },
+  { key: 'phone', label: '전화' },
+  { key: 'bank', label: '통장' },
+  { key: 'bankbook', label: '사본' },
+  { key: 'ledger', label: '대장' },
+  { key: 'estimate', label: '견적' },
+  { key: 'meeting', label: '회의' },
+  { key: 'applicationDate', label: '신청일' },
+  { key: 'smsConsent', label: '문자' },
+] as const satisfies ReadonlyArray<{ key: ReadinessKey; label: string }>
 
-export type ReceptionStepNumber = keyof typeof RECEPTION_STEP_READINESS_KEYS
+export type ReadinessPillKey = (typeof READINESS_PILL_ITEMS)[number]['key']
 
-/** 사람 칸만. 목록 「빈 N」용. 시스템(대장/견적)은 세지 않는다. */
+/** 사람 칸만. 목록 레거시 집계용. 시스템(대장/견적)은 세지 않는다. */
 export function countEmptyHumanReadiness(checks: WaterPublicReadinessChecks): number {
   let empty = 0
   for (const item of HUMAN_READINESS_ITEMS) {
     if (!checks[item.key]) empty += 1
   }
   return empty
+}
+
+export type ReadinessSummary = {
+  filled: number
+  total: number
+  remaining: number
+  remainingLabels: string[]
+}
+
+/** 준비 블록·목록 「남 N」용. 필 9칸만 센다. */
+export function summarizeReadiness(checks: WaterPublicReadinessChecks): ReadinessSummary {
+  let filled = 0
+  const remainingLabels: string[] = []
+  for (const item of READINESS_PILL_ITEMS) {
+    if (checks[item.key]) filled += 1
+    else remainingLabels.push(item.label)
+  }
+  return {
+    filled,
+    total: READINESS_PILL_ITEMS.length,
+    remaining: remainingLabels.length,
+    remainingLabels,
+  }
+}
+
+export function countEmptyReadiness(checks: WaterPublicReadinessChecks): number {
+  return summarizeReadiness(checks).remaining
+}
+
+export function formatReadinessSummary(summary: ReadinessSummary): string {
+  return `준비 ${summary.filled}/${summary.total} · 남음 ${summary.remaining}`
+}
+
+export function formatRemainingLine(labels: readonly string[]): string {
+  if (labels.length === 0) return ''
+  return `남은 것: ${labels.join(', ')}`
 }
 
 export type WaterPublicEvidence = {

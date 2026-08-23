@@ -5,7 +5,11 @@ import {
   buildApplicationReadyPatch,
   buildSmsConsentPatch,
   canLightApplicationReady,
+  countEmptyHumanReadiness,
   evaluateWaterPublicReadiness,
+  HUMAN_READINESS_ITEMS,
+  RECEPTION_STEP_READINESS_KEYS,
+  SYSTEM_READINESS_ITEMS,
   groupEvidence,
   hasEstimateEvidence,
   hasLedgerEvidence,
@@ -177,6 +181,32 @@ describe('신청서 만들자', () => {
       const checks = evaluateWaterPublicReadiness({ ...allReadyOverrides(), ...partial })
       expect(canLightApplicationReady(checks)).toBe(false)
     }
+  })
+
+  it('사람 칸 빈 개수만 센다. 시스템 칸은 「빈 N」에 넣지 않는다', () => {
+    expect(countEmptyHumanReadiness(evaluateWaterPublicReadiness(allReadyOverrides()))).toBe(0)
+    expect(countEmptyHumanReadiness(evaluateWaterPublicReadiness({
+      ...allReadyOverrides(),
+      owner_name: null,
+      owner_phone: '',
+    }))).toBe(2)
+    expect(countEmptyHumanReadiness(evaluateWaterPublicReadiness({
+      ...allReadyOverrides(),
+      evidence: {
+        hasBankbookAttachment: true,
+        hasLedgerAttachment: false,
+        ledgerStatuses: [],
+        hasEstimateRow: false,
+        hasLedgerDriveFile: false,
+      },
+    }))).toBe(0)
+  })
+
+  it('접수 1~5 단계 키는 준비도 키를 한 번씩만 나눈다', () => {
+    const assigned = Object.values(RECEPTION_STEP_READINESS_KEYS).flat()
+    const expected = [...HUMAN_READINESS_ITEMS, ...SYSTEM_READINESS_ITEMS].map((item) => item.key)
+    expect([...assigned].sort()).toEqual([...expected].sort())
+    expect(new Set(assigned).size).toBe(assigned.length)
   })
 
   it('플래그는 extra_fields.application_ready === true 일 때만 이미 신호된 것이다', () => {

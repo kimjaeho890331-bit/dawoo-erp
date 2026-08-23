@@ -52,6 +52,26 @@ export type ReadinessKey = HumanReadinessKey | SystemReadinessKey
 
 export type WaterPublicReadinessChecks = Record<ReadinessKey, boolean>
 
+/** 접수 탭 1~5에 붙는 준비도 키. 계산은 evaluateWaterPublicReadiness 만 쓴다. */
+export const RECEPTION_STEP_READINESS_KEYS = {
+  1: ['owner', 'phone'],
+  2: ['estimate'],
+  3: ['meeting', 'smsConsent'],
+  4: ['bank', 'bankbook'],
+  5: ['applicationDate', 'constructionStart', 'constructionEnd', 'ledger'],
+} as const satisfies Record<1 | 2 | 3 | 4 | 5, readonly ReadinessKey[]>
+
+export type ReceptionStepNumber = keyof typeof RECEPTION_STEP_READINESS_KEYS
+
+/** 사람 칸만. 목록 「빈 N」용. 시스템(대장/견적)은 세지 않는다. */
+export function countEmptyHumanReadiness(checks: WaterPublicReadinessChecks): number {
+  let empty = 0
+  for (const item of HUMAN_READINESS_ITEMS) {
+    if (!checks[item.key]) empty += 1
+  }
+  return empty
+}
+
 export type WaterPublicEvidence = {
   hasBankbookAttachment: boolean
   hasLedgerAttachment: boolean

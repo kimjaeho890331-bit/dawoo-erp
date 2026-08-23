@@ -6,8 +6,15 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 import FileDropZone from '@/components/common/FileDropZone'
-import { toggleSmsConsent } from '@/components/register/WaterPublicReadiness'
-import { isSmsConsentGiven, isWaterPublicRow } from '@/lib/register/waterPublicReadiness'
+import { persistApplicationReady, toggleSmsConsent, WaterPublicStepReadiness } from '@/components/register/WaterPublicReadiness'
+import {
+  canLightApplicationReady,
+  evaluateWaterPublicReadiness,
+  isSmsConsentGiven,
+  isWaterPublicRow,
+  RECEPTION_STEP_READINESS_KEYS,
+  type WaterPublicEvidence,
+} from '@/lib/register/waterPublicReadiness'
 import type { TabProps } from './panelHelpers'
 import { FormInput, DateTimeInput, StaffSelect, useCurrentStaff } from './panelHelpers'
 
@@ -24,13 +31,56 @@ interface WaterPricing {
   공용_세대: number
 }
 
-export default function TabReception({ project, category, getVal, onChange, onRefresh }: TabProps & { category: '소규모' | '수도'; onRefresh?: () => void }) {
+export default function TabReception({
+  project,
+  category,
+  getVal,
+  onChange,
+  onRefresh,
+  waterPublicEvidence,
+}: TabProps & {
+  category: '소규모' | '수도'
+  onRefresh?: () => void
+  waterPublicEvidence?: WaterPublicEvidence
+}) {
   const router = useRouter()
   const urlCategory = category === '소규모' ? 'small' : 'water'
   const [pricing, setPricing] = useState<WaterPricing>(DEFAULT_WATER_PRICES)
   const [pricingLoaded, setPricingLoaded] = useState(false)
   const currentStaff = useCurrentStaff()
   const [consentProcessing, setConsentProcessing] = useState(false)
+  const [markingReady, setMarkingReady] = useState(false)
+  const isPublicWater = isWaterPublicRow({ category, water_work_type: project.water_work_type })
+  const publicChecks = isPublicWater
+    ? evaluateWaterPublicReadiness({
+        owner_name: (getVal('owner_name') as string | null) ?? project.owner_name,
+        owner_phone: (getVal('owner_phone') as string | null) ?? project.owner_phone,
+        bank_name: (getVal('bank_name') as string | null) ?? project.bank_name,
+        account_number: (getVal('account_number') as string | null) ?? project.account_number,
+        account_holder: (getVal('account_holder') as string | null) ?? project.account_holder,
+        construction_date: (getVal('construction_date') as string | null) ?? project.construction_date,
+        construction_end_date: (getVal('construction_end_date') as string | null) ?? project.construction_end_date,
+        consent_date: (getVal('consent_date') as string | null) ?? project.consent_date,
+        consent_time: (getVal('consent_time') as string | null) ?? project.consent_time,
+        application_date: (getVal('application_date') as string | null) ?? project.application_date,
+        extra_fields: project.extra_fields,
+        evidence: waterPublicEvidence,
+      })
+    : null
+
+  const handleMarkApplicationReady = async () => {
+    if (!publicChecks || !canLightApplicationReady(publicChecks)) return
+    setMarkingReady(true)
+    try {
+      await persistApplicationReady(project.id, project.extra_fields)
+      onRefresh?.()
+    } catch (err) {
+      console.error('신청서 준비 신호 저장 실패:', err)
+      alert('신청서 준비 신호를 저장하지 못했습니다.')
+    } finally {
+      setMarkingReady(false)
+    }
+  }
 
   const consentDate = getVal('consent_date') as string | null | undefined
   const consentSubmitter = getVal('consent_submitter') as string | null | undefined
@@ -157,7 +207,12 @@ export default function TabReception({ project, category, getVal, onChange, onRe
       {/* 1 실측 */}
       <div className="relative pb-8">
         <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[0].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>1</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[0].textColor} mb-3`}>실측</h3>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <h3 className={`text-[13px] font-semibold ${timelineSteps[0].textColor}`}>실측</h3>
+          {publicChecks && (
+            <WaterPublicStepReadiness stepKeys={RECEPTION_STEP_READINESS_KEYS[1]} checks={publicChecks} />
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="실측일" value={getVal('survey_date') as string} onChange={v => onChange('survey_date', v)} timeValue={getVal('survey_time') as string} onTimeChange={v => onChange('survey_time', v)} />
           <StaffSelect label="담당자" value={getVal('survey_staff') as string} onChange={v => onChange('survey_staff', v)} />
@@ -187,7 +242,12 @@ export default function TabReception({ project, category, getVal, onChange, onRe
       {/* 2 견적 */}
       <div className="relative pb-8">
         <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[1].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>2</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor} mb-3`}>견적</h3>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor}`}>견적</h3>
+          {publicChecks && (
+            <WaterPublicStepReadiness stepKeys={RECEPTION_STEP_READINESS_KEYS[2]} checks={publicChecks} />
+          )}
+        </div>
         {/* 공문 기준 견적 산출 정보 */}
         {area > 0 && (
           <div className="mb-3 p-3 bg-[#faf0eb] rounded-lg border border-[#e8d5cc]">
@@ -270,7 +330,12 @@ export default function TabReception({ project, category, getVal, onChange, onRe
       {project.water_work_type !== '옥내' && (
       <div className="relative pb-8">
         <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[2].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>3</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[2].textColor} mb-3`}>동의서</h3>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <h3 className={`text-[13px] font-semibold ${timelineSteps[2].textColor}`}>동의서</h3>
+          {publicChecks && (
+            <WaterPublicStepReadiness stepKeys={RECEPTION_STEP_READINESS_KEYS[3]} checks={publicChecks} />
+          )}
+        </div>
         {/* 동의서 회수 버튼 */}
         {isConsentDone ? (
           <div className="flex items-center justify-between gap-3 p-3 bg-[#ecfdf5] border border-[#a7f3d0] rounded-lg mb-3">
@@ -339,7 +404,12 @@ export default function TabReception({ project, category, getVal, onChange, onRe
       {/* 4 통장 */}
       <div className="relative pb-8">
         <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-[#c96442] text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
-        <h3 className="text-[13px] font-semibold text-[#c96442] mb-3">통장</h3>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <h3 className="text-[13px] font-semibold text-[#c96442]">통장</h3>
+          {publicChecks && (
+            <WaterPublicStepReadiness stepKeys={RECEPTION_STEP_READINESS_KEYS[4]} checks={publicChecks} />
+          )}
+        </div>
         <div className="mb-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
           <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
@@ -354,7 +424,19 @@ export default function TabReception({ project, category, getVal, onChange, onRe
       {/* 5 신청서 */}
       <div className="relative pb-4">
         <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[4].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>{project.water_work_type === '옥내' ? 4 : 5}</div>
-        <h3 className={`text-[13px] font-semibold ${timelineSteps[4].textColor} mb-3`}>신청서</h3>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <h3 className={`text-[13px] font-semibold ${timelineSteps[4].textColor}`}>신청서</h3>
+          {publicChecks && (
+            <WaterPublicStepReadiness
+              stepKeys={RECEPTION_STEP_READINESS_KEYS[5]}
+              checks={publicChecks}
+              extraFields={project.extra_fields}
+              showApplicationReady
+              onMarkReady={handleMarkApplicationReady}
+              markingReady={markingReady}
+            />
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <DateTimeInput label="신청서 제출일" value={getVal('application_date') as string} onChange={v => onChange('application_date', v)} timeValue={getVal('application_time') as string} onTimeChange={v => onChange('application_time', v)} />
           <StaffSelect label="제출자" value={getVal('application_submitter') as string} onChange={v => onChange('application_submitter', v)} />

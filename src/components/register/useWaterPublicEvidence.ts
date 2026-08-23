@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   BANKBOOK_FILE_TYPE,
+  CERT_TASK_TYPE,
   EMPTY_WATER_PUBLIC_EVIDENCE,
-  ESTIMATE_DOC_TYPE,
   ESTIMATE_FILE_TYPE,
   LEDGER_FILE_TYPE,
   groupEvidence,
@@ -30,32 +30,32 @@ export function useWaterPublicEvidence(projects: DBProject[], category: '소규�
       return
     }
 
-    const [attachments, ledgerRequests, estimates, documents] = await Promise.all([
+    const [attachments, ledgerRequests, estimates, certTasks] = await Promise.all([
       supabase
         .from('attachments')
-        .select('project_id, file_type')
+        .select('project_id, file_type, file_path, drive_url')
         .in('project_id', ids)
         .in('file_type', [...ATTACHMENT_TYPES]),
       supabase
         .from('building_ledger_requests')
-        .select('project_id, status')
+        .select('project_id, status, drive_file_url')
         .in('project_id', ids),
       supabase
         .from('estimates')
         .select('project_id')
         .in('project_id', ids),
       supabase
-        .from('documents')
-        .select('project_id, doc_type')
+        .from('cowork_tasks')
+        .select('project_id, status, result_drive_file_url')
         .in('project_id', ids)
-        .eq('doc_type', ESTIMATE_DOC_TYPE),
+        .eq('task_type', CERT_TASK_TYPE),
     ])
 
     setEvidenceById(groupEvidence({
       attachments: attachments.error ? null : attachments.data,
       ledgerRequests: ledgerRequests.error ? null : ledgerRequests.data,
       estimates: estimates.error ? null : estimates.data,
-      documents: documents.error ? null : documents.data,
+      certTasks: certTasks.error ? null : certTasks.data,
     }))
   }, [category, projects])
 
@@ -70,7 +70,7 @@ export function useWaterPublicEvidence(projects: DBProject[], category: '소규�
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attachments' }, () => { loadEvidence() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'estimates' }, () => { loadEvidence() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'building_ledger_requests' }, () => { loadEvidence() })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => { loadEvidence() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cowork_tasks' }, () => { loadEvidence() })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [category, loadEvidence])

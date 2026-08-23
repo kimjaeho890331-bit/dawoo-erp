@@ -1,17 +1,15 @@
 /**
  * 수도 공용 접수대장 행 준비도 (신청서 만들자 신호).
  *
- * 재사용 컬럼/테이블:
- * - 사람 입력: projects.owner_name / owner_phone / bank_name+account_number+account_holder
- *   / construction_date / construction_end_date / consent_date+consent_time / application_date
- * - 통장사본: attachments.file_type = '통장사본' (FileDropZone 기존 타입, documents 버킷)
- * - 대장: building_ledger_requests.status in issued|confirmed
- *   또는 attachments.file_type = '건축물대장' (cowork complete 가 이미 기록)
- * - 견적: estimates.project_id 행, 또는 attachments.file_type / documents.doc_type = '견적서'
+ * Live (etwpcaedbuubjzbfrjli): documents=0, estimates=0.
+ * 파일은 attachments 행(file_path → storage bucket `documents`, drive_url)으로 붙는다.
+ * FileDropZone file_type 실데이터: 통장사본 / 동의서 / 신청서. 견적서·건축물대장 첨부 행은 아직 없음.
+ * 대장은 building_ledger_requests(issued|confirmed, drive_file_url)와
+ * cowork_tasks.issue_certificate done + result_drive_file_url.
+ * extra_fields 실키는 additional_cost / remark 뿐. sms_consent 없음 → 여기에만 둔다.
  *
- * extra_fields 키 (신규 컬럼/테이블 없음):
- * - sms_consent: 문자 동의 (boolean). 기존 컬럼/키가 없어 여기에만 둔다.
- * - application_ready / application_ready_at: 「신청서 만들자」 클릭 시 세움터 조회용 플래그.
+ * 사람 입력 재사용: owner_name, owner_phone, bank_name+account_number+account_holder,
+ * construction_date, construction_end_date, consent_date+consent_time, application_date
  */
 
 export const WATER_PUBLIC_TYPE = '공용'
@@ -19,7 +17,7 @@ export const WATER_PUBLIC_TYPE = '공용'
 export const BANKBOOK_FILE_TYPE = '통장사본'
 export const LEDGER_FILE_TYPE = '건축물대장'
 export const ESTIMATE_FILE_TYPE = '견적서'
-export const ESTIMATE_DOC_TYPE = '견적서'
+export const CERT_TASK_TYPE = 'issue_certificate'
 
 export const LEDGER_READY_STATUSES = ['issued', 'confirmed'] as const
 
@@ -54,17 +52,17 @@ export type WaterPublicEvidence = {
   attachmentFileTypes: readonly string[]
   ledgerStatuses: readonly string[]
   hasEstimateRow: boolean
-  documentDocTypes: readonly string[]
+  hasLedgerDriveFile: boolean
 }
 
 export const EMPTY_WATER_PUBLIC_EVIDENCE: WaterPublicEvidence = {
   attachmentFileTypes: [],
   ledgerStatuses: [],
   hasEstimateRow: false,
-  documentDocTypes: [],
+  hasLedgerDriveFile: false,
 }
 
-/** 문의→…→입금. DB 값 이름 유지. 착공계/완료서류제출은 공사에 접는다. */
+/** 문의→…→입금. Live DB 값만 이름 그대로. 준공은 입금 뒤에만 UI에 붙인다. */
 export const WATER_PUBLIC_STATUS_FLOW = [
   '문의',
   '실측',
@@ -80,6 +78,7 @@ export type WaterPublicStatusStep = (typeof WATER_PUBLIC_STATUS_FLOW)[number]
 
 export const WATER_PUBLIC_JUNGGONG_LABEL = '준공'
 
+/** Live status 값. 문의(예약)·취소는 흐름 밖(기존 문자열 유지). */
 const DB_STATUS_TO_FLOW: Record<string, WaterPublicStatusStep> = {
   문의: '문의',
   실측: '실측',
@@ -87,9 +86,7 @@ const DB_STATUS_TO_FLOW: Record<string, WaterPublicStatusStep> = {
   동의서: '동의서',
   신청서제출: '신청서제출',
   승인: '승인',
-  착공계: '공사',
   공사: '공사',
-  완료서류제출: '공사',
   입금: '입금',
 }
 
@@ -124,25 +121,29 @@ export function hasBankbookFile(fileTypes: readonly string[]): boolean {
   return fileTypes.includes(BANKBOOK_FILE_TYPE)
 }
 
+export function hasFilledPath(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== ''
+}
+
 export function hasLedgerEvidence(input: {
   ledgerStatuses?: readonly string[]
   fileTypes?: readonly string[]
+  hasLedgerDriveFile?: boolean
 }): boolean {
   const readyStatus = (input.ledgerStatuses ?? []).some(
     (status) => status === 'issued' || status === 'confirmed'
   )
   const readyFile = (input.fileTypes ?? []).includes(LEDGER_FILE_TYPE)
-  return readyStatus || readyFile
+  return readyStatus || readyFile || input.hasLedgerDriveFile === true
 }
 
+/** documents 테이블은 live 0행. 견적은 estimates 행 또는 attachments.file_type=견적서만. */
 export function hasEstimateEvidence(input: {
   hasEstimateRow?: boolean
   fileTypes?: readonly string[]
-  docTypes?: readonly string[]
 }): boolean {
   if (input.hasEstimateRow) return true
   if ((input.fileTypes ?? []).includes(ESTIMATE_FILE_TYPE)) return true
-  if ((input.docTypes ?? []).includes(ESTIMATE_DOC_TYPE)) return true
   return false
 }
 
@@ -181,11 +182,11 @@ export function evaluateWaterPublicReadiness(
     ledger: hasLedgerEvidence({
       ledgerStatuses: evidence.ledgerStatuses,
       fileTypes: evidence.attachmentFileTypes,
+      hasLedgerDriveFile: evidence.hasLedgerDriveFile,
     }),
     estimate: hasEstimateEvidence({
       hasEstimateRow: evidence.hasEstimateRow,
       fileTypes: evidence.attachmentFileTypes,
-      docTypes: evidence.documentDocTypes,
     }),
   }
 }
@@ -242,16 +243,16 @@ export function buildApplicationReadyPatch(
 }
 
 export function groupEvidence(input: {
-  attachments?: { project_id: string; file_type: string | null }[] | null
-  ledgerRequests?: { project_id: string; status: string | null }[] | null
+  attachments?: { project_id: string; file_type: string | null; file_path?: string | null; drive_url?: string | null }[] | null
+  ledgerRequests?: { project_id: string; status: string | null; drive_file_url?: string | null }[] | null
   estimates?: { project_id: string }[] | null
-  documents?: { project_id: string; doc_type: string | null }[] | null
+  certTasks?: { project_id: string | null; status?: string | null; result_drive_file_url?: string | null }[] | null
 }): Record<string, WaterPublicEvidence> {
   const byProject: Record<string, {
     attachmentFileTypes: string[]
     ledgerStatuses: string[]
     hasEstimateRow: boolean
-    documentDocTypes: string[]
+    hasLedgerDriveFile: boolean
   }> = {}
 
   const bucket = (projectId: string) => {
@@ -260,23 +261,28 @@ export function groupEvidence(input: {
         attachmentFileTypes: [],
         ledgerStatuses: [],
         hasEstimateRow: false,
-        documentDocTypes: [],
+        hasLedgerDriveFile: false,
       }
     }
     return byProject[projectId]
   }
 
   for (const row of input.attachments ?? []) {
-    if (row.file_type) bucket(row.project_id).attachmentFileTypes.push(row.file_type)
+    const hasFile = hasFilledPath(row.file_path) || hasFilledPath(row.drive_url)
+    if (row.file_type && hasFile) bucket(row.project_id).attachmentFileTypes.push(row.file_type)
   }
   for (const row of input.ledgerRequests ?? []) {
     if (row.status) bucket(row.project_id).ledgerStatuses.push(row.status)
+    if (hasFilledPath(row.drive_file_url)) bucket(row.project_id).hasLedgerDriveFile = true
   }
   for (const row of input.estimates ?? []) {
     bucket(row.project_id).hasEstimateRow = true
   }
-  for (const row of input.documents ?? []) {
-    if (row.doc_type) bucket(row.project_id).documentDocTypes.push(row.doc_type)
+  for (const row of input.certTasks ?? []) {
+    if (!row.project_id) continue
+    if (row.status === 'done' && hasFilledPath(row.result_drive_file_url)) {
+      bucket(row.project_id).hasLedgerDriveFile = true
+    }
   }
 
   return byProject

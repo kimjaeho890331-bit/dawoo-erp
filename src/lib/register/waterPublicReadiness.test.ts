@@ -29,26 +29,27 @@ function allReadyOverrides() {
     application_date: '2026-07-21',
     extra_fields: { sms_consent: true },
     evidence: {
-      attachmentFileTypes: ['통장사본', '건축물대장'],
-      ledgerStatuses: ['issued'] as string[],
+      attachmentFileTypes: ['통장사본'],
+      ledgerStatuses: ['confirmed'] as string[],
       hasEstimateRow: true,
-      documentDocTypes: [] as string[],
+      hasLedgerDriveFile: false,
     },
   }
 }
 
 describe('isWaterPublicRow', () => {
-  it('수도 + 공용만 준비도 대상이다', () => {
+  it('수도 + water_work_type=공용만 준비도 대상이다', () => {
     expect(isWaterPublicRow({ category: '수도', water_work_type: '공용' })).toBe(true)
     expect(isWaterPublicRow({ water_work_type: '공용' })).toBe(true)
   })
 
-  it('옥내·단독·소규모·빈 종류는 숨긴다', () => {
+  it('옥내·단독·null·junk·소규모는 숨긴다', () => {
     expect(isWaterPublicRow({ category: '수도', water_work_type: '옥내' })).toBe(false)
     expect(isWaterPublicRow({ category: '수도', water_work_type: '단독' })).toBe(false)
     expect(isWaterPublicRow({ category: '소규모', water_work_type: '공용' })).toBe(false)
     expect(isWaterPublicRow({ category: '수도', water_work_type: null })).toBe(false)
     expect(isWaterPublicRow({ category: '수도', water_work_type: '' })).toBe(false)
+    expect(isWaterPublicRow({ category: '수도', water_work_type: '000' })).toBe(false)
   })
 })
 
@@ -79,6 +80,7 @@ describe('filled field rules', () => {
   it('문자 동의는 extra_fields.sms_consent 만 본다', () => {
     expect(isSmsConsentGiven(undefined)).toBe(false)
     expect(isSmsConsentGiven({})).toBe(false)
+    expect(isSmsConsentGiven({ additional_cost: 1, remark: 'x' })).toBe(false)
     expect(isSmsConsentGiven({ sms_consent: false })).toBe(false)
     expect(isSmsConsentGiven({ sms_consent: 'yes' })).toBe(false)
     expect(isSmsConsentGiven({ sms_consent: true })).toBe(true)
@@ -92,7 +94,7 @@ describe('filled field rules', () => {
     expect(
       evaluateWaterPublicReadiness({
         ...base,
-        evidence: { ...base.evidence, attachmentFileTypes: ['건축물대장'] },
+        evidence: { ...base.evidence, attachmentFileTypes: [] },
       }).bankbook
     ).toBe(false)
     expect(evaluateWaterPublicReadiness(base).bankbook).toBe(true)
@@ -100,21 +102,22 @@ describe('filled field rules', () => {
 })
 
 describe('system fields', () => {
-  it('대장은 issued/confirmed 또는 건축물대장 첨부가 있으면 있다', () => {
+  it('대장은 issued/confirmed, 건축물대장 첨부, 또는 Drive 링크가 있으면 있다', () => {
     expect(hasLedgerEvidence({ ledgerStatuses: ['requested'], fileTypes: [] })).toBe(false)
     expect(hasLedgerEvidence({ ledgerStatuses: ['issued'], fileTypes: [] })).toBe(true)
     expect(hasLedgerEvidence({ ledgerStatuses: ['confirmed'], fileTypes: [] })).toBe(true)
     expect(hasLedgerEvidence({ ledgerStatuses: [], fileTypes: ['건축물대장'] })).toBe(true)
     expect(hasLedgerEvidence({ ledgerStatuses: [], fileTypes: ['통장사본'] })).toBe(false)
+    expect(hasLedgerEvidence({ hasLedgerDriveFile: true })).toBe(true)
+    expect(hasLedgerEvidence({ hasLedgerDriveFile: false })).toBe(false)
   })
 
-  it('견적은 estimates 행 또는 견적서 첨부/서류가 있을 때만 있다. 추측 채움 없음', () => {
+  it('견적은 estimates 행 또는 attachments.file_type=견적서만. documents 0행은 쓰지 않는다', () => {
     expect(hasEstimateEvidence({})).toBe(false)
-    expect(hasEstimateEvidence({ hasEstimateRow: false, fileTypes: [], docTypes: [] })).toBe(false)
+    expect(hasEstimateEvidence({ hasEstimateRow: false, fileTypes: [] })).toBe(false)
     expect(hasEstimateEvidence({ hasEstimateRow: true })).toBe(true)
     expect(hasEstimateEvidence({ fileTypes: ['견적서'] })).toBe(true)
-    expect(hasEstimateEvidence({ docTypes: ['견적서'] })).toBe(true)
-    expect(hasEstimateEvidence({ fileTypes: ['통장사본'], docTypes: ['신청서'] })).toBe(false)
+    expect(hasEstimateEvidence({ fileTypes: ['통장사본', '신청서'] })).toBe(false)
   })
 })
 
@@ -136,10 +139,10 @@ describe('신청서 만들자', () => {
       { extra_fields: {} },
       {
         evidence: {
-          attachmentFileTypes: ['건축물대장'],
-          ledgerStatuses: ['issued'],
+          attachmentFileTypes: [],
+          ledgerStatuses: ['confirmed'],
           hasEstimateRow: true,
-          documentDocTypes: [],
+          hasLedgerDriveFile: false,
         },
       },
       {
@@ -147,15 +150,15 @@ describe('신청서 만들자', () => {
           attachmentFileTypes: ['통장사본'],
           ledgerStatuses: ['requested'],
           hasEstimateRow: true,
-          documentDocTypes: [],
+          hasLedgerDriveFile: false,
         },
       },
       {
         evidence: {
-          attachmentFileTypes: ['통장사본', '건축물대장'],
-          ledgerStatuses: ['issued'],
+          attachmentFileTypes: ['통장사본'],
+          ledgerStatuses: ['confirmed'],
           hasEstimateRow: false,
-          documentDocTypes: [],
+          hasLedgerDriveFile: false,
         },
       },
     ]
@@ -174,35 +177,35 @@ describe('신청서 만들자', () => {
 })
 
 describe('status flow mapping', () => {
-  it('기존 DB 상태를 문의-실측-견적전달-동의서-신청서제출-승인-공사-입금에 접는다', () => {
+  it('live DB 상태 문자열을 문의-실측-견적전달-동의서-신청서제출-승인-공사-입금에 그대로 쓴다', () => {
     expect(mapWaterPublicStatus('문의').displayStep).toBe('문의')
     expect(mapWaterPublicStatus('실측').flowIndex).toBe(1)
     expect(mapWaterPublicStatus('견적전달').displayStep).toBe('견적전달')
     expect(mapWaterPublicStatus('동의서').displayStep).toBe('동의서')
     expect(mapWaterPublicStatus('신청서제출').displayStep).toBe('신청서제출')
     expect(mapWaterPublicStatus('승인').displayStep).toBe('승인')
-    expect(mapWaterPublicStatus('착공계').displayStep).toBe('공사')
     expect(mapWaterPublicStatus('공사').displayStep).toBe('공사')
-    expect(mapWaterPublicStatus('완료서류제출').displayStep).toBe('공사')
     expect(mapWaterPublicStatus('입금').displayStep).toBe('입금')
   })
 
   it('준공은 입금 이후에만 보이고, 빈 값·취소·예약은 흐름에 넣지 않는다', () => {
     expect(mapWaterPublicStatus('입금').showJunggong).toBe(true)
     expect(mapWaterPublicStatus('공사').showJunggong).toBe(false)
-    expect(mapWaterPublicStatus('완료서류제출').showJunggong).toBe(false)
     expect(mapWaterPublicStatus(null).inFlow).toBe(false)
     expect(mapWaterPublicStatus('').inFlow).toBe(false)
     expect(mapWaterPublicStatus('취소').inFlow).toBe(false)
     expect(mapWaterPublicStatus('문의(예약)').inFlow).toBe(false)
     expect(mapWaterPublicStatus('취소').displayStep).toBe('취소')
+    expect(mapWaterPublicStatus('문의(예약)').displayStep).toBe('문의(예약)')
+    expect(mapWaterPublicStatus('준공').inFlow).toBe(false)
   })
 })
 
 describe('extra_fields merge', () => {
   it('sms_consent 와 application_ready 만 덧씌우고 기존 키는 남긴다', () => {
-    expect(mergeExtraFields({ keep: 1 }, { sms_consent: true })).toEqual({
-      keep: 1,
+    expect(mergeExtraFields({ additional_cost: 1, remark: 'x' }, { sms_consent: true })).toEqual({
+      additional_cost: 1,
+      remark: 'x',
       sms_consent: true,
     })
     expect(buildSmsConsentPatch(null, true)).toEqual({ sms_consent: true })
@@ -216,22 +219,27 @@ describe('extra_fields merge', () => {
 })
 
 describe('groupEvidence', () => {
-  it('프로젝트별로 첨부·대장·견적 증거를 모은다. 없는 프로젝트는 만들지 않는다', () => {
+  it('attachments 는 file_path 또는 drive_url 이 있을 때만 센다. documents 는 쓰지 않는다', () => {
     const grouped = groupEvidence({
       attachments: [
-        { project_id: 'a', file_type: '통장사본' },
-        { project_id: 'a', file_type: '건축물대장' },
-        { project_id: 'b', file_type: null },
+        { project_id: 'a', file_type: '통장사본', file_path: 'attachments/a/bankbook/1.jpg' },
+        { project_id: 'a', file_type: '건축물대장', drive_url: 'https://drive.google.com/file/d/x' },
+        { project_id: 'b', file_type: '통장사본', file_path: null, drive_url: null },
       ],
-      ledgerRequests: [{ project_id: 'a', status: 'issued' }],
+      ledgerRequests: [{ project_id: 'a', status: 'confirmed', drive_file_url: null }],
       estimates: [{ project_id: 'c' }],
-      documents: [{ project_id: 'c', doc_type: '견적서' }],
+      certTasks: [
+        { project_id: 'd', status: 'done', result_drive_file_url: 'https://drive.google.com/file/d/y' },
+        { project_id: 'e', status: 'pending', result_drive_file_url: null },
+      ],
     })
     expect(grouped.a.attachmentFileTypes).toEqual(['통장사본', '건축물대장'])
-    expect(grouped.a.ledgerStatuses).toEqual(['issued'])
+    expect(grouped.a.ledgerStatuses).toEqual(['confirmed'])
     expect(grouped.a.hasEstimateRow).toBe(false)
+    expect(grouped.b).toBeUndefined()
     expect(grouped.c.hasEstimateRow).toBe(true)
-    expect(grouped.c.documentDocTypes).toEqual(['견적서'])
+    expect(grouped.d.hasLedgerDriveFile).toBe(true)
+    expect(grouped.e).toBeUndefined()
     expect(grouped.missing).toBeUndefined()
   })
 })

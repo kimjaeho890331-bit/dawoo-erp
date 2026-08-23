@@ -6,10 +6,12 @@ import {
   buildSmsConsentPatch,
   canLightApplicationReady,
   countEmptyHumanReadiness,
+  countEmptyReadiness,
   evaluateWaterPublicReadiness,
-  HUMAN_READINESS_ITEMS,
-  RECEPTION_STEP_READINESS_KEYS,
-  SYSTEM_READINESS_ITEMS,
+  formatReadinessSummary,
+  formatRemainingLine,
+  READINESS_PILL_ITEMS,
+  summarizeReadiness,
   groupEvidence,
   hasEstimateEvidence,
   hasLedgerEvidence,
@@ -183,7 +185,7 @@ describe('신청서 만들자', () => {
     }
   })
 
-  it('사람 칸 빈 개수만 센다. 시스템 칸은 「빈 N」에 넣지 않는다', () => {
+  it('사람 칸 빈 개수만 센다. 시스템 칸은 사람 집계에 넣지 않는다', () => {
     expect(countEmptyHumanReadiness(evaluateWaterPublicReadiness(allReadyOverrides()))).toBe(0)
     expect(countEmptyHumanReadiness(evaluateWaterPublicReadiness({
       ...allReadyOverrides(),
@@ -202,11 +204,61 @@ describe('신청서 만들자', () => {
     }))).toBe(0)
   })
 
-  it('접수 1~5 단계 키는 준비도 키를 한 번씩만 나눈다', () => {
-    const assigned = Object.values(RECEPTION_STEP_READINESS_KEYS).flat()
-    const expected = [...HUMAN_READINESS_ITEMS, ...SYSTEM_READINESS_ITEMS].map((item) => item.key)
-    expect([...assigned].sort()).toEqual([...expected].sort())
-    expect(new Set(assigned).size).toBe(assigned.length)
+  it('준비 필은 짧은 라벨 9개다', () => {
+    expect(READINESS_PILL_ITEMS.map((item) => item.label)).toEqual([
+      '대표자', '전화', '통장', '사본', '대장', '견적', '회의', '신청일', '문자',
+    ])
+    expect(READINESS_PILL_ITEMS).toHaveLength(9)
+  })
+
+  it('준비 요약·남은 것·남 N 은 필 9칸을 쓴다', () => {
+    const ready = summarizeReadiness(evaluateWaterPublicReadiness(allReadyOverrides()))
+    expect(ready).toEqual({ filled: 9, total: 9, remaining: 0, remainingLabels: [] })
+    expect(formatReadinessSummary(ready)).toBe('준비 9/9 · 남음 0')
+    expect(formatRemainingLine(ready.remainingLabels)).toBe('')
+    expect(countEmptyReadiness(evaluateWaterPublicReadiness(allReadyOverrides()))).toBe(0)
+
+    const leftover = summarizeReadiness(evaluateWaterPublicReadiness({
+      ...allReadyOverrides(),
+      owner_phone: '',
+      evidence: {
+        hasBankbookAttachment: false,
+        hasLedgerAttachment: false,
+        ledgerStatuses: ['confirmed'],
+        hasEstimateRow: true,
+        hasLedgerDriveFile: false,
+      },
+    }))
+    expect(leftover.filled).toBe(7)
+    expect(leftover.total).toBe(9)
+    expect(leftover.remaining).toBe(2)
+    expect(leftover.remainingLabels).toEqual(['전화', '사본'])
+    expect(formatReadinessSummary(leftover)).toBe('준비 7/9 · 남음 2')
+    expect(formatRemainingLine(leftover.remainingLabels)).toBe('남은 것: 전화, 사본')
+    expect(countEmptyReadiness(evaluateWaterPublicReadiness({
+      ...allReadyOverrides(),
+      owner_phone: '',
+      evidence: {
+        hasBankbookAttachment: false,
+        hasLedgerAttachment: false,
+        ledgerStatuses: ['confirmed'],
+        hasEstimateRow: true,
+        hasLedgerDriveFile: false,
+      },
+    }))).toBe(2)
+  })
+
+  it('시스템 칸(대장·견적)이 비면 남 N 에 포함한다', () => {
+    expect(countEmptyReadiness(evaluateWaterPublicReadiness({
+      ...allReadyOverrides(),
+      evidence: {
+        hasBankbookAttachment: true,
+        hasLedgerAttachment: false,
+        ledgerStatuses: [],
+        hasEstimateRow: false,
+        hasLedgerDriveFile: false,
+      },
+    }))).toBe(2)
   })
 
   it('플래그는 extra_fields.application_ready === true 일 때만 이미 신호된 것이다', () => {

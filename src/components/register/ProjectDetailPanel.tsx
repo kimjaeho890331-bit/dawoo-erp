@@ -13,7 +13,18 @@ import TabReception from './panels/TabReception'
 import TabConstruction from './panels/TabConstruction'
 import TabCompletion from './panels/TabCompletion'
 import CertificateButton from './CertificateButton'
-import { type WaterPublicEvidence } from '@/lib/register/waterPublicReadiness'
+import {
+  READINESS_PILL_TAB,
+  persistApplicationReady,
+  scrollToReadinessAnchor,
+  WaterPublicReadyBlock,
+} from '@/components/register/WaterPublicReadiness'
+import {
+  evaluateWaterPublicReadiness,
+  isWaterPublicRow,
+  type ReadinessKey,
+  type WaterPublicEvidence,
+} from '@/lib/register/waterPublicReadiness'
 
 const PROGRESS_STEPS: ProjectStep[] = [
   '문의', '실측', '견적전달', '동의서', '신청서제출',
@@ -55,6 +66,8 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
   const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
   const [statusReason, setStatusReason] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [markingReady, setMarkingReady] = useState(false)
+  const [pendingAnchor, setPendingAnchor] = useState<ReadinessKey | null>(null)
 
   // project.id 만 추적 (실시간 업데이트로 같은 프로젝트가 refresh 될 때는 editData 유지)
   const projectIdRef = useRef<string | null>(null)
@@ -464,6 +477,15 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
     }
   }
 
+  useEffect(() => {
+    if (!pendingAnchor) return
+    const frame = window.requestAnimationFrame(() => {
+      scrollToReadinessAnchor(pendingAnchor)
+      setPendingAnchor(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [pendingAnchor, activeTab, editingInfo])
+
   if (!project) return null
 
   const currentStepIdx = getStepIndex(project.status)
@@ -471,6 +493,45 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
   const getVal = (field: keyof DBProject) => {
     if (field in editData) return editData[field]
     return project[field]
+  }
+
+  const isPublicWater = isWaterPublicRow({ category, water_work_type: project.water_work_type })
+  const publicChecks = isPublicWater
+    ? evaluateWaterPublicReadiness({
+        owner_name: (getVal('owner_name') as string | null) ?? project.owner_name,
+        owner_phone: (getVal('owner_phone') as string | null) ?? project.owner_phone,
+        bank_name: (getVal('bank_name') as string | null) ?? project.bank_name,
+        account_number: (getVal('account_number') as string | null) ?? project.account_number,
+        account_holder: (getVal('account_holder') as string | null) ?? project.account_holder,
+        construction_date: (getVal('construction_date') as string | null) ?? project.construction_date,
+        construction_end_date: (getVal('construction_end_date') as string | null) ?? project.construction_end_date,
+        consent_date: (getVal('consent_date') as string | null) ?? project.consent_date,
+        consent_time: (getVal('consent_time') as string | null) ?? project.consent_time,
+        application_date: (getVal('application_date') as string | null) ?? project.application_date,
+        extra_fields: project.extra_fields,
+        evidence: waterPublicEvidence,
+      })
+    : null
+
+  const handleMarkApplicationReady = async () => {
+    if (!publicChecks) return
+    setMarkingReady(true)
+    try {
+      await persistApplicationReady(project.id, project.extra_fields)
+      onRefresh?.()
+    } catch (err) {
+      console.error('신청서 준비 신호 저장 실패:', err)
+      alert('신청서 준비 신호를 저장하지 못했습니다.')
+    } finally {
+      setMarkingReady(false)
+    }
+  }
+
+  const handleReadyPillClick = (key: ReadinessKey) => {
+    if (key === 'owner' || key === 'phone') setEditingInfo(true)
+    const tab = READINESS_PILL_TAB[key]
+    if (tab) setActiveTab(tab)
+    setPendingAnchor(key)
   }
 
   return (
@@ -494,7 +555,9 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
               </button>
             )}
             {/* 건축물대장 발급 + 상태 표시 */}
-            <CertificateButton projectId={project.id} buildingName={project.building_name} />
+            <span data-ready-anchor="ledger" className="inline-flex">
+              <CertificateButton projectId={project.id} buildingName={project.building_name} />
+            </span>
 
             <button
               onClick={() => setShowStatusModal('취소')}
@@ -642,7 +705,7 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
           {/* 2행: 소유주 / 연락처 / 담당자 — 인라인 편집 */}
           {editingInfo ? (
             <div className="grid grid-cols-3 gap-2 mb-1.5">
-              <div>
+              <div data-ready-anchor="owner">
                 <span className="text-[11px] text-txt-tertiary block mb-0.5">소유주</span>
                 <input
                   type="text"
@@ -652,7 +715,7 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
                   placeholder="소유주"
                 />
               </div>
-              <div>
+              <div data-ready-anchor="phone">
                 <span className="text-[11px] text-txt-tertiary block mb-0.5">연락처</span>
                 <input
                   type="tel"
@@ -678,8 +741,12 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
-              <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
-              <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
+              <div data-ready-anchor="owner">
+                <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
+              </div>
+              <div data-ready-anchor="phone">
+                <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
+              </div>
               <InfoField label="담당자" value={(() => {
                 const sid = getVal('staff_id') as string
                 return staffOptions.find(s => s.id === sid)?.name || project.staff?.name || '-'
@@ -747,7 +814,22 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
-          {activeTab === '접수' && <TabReception project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} waterPublicEvidence={waterPublicEvidence} />}
+          {activeTab === '접수' && (
+            <>
+              {isPublicWater && publicChecks && (
+                <div className="mb-4">
+                  <WaterPublicReadyBlock
+                    checks={publicChecks}
+                    extraFields={project.extra_fields}
+                    onMarkReady={handleMarkApplicationReady}
+                    markingReady={markingReady}
+                    onPillClick={handleReadyPillClick}
+                  />
+                </div>
+              )}
+              <TabReception project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />
+            </>
+          )}
           {activeTab === '승인(시공)' && <TabConstruction project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} onRefresh={onRefresh} />}
           {activeTab === '완료' && <TabCompletion project={project} getVal={getVal} onChange={updateField} />}
           {activeTab === '이력' && <TabHistory projectId={project.id} />}

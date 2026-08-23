@@ -500,9 +500,6 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
     ? evaluateWaterPublicReadiness({
         owner_name: (getVal('owner_name') as string | null) ?? project.owner_name,
         owner_phone: (getVal('owner_phone') as string | null) ?? project.owner_phone,
-        bank_name: (getVal('bank_name') as string | null) ?? project.bank_name,
-        account_number: (getVal('account_number') as string | null) ?? project.account_number,
-        account_holder: (getVal('account_holder') as string | null) ?? project.account_holder,
         construction_date: (getVal('construction_date') as string | null) ?? project.construction_date,
         construction_end_date: (getVal('construction_end_date') as string | null) ?? project.construction_end_date,
         consent_date: (getVal('consent_date') as string | null) ?? project.consent_date,
@@ -829,7 +826,7 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
                   />
                 </div>
               )}
-              <TabReception project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />
+              <TabReception project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} waterPublicEvidence={waterPublicEvidence} />
             </>
           )}
           {activeTab === '승인(시공)' && <TabConstruction project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} onRefresh={onRefresh} />}

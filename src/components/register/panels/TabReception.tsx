@@ -34,6 +34,7 @@ export default function TabReception({
   getVal,
   onChange,
   onRefresh,
+  waterPublicEvidence,
 }: TabProps & {
   category: '소규모' | '수도'
   onRefresh?: () => void
@@ -147,6 +148,7 @@ export default function TabReception({
   }
 
   // 미리보기 계산
+  const isPublicWater = isWaterPublicRow({ category, water_work_type: project.water_work_type })
   const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
   const pricingType = isPublic ? '공용' : '전용'
   const previewCost = area > 0
@@ -202,83 +204,94 @@ export default function TabReception({
       <div className="relative pb-8">
         <div className={`absolute left-[-30px] w-6 h-6 rounded-full ${timelineSteps[1].color} text-white text-[11px] font-bold flex items-center justify-center z-10`}>2</div>
         <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor} mb-3`}>견적</h3>
-        {/* 공문 기준 견적 산출 정보 */}
-        {area > 0 && (
-          <div className="mb-3 p-3 bg-[#faf0eb] rounded-lg border border-[#e8d5cc]">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-[#c96442]">
-                공문 단가 기준 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
-              </p>
-              <button
-                onClick={handleRecalculate}
-                className="px-3 py-1 text-[11px] font-medium text-white bg-[#c96442] rounded-md hover:bg-[#b55a3a] transition-colors"
-              >
-                재산출
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div>
-                <span className="text-txt-tertiary">전유면적:</span>
-                <span className="ml-1 font-medium text-txt-primary">{area}m²</span>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">세대수:</span>
-                <span className="ml-1 font-medium text-txt-primary">{units}세대</span>
-              </div>
-            </div>
-            <div className="mt-2 pt-2 border-t border-[#e8d5cc] grid grid-cols-3 gap-2 text-[11px]">
-              <div>
-                <span className="text-txt-tertiary">총공사비</span>
-                <p className="font-semibold text-txt-primary">{previewTotal.toLocaleString()}원</p>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">시지원 80%</span>
-                <p className="font-semibold text-[#c96442]">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
-              </div>
-              <div>
-                <span className="text-txt-tertiary">자부담 20%</span>
-                <p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p>
-              </div>
-            </div>
-            <p className="mt-2 text-[9px] text-[#c96442]/60">
-              적용 단가: {isPublic
-                ? `공용 ${pricing.공용.toLocaleString()}원/m² + ${pricing.공용_세대.toLocaleString()}원/세대`
-                : `전용 ${pricing.전용.toLocaleString()}원/m²`
-              }
-              {pricingLoaded && ' (서류함 공문 기준)'}
-            </p>
+        {isPublicWater ? (
+          <div data-ready-anchor="estimate">
+            {waterPublicEvidence?.hasEstimateRow && (
+              <p className="text-[11px] font-medium tracking-[0.3px] text-txt-secondary mb-2">ERP 견적 있음</p>
+            )}
+            <p className="text-[11px] font-medium text-txt-tertiary mb-1">견적서</p>
+            <FileDropZone projectId={project.id} fileType="견적서" accept="image/*,application/pdf" compact />
           </div>
+        ) : (
+          <>
+            {/* 공문 기준 견적 산출 정보 */}
+            {area > 0 && (
+              <div className="mb-3 p-3 bg-[#faf0eb] rounded-lg border border-[#e8d5cc]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-semibold text-[#c96442]">
+                    공문 단가 기준 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
+                  </p>
+                  <button
+                    onClick={handleRecalculate}
+                    className="px-3 py-1 text-[11px] font-medium text-white bg-[#c96442] rounded-md hover:bg-[#b55a3a] transition-colors"
+                  >
+                    재산출
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-txt-tertiary">전유면적:</span>
+                    <span className="ml-1 font-medium text-txt-primary">{area}m²</span>
+                  </div>
+                  <div>
+                    <span className="text-txt-tertiary">세대수:</span>
+                    <span className="ml-1 font-medium text-txt-primary">{units}세대</span>
+                  </div>
+                </div>
+                <div className="mt-2 pt-2 border-t border-[#e8d5cc] grid grid-cols-3 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-txt-tertiary">총공사비</span>
+                    <p className="font-semibold text-txt-primary">{previewTotal.toLocaleString()}원</p>
+                  </div>
+                  <div>
+                    <span className="text-txt-tertiary">시지원 80%</span>
+                    <p className="font-semibold text-[#c96442]">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
+                  </div>
+                  <div>
+                    <span className="text-txt-tertiary">자부담 20%</span>
+                    <p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[9px] text-[#c96442]/60">
+                  적용 단가: {isPublic
+                    ? `공용 ${pricing.공용.toLocaleString()}원/m² + ${pricing.공용_세대.toLocaleString()}원/세대`
+                    : `전용 ${pricing.전용.toLocaleString()}원/m²`
+                  }
+                  {pricingLoaded && ' (서류함 공문 기준)'}
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <FormInput label="시지원금" value={formatMoney((getVal('city_support') as number) || 0)} onChange={v => {
+                const cs = parseMoney(v)
+                onChange('city_support', cs)
+                onChange('total_cost', cs + ((getVal('self_pay') as number) || 0) + ((getVal('additional_cost') as number) || 0))
+              }} placeholder="0" />
+              <FormInput label="자부담금" value={formatMoney((getVal('self_pay') as number) || 0)} onChange={v => {
+                const sp = parseMoney(v)
+                onChange('self_pay', sp)
+                onChange('total_cost', ((getVal('city_support') as number) || 0) + sp + ((getVal('additional_cost') as number) || 0))
+              }} placeholder="0" />
+              <FormInput label="추가공사금" value={formatMoney((getVal('additional_cost') as number) || 0)} onChange={v => {
+                const ac = parseMoney(v)
+                onChange('additional_cost', ac)
+                onChange('total_cost', ((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + ac)
+              }} placeholder="0" />
+              <div>
+                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">총공사비 (자동)</label>
+                <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] font-semibold text-txt-primary bg-surface-secondary tabular-nums">
+                  {((getVal('total_cost') as number) || 0).toLocaleString()}원
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
+              className="mt-3 px-4 py-2 text-[13px] font-medium bg-[#c96442] text-white rounded-lg hover:bg-[#b5573a] transition-colors"
+            >
+              견적서 열기
+            </button>
+          </>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput label="시지원금" value={formatMoney((getVal('city_support') as number) || 0)} onChange={v => {
-            const cs = parseMoney(v)
-            onChange('city_support', cs)
-            onChange('total_cost', cs + ((getVal('self_pay') as number) || 0) + ((getVal('additional_cost') as number) || 0))
-          }} placeholder="0" />
-          <FormInput label="자부담금" value={formatMoney((getVal('self_pay') as number) || 0)} onChange={v => {
-            const sp = parseMoney(v)
-            onChange('self_pay', sp)
-            onChange('total_cost', ((getVal('city_support') as number) || 0) + sp + ((getVal('additional_cost') as number) || 0))
-          }} placeholder="0" />
-          <FormInput label="추가공사금" value={formatMoney((getVal('additional_cost') as number) || 0)} onChange={v => {
-            const ac = parseMoney(v)
-            onChange('additional_cost', ac)
-            onChange('total_cost', ((getVal('city_support') as number) || 0) + ((getVal('self_pay') as number) || 0) + ac)
-          }} placeholder="0" />
-          <div>
-            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">총공사비 (자동)</label>
-            <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] font-semibold text-txt-primary bg-surface-secondary tabular-nums">
-              {((getVal('total_cost') as number) || 0).toLocaleString()}원
-            </p>
-          </div>
-        </div>
-        <button
-          data-ready-anchor="estimate"
-          onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
-          className="mt-3 px-4 py-2 text-[13px] font-medium bg-[#c96442] text-white rounded-lg hover:bg-[#b5573a] transition-colors"
-        >
-          견적서 열기
-        </button>
       </div>
 
       {/* 3 동의서 */}
@@ -320,7 +333,7 @@ export default function TabReception({
         )}
         <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
         <FileDropZone projectId={project.id} fileType="동의서" accept="image/*,application/pdf" compact />
-        {isWaterPublicRow({ category, water_work_type: project.water_work_type }) && (
+        {isPublicWater && (
           <div className="mt-3 space-y-3">
             <div data-ready-anchor="meeting">
               <DateTimeInput
@@ -359,13 +372,15 @@ export default function TabReception({
         <h3 className="text-[13px] font-semibold text-[#c96442] mb-3">통장</h3>
         <div className="mb-3" data-ready-anchor="bankbook">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
-          <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />
+          <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*,application/pdf" compact />
         </div>
-        <div className="grid grid-cols-3 gap-3" data-ready-anchor="bank">
-          <FormInput label="은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} placeholder="국민은행" />
-          <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
-          <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
-        </div>
+        {!isPublicWater && (
+          <div className="grid grid-cols-3 gap-3">
+            <FormInput label="은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} placeholder="국민은행" />
+            <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
+            <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
+          </div>
+        )}
       </div>
 
       {/* 5 신청서 */}

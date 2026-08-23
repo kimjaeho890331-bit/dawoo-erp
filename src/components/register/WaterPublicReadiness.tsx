@@ -44,7 +44,6 @@ export async function toggleSmsConsent(projectId: string, extraFields: unknown) 
 }
 
 export const READINESS_PILL_TAB: Partial<Record<ReadinessKey, '접수' | '승인(시공)'>> = {
-  bank: '접수',
   meeting: '접수',
   smsConsent: '접수',
   applicationDate: '접수',

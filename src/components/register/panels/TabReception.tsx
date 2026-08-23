@@ -366,20 +366,30 @@ export default function TabReception({
       </div>
       )}
 
-      {/* 4 통장 */}
+      {/* 4 통장 — 공용은 사본 파일만. 은행·예금주·계좌는 준비 「통장」에서만 입력 */}
       <div className="relative pb-8">
         <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-[#c96442] text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
         <h3 className="text-[13px] font-semibold text-[#c96442] mb-3">통장</h3>
-        <div className="mb-3" data-ready-anchor="bankbook">
-          <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
-          <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*,application/pdf" compact />
-        </div>
-        {!isPublicWater && (
-          <div className="grid grid-cols-3 gap-3">
-            <FormInput label="은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} placeholder="국민은행" />
-            <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
-            <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
+        {isPublicWater ? (
+          <div>
+            <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">
+              은행·예금주·계좌는 위 준비 「통장」에서 입력합니다.
+            </p>
+            <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
+            <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*,application/pdf" compact />
           </div>
+        ) : (
+          <>
+            <div className="mb-3">
+              <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
+              <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*,application/pdf" compact />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <FormInput label="은행" value={getVal('bank_name') as string} onChange={v => onChange('bank_name', v || null)} placeholder="국민은행" />
+              <FormInput label="예금주" value={getVal('account_holder') as string} onChange={v => onChange('account_holder', v || null)} />
+              <FormInput label="계좌번호" value={getVal('account_number') as string} onChange={v => onChange('account_number', v || null)} />
+            </div>
+          </>
         )}
       </div>
 

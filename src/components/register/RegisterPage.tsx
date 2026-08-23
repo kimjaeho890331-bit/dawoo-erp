@@ -271,6 +271,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     return evaluateWaterPublicReadiness({
       owner_name: project.owner_name,
       owner_phone: project.owner_phone,
+      bank_name: project.bank_name,
+      account_holder: project.account_holder,
+      account_number: project.account_number,
       construction_date: project.construction_date,
       construction_end_date: project.construction_end_date,
       consent_date: project.consent_date,

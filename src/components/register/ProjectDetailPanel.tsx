@@ -500,6 +500,9 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
     ? evaluateWaterPublicReadiness({
         owner_name: (getVal('owner_name') as string | null) ?? project.owner_name,
         owner_phone: (getVal('owner_phone') as string | null) ?? project.owner_phone,
+        bank_name: (getVal('bank_name') as string | null) ?? project.bank_name,
+        account_holder: (getVal('account_holder') as string | null) ?? project.account_holder,
+        account_number: (getVal('account_number') as string | null) ?? project.account_number,
         construction_date: (getVal('construction_date') as string | null) ?? project.construction_date,
         construction_end_date: (getVal('construction_end_date') as string | null) ?? project.construction_end_date,
         consent_date: (getVal('consent_date') as string | null) ?? project.consent_date,
@@ -820,6 +823,10 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
                     checks={publicChecks}
                     evidence={waterPublicEvidence}
                     extraFields={project.extra_fields}
+                    bankName={(getVal('bank_name') as string | null) ?? project.bank_name}
+                    accountHolder={(getVal('account_holder') as string | null) ?? project.account_holder}
+                    accountNumber={(getVal('account_number') as string | null) ?? project.account_number}
+                    onBankChange={updateField}
                     onMarkReady={handleMarkApplicationReady}
                     markingReady={markingReady}
                     onPillClick={handleReadyPillClick}

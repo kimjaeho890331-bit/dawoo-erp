@@ -819,7 +819,9 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
               {isPublicWater && publicChecks && (
                 <div className="mb-4">
                   <WaterPublicReadyBlock
+                    projectId={project.id}
                     checks={publicChecks}
+                    evidence={waterPublicEvidence}
                     extraFields={project.extra_fields}
                     onMarkReady={handleMarkApplicationReady}
                     markingReady={markingReady}

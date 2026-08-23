@@ -6,6 +6,8 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 import FileDropZone from '@/components/common/FileDropZone'
+import { toggleSmsConsent } from '@/components/register/WaterPublicReadiness'
+import { isSmsConsentGiven, isWaterPublicRow } from '@/lib/register/waterPublicReadiness'
 import type { TabProps } from './panelHelpers'
 import { FormInput, DateTimeInput, StaffSelect, useCurrentStaff } from './panelHelpers'
 
@@ -303,6 +305,34 @@ export default function TabReception({ project, category, getVal, onChange, onRe
         )}
         <p className="text-[11px] font-medium text-txt-tertiary mb-1">동의서 스캔</p>
         <FileDropZone projectId={project.id} fileType="동의서" accept="image/*,application/pdf" compact />
+        {isWaterPublicRow({ category, water_work_type: project.water_work_type }) && (
+          <div className="mt-3 space-y-3">
+            <DateTimeInput
+              label="회의 일시"
+              value={getVal('consent_date') as string}
+              onChange={v => onChange('consent_date', v)}
+              timeValue={getVal('consent_time') as string}
+              onTimeChange={v => onChange('consent_time', v)}
+            />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isSmsConsentGiven(project.extra_fields)}
+                onChange={async () => {
+                  try {
+                    await toggleSmsConsent(project.id, project.extra_fields)
+                    onRefresh?.()
+                  } catch (err) {
+                    console.error('문자 동의 저장 실패:', err)
+                    alert('문자 동의를 저장하지 못했습니다.')
+                  }
+                }}
+                className="w-3.5 h-3.5 rounded border-border-secondary accent-accent"
+              />
+              <span className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">문자 동의</span>
+            </label>
+          </div>
+        )}
       </div>
       )}
 

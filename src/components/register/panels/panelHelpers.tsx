@@ -7,7 +7,7 @@ import type { DBProject } from '@/components/register/RegisterPage'
 // --- Shared Tab Props ---
 export interface TabProps {
   project: DBProject
-  getVal: (field: keyof DBProject) => string | number | null | undefined | { id: string; name: string } | { name: string } | { name: string; work_categories?: { name: string } | null }
+  getVal: (field: keyof DBProject) => string | number | null | undefined | Record<string, unknown> | { id: string; name: string } | { name: string } | { name: string; work_categories?: { name: string } | null }
   onChange: (field: string, value: string | number | null) => void
   apiFieldsLocked?: boolean
 }

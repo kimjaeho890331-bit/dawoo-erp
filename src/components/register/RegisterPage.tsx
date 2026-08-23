@@ -1,11 +1,23 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
+import {
+  WaterPublicReadinessBar,
+  WaterPublicStatusFlow,
+  persistApplicationReady,
+  toggleSmsConsent,
+} from '@/components/register/WaterPublicReadiness'
+import { useWaterPublicEvidence } from '@/components/register/useWaterPublicEvidence'
+import {
+  canLightApplicationReady,
+  evaluateWaterPublicReadiness,
+  isWaterPublicRow,
+} from '@/lib/register/waterPublicReadiness'
 
 // --- 타입 ---
 export type ProjectStep =
@@ -78,6 +90,7 @@ export interface DBProject {
   account_holder: string | null
   support_program: string | null
   year: number | null
+  extra_fields?: Record<string, unknown> | null
   created_at: string
   updated_at: string
   // JOIN 필드
@@ -257,6 +270,48 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const [cities, setCities] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [markingReadyId, setMarkingReadyId] = useState<string | null>(null)
+  const { getEvidence } = useWaterPublicEvidence(projects, category)
+
+  const projectReadiness = useCallback((project: DBProject) => {
+    return evaluateWaterPublicReadiness({
+      owner_name: project.owner_name,
+      owner_phone: project.owner_phone,
+      bank_name: project.bank_name,
+      account_number: project.account_number,
+      account_holder: project.account_holder,
+      construction_date: project.construction_date,
+      construction_end_date: project.construction_end_date,
+      consent_date: project.consent_date,
+      consent_time: project.consent_time,
+      application_date: project.application_date,
+      extra_fields: project.extra_fields,
+      evidence: getEvidence(project.id),
+    })
+  }, [getEvidence])
+
+  const handleMarkApplicationReady = async (project: DBProject) => {
+    const checks = projectReadiness(project)
+    if (!canLightApplicationReady(checks)) return
+    setMarkingReadyId(project.id)
+    try {
+      await persistApplicationReady(project.id, project.extra_fields)
+    } catch (err) {
+      console.error('신청서 준비 신호 저장 실패:', err)
+      alert('신청서 준비 신호를 저장하지 못했습니다.')
+    } finally {
+      setMarkingReadyId(null)
+    }
+  }
+
+  const handleToggleSmsConsent = async (project: DBProject) => {
+    try {
+      await toggleSmsConsent(project.id, project.extra_fields)
+    } catch (err) {
+      console.error('문자 동의 저장 실패:', err)
+      alert('문자 동의를 저장하지 못했습니다.')
+    }
+  }
 
   // 데이터 로드
   const loadProjects = useCallback(async () => {
@@ -642,6 +697,19 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                 )}
                 <span className="text-[10px] text-txt-tertiary truncate">{project.note || ''}</span>
               </div>
+              {isWaterPublicRow({ category, water_work_type: project.water_work_type }) && (
+                <div className="mt-2 pt-2 border-t border-border-tertiary space-y-1.5">
+                  <WaterPublicStatusFlow status={project.status} compact />
+                  <WaterPublicReadinessBar
+                    checks={projectReadiness(project)}
+                    extraFields={project.extra_fields}
+                    compact
+                    onMarkReady={() => handleMarkApplicationReady(project)}
+                    markingReady={markingReadyId === project.id}
+                    onToggleSmsConsent={() => handleToggleSmsConsent(project)}
+                  />
+                </div>
+              )}
             </div>
           ))
         )}
@@ -680,8 +748,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                 </tr>
               ) : (
                 filteredProjects.map(project => (
+                  <Fragment key={project.id}>
                   <tr
-                    key={project.id}
                     onClick={() => setSelectedProjectId(project.id)}
                     className={`border-b border-border-primary cursor-pointer transition-colors hover:bg-surface-secondary/40 ${
                       selectedProjectId === project.id
@@ -743,6 +811,29 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                       />
                     </td>
                   </tr>
+                  {isWaterPublicRow({ category, water_work_type: project.water_work_type }) && (
+                    <tr
+                      onClick={() => setSelectedProjectId(project.id)}
+                      className={`border-b border-border-primary cursor-pointer ${
+                        selectedProjectId === project.id ? 'bg-accent-light' : 'bg-surface-secondary/30'
+                      }`}
+                    >
+                      <td colSpan={9} className="px-3 py-2">
+                        <div className="space-y-1.5">
+                          <WaterPublicStatusFlow status={project.status} compact />
+                          <WaterPublicReadinessBar
+                            checks={projectReadiness(project)}
+                            extraFields={project.extra_fields}
+                            compact
+                            onMarkReady={() => handleMarkApplicationReady(project)}
+                            markingReady={markingReadyId === project.id}
+                            onToggleSmsConsent={() => handleToggleSmsConsent(project)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -766,6 +857,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       <ProjectDetailPanel
         project={selectedProject}
         category={category}
+        waterPublicEvidence={selectedProject ? getEvidence(selectedProject.id) : undefined}
         onClose={() => setSelectedProjectId(null)}
         onEdit={handleEditFromPanel}
         onDelete={handleDeleteFromPanel}

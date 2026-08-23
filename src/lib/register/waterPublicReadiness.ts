@@ -8,7 +8,8 @@
  * 통장사본은 live file_type 또는 이름 표시. 대장은 건축물대장 표시 또는 issued/confirmed.
  * extra_fields 실키는 additional_cost / remark 뿐. sms_consent 없음 → 여기에만 둔다.
  *
- * 사람 입력 재사용: owner_name, owner_phone, bank_name+account_number+account_holder,
+ * 통장 = attachments.file_type='통장사본' (실제 path/url). 은행·예금주·계좌 입력은 보지 않는다.
+ * 사람 입력 재사용: owner_name, owner_phone,
  * construction_date, construction_end_date, consent_date+consent_time, application_date
  */
 
@@ -35,8 +36,7 @@ export const APPLICATION_READY_AT_KEY = 'application_ready_at'
 export const HUMAN_READINESS_ITEMS = [
   { key: 'owner', label: '대표자' },
   { key: 'phone', label: '전화' },
-  { key: 'bank', label: '은행·계좌·예금주' },
-  { key: 'bankbook', label: '통장사본' },
+  { key: 'bankbook', label: '통장' },
   { key: 'constructionStart', label: '공사 시작일' },
   { key: 'constructionEnd', label: '공사 종료일' },
   { key: 'meeting', label: '회의 일시' },
@@ -58,7 +58,7 @@ export type ReadinessKey = HumanReadinessKey | SystemReadinessKey | OptionalRead
 export type WaterPublicReadinessChecks = Record<ReadinessKey, boolean>
 
 export const ATTACHMENT_PILL_ITEMS = [
-  { key: 'bankbook', label: '통장사본' },
+  { key: 'bankbook', label: '통장' },
   { key: 'idCard', label: '신분증' },
   { key: 'ledger', label: '대장' },
   { key: 'estimate', label: '견적' },
@@ -67,7 +67,6 @@ export const ATTACHMENT_PILL_ITEMS = [
 export const WRITE_PILL_ITEMS = [
   { key: 'owner', label: '대표자' },
   { key: 'phone', label: '전화' },
-  { key: 'bank', label: '통장' },
   { key: 'meeting', label: '회의' },
   { key: 'applicationDate', label: '신청일' },
   { key: 'smsConsent', label: '문자' },
@@ -129,7 +128,7 @@ export function countEmptyReadiness(checks: WaterPublicReadinessChecks): number 
   return summarizeReadiness(checks).remaining
 }
 
-/** 이전 필 9칸(신분증 제외). 준비 블록 「신청서 만들자」 점등. */
+/** 필에서 신분증만 빼고. 준비 블록 「신청서 만들자」 점등. */
 export function areRequiredPillsReady(checks: WaterPublicReadinessChecks): boolean {
   return READINESS_PILL_ITEMS.every((item) => item.key === 'idCard' || checks[item.key])
 }
@@ -273,9 +272,6 @@ export function hasEstimateEvidence(input: {
 export type WaterPublicReadinessInput = {
   owner_name?: string | null
   owner_phone?: string | null
-  bank_name?: string | null
-  account_number?: string | null
-  account_holder?: string | null
   construction_date?: string | null
   construction_end_date?: string | null
   consent_date?: string | null
@@ -292,10 +288,6 @@ export function evaluateWaterPublicReadiness(
   return {
     owner: isFilledText(input.owner_name),
     phone: isFilledText(input.owner_phone),
-    bank:
-      isFilledText(input.bank_name)
-      && isFilledText(input.account_number)
-      && isFilledText(input.account_holder),
     bankbook: evidence.hasBankbookAttachment,
     idCard: evidence.hasIdCardAttachment === true,
     constructionStart: isFilledText(input.construction_date),

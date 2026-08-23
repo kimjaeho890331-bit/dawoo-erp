@@ -33,9 +33,6 @@ function allReadyOverrides() {
   return {
     owner_name: '김대표',
     owner_phone: '010-1111-2222',
-    bank_name: '국민은행',
-    account_number: '123-45-67890',
-    account_holder: '김대표',
     construction_date: '2026-08-01',
     construction_end_date: '2026-08-10',
     consent_date: '2026-07-20',
@@ -88,12 +85,23 @@ describe('filled field rules', () => {
     expect(isFilledText('박대표')).toBe(true)
   })
 
-  it('은행 체크는 은행·계좌·예금주 세 칸이 모두 있어야 한다', () => {
-    const base = allReadyOverrides()
-    expect(evaluateWaterPublicReadiness({ ...base, bank_name: null }).bank).toBe(false)
-    expect(evaluateWaterPublicReadiness({ ...base, account_number: '  ' }).bank).toBe(false)
-    expect(evaluateWaterPublicReadiness({ ...base, account_holder: '' }).bank).toBe(false)
-    expect(evaluateWaterPublicReadiness(base).bank).toBe(true)
+  it('통장은 통장사본 파일만 본다. 은행·예금주·계좌 입력은 보지 않는다', () => {
+    const withFile = evaluateWaterPublicReadiness(allReadyOverrides())
+    expect(withFile.bankbook).toBe(true)
+    expect(canLightApplicationReady(withFile)).toBe(true)
+
+    const noFile = evaluateWaterPublicReadiness({
+      ...allReadyOverrides(),
+      evidence: {
+        hasBankbookAttachment: false,
+        hasLedgerAttachment: false,
+        ledgerStatuses: ['confirmed'],
+        hasEstimateRow: true,
+        hasLedgerDriveFile: false,
+      },
+    })
+    expect(noFile.bankbook).toBe(false)
+    expect(canLightApplicationReady(noFile)).toBe(false)
   })
 
   it('회의 일시는 날짜와 시간이 둘 다 있어야 한다', () => {
@@ -203,7 +211,6 @@ describe('신청서 만들자', () => {
     const cases = [
       { owner_name: null },
       { owner_phone: '' },
-      { bank_name: null },
       { construction_date: null },
       { construction_end_date: null },
       { consent_time: null },
@@ -263,32 +270,33 @@ describe('신청서 만들자', () => {
     }))).toBe(0)
   })
 
-  it('준비 필은 첨부 4 + 작성 6 = 10개다', () => {
+  it('준비 필은 첨부 4 + 작성 5 = 9개다. 통장 작성 필은 없고 첨부 「통장」만 있다', () => {
     expect(ATTACHMENT_PILL_ITEMS.map((item) => item.label)).toEqual([
-      '통장사본', '신분증', '대장', '견적',
+      '통장', '신분증', '대장', '견적',
     ])
     expect(WRITE_PILL_ITEMS.map((item) => item.label)).toEqual([
-      '대표자', '전화', '통장', '회의', '신청일', '문자',
+      '대표자', '전화', '회의', '신청일', '문자',
     ])
     expect(READINESS_PILL_ITEMS.map((item) => item.label)).toEqual([
-      '통장사본', '신분증', '대장', '견적', '대표자', '전화', '통장', '회의', '신청일', '문자',
+      '통장', '신분증', '대장', '견적', '대표자', '전화', '회의', '신청일', '문자',
     ])
-    expect(READINESS_PILL_ITEMS).toHaveLength(10)
+    expect(READINESS_PILL_ITEMS).toHaveLength(9)
     expect(isAttachmentPillKey('bankbook')).toBe(true)
     expect(isAttachmentPillKey('idCard')).toBe(true)
     expect(isAttachmentPillKey('owner')).toBe(false)
+    expect(isAttachmentPillKey('bank')).toBe(false)
   })
 
-  it('준비 요약·남은 것·남 N 은 필 10칸(신분증 포함)을 쓴다', () => {
+  it('준비 요약·남은 것·남 N 은 필 9칸(신분증 포함)을 쓴다', () => {
     const ready = summarizeReadiness(evaluateWaterPublicReadiness(allPillsReadyOverrides()))
-    expect(ready).toEqual({ filled: 10, total: 10, remaining: 0, remainingLabels: [] })
-    expect(formatReadinessSummary(ready)).toBe('준비 10/10 · 남음 0')
+    expect(ready).toEqual({ filled: 9, total: 9, remaining: 0, remainingLabels: [] })
+    expect(formatReadinessSummary(ready)).toBe('준비 9/9 · 남음 0')
     expect(formatRemainingLine(ready.remainingLabels)).toBe('')
     expect(countEmptyReadiness(evaluateWaterPublicReadiness(allPillsReadyOverrides()))).toBe(0)
 
     const withoutId = summarizeReadiness(evaluateWaterPublicReadiness(allReadyOverrides()))
-    expect(withoutId).toEqual({ filled: 9, total: 10, remaining: 1, remainingLabels: ['신분증'] })
-    expect(formatReadinessSummary(withoutId)).toBe('준비 9/10 · 남음 1')
+    expect(withoutId).toEqual({ filled: 8, total: 9, remaining: 1, remainingLabels: ['신분증'] })
+    expect(formatReadinessSummary(withoutId)).toBe('준비 8/9 · 남음 1')
     expect(countEmptyReadiness(evaluateWaterPublicReadiness(allReadyOverrides()))).toBe(1)
 
     const leftover = summarizeReadiness(evaluateWaterPublicReadiness({
@@ -302,12 +310,12 @@ describe('신청서 만들자', () => {
         hasLedgerDriveFile: false,
       },
     }))
-    expect(leftover.filled).toBe(7)
-    expect(leftover.total).toBe(10)
+    expect(leftover.filled).toBe(6)
+    expect(leftover.total).toBe(9)
     expect(leftover.remaining).toBe(3)
-    expect(leftover.remainingLabels).toEqual(['통장사본', '신분증', '전화'])
-    expect(formatReadinessSummary(leftover)).toBe('준비 7/10 · 남음 3')
-    expect(formatRemainingLine(leftover.remainingLabels)).toBe('남은 것: 통장사본, 신분증, 전화')
+    expect(leftover.remainingLabels).toEqual(['통장', '신분증', '전화'])
+    expect(formatReadinessSummary(leftover)).toBe('준비 6/9 · 남음 3')
+    expect(formatRemainingLine(leftover.remainingLabels)).toBe('남은 것: 통장, 신분증, 전화')
     expect(countEmptyReadiness(evaluateWaterPublicReadiness({
       ...allReadyOverrides(),
       owner_phone: '',

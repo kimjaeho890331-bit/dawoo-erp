@@ -111,14 +111,50 @@ function ReadyPill({
   )
 }
 
+function BankTextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const filled = value.trim() !== ''
+  return (
+    <div>
+      <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder || label}
+        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 hover:border-border-secondary transition-colors ${
+          filled ? 'bg-surface-secondary border-border-secondary' : 'bg-surface border-border-primary'
+        }`}
+      />
+    </div>
+  )
+}
+
 function ReadinessAttachSlot({
   projectId,
   slot,
   evidence,
+  bankName,
+  accountHolder,
+  accountNumber,
+  onBankChange,
 }: {
   projectId: string
   slot: AttachmentPillKey
   evidence?: WaterPublicEvidence
+  bankName?: string | null
+  accountHolder?: string | null
+  accountNumber?: string | null
+  onBankChange?: (field: 'bank_name' | 'account_holder' | 'account_number', value: string | null) => void
 }) {
   const label = ATTACHMENT_PILL_ITEMS.find((item) => item.key === slot)?.label ?? slot
   const hasEstimateRow = evidence?.hasEstimateRow === true
@@ -129,7 +165,7 @@ function ReadinessAttachSlot({
   )
 
   return (
-    <div className="rounded-lg border border-border-primary bg-surface-secondary/40 p-2.5 space-y-2">
+    <div className="rounded-lg border border-border-primary bg-surface-secondary/40 p-2.5 space-y-2" data-ready-anchor={slot === 'bankbook' ? 'bankbook' : undefined}>
       <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">{label}</p>
 
       {slot === 'estimate' && hasEstimateRow && (
@@ -152,13 +188,43 @@ function ReadinessAttachSlot({
         <p className="text-[11px] font-medium tracking-[0.3px] text-txt-secondary">대장 발급됨</p>
       )}
 
-      <FileDropZone
-        projectId={projectId}
-        fileType={ATTACH_FILE_TYPE[slot]}
-        accept={ATTACH_ACCEPT[slot]}
-        label={`${label} 파일을 드래그하거나 클릭`}
-        compact
-      />
+      {slot === 'bankbook' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          <FileDropZone
+            projectId={projectId}
+            fileType={ATTACH_FILE_TYPE[slot]}
+            accept={ATTACH_ACCEPT[slot]}
+            label={`${label} 파일을 드래그하거나 클릭`}
+            compact
+          />
+          <div className="grid grid-cols-3 sm:grid-cols-1 gap-2">
+            <BankTextInput
+              label="은행"
+              value={bankName ?? ''}
+              placeholder="국민은행"
+              onChange={(v) => onBankChange?.('bank_name', v || null)}
+            />
+            <BankTextInput
+              label="예금주"
+              value={accountHolder ?? ''}
+              onChange={(v) => onBankChange?.('account_holder', v || null)}
+            />
+            <BankTextInput
+              label="계좌번호"
+              value={accountNumber ?? ''}
+              onChange={(v) => onBankChange?.('account_number', v || null)}
+            />
+          </div>
+        </div>
+      ) : (
+        <FileDropZone
+          projectId={projectId}
+          fileType={ATTACH_FILE_TYPE[slot]}
+          accept={ATTACH_ACCEPT[slot]}
+          label={`${label} 파일을 드래그하거나 클릭`}
+          compact
+        />
+      )}
     </div>
   )
 }
@@ -169,6 +235,10 @@ export function WaterPublicReadyBlock({
   checks,
   evidence,
   extraFields,
+  bankName,
+  accountHolder,
+  accountNumber,
+  onBankChange,
   onMarkReady,
   markingReady = false,
   onPillClick,
@@ -177,11 +247,17 @@ export function WaterPublicReadyBlock({
   checks: WaterPublicReadinessChecks
   evidence?: WaterPublicEvidence
   extraFields?: unknown
+  bankName?: string | null
+  accountHolder?: string | null
+  accountNumber?: string | null
+  onBankChange?: (field: 'bank_name' | 'account_holder' | 'account_number', value: string | null) => void
   onMarkReady?: () => void
   markingReady?: boolean
   onPillClick?: (key: ReadinessPillKey) => void
 }) {
-  const [openSlot, setOpenSlot] = useState<AttachmentPillKey | null>(null)
+  const [openSlot, setOpenSlot] = useState<AttachmentPillKey | null>(
+    checks.bankbook ? null : 'bankbook'
+  )
   const summary = summarizeReadiness(checks)
   const ready = areRequiredPillsReady(checks)
   const flagged = isApplicationReadyFlagged(extraFields)
@@ -248,7 +324,15 @@ export function WaterPublicReadyBlock({
           >
             <X size={14} className="text-txt-tertiary" />
           </button>
-          <ReadinessAttachSlot projectId={projectId} slot={openSlot} evidence={evidence} />
+          <ReadinessAttachSlot
+            projectId={projectId}
+            slot={openSlot}
+            evidence={evidence}
+            bankName={bankName}
+            accountHolder={accountHolder}
+            accountNumber={accountNumber}
+            onBankChange={onBankChange}
+          />
         </div>
       )}
 

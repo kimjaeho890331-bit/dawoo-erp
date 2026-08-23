@@ -15,6 +15,8 @@ import {
   evaluateWaterPublicReadiness,
   formatReadinessSummary,
   formatRemainingLine,
+  hasBankbookTexts,
+  isBankbookReady,
   READINESS_PILL_ITEMS,
   summarizeReadiness,
   groupEvidence,
@@ -33,6 +35,9 @@ function allReadyOverrides() {
   return {
     owner_name: '김대표',
     owner_phone: '010-1111-2222',
+    bank_name: '국민은행',
+    account_holder: '김대표',
+    account_number: '123-45-67890',
     construction_date: '2026-08-01',
     construction_end_date: '2026-08-10',
     consent_date: '2026-07-20',
@@ -85,13 +90,30 @@ describe('filled field rules', () => {
     expect(isFilledText('박대표')).toBe(true)
   })
 
-  it('통장은 통장사본 파일만 본다. 은행·예금주·계좌 입력은 보지 않는다', () => {
-    const withFile = evaluateWaterPublicReadiness(allReadyOverrides())
-    expect(withFile.bankbook).toBe(true)
-    expect(canLightApplicationReady(withFile)).toBe(true)
+  it('통장은 사본 파일 + 은행·예금주·계좌 세 칸이 모두 있어야 한다', () => {
+    const ready = allReadyOverrides()
+    expect(hasBankbookTexts(ready)).toBe(true)
+    expect(isBankbookReady(true, ready)).toBe(true)
+    expect(evaluateWaterPublicReadiness(ready).bankbook).toBe(true)
+    expect(canLightApplicationReady(evaluateWaterPublicReadiness(ready))).toBe(true)
 
-    const noFile = evaluateWaterPublicReadiness({
-      ...allReadyOverrides(),
+    expect(evaluateWaterPublicReadiness({ ...ready, bank_name: null }).bankbook).toBe(false)
+    expect(evaluateWaterPublicReadiness({ ...ready, account_holder: '' }).bankbook).toBe(false)
+    expect(evaluateWaterPublicReadiness({ ...ready, account_number: '  ' }).bankbook).toBe(false)
+    expect(canLightApplicationReady(evaluateWaterPublicReadiness({ ...ready, bank_name: null }))).toBe(false)
+
+    const fileOnly = evaluateWaterPublicReadiness({
+      ...ready,
+      bank_name: null,
+      account_holder: null,
+      account_number: null,
+    })
+    expect(fileOnly.bankbook).toBe(false)
+    expect(canLightApplicationReady(fileOnly)).toBe(false)
+    expect(summarizeReadiness(fileOnly).remainingLabels).toContain('통장')
+
+    const textsOnly = evaluateWaterPublicReadiness({
+      ...ready,
       evidence: {
         hasBankbookAttachment: false,
         hasLedgerAttachment: false,
@@ -100,8 +122,9 @@ describe('filled field rules', () => {
         hasLedgerDriveFile: false,
       },
     })
-    expect(noFile.bankbook).toBe(false)
-    expect(canLightApplicationReady(noFile)).toBe(false)
+    expect(hasBankbookTexts(ready)).toBe(true)
+    expect(textsOnly.bankbook).toBe(false)
+    expect(canLightApplicationReady(textsOnly)).toBe(false)
   })
 
   it('회의 일시는 날짜와 시간이 둘 다 있어야 한다', () => {
@@ -211,6 +234,9 @@ describe('신청서 만들자', () => {
     const cases = [
       { owner_name: null },
       { owner_phone: '' },
+      { bank_name: null },
+      { account_holder: '' },
+      { account_number: '  ' },
       { construction_date: null },
       { construction_end_date: null },
       { consent_time: null },
@@ -270,7 +296,7 @@ describe('신청서 만들자', () => {
     }))).toBe(0)
   })
 
-  it('준비 필은 첨부 4 + 작성 5 = 9개다. 통장 작성 필은 없고 첨부 「통장」만 있다', () => {
+  it('준비 필은 첨부 4 + 작성 5 = 9개다. 통장 작성 필은 없고 첨부 「통장」한 덩어리다', () => {
     expect(ATTACHMENT_PILL_ITEMS.map((item) => item.label)).toEqual([
       '통장', '신분증', '대장', '견적',
     ])

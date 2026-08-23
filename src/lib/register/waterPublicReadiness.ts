@@ -8,8 +8,9 @@
  * 통장사본은 live file_type 또는 이름 표시. 대장은 건축물대장 표시 또는 issued/confirmed.
  * extra_fields 실키는 additional_cost / remark 뿐. sms_consent 없음 → 여기에만 둔다.
  *
- * 통장 = attachments.file_type='통장사본' (실제 path/url). 은행·예금주·계좌 입력은 보지 않는다.
- * 사람 입력 재사용: owner_name, owner_phone,
+ * 통장 = 통장사본 파일(실제 path/url) AND bank_name + account_holder + account_number.
+ * 파일만 있으면 신청서 통장 칸이 비므로 세 칸도 본다. 작성 필을 따로 두지 않는다.
+ * 사람 입력 재사용: owner_name, owner_phone, bank_name, account_holder, account_number,
  * construction_date, construction_end_date, consent_date+consent_time, application_date
  */
 
@@ -272,6 +273,9 @@ export function hasEstimateEvidence(input: {
 export type WaterPublicReadinessInput = {
   owner_name?: string | null
   owner_phone?: string | null
+  bank_name?: string | null
+  account_holder?: string | null
+  account_number?: string | null
   construction_date?: string | null
   construction_end_date?: string | null
   consent_date?: string | null
@@ -281,6 +285,29 @@ export type WaterPublicReadinessInput = {
   evidence?: WaterPublicEvidence
 }
 
+/** 신청서 통장 칸용. 파일만으로는 은행·예금주·계좌가 비므로 세 칸이 모두 있어야 한다. */
+export function hasBankbookTexts(input: {
+  bank_name?: string | null
+  account_holder?: string | null
+  account_number?: string | null
+}): boolean {
+  return isFilledText(input.bank_name)
+    && isFilledText(input.account_holder)
+    && isFilledText(input.account_number)
+}
+
+/** 「통장」 필. 사본 파일 + 은행·예금주·계좌. 작성 필을 따로 두지 않는다. */
+export function isBankbookReady(
+  hasFile: boolean,
+  input: {
+    bank_name?: string | null
+    account_holder?: string | null
+    account_number?: string | null
+  }
+): boolean {
+  return hasFile && hasBankbookTexts(input)
+}
+
 export function evaluateWaterPublicReadiness(
   input: WaterPublicReadinessInput
 ): WaterPublicReadinessChecks {
@@ -288,7 +315,7 @@ export function evaluateWaterPublicReadiness(
   return {
     owner: isFilledText(input.owner_name),
     phone: isFilledText(input.owner_phone),
-    bankbook: evidence.hasBankbookAttachment,
+    bankbook: isBankbookReady(evidence.hasBankbookAttachment, input),
     idCard: evidence.hasIdCardAttachment === true,
     constructionStart: isFilledText(input.construction_date),
     constructionEnd: isFilledText(input.construction_end_date),

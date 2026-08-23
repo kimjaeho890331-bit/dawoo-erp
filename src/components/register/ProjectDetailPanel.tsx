@@ -13,6 +13,18 @@ import TabReception from './panels/TabReception'
 import TabConstruction from './panels/TabConstruction'
 import TabCompletion from './panels/TabCompletion'
 import CertificateButton from './CertificateButton'
+import {
+  WaterPublicReadinessBar,
+  WaterPublicStatusFlow,
+  persistApplicationReady,
+  toggleSmsConsent,
+} from '@/components/register/WaterPublicReadiness'
+import {
+  canLightApplicationReady,
+  evaluateWaterPublicReadiness,
+  isWaterPublicRow,
+  type WaterPublicEvidence,
+} from '@/lib/register/waterPublicReadiness'
 
 const PROGRESS_STEPS: ProjectStep[] = [
   '문의', '실측', '견적전달', '동의서', '신청서제출',
@@ -34,13 +46,14 @@ function getStepIndex(step: string): number {
 interface Props {
   project: DBProject | null
   category: '소규모' | '수도'
+  waterPublicEvidence?: WaterPublicEvidence
   onClose: () => void
   onEdit?: (project: DBProject) => void
   onDelete?: (project: DBProject) => void
   onRefresh?: () => void
 }
 
-export default function ProjectDetailPanel({ project, category, onClose, onDelete, onRefresh }: Props) {
+export default function ProjectDetailPanel({ project, category, waterPublicEvidence, onClose, onDelete, onRefresh }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('접수')
   const [editData, setEditData] = useState<Record<string, string | number | null>>({})
   const [saving, setSaving] = useState(false)
@@ -53,6 +66,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
   const [statusReason, setStatusReason] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [markingReady, setMarkingReady] = useState(false)
 
   // project.id 만 추적 (실시간 업데이트로 같은 프로젝트가 refresh 될 때는 editData 유지)
   const projectIdRef = useRef<string | null>(null)
@@ -465,10 +479,52 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   if (!project) return null
 
   const currentStepIdx = getStepIndex(project.status)
+  const isPublicWater = isWaterPublicRow({ category, water_work_type: project.water_work_type })
 
   const getVal = (field: keyof DBProject) => {
     if (field in editData) return editData[field]
     return project[field]
+  }
+
+  const publicChecks = isPublicWater
+    ? evaluateWaterPublicReadiness({
+        owner_name: (getVal('owner_name') as string | null) ?? project.owner_name,
+        owner_phone: (getVal('owner_phone') as string | null) ?? project.owner_phone,
+        bank_name: (getVal('bank_name') as string | null) ?? project.bank_name,
+        account_number: (getVal('account_number') as string | null) ?? project.account_number,
+        account_holder: (getVal('account_holder') as string | null) ?? project.account_holder,
+        construction_date: (getVal('construction_date') as string | null) ?? project.construction_date,
+        construction_end_date: (getVal('construction_end_date') as string | null) ?? project.construction_end_date,
+        consent_date: (getVal('consent_date') as string | null) ?? project.consent_date,
+        consent_time: (getVal('consent_time') as string | null) ?? project.consent_time,
+        application_date: (getVal('application_date') as string | null) ?? project.application_date,
+        extra_fields: project.extra_fields,
+        evidence: waterPublicEvidence,
+      })
+    : null
+
+  const handleMarkApplicationReady = async () => {
+    if (!publicChecks || !canLightApplicationReady(publicChecks)) return
+    setMarkingReady(true)
+    try {
+      await persistApplicationReady(project.id, project.extra_fields)
+      onRefresh?.()
+    } catch (err) {
+      console.error('신청서 준비 신호 저장 실패:', err)
+      alert('신청서 준비 신호를 저장하지 못했습니다.')
+    } finally {
+      setMarkingReady(false)
+    }
+  }
+
+  const handleToggleSmsConsent = async () => {
+    try {
+      await toggleSmsConsent(project.id, project.extra_fields)
+      onRefresh?.()
+    } catch (err) {
+      console.error('문자 동의 저장 실패:', err)
+      alert('문자 동의를 저장하지 못했습니다.')
+    }
   }
 
   return (
@@ -591,6 +647,20 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             </div>
           </div>
         </div>
+
+        {isPublicWater && publicChecks && (
+          <div className="px-6 py-3 border-b border-border-tertiary space-y-2">
+            <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">공용 신청 준비</p>
+            <WaterPublicStatusFlow status={project.status} />
+            <WaterPublicReadinessBar
+              checks={publicChecks}
+              extraFields={project.extra_fields}
+              onMarkReady={handleMarkApplicationReady}
+              markingReady={markingReady}
+              onToggleSmsConsent={handleToggleSmsConsent}
+            />
+          </div>
+        )}
 
         {/* 단계 전환 */}
         <StepTransition project={project} onStepChange={() => onRefresh?.()} />

@@ -11,6 +11,7 @@ interface Attachment {
   file_path: string
   file_type: string
   created_at: string
+  drive_url?: string | null
 }
 
 interface Props {
@@ -34,6 +35,9 @@ const FILE_TYPE_SLUGS: Record<string, string> = {
   '완료보고서': 'completion',
   '공문': 'notice',
   '기타': 'etc',
+  '신분증사본': 'id_card',
+  '견적서': 'estimate',
+  '건축물대장': 'building_ledger',
 }
 const slugifyFileType = (type: string): string => {
   return FILE_TYPE_SLUGS[type] || type.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_') || 'etc'
@@ -163,9 +167,20 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
     return data.publicUrl
   }
 
+  const fileOpenUrl = (file: Attachment) => {
+    if (file.drive_url && file.drive_url.trim() !== '') return file.drive_url
+    return getPublicUrl(file.file_path)
+  }
+
+  const fileThumbUrl = (file: Attachment) => {
+    if (file.file_path) return getPublicUrl(file.file_path)
+    return fileOpenUrl(file)
+  }
+
   const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(name)
   const isPdf = (name: string) => /\.pdf$/i.test(name)
-  const imageFiles = files.filter(f => isImage(f.name))
+  const imageFiles = files.filter(f => isImage(f.name) && !!f.file_path)
+  const driveOnlyImages = files.filter(f => isImage(f.name) && !f.file_path)
 
   // 드래그 counter 패턴: 자식 요소 위로 올라가도 dragLeave 오작동 방지
   const handleDragEnter = (e: React.DragEvent) => {
@@ -200,7 +215,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
   }
 
   const hasFiles = files.length > 0
-  const nonImageFiles = files.filter(f => !isImage(f.name))
+  const nonImageFiles = [...files.filter(f => !isImage(f.name)), ...driveOnlyImages]
 
   return (
     <div>
@@ -228,7 +243,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
                 className="relative group w-[56px] h-[56px] rounded-md overflow-hidden border border-border-primary bg-surface flex-shrink-0"
               >
                 <img
-                  src={getPublicUrl(file.file_path)}
+                  src={fileThumbUrl(file)}
                   alt={file.name}
                   className="w-full h-full object-cover cursor-pointer"
                   onClick={() => setViewerIdx(idx)}
@@ -248,7 +263,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
             {nonImageFiles.map(file => (
               <a
                 key={file.id}
-                href={getPublicUrl(file.file_path)}
+                href={fileOpenUrl(file)}
                 target="_blank"
                 rel="noreferrer"
                 className="relative group w-[56px] h-[56px] rounded-md border border-border-primary bg-surface flex flex-col items-center justify-center gap-0.5 flex-shrink-0 hover:border-[#c96442] transition-colors"
@@ -343,7 +358,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
       {/* 이미지 뷰어 */}
       {viewerIdx !== null && imageFiles.length > 0 && (
         <ImageViewer
-          images={imageFiles.map(f => ({ url: getPublicUrl(f.file_path), name: f.name }))}
+          images={imageFiles.map(f => ({ url: fileThumbUrl(f), name: f.name }))}
           initialIndex={viewerIdx}
           onClose={() => setViewerIdx(null)}
         />

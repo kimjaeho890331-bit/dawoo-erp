@@ -14,19 +14,7 @@ import {
 } from '@/lib/register/waterPublicReadiness'
 import type { TabProps } from './panelHelpers'
 import { FormInput, DateTimeInput, StaffSelect, useCurrentStaff } from './panelHelpers'
-
-// 수도공사 기본 단가
-const DEFAULT_WATER_PRICES = {
-  전용: 8500,
-  공용: 4500,
-  공용_세대: 150000,
-}
-
-interface WaterPricing {
-  전용: number
-  공용: number
-  공용_세대: number
-}
+import { DEFAULT_WATER_PRICES, mergeWaterPricing, type WaterPricing } from '@/lib/register/waterPricing'
 
 export default function TabReception({
   project,
@@ -122,7 +110,7 @@ export default function TabReception({
     fetch(`/api/pricing?city=${encodeURIComponent(cityName)}&category=${encodeURIComponent(category === '소규모' ? '소규모' : '수도')}`)
       .then(res => res.json())
       .then(data => {
-        setPricing(data)
+        setPricing(mergeWaterPricing(data))
         setPricingLoaded(true)
       })
       .catch(() => setPricingLoaded(true))

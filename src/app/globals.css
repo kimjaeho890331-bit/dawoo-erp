@@ -437,3 +437,11 @@ table tbody tr:hover {
   outline-offset: 2px;
   border-radius: 8px;
 }
+
+@keyframes dawoo-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in {
+  animation: dawoo-slide-in-right 0.25s ease-out;
+}

@@ -256,7 +256,7 @@ export function WaterPublicReadyBlock({
   onPillClick?: (key: ReadinessPillKey) => void
 }) {
   const [openSlot, setOpenSlot] = useState<AttachmentPillKey | null>(
-    checks.bankbook ? null : 'bankbook'
+    checks?.bankbook ? null : 'bankbook'
   )
   const summary = summarizeReadiness(checks)
   const ready = areRequiredPillsReady(checks)
@@ -292,7 +292,7 @@ export function WaterPublicReadyBlock({
               <ReadyPill
                 key={item.key}
                 label={item.label}
-                filled={checks[item.key]}
+                filled={checks?.[item.key] === true}
                 selected={openSlot === item.key}
                 onClick={() => handlePillClick(item.key)}
               />
@@ -306,7 +306,7 @@ export function WaterPublicReadyBlock({
               <ReadyPill
                 key={item.key}
                 label={item.label}
-                filled={checks[item.key]}
+                filled={checks?.[item.key] === true}
                 onClick={() => handlePillClick(item.key)}
               />
             ))}

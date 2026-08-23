@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { validateProjectData } from '@/lib/utils/validate'
+import { safeMoney } from '@/lib/utils/format'
 import StepTransition from '@/components/register/StepTransition'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
@@ -489,6 +490,8 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
   if (!project) return null
 
   const currentStepIdx = getStepIndex(project.status)
+  // 문의(예약)·취소는 흐름 밖(-1). 음수 width 로 레이아웃을 깨지 않는다.
+  const progressPct = currentStepIdx < 0 ? 0 : (currentStepIdx / (PROGRESS_STEPS.length - 1)) * 100
 
   const getVal = (field: keyof DBProject) => {
     if (field in editData) return editData[field]
@@ -620,7 +623,7 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
             {/* 진행 라인 */}
             <div
               className="absolute top-[11px] left-3 h-[2px] bg-[#c96442] transition-all"
-              style={{ width: `${(currentStepIdx / (PROGRESS_STEPS.length - 1)) * 100}%` }}
+              style={{ width: `${progressPct}%` }}
             />
             {/* 단계 점 */}
             <div className="relative flex justify-between">
@@ -789,7 +792,7 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
             <MiniStat label="총공사비" value={project.total_cost} />
             <MiniStat label="자부담금" value={project.self_pay} />
             <MiniStat label="시지원금" value={project.city_support} />
-            <MiniStat label="추가공사금" value={project.additional_cost || 0} />
+            <MiniStat label="추가공사금" value={project.additional_cost} />
             <MiniStat label="미수금" value={project.outstanding} highlight />
           </div>
         </div>
@@ -877,26 +880,18 @@ export default function ProjectDetailPanel({ project, category, waterPublicEvide
         </>
       )}
 
-      <style jsx global>{`
-        @keyframes slideIn {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-        .animate-slide-in {
-          animation: slideIn 0.25s ease-out;
-        }
-      `}</style>
     </>
   )
 }
 
 // --- MiniStat (금액 표시용, 이 파일 전용) ---
-function MiniStat({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+function MiniStat({ label, value, highlight }: { label: string; value: number | null | undefined; highlight?: boolean }) {
+  const amount = safeMoney(value)
   return (
     <div className="text-center">
       <p className="text-[10px] text-txt-tertiary">{label}</p>
-      <p className={`text-[11px] font-semibold tabular-nums ${highlight && value > 0 ? 'text-[#dc2626] font-medium' : 'text-txt-secondary'}`}>
-        {value > 0 ? `${value.toLocaleString()}원` : '-'}
+      <p className={`text-[11px] font-semibold tabular-nums ${highlight && amount > 0 ? 'text-[#dc2626] font-medium' : 'text-txt-secondary'}`}>
+        {amount > 0 ? `${amount.toLocaleString()}원` : '-'}
       </p>
     </div>
   )

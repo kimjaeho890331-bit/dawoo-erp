@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
+import DetailPanelErrorBoundary from '@/components/register/DetailPanelErrorBoundary'
 import NewProjectModal from '@/components/register/NewProjectModal'
 import { WaterPublicEmptyCount } from '@/components/register/WaterPublicReadiness'
 import { useWaterPublicEvidence } from '@/components/register/useWaterPublicEvidence'
@@ -798,15 +799,20 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       </div>
 
       {/* 상세 패널 */}
-      <ProjectDetailPanel
-        project={selectedProject}
-        category={category}
-        waterPublicEvidence={selectedProject ? getEvidence(selectedProject.id) : undefined}
+      <DetailPanelErrorBoundary
+        key={selectedProjectId ?? 'closed'}
         onClose={() => setSelectedProjectId(null)}
-        onEdit={handleEditFromPanel}
-        onDelete={handleDeleteFromPanel}
-        onRefresh={loadProjects}
-      />
+      >
+        <ProjectDetailPanel
+          project={selectedProject}
+          category={category}
+          waterPublicEvidence={selectedProject ? getEvidence(selectedProject.id) : undefined}
+          onClose={() => setSelectedProjectId(null)}
+          onEdit={handleEditFromPanel}
+          onDelete={handleDeleteFromPanel}
+          onRefresh={loadProjects}
+        />
+      </DetailPanelErrorBoundary>
 
       {/* 신규등록 / 수정 모달 */}
       {(showNewModal || editProject) && (

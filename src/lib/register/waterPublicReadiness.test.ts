@@ -27,6 +27,7 @@ import {
   isFilledText,
   isSmsConsentGiven,
   isWaterPublicRow,
+  waterPublicEvidenceIdsKey,
   mapWaterPublicStatus,
   mergeExtraFields,
 } from './waterPublicReadiness'
@@ -64,6 +65,20 @@ function allPillsReadyOverrides() {
     },
   }
 }
+
+describe('waterPublicEvidenceIdsKey', () => {
+  it('공용 id 만 정렬해 이어 붙인다. 배열 참조가 달라도 같은 키다', () => {
+    const rows = [
+      { id: 'b', water_work_type: '공용' },
+      { id: 'a', water_work_type: '옥내' },
+      { id: 'c', water_work_type: '공용' },
+    ]
+    expect(waterPublicEvidenceIdsKey(rows, '수도')).toBe('b,c')
+    expect(waterPublicEvidenceIdsKey([{ id: 'c', water_work_type: '공용' }, { id: 'b', water_work_type: '공용' }, { id: 'a', water_work_type: '옥내' }], '수도')).toBe('b,c')
+    expect(waterPublicEvidenceIdsKey(rows, '소규모')).toBe('')
+    expect(waterPublicEvidenceIdsKey([], '수도')).toBe('')
+  })
+})
 
 describe('isWaterPublicRow', () => {
   it('수도 + water_work_type=공용만 준비도 대상이다', () => {

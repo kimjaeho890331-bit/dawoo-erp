@@ -201,6 +201,19 @@ export function isWaterPublicRow(input: {
   return input.water_work_type === WATER_PUBLIC_TYPE
 }
 
+/** 공용 행 id 만. projects 배열 참조가 매 렌더 바뀌어도 같은 키면 재조회하지 않는다. */
+export function waterPublicEvidenceIdsKey(
+  projects: readonly { id: string; water_work_type?: string | null }[],
+  category: '소규모' | '수도',
+): string {
+  if (category !== '수도') return ''
+  return projects
+    .filter((p) => isWaterPublicRow({ category, water_work_type: p.water_work_type }))
+    .map((p) => p.id)
+    .sort()
+    .join(',')
+}
+
 export function isFilledText(value: unknown): boolean {
   return typeof value === 'string' && value.trim() !== ''
 }

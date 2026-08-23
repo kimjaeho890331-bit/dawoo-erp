@@ -25,3 +25,8 @@ export function formatMoney(value: string | number): string {
 export function parseMoney(value: string): number {
   return Number(value.replace(/[^0-9]/g, '')) || 0
 }
+
+/** DB numeric 이 null 이어도 toLocaleString 을 부르지 않게 숫자만 남긴다. */
+export function safeMoney(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}

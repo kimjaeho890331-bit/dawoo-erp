@@ -6,20 +6,21 @@ import {
   CERT_TASK_TYPE,
   EMPTY_WATER_PUBLIC_EVIDENCE,
   groupEvidence,
-  isWaterPublicRow,
+  waterPublicEvidenceIdsKey,
   type WaterPublicEvidence,
 } from '@/lib/register/waterPublicReadiness'
 import type { DBProject } from '@/components/register/RegisterPage'
 
 export function useWaterPublicEvidence(projects: DBProject[], category: '소규모' | '수도') {
   const [evidenceById, setEvidenceById] = useState<Record<string, WaterPublicEvidence>>({})
+  const publicIdsKey = waterPublicEvidenceIdsKey(projects, category)
 
   const loadEvidence = useCallback(async () => {
     if (category !== '수도') {
       setEvidenceById({})
       return
     }
-    const ids = projects.filter((p) => isWaterPublicRow({ category, water_work_type: p.water_work_type })).map((p) => p.id)
+    const ids = publicIdsKey ? publicIdsKey.split(',') : []
     if (ids.length === 0) {
       setEvidenceById({})
       return
@@ -51,7 +52,7 @@ export function useWaterPublicEvidence(projects: DBProject[], category: '소규�
       estimates: estimates.error ? null : estimates.data,
       certTasks: certTasks.error ? null : certTasks.data,
     }))
-  }, [category, projects])
+  }, [category, publicIdsKey])
 
   useEffect(() => {
     loadEvidence()

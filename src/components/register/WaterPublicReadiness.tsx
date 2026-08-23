@@ -93,7 +93,7 @@ export function WaterPublicStatusFlow({
     return null
   }
 
-  const steps = [...WATER_PUBLIC_STATUS_FLOW]
+  const steps: string[] = [...WATER_PUBLIC_STATUS_FLOW]
   if (mapped.showJunggong) steps.push(WATER_PUBLIC_JUNGGONG_LABEL)
 
   return (

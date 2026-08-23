@@ -3,18 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  BANKBOOK_FILE_TYPE,
   CERT_TASK_TYPE,
   EMPTY_WATER_PUBLIC_EVIDENCE,
-  ESTIMATE_FILE_TYPE,
-  LEDGER_FILE_TYPE,
   groupEvidence,
   isWaterPublicRow,
   type WaterPublicEvidence,
 } from '@/lib/register/waterPublicReadiness'
 import type { DBProject } from '@/components/register/RegisterPage'
-
-const ATTACHMENT_TYPES = [BANKBOOK_FILE_TYPE, LEDGER_FILE_TYPE, ESTIMATE_FILE_TYPE] as const
 
 export function useWaterPublicEvidence(projects: DBProject[], category: '소규모' | '수도') {
   const [evidenceById, setEvidenceById] = useState<Record<string, WaterPublicEvidence>>({})
@@ -33,9 +28,8 @@ export function useWaterPublicEvidence(projects: DBProject[], category: '소규�
     const [attachments, ledgerRequests, estimates, certTasks] = await Promise.all([
       supabase
         .from('attachments')
-        .select('project_id, file_type, file_path, drive_url')
-        .in('project_id', ids)
-        .in('file_type', [...ATTACHMENT_TYPES]),
+        .select('project_id, name, file_path, file_type, drive_url')
+        .in('project_id', ids),
       supabase
         .from('building_ledger_requests')
         .select('project_id, status, drive_file_url')

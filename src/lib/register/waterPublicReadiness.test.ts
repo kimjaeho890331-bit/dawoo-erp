@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  attachmentMarksBankbook,
+  attachmentMarksLedger,
   buildApplicationReadyPatch,
   buildSmsConsentPatch,
   canLightApplicationReady,
@@ -29,7 +31,8 @@ function allReadyOverrides() {
     application_date: '2026-07-21',
     extra_fields: { sms_consent: true },
     evidence: {
-      attachmentFileTypes: ['통장사본'],
+      hasBankbookAttachment: true,
+      hasLedgerAttachment: false,
       ledgerStatuses: ['confirmed'] as string[],
       hasEstimateRow: true,
       hasLedgerDriveFile: false,
@@ -88,36 +91,40 @@ describe('filled field rules', () => {
     expect(isSmsConsentGiven({ sms_consent: 'Y' })).toBe(true)
     expect(isSmsConsentGiven({ sms_consent: '동의' })).toBe(true)
   })
+})
 
-  it('통장사본은 attachments.file_type=통장사본이 있을 때만 체크된다', () => {
-    const base = allReadyOverrides()
-    expect(
-      evaluateWaterPublicReadiness({
-        ...base,
-        evidence: { ...base.evidence, attachmentFileTypes: [] },
-      }).bankbook
-    ).toBe(false)
-    expect(evaluateWaterPublicReadiness(base).bankbook).toBe(true)
+describe('attachment marks', () => {
+  it('통장사본은 live file_type=통장사본 또는 이름 표시(통장사본/통장 사본/통장계좌)만 본다', () => {
+    expect(attachmentMarksBankbook({ file_type: '통장사본', name: 'x.jpg' })).toBe(true)
+    expect(attachmentMarksBankbook({ file_type: '신청서', name: '※ 원주빌라 7동 통장사본.jpg' })).toBe(true)
+    expect(attachmentMarksBankbook({ file_type: '통장사본', name: '광일빌라 통장 사본.jpg' })).toBe(true)
+    expect(attachmentMarksBankbook({ file_type: null, name: '화성파크타운 통장계좌.jpg' })).toBe(true)
+    expect(attachmentMarksBankbook({ file_type: '동의서', name: '02. 경동빌라 동의서.pdf' })).toBe(false)
+    expect(attachmentMarksBankbook({ file_type: '신청서', name: '신청서.pdf' })).toBe(false)
+  })
+
+  it('대장은 file_type/name 이 건축물대장으로 이미 표시된 경우만. 새 타입을 만들지 않는다', () => {
+    expect(attachmentMarksLedger({ file_type: '건축물대장', name: 'x.pdf' })).toBe(true)
+    expect(attachmentMarksLedger({ file_type: '통장사본', name: '빌라_건축물대장.pdf' })).toBe(true)
+    expect(attachmentMarksLedger({ file_type: '통장사본', name: '통장사본.jpg' })).toBe(false)
+    expect(attachmentMarksLedger({ file_type: '동의서', name: '동의서.pdf' })).toBe(false)
   })
 })
 
 describe('system fields', () => {
-  it('대장은 issued/confirmed, 건축물대장 첨부, 또는 Drive 링크가 있으면 있다', () => {
-    expect(hasLedgerEvidence({ ledgerStatuses: ['requested'], fileTypes: [] })).toBe(false)
-    expect(hasLedgerEvidence({ ledgerStatuses: ['issued'], fileTypes: [] })).toBe(true)
-    expect(hasLedgerEvidence({ ledgerStatuses: ['confirmed'], fileTypes: [] })).toBe(true)
-    expect(hasLedgerEvidence({ ledgerStatuses: [], fileTypes: ['건축물대장'] })).toBe(true)
-    expect(hasLedgerEvidence({ ledgerStatuses: [], fileTypes: ['통장사본'] })).toBe(false)
+  it('대장은 issued/confirmed 또는 이미 표시된 대장 첨부/Drive', () => {
+    expect(hasLedgerEvidence({ ledgerStatuses: ['requested'] })).toBe(false)
+    expect(hasLedgerEvidence({ ledgerStatuses: ['issued'] })).toBe(true)
+    expect(hasLedgerEvidence({ ledgerStatuses: ['confirmed'] })).toBe(true)
+    expect(hasLedgerEvidence({ hasLedgerAttachment: true })).toBe(true)
     expect(hasLedgerEvidence({ hasLedgerDriveFile: true })).toBe(true)
-    expect(hasLedgerEvidence({ hasLedgerDriveFile: false })).toBe(false)
+    expect(hasLedgerEvidence({ hasLedgerAttachment: false, hasLedgerDriveFile: false })).toBe(false)
   })
 
-  it('견적은 estimates 행 또는 attachments.file_type=견적서만. documents 0행은 쓰지 않는다', () => {
+  it('견적서 있음은 estimates 행 존재만. 빈 견적을 채우지 않는다', () => {
     expect(hasEstimateEvidence({})).toBe(false)
-    expect(hasEstimateEvidence({ hasEstimateRow: false, fileTypes: [] })).toBe(false)
+    expect(hasEstimateEvidence({ hasEstimateRow: false })).toBe(false)
     expect(hasEstimateEvidence({ hasEstimateRow: true })).toBe(true)
-    expect(hasEstimateEvidence({ fileTypes: ['견적서'] })).toBe(true)
-    expect(hasEstimateEvidence({ fileTypes: ['통장사본', '신청서'] })).toBe(false)
   })
 })
 
@@ -139,7 +146,8 @@ describe('신청서 만들자', () => {
       { extra_fields: {} },
       {
         evidence: {
-          attachmentFileTypes: [],
+          hasBankbookAttachment: false,
+          hasLedgerAttachment: false,
           ledgerStatuses: ['confirmed'],
           hasEstimateRow: true,
           hasLedgerDriveFile: false,
@@ -147,7 +155,8 @@ describe('신청서 만들자', () => {
       },
       {
         evidence: {
-          attachmentFileTypes: ['통장사본'],
+          hasBankbookAttachment: true,
+          hasLedgerAttachment: false,
           ledgerStatuses: ['requested'],
           hasEstimateRow: true,
           hasLedgerDriveFile: false,
@@ -155,7 +164,8 @@ describe('신청서 만들자', () => {
       },
       {
         evidence: {
-          attachmentFileTypes: ['통장사본'],
+          hasBankbookAttachment: true,
+          hasLedgerAttachment: false,
           ledgerStatuses: ['confirmed'],
           hasEstimateRow: false,
           hasLedgerDriveFile: false,
@@ -188,7 +198,7 @@ describe('status flow mapping', () => {
     expect(mapWaterPublicStatus('입금').displayStep).toBe('입금')
   })
 
-  it('준공은 입금 이후에만 보이고, 빈 값·취소·예약은 흐름에 넣지 않는다', () => {
+  it('준공은 입금 이후에만 보이고, DB에 준공 값은 없다', () => {
     expect(mapWaterPublicStatus('입금').showJunggong).toBe(true)
     expect(mapWaterPublicStatus('공사').showJunggong).toBe(false)
     expect(mapWaterPublicStatus(null).inFlow).toBe(false)
@@ -219,27 +229,22 @@ describe('extra_fields merge', () => {
 })
 
 describe('groupEvidence', () => {
-  it('attachments 는 file_path 또는 drive_url 이 있을 때만 센다. documents 는 쓰지 않는다', () => {
+  it('이름에 통장사본이 있으면 file_type=신청서여도 통장으로 센다. 견적은 행 존재만', () => {
     const grouped = groupEvidence({
       attachments: [
-        { project_id: 'a', file_type: '통장사본', file_path: 'attachments/a/bankbook/1.jpg' },
-        { project_id: 'a', file_type: '건축물대장', drive_url: 'https://drive.google.com/file/d/x' },
-        { project_id: 'b', file_type: '통장사본', file_path: null, drive_url: null },
+        { project_id: 'a', file_type: '신청서', name: '※ 원주빌라 7동 통장사본.jpg', file_path: 'attachments/a/application/1.jpg' },
+        { project_id: 'a', file_type: '동의서', name: '02. 동의서.pdf', file_path: 'attachments/a/consent/1.pdf' },
+        { project_id: 'b', file_type: '통장사본', name: '통장사본.jpg', file_path: null, drive_url: null },
       ],
       ledgerRequests: [{ project_id: 'a', status: 'confirmed', drive_file_url: null }],
       estimates: [{ project_id: 'c' }],
-      certTasks: [
-        { project_id: 'd', status: 'done', result_drive_file_url: 'https://drive.google.com/file/d/y' },
-        { project_id: 'e', status: 'pending', result_drive_file_url: null },
-      ],
     })
-    expect(grouped.a.attachmentFileTypes).toEqual(['통장사본', '건축물대장'])
+    expect(grouped.a.hasBankbookAttachment).toBe(true)
+    expect(grouped.a.hasLedgerAttachment).toBe(false)
     expect(grouped.a.ledgerStatuses).toEqual(['confirmed'])
     expect(grouped.a.hasEstimateRow).toBe(false)
     expect(grouped.b).toBeUndefined()
     expect(grouped.c.hasEstimateRow).toBe(true)
-    expect(grouped.d.hasLedgerDriveFile).toBe(true)
-    expect(grouped.e).toBeUndefined()
-    expect(grouped.missing).toBeUndefined()
+    expect(grouped.c.hasBankbookAttachment).toBe(false)
   })
 })

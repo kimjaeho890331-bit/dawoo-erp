@@ -1443,18 +1443,8 @@ async function loadMemoryBlock(): Promise<string> {
     const { data } = await supabaseAdmin.from('ai_memory').select('category, key, value').order('category').limit(100)
     if (!data || data.length === 0) return ''
     const lines = data.map((m: Record<string, unknown>) => `- [${m.category}] ${m.key}: ${m.value}`).join('\n')
-    return `\n\n## 회사 학습 규칙 (대표/직원이 'AI 검토'에서 교정한 규칙 — 반드시 우선 반영)\n${lines}`
+    return `\n\n## 회사 학습 규칙 (대표/직원이 교정한 규칙 — 반드시 우선 반영)\n${lines}`
   } catch { return '' }
-}
-
-// AI 운영 신호 로그 (확인카드 결정·피드백) — ai_events. 'AI 검토' 대시보드 소스. 없으면 graceful
-async function logEvent(kind: string, opts: { staffId?: string; sessionId?: string | null; tool?: string; detail?: string }) {
-  try {
-    await supabaseAdmin.from('ai_events').insert({
-      staff_id: opts.staffId || null, session_id: opts.sessionId || null,
-      kind, tool: opts.tool || null, detail: opts.detail || null,
-    })
-  } catch { /* graceful */ }
 }
 
 // --- Non-streaming handler (텔레그램 및 기타 용도) ---
@@ -1582,7 +1572,6 @@ export async function POST(request: NextRequest) {
         const message = ok
           ? buildResultMessage(executeAction.tool, executeAction.input || {}, parsed)
           : `실패: ${parsed.error}`
-        if (ok) logEvent('confirm_approved', { staffId, sessionId, tool: executeAction.tool })
         if (ok && staffId) {
           try {
             await insertChatMessage({ staff_id: staffId, role: 'assistant', content: message, channel: channel || 'web', session_id: sessionId || null })
@@ -1730,7 +1719,6 @@ export async function POST(request: NextRequest) {
                   variant: actionVariant(writeBlock.name as string, writeBlock.input as Record<string, unknown>),
                 },
               })}\n\n`))
-              logEvent('confirm_shown', { staffId, sessionId: activeSessionId, tool: writeBlock.name as string })
               break
             }
 

@@ -7,7 +7,6 @@ export const UI_HIDDEN = {
   documents: true,
   reports: true,
   kpi: true,
-  aiReview: true,
   aiAssistant: true,
   promo: true,
 } as const
@@ -16,7 +15,6 @@ export const HIDDEN_MENU_PATHS: readonly string[] = [
   ...(UI_HIDDEN.documents ? (['/documents'] as const) : []),
   ...(UI_HIDDEN.reports ? (['/reports'] as const) : []),
   ...(UI_HIDDEN.kpi ? (['/kpi'] as const) : []),
-  ...(UI_HIDDEN.aiReview ? (['/ai-review'] as const) : []),
 ]
 
 export function isHiddenMenuPath(pathname: string): boolean {

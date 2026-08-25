@@ -16,6 +16,7 @@ import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { workKindFromIds, type WorkKind } from '@/lib/workTarget'
+import { draftTitleFromTarget } from '@/lib/approval/draftTitle'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
 
@@ -287,7 +288,19 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
             projectId={projectId}
             sites={sites}
             projects={projects}
-            onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+            onChange={next => {
+              setWorkKind(next.kind)
+              setSiteId(next.siteId)
+              setProjectId(next.projectId)
+              // 제목이 비어 있을 때만 채운다 — 손으로 고친 제목이 날아가면 안 된다
+              setTitle(prev => {
+                if (prev.trim()) return prev
+                const picked = next.siteId
+                  ? sites.find(s => s.id === next.siteId)?.name
+                  : projects.find(p => p.id === next.projectId)?.building_name
+                return picked ? draftTitleFromTarget(picked) : prev
+              })
+            }}
           />
         </div>
       </div>
@@ -331,7 +344,19 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                   projectId={projectId}
                   sites={sites}
                   projects={projects}
-                  onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+                  onChange={next => {
+                    setWorkKind(next.kind)
+                    setSiteId(next.siteId)
+                    setProjectId(next.projectId)
+                    // 제목이 비어 있을 때만 채운다 — 손으로 고친 제목이 날아가면 안 된다
+                    setTitle(prev => {
+                      if (prev.trim()) return prev
+                      const picked = next.siteId
+                        ? sites.find(s => s.id === next.siteId)?.name
+                        : projects.find(p => p.id === next.projectId)?.building_name
+                      return picked ? draftTitleFromTarget(picked) : prev
+                    })
+                  }}
                 />
               </td>
             </tr>

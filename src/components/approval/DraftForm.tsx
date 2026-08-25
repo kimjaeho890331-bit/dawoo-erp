@@ -9,7 +9,7 @@ import ApprovalLineModal, { type LineDraft } from './ApprovalLineModal'
 import ApprovalLineView from './ApprovalLineView'
 import PaymentTable from './PaymentTable'
 import DetailTable from './DetailTable'
-import FileAttach, { type AttachedFile } from './FileAttach'
+import FileAttach, { MAX_FILES, type AttachedFile } from './FileAttach'
 import MobileField from './MobileField'
 import type { ApprovalStatus, PaymentRow, DetailRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
@@ -439,7 +439,24 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         <PaymentTable
           rows={payments}
           onChange={setPayments}
-          onPickVendor={v => setFiles(prev => [...prev, ...vendorDocsToAttachments(v, prev)])}
+          onPickVendor={v => {
+            const toAdd = vendorDocsToAttachments(v, files)
+            // 서류가 등록 안 된 거래처는 toAdd가 빈 배열이다 — 이 경우 파일도, 오류도 건드리지 않는다.
+            if (toAdd.length === 0) return
+
+            // 상한(MAX_FILES)은 FileAttach.tsx 한 곳에서만 정의한다. 자동 첨부가 직접 올리기와
+            // 다른 상한을 쓰면(또는 상한 자체가 없으면) 직접 올린 파일이 상한 근처일 때
+            // 거래처를 고르는 것만으로 조용히 상한을 넘게 된다.
+            const room = Math.max(0, MAX_FILES - files.length)
+            const fit = toAdd.slice(0, room)
+            if (fit.length > 0) setFiles(prev => [...prev, ...fit])
+
+            // 자리가 모자라 일부를 못 붙였으면 조용히 버리지 않고 알린다.
+            // 전부 붙었을 때는 오류를 띄우지 않는다 — 기존에 떠 있던 다른 오류는 그대로 둔다.
+            if (fit.length < toAdd.length) {
+              setError(`첨부는 최대 ${MAX_FILES}개까지 가능합니다 — 거래처 서류 일부를 붙이지 못했습니다`)
+            }
+          }}
         />
       </div>
       <div className={`${stepBlock(2)} mb-8`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>

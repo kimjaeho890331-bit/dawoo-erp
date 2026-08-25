@@ -11,7 +11,9 @@ export interface AttachedFile {
   source: 'manual' | 'vendor'
 }
 
-const MAX_FILES = 10
+// 자동 첨부(거래처 서류)도 이 상한을 지켜야 한다. 값을 두 곳에 따로 두면
+// 하나만 고치고 다른 쪽을 잊어 상한이 무의미해지는 버그가 재발한다.
+export const MAX_FILES = 10
 const MAX_SIZE = 20 * 1024 * 1024
 const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'gif', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'pdf', 'hwp']
 

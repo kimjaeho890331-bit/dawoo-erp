@@ -204,6 +204,22 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     }
   }, [payments, details])
 
+  // 데스크톱·모바일 두 경로가 현장 선택 시 다르게 동작하지 않도록 핸들러를 하나로 통합한다.
+  // 나중에 로직을 고칠 때 한쪽만 빠뜨리는 버그를 방지한다.
+  const handleWorkTargetChange = useCallback((next: { kind: WorkKind; siteId: string; projectId: string }) => {
+    setWorkKind(next.kind)
+    setSiteId(next.siteId)
+    setProjectId(next.projectId)
+    // 제목이 비어 있을 때만 채운다 — 손으로 고친 제목이 날아가면 안 된다
+    setTitle(prev => {
+      if (prev.trim()) return prev
+      const picked = next.siteId
+        ? sites.find(s => s.id === next.siteId)?.name
+        : projects.find(p => p.id === next.projectId)?.building_name
+      return picked ? draftTitleFromTarget(picked) : prev
+    })
+  }, [sites, projects])
+
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
   // 단계 이동 시 위로 올려준다. 긴 단계를 지나온 뒤 다음 단계의 중간부터 보이면
@@ -288,19 +304,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
             projectId={projectId}
             sites={sites}
             projects={projects}
-            onChange={next => {
-              setWorkKind(next.kind)
-              setSiteId(next.siteId)
-              setProjectId(next.projectId)
-              // 제목이 비어 있을 때만 채운다 — 손으로 고친 제목이 날아가면 안 된다
-              setTitle(prev => {
-                if (prev.trim()) return prev
-                const picked = next.siteId
-                  ? sites.find(s => s.id === next.siteId)?.name
-                  : projects.find(p => p.id === next.projectId)?.building_name
-                return picked ? draftTitleFromTarget(picked) : prev
-              })
-            }}
+            onChange={handleWorkTargetChange}
           />
         </div>
       </div>
@@ -344,19 +348,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                   projectId={projectId}
                   sites={sites}
                   projects={projects}
-                  onChange={next => {
-                    setWorkKind(next.kind)
-                    setSiteId(next.siteId)
-                    setProjectId(next.projectId)
-                    // 제목이 비어 있을 때만 채운다 — 손으로 고친 제목이 날아가면 안 된다
-                    setTitle(prev => {
-                      if (prev.trim()) return prev
-                      const picked = next.siteId
-                        ? sites.find(s => s.id === next.siteId)?.name
-                        : projects.find(p => p.id === next.projectId)?.building_name
-                      return picked ? draftTitleFromTarget(picked) : prev
-                    })
-                  }}
+                  onChange={handleWorkTargetChange}
                 />
               </td>
             </tr>

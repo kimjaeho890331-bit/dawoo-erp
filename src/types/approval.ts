@@ -99,6 +99,8 @@ export interface ExpenseReportFile {
   file_name: string
   file_url: string
   size: number
+  /** 'manual' = 기안자가 직접 올림, 'vendor' = 거래처DB에서 자동 첨부 */
+  source: 'manual' | 'vendor'
   uploaded_at: string
 }
 

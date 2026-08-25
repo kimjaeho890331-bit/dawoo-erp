@@ -7,6 +7,8 @@ export interface AttachedFile {
   file_name: string
   file_url: string
   size: number
+  /** 'manual' = 직접 올림, 'vendor' = 거래처DB에서 자동 첨부 */
+  source: 'manual' | 'vendor'
 }
 
 const MAX_FILES = 10
@@ -54,7 +56,7 @@ export default function FileAttach({ files, onChange }: Props) {
         const json = await res.json()
         if (!res.ok) { setError(json.error ?? '업로드 실패'); continue }
 
-        added.push({ file_name: file.name, file_url: json.url, size: file.size })
+        added.push({ file_name: file.name, file_url: json.url, size: file.size, source: 'manual' })
       }
 
       onChange([...files, ...added])

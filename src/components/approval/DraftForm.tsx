@@ -15,7 +15,7 @@ import type { ApprovalStatus, PaymentRow, DetailRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
-import { workKindFromIds, type WorkKind } from '@/lib/workTarget'
+import { workKindFromIds, projectLabel, type WorkKind } from '@/lib/workTarget'
 import { draftTitleFromTarget } from '@/lib/approval/draftTitle'
 import { vendorDocsToAttachments } from '@/lib/approval/vendorDocs'
 
@@ -214,9 +214,18 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     // 제목이 비어 있을 때만 채운다 — 손으로 고친 제목이 날아가면 안 된다
     setTitle(prev => {
       if (prev.trim()) return prev
-      const picked = next.siteId
-        ? sites.find(s => s.id === next.siteId)?.name
-        : projects.find(p => p.id === next.projectId)?.building_name
+      let picked: string | undefined
+      if (next.siteId) {
+        picked = sites.find(s => s.id === next.siteId)?.name
+      } else {
+        // building_name만 쓰면 동·호가 빠진다. 화면 목록(WorkTargetPicker)과 같은
+        // projectLabel로 만들어야 "대광빌라 F동 302호"처럼 동·호가 제목에 남고,
+        // 이 제목이 그대로 expenses.title로 복사돼도 어느 세대 건인지 알 수 있다.
+        const project = projects.find(p => p.id === next.projectId)
+        picked = project ? projectLabel(project) : undefined
+      }
+      // picked가 빈 문자열/공백뿐이면 draftTitleFromTarget이 ''을 돌려주고,
+      // 그때는 아래 삼항이 prev(기존 동작)를 지킨다 — 억지로 채우지 않는다.
       return picked ? draftTitleFromTarget(picked) : prev
     })
   }, [sites, projects])

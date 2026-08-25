@@ -8,16 +8,16 @@ const vendor = {
 }
 
 describe('vendorDocsToAttachments', () => {
-  it('사업자등록증과 통장사본을 거래처 출처로 만든다', () => {
+  it('사업자등록증과 통장사본을 거래처 출처로 만든다 — 파일명에 확장자를 붙인다', () => {
     expect(vendorDocsToAttachments(vendor, [])).toEqual([
-      { file_name: '기원건설 사업자등록증', file_url: 'https://x/vendors/biz.pdf', size: 0, source: 'vendor' },
-      { file_name: '기원건설 통장사본', file_url: 'https://x/vendors/bank.pdf', size: 0, source: 'vendor' },
+      { file_name: '기원건설 사업자등록증.pdf', file_url: 'https://x/vendors/biz.pdf', size: 0, source: 'vendor' },
+      { file_name: '기원건설 통장사본.pdf', file_url: 'https://x/vendors/bank.pdf', size: 0, source: 'vendor' },
     ])
   })
 
   it('이미 붙어 있는 파일은 다시 붙이지 않는다', () => {
     const existing = [
-      { file_name: '기원건설 사업자등록증', file_url: 'https://x/vendors/biz.pdf', size: 0, source: 'vendor' as const },
+      { file_name: '기원건설 사업자등록증.pdf', file_url: 'https://x/vendors/biz.pdf', size: 0, source: 'vendor' as const },
     ]
     expect(vendorDocsToAttachments(vendor, existing).map(f => f.file_url))
       .toEqual(['https://x/vendors/bank.pdf'])
@@ -32,6 +32,24 @@ describe('vendorDocsToAttachments', () => {
   it('한쪽만 등록돼 있으면 그것만 돌려준다', () => {
     expect(vendorDocsToAttachments(
       { name: '노나', biz_license_url: null, bankbook_url: 'https://x/vendors/b.pdf' }, [],
-    ).map(f => f.file_name)).toEqual(['노나 통장사본'])
+    ).map(f => f.file_name)).toEqual(['노나 통장사본.pdf'])
+  })
+
+  it('쿼리스트링이 붙어도 확장자를 정확히 뽑는다', () => {
+    expect(vendorDocsToAttachments(
+      { name: '노나', biz_license_url: 'https://x/vendors/biz.pdf?token=abc123', bankbook_url: null }, [],
+    ).map(f => f.file_name)).toEqual(['노나 사업자등록증.pdf'])
+  })
+
+  it('확장자가 없는 URL이면 파일명을 그대로 둔다', () => {
+    expect(vendorDocsToAttachments(
+      { name: '노나', biz_license_url: 'https://x/vendors/biz', bankbook_url: null }, [],
+    ).map(f => f.file_name)).toEqual(['노나 사업자등록증'])
+  })
+
+  it('대문자 확장자는 소문자로 정규화한다', () => {
+    expect(vendorDocsToAttachments(
+      { name: '노나', biz_license_url: 'https://x/vendors/biz.PDF', bankbook_url: null }, [],
+    ).map(f => f.file_name)).toEqual(['노나 사업자등록증.pdf'])
   })
 })

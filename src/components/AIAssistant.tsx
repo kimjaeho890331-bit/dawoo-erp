@@ -262,21 +262,10 @@ export default function AIAssistant() {
     if (id === sessionId) startNewChat()
   }
 
-  // AI 운영 신호 기록 (fire-and-forget) → 'AI 검토' 대시보드 소스
-  function logAiEvent(kind: string, tool?: string) {
-    try {
-      fetch('/api/chat/events', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, tool, session_id: sessionId || undefined, staff_id: staffId || undefined }),
-      })
-    } catch { /* graceful */ }
-  }
-
   // ── 피드백 (👍 시각 / 👎 세션 플래그) ──────────────────
   async function handleFeedback(i: number, type: 'up' | 'down') {
     if (feedback[i]) return
     setFeedback(prev => ({ ...prev, [i]: type }))
-    logAiEvent(type === 'up' ? 'feedback_up' : 'feedback_down')
     if (type === 'down' && sessionId) {
       try {
         await fetch('/api/chat/sessions', {
@@ -448,7 +437,6 @@ export default function AIAssistant() {
   }
 
   function cancelCard(i: number) {
-    logAiEvent('confirm_cancelled', messages[i]?.tool)
     setMessages(prev => prev.map((m, idx) => idx === i ? { ...m, status: 'cancelled' } : m))
     setMessages(prev => [...prev, { role: 'assistant', content: '취소했습니다.' }])
   }

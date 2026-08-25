@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Search, ChevronUp, ChevronDown, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { validateApprovalLine } from '@/lib/approval/status'
+import { sortStaffForApprovalLine } from '@/lib/approval/staffOrder'
 import type { LineRole } from '@/types/approval'
 
 export interface LineDraft {
@@ -40,8 +41,8 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
 
   useEffect(() => {
     if (!open) return
-    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
-      setStaffList((data ?? []) as StaffRow[])
+    supabase.from('staff').select('id, name').then(({ data }) => {
+      setStaffList(sortStaffForApprovalLine((data ?? []) as StaffRow[]))
     })
   }, [open])
 

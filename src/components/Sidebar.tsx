@@ -5,15 +5,13 @@ import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { HIDDEN_MENU_PATHS, UI_HIDDEN } from '@/lib/uiHidden'
 import { canSeeLedger } from '@/lib/ledgerAccess'
-import { canSeeMySites } from '@/lib/mySitesAccess'
+import { isKimJaehoStaffId } from '@/lib/mySitesAccess'
 
-const menuGroups = [
-  {
-    name: '내 현장',
-    items: [
-      { name: '내 현장', path: '/my-sites', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
-    ],
-  },
+const menuGroups: {
+  name: string
+  hideHeading?: boolean
+  items: { name: string; path: string; icon: string }[]
+}[] = [
   {
     name: '지원사업',
     items: [
@@ -60,12 +58,11 @@ const menuGroups = [
     ]
   },
   {
-    name: '분석',
+    name: '',
+    hideHeading: true,
     items: [
-      { name: '보고서', path: '/reports', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-      { name: 'KPI', path: '/kpi', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
-      { name: 'AI 검토', path: '/ai-review', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
-    ]
+      { name: '.', path: '/my-sites', icon: '' },
+    ],
   },
 ]
 
@@ -104,14 +101,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         }
         return
       }
-      const [{ data }, twins] = await Promise.all([
-        supabase.from('staff').select('id, name, role, email').eq('id', id).maybeSingle(),
-        supabase.from('staff').select('id, name, role').eq('name', '김재호'),
-      ])
-      if (!cancelled) {
-        setLedgerOk(canSeeLedger(data?.role))
-        setMySitesOk(canSeeMySites(data, twins.data))
-      }
+      if (!cancelled) setMySitesOk(isKimJaehoStaffId(id))
+      const { data } = await supabase.from('staff').select('role').eq('id', id).maybeSingle()
+      if (!cancelled) setLedgerOk(canSeeLedger(data?.role))
     })()
     return () => { cancelled = true }
   }, [pathname])
@@ -212,8 +204,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* 메뉴 그룹 */}
         <nav className="flex-1 overflow-y-auto mt-1 px-2">
           {visibleGroups.map((group) => (
-            <div key={group.name} className="mt-4 first:mt-2">
-              {!collapsed && (
+            <div key={group.name || group.items[0]?.path} className="mt-4 first:mt-2">
+              {!collapsed && !group.hideHeading && group.name && (
                 <div className="px-3 mb-1 text-[11px] font-medium text-[#87867f] uppercase tracking-[0.5px]">
                   {group.name}
                 </div>
@@ -221,6 +213,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const active = isActive(item.path)
+                  const isDot = item.name === '.'
                   return (
                     <Link
                       key={item.path}
@@ -235,8 +228,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                       {active && (
                         <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#c96442] rounded-l" />
                       )}
-                      <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-[#c96442]' : ''}`} />
-                      {!collapsed && <span className={active ? 'font-medium' : ''}>{item.name}</span>}
+                      {isDot ? (
+                        <span className={active ? 'font-medium' : ''}>.</span>
+                      ) : (
+                        <>
+                          <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-[#c96442]' : ''}`} />
+                          {!collapsed && <span className={active ? 'font-medium' : ''}>{item.name}</span>}
+                        </>
+                      )}
                     </Link>
                   )
                 })}

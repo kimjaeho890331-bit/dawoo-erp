@@ -1,9 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createSupabaseBrowser } from '@/lib/supabase/client'
-import { canSeeMySites, WEEKLY_UNASSIGNED_TASKS } from '@/lib/mySitesAccess'
+import { supabase } from '@/lib/supabase'
+import { mySitesGateReason, WEEKLY_UNASSIGNED_TASKS, type MySitesGate } from '@/lib/mySitesAccess'
 import {
   isInConstruction,
   isNearCompletion,
@@ -118,32 +117,24 @@ function TaskList({
 }
 
 export default function MySitesPage() {
-  const router = useRouter()
-  const [allowed, setAllowed] = useState<boolean | null>(null)
+  const [gate, setGate] = useState<MySitesGate | 'loading'>('loading')
   const [sites, setSites] = useState<BoardSite[]>([])
   const [tasks, setTasks] = useState<SiteTaskRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
-    const supabase = createSupabaseBrowser()
     ;(async () => {
       const id = localStorage.getItem(STAFF_KEY)
-      const [{ data: me }, twins] = id
-        ? await Promise.all([
-            supabase.from('staff').select('id, name, role, email').eq('id', id).maybeSingle(),
-            supabase.from('staff').select('id, name, role').eq('name', '김재호'),
-          ])
-        : await Promise.resolve([{ data: null }, { data: [] as { id: string; name: string; role: string }[] }])
-      const ok = canSeeMySites(me, twins.data)
+      const nextGate = mySitesGateReason({ staffId: id })
       if (cancelled) return
-      setAllowed(ok)
-      if (!ok) {
-        router.replace('/dashboard')
+      setGate(nextGate)
+      if (nextGate !== 'ok') {
+        setLoading(false)
         return
       }
 
-      await ensureWeeklyTasks(supabase)
+      await ensureWeeklyTasks()
       const [siteRes, taskRes] = await Promise.all([
         supabase
           .from('sites')
@@ -164,7 +155,7 @@ export default function MySitesPage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [])
 
   const weekly = useMemo(
     () => tasks.filter((t) => t.site_id === null),
@@ -188,7 +179,6 @@ export default function MySitesPage() {
   const toggleTask = async (task: SiteTaskRow) => {
     const next = !task.is_done
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, is_done: next } : t)))
-    const supabase = createSupabaseBrowser()
     const { error } = await supabase.from('site_tasks').update({ is_done: next }).eq('id', task.id)
     if (error) {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, is_done: task.is_done } : t)))
@@ -196,7 +186,6 @@ export default function MySitesPage() {
   }
 
   const addTask = async (taskName: string, siteId: string | null) => {
-    const supabase = createSupabaseBrowser()
     const { data, error } = await supabase
       .from('site_tasks')
       .insert({ task_name: taskName, site_id: siteId, is_done: false })
@@ -208,7 +197,6 @@ export default function MySitesPage() {
   const hideSite = async (site: BoardSite) => {
     if (!confirm(`「${shortSiteName(site.name)}」을 이 보드에서 넘길까요?`)) return
     setSites((prev) => prev.filter((s) => s.id !== site.id))
-    const supabase = createSupabaseBrowser()
     const { error } = await supabase
       .from('sites')
       .update({ hidden_from_my_sites: true })
@@ -218,8 +206,14 @@ export default function MySitesPage() {
     }
   }
 
-  if (allowed !== true) {
+  if (gate === 'loading') {
     return <div className="text-[13px] text-txt-tertiary">확인 중...</div>
+  }
+  if (gate === 'staff-unread') {
+    return <div className="text-[13px] text-txt-tertiary">staff 못 읽음</div>
+  }
+  if (gate === 'no-access') {
+    return <div className="text-[13px] text-txt-tertiary">권한 없음</div>
   }
 
   return (
@@ -326,9 +320,7 @@ function SiteGroup({
   )
 }
 
-async function ensureWeeklyTasks(
-  supabase: ReturnType<typeof createSupabaseBrowser>,
-) {
+async function ensureWeeklyTasks() {
   const { data } = await supabase
     .from('site_tasks')
     .select('task_name')

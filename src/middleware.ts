@@ -1,9 +1,45 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { isHiddenMenuPath } from '@/lib/uiHidden'
+import { canSeeMySites, type MySitesStaff } from '@/lib/mySitesAccess'
 
 // Rate limiting (in-memory, 서버리스 환경에서는 인스턴스별)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
+
+async function canAccessMySites(
+  supabase: ReturnType<typeof createServerClient>,
+  email: string | undefined,
+): Promise<boolean> {
+  if (!email) return false
+
+  const { data: mapped } = await supabase
+    .from('staff_emails')
+    .select('staff:staff_id(id, name, role, email)')
+    .eq('email', email)
+    .maybeSingle()
+
+  const mappedStaff = (mapped?.staff as MySitesStaff | MySitesStaff[] | null) ?? null
+  const fromMap = Array.isArray(mappedStaff) ? mappedStaff[0] : mappedStaff
+
+  const staff =
+    fromMap ??
+    (
+      await supabase
+        .from('staff')
+        .select('id, name, role, email')
+        .eq('email', email)
+        .maybeSingle()
+    ).data
+
+  if (!staff) return false
+
+  const { data: twins } = await supabase
+    .from('staff')
+    .select('id, name, role')
+    .eq('name', '김재호')
+
+  return canSeeMySites(staff, twins)
+}
 
 function checkRateLimit(ip: string, path: string): boolean {
   const limit = path.startsWith('/api/chat') ? 20 : 60
@@ -108,6 +144,15 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  if (user && (pathname === '/my-sites' || pathname.startsWith('/my-sites/'))) {
+    const allowed = await canAccessMySites(supabase, user.email)
+    if (!allowed) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+  }
 
   // 미인증 사용자 처리
   if (!user) {

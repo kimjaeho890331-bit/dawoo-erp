@@ -447,3 +447,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS building_ledger_requests_one_open_per_project
 
 CREATE INDEX IF NOT EXISTS building_ledger_requests_status_requested_at_idx
   ON building_ledger_requests (status, requested_at);
+
+-- ============================================
+-- 28. 내 현장 보드 (021_my_sites_board.sql)
+-- ============================================
+-- site_tasks 는 원래 공정 캘린더용(is_confirmed=확정). 완료는 is_done.
+-- site_id NULL = 현장 없는 일(이번 주). hidden_from_my_sites = 보드에서 넘김.
+-- 기존 site_tasks / sites RLS 정책은 변경하지 않는다.
+
+CREATE TABLE IF NOT EXISTS site_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id UUID REFERENCES sites(id) ON DELETE SET NULL,
+  task_name TEXT NOT NULL,
+  contractor_name TEXT,
+  worker_name TEXT,
+  start_date DATE,
+  end_date DATE,
+  color TEXT,
+  is_confirmed BOOLEAN DEFAULT false,
+  is_done BOOLEAN NOT NULL DEFAULT false,
+  memo TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE site_tasks
+  ADD COLUMN IF NOT EXISTS is_done BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE sites
+  ADD COLUMN IF NOT EXISTS hidden_from_my_sites BOOLEAN NOT NULL DEFAULT false;

@@ -19,6 +19,7 @@ describe('uiHidden', () => {
     expect(isHiddenMenuPath('/register/building-ledger')).toBe(false)
     expect(isHiddenMenuPath('/calendar/work')).toBe(false)
     expect(isHiddenMenuPath('/sites')).toBe(false)
+    expect(isHiddenMenuPath('/my-sites')).toBe(false)
     expect(isHiddenMenuPath('/approval')).toBe(false)
     expect(isHiddenMenuPath('/vendors')).toBe(false)
     expect(isHiddenMenuPath('/staff')).toBe(false)

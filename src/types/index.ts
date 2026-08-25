@@ -43,6 +43,23 @@ export interface Staff {
   created_at?: string;
 }
 
+/** 현장 할 일 (site_tasks). is_confirmed=캘린더 확정, is_done=내 현장 완료. */
+export interface SiteTask {
+  id: string;
+  site_id: string | null;
+  task_name: string;
+  contractor_name: string | null;
+  worker_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  color: string | null;
+  is_confirmed: boolean;
+  is_done: boolean;
+  memo: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // --- 시(지자체) ---
 export interface City {
   id: string;

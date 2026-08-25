@@ -5,8 +5,15 @@ import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { HIDDEN_MENU_PATHS, UI_HIDDEN } from '@/lib/uiHidden'
 import { canSeeLedger } from '@/lib/ledgerAccess'
+import { canSeeMySites } from '@/lib/mySitesAccess'
 
 const menuGroups = [
+  {
+    name: '내 현장',
+    items: [
+      { name: '내 현장', path: '/my-sites', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+    ],
+  },
   {
     name: '지원사업',
     items: [
@@ -84,17 +91,27 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [ledgerOk, setLedgerOk] = useState(false)
+  const [mySitesOk, setMySitesOk] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       const id = localStorage.getItem('dawoo_current_staff_id')
       if (!id) {
-        if (!cancelled) setLedgerOk(false)
+        if (!cancelled) {
+          setLedgerOk(false)
+          setMySitesOk(false)
+        }
         return
       }
-      const { data } = await supabase.from('staff').select('role').eq('id', id).maybeSingle()
-      if (!cancelled) setLedgerOk(canSeeLedger(data?.role))
+      const [{ data }, twins] = await Promise.all([
+        supabase.from('staff').select('id, name, role, email').eq('id', id).maybeSingle(),
+        supabase.from('staff').select('id, name, role').eq('name', '김재호'),
+      ])
+      if (!cancelled) {
+        setLedgerOk(canSeeLedger(data?.role))
+        setMySitesOk(canSeeMySites(data, twins.data))
+      }
     })()
     return () => { cancelled = true }
   }, [pathname])
@@ -106,6 +123,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       items: group.items.filter((item) => {
         if (hiddenPaths.has(item.path)) return false
         if (item.path === '/ledger' && !ledgerOk) return false
+        if (item.path === '/my-sites' && !mySitesOk) return false
         return true
       }),
     }))

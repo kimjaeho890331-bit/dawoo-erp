@@ -49,7 +49,7 @@ function TaskLine({
     >
       <span
         className={`shrink-0 w-6 h-6 rounded-full border flex items-center justify-center ${
-          task.is_done ? 'border-accent bg-accent' : 'border-border-secondary bg-surface'
+          task.is_done ? 'border-blue-600 bg-blue-600' : 'border-border-secondary bg-surface'
         }`}
       >
         {task.is_done && (
@@ -106,7 +106,7 @@ function AddLine({
       }}
       placeholder="할 일 적기"
       disabled={saving}
-      className="w-full h-[44px] md:h-[40px] px-1 bg-transparent text-[15px] md:text-[14px] text-txt-primary placeholder:text-txt-quaternary border-0 border-b border-border-tertiary rounded-none outline-none focus:border-accent"
+      className="w-full h-[44px] md:h-[40px] px-1 bg-transparent text-[15px] md:text-[14px] text-txt-primary placeholder:text-txt-quaternary border-0 border-b border-border-tertiary rounded-none outline-none focus:border-blue-600"
     />
   )
 }
@@ -185,7 +185,7 @@ function SummaryBadges({
       <span className="text-txt-secondary">
         현장 <span className="font-semibold tabular-nums text-txt-primary">{siteCount}</span>
       </span>
-      <span className="text-accent">
+      <span className="text-blue-600">
         안 한 일 <span className="font-semibold tabular-nums">{openCount}</span>
       </span>
       <span className="text-danger">
@@ -258,6 +258,16 @@ export default function MySitesPage() {
     () => partitionSitesByOpenTasks(sites, tasks),
     [sites, tasks],
   )
+  const cardSites = useMemo(() => {
+    if (!draftSiteId) return withOpen
+    if (withOpen.some((s) => s.id === draftSiteId)) return withOpen
+    const draft = withoutOpen.find((s) => s.id === draftSiteId)
+    return draft ? [...withOpen, draft] : withOpen
+  }, [withOpen, withoutOpen, draftSiteId])
+  const listSites = useMemo(
+    () => withoutOpen.filter((s) => s.id !== draftSiteId),
+    [withoutOpen, draftSiteId],
+  )
 
   const toggleTask = async (task: SiteTaskRow) => {
     const next = !task.is_done
@@ -279,6 +289,7 @@ export default function MySitesPage() {
 
   const hideSite = async (site: BoardSite) => {
     if (!confirm(`「${shortSiteName(site.name)}」을 이 보드에서 넘길까요?`)) return
+    if (draftSiteId === site.id) setDraftSiteId(null)
     setSites((prev) => prev.filter((s) => s.id !== site.id))
     const { error } = await supabase
       .from('sites')
@@ -312,9 +323,11 @@ export default function MySitesPage() {
       <header>
         <p className="text-[13px] text-txt-tertiary">{dateHeading}</p>
         <div className="mt-1 flex items-end justify-between gap-4">
-          <h1 className="text-[22px] font-semibold text-txt-primary md:hidden">안 한 일</h1>
-          <h1 className="hidden text-[22px] font-semibold text-txt-primary md:block">내 현장</h1>
-          <p className="text-[40px] font-semibold leading-none tabular-nums text-accent md:hidden">
+          <h1 className="text-[22px] font-semibold text-txt-primary">
+            <span className="md:hidden">안 한 일</span>
+            <span className="hidden md:inline">내 현장</span>
+          </h1>
+          <p className="text-[40px] font-semibold leading-none tabular-nums text-blue-600 md:hidden">
             {loading ? '–' : openAll}
           </p>
         </div>
@@ -335,7 +348,7 @@ export default function MySitesPage() {
               onToggle={toggleTask}
               onAdd={(name) => addTask(name, null)}
             />
-            {withOpen.map((site) => (
+            {cardSites.map((site) => (
               <SiteCard
                 key={site.id}
                 site={site}
@@ -346,7 +359,10 @@ export default function MySitesPage() {
                 }}
                 autoFocusAdd={draftSiteId === site.id}
                 onToggle={toggleTask}
-                onAdd={(name) => addTask(name, site.id)}
+                onAdd={async (name) => {
+                  await addTask(name, site.id)
+                  setDraftSiteId(null)
+                }}
                 onHide={() => hideSite(site)}
               />
             ))}
@@ -354,56 +370,39 @@ export default function MySitesPage() {
         )}
       </div>
 
-      {!loading && withoutOpen.length > 0 && (
+      {!loading && listSites.length > 0 && (
         <section className="mt-8">
           <h2 className="text-[16px] font-semibold text-txt-primary">
             할 일 없는 현장{' '}
-            <span className="tabular-nums">{withoutOpen.length}</span>개
+            <span className="tabular-nums">{listSites.length}</span>개
           </h2>
           <ul className="mt-2 divide-y divide-border-tertiary">
-            {withoutOpen.map((site) => {
-              const drafting = draftSiteId === site.id
-              return (
-                <li key={site.id} className="py-2">
-                  <div className="flex items-center gap-3 min-h-[44px]">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-medium text-txt-primary truncate">
-                        {shortSiteName(site.name) || site.name}
-                      </p>
-                      {hasDisplayText(site.status) && (
-                        <p className="text-[12px] text-txt-tertiary">{site.status}</p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => hideSite(site)}
-                      className="shrink-0 min-h-[44px] px-2 text-[13px] text-txt-tertiary"
-                    >
-                      넘기기
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => focusAdd(site.id)}
-                      className="shrink-0 min-h-[44px] px-2 text-[13px] text-accent"
-                    >
-                      적기
-                    </button>
-                  </div>
-                  {drafting && (
-                    <AddLine
-                      autoFocus
-                      inputRef={(el) => {
-                        addRefs.current[site.id] = el
-                      }}
-                      onAdd={async (name) => {
-                        await addTask(name, site.id)
-                        setDraftSiteId(null)
-                      }}
-                    />
+            {listSites.map((site) => (
+              <li key={site.id} className="flex items-center gap-3 min-h-[44px] py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-medium text-txt-primary truncate">
+                    {shortSiteName(site.name) || site.name}
+                  </p>
+                  {hasDisplayText(site.status) && (
+                    <p className="text-[12px] text-txt-tertiary">{site.status}</p>
                   )}
-                </li>
-              )
-            })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => hideSite(site)}
+                  className="shrink-0 min-h-[44px] px-2 text-[13px] text-txt-tertiary"
+                >
+                  넘기기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => focusAdd(site.id)}
+                  className="shrink-0 min-h-[44px] px-2 text-[13px] text-blue-600"
+                >
+                  적기
+                </button>
+              </li>
+            ))}
           </ul>
         </section>
       )}
@@ -430,12 +429,12 @@ function WeeklyCard({
       <div className="flex items-start justify-between gap-3 min-h-[32px]">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-[18px] font-semibold text-txt-primary leading-snug">
-            <span className="shrink-0 w-2 h-2 rounded-full bg-accent" />
+            <span className="shrink-0 w-2 h-2 rounded-full bg-blue-600" />
             내일/내 일
           </h3>
         </div>
         {open > 0 && (
-          <span className="shrink-0 text-[16px] font-semibold tabular-nums text-accent">
+          <span className="shrink-0 text-[16px] font-semibold tabular-nums text-blue-600">
             {open}
           </span>
         )}
@@ -477,11 +476,11 @@ function SiteCard({
       <div>
         <div className="flex items-start justify-between gap-3 min-h-[32px]">
           <h3 className="flex items-center gap-2 text-[18px] font-semibold text-txt-primary leading-snug">
-            <span className="shrink-0 w-2 h-2 rounded-full bg-accent" />
+            <span className="shrink-0 w-2 h-2 rounded-full bg-blue-600" />
             <span className="min-w-0">{title}</span>
           </h3>
           {open > 0 && (
-            <span className="shrink-0 text-[16px] font-semibold tabular-nums text-accent">
+            <span className="shrink-0 text-[16px] font-semibold tabular-nums text-blue-600">
               {open}
             </span>
           )}

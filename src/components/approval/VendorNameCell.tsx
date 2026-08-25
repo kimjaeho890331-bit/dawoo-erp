@@ -12,6 +12,8 @@ export interface VendorOption {
   bank_name: string | null
   account_number: string | null
   bank_info: string | null
+  biz_license_url: string | null
+  bankbook_url: string | null
 }
 
 interface Props {
@@ -19,6 +21,8 @@ interface Props {
   vendors: VendorOption[]
   onInput: (value: string) => void
   onSelect: (patch: Partial<PaymentRow>) => void
+  /** 거래처를 고른 순간, 그 업체의 결제 서류를 첨부에 붙이라고 알린다 */
+  onPickVendor?: (vendor: VendorOption) => void
   className: string
   placeholder?: string
 }
@@ -29,7 +33,7 @@ interface Props {
  * 후보 목록은 표(overflow-hidden) 바깥으로 잘리면 안 되므로 document.body에 포탈로 띄운다.
  * 목록에 없는 이름을 그냥 타이핑해서 쓰는 것도 항상 가능해야 한다 (강제 선택 아님).
  */
-export default function VendorNameCell({ value, vendors, onInput, onSelect, className, placeholder }: Props) {
+export default function VendorNameCell({ value, vendors, onInput, onSelect, onPickVendor, className, placeholder }: Props) {
   /**
    * 후보 목록의 위치. 아래 공간이 모자라면 입력칸 위로 띄운다(`bottom` 사용).
    * 폰에서는 입력칸이 화면 하단에 오는 일이 잦은데, 그때 아래로만 띄우면
@@ -111,6 +115,7 @@ export default function VendorNameCell({ value, vendors, onInput, onSelect, clas
       account_no: resolved?.account ?? '',
       business_no: v.business_number ?? '',
     })
+    onPickVendor?.(v)
     setOpen(false)
   }
 

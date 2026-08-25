@@ -79,6 +79,9 @@ export default function FileAttach({ files, onChange }: Props) {
           <span key={i} className="flex items-center gap-2 rounded-lg bg-surface-secondary px-3 py-1.5 text-[13px]">
             <Paperclip size={14} className="text-txt-tertiary" />
             {f.file_name}
+            {f.source === 'vendor' && (
+              <span className="rounded bg-surface-tertiary px-1 text-[10px] text-txt-tertiary">거래처</span>
+            )}
             <button onClick={() => onChange(files.filter((_, idx) => idx !== i))} aria-label={`${f.file_name} 삭제`}
               className="inline-flex h-6 w-6 items-center justify-center">
               <X size={14} className="text-txt-tertiary" />

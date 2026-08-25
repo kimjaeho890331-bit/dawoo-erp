@@ -10,9 +10,10 @@ import VendorNameCell, { type VendorOption } from './VendorNameCell'
 interface Props {
   rows: PaymentRow[]
   onChange: (rows: PaymentRow[]) => void
+  onPickVendor?: (vendor: VendorOption) => void
 }
 
-export default function PaymentTable({ rows, onChange }: Props) {
+export default function PaymentTable({ rows, onChange, onPickVendor }: Props) {
   const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
 
   // 거래처DB 후보 목록. 조회 전용 — vendors 테이블에는 쓰지 않는다.
@@ -22,7 +23,7 @@ export default function PaymentTable({ rows, onChange }: Props) {
     let cancelled = false
     supabase
       .from('vendors')
-      .select('id, name, business_number, bank_name, account_number, bank_info')
+      .select('id, name, business_number, bank_name, account_number, bank_info, biz_license_url, bankbook_url')
       .order('name')
       .then(({ data }) => {
         if (cancelled) return
@@ -84,6 +85,7 @@ export default function PaymentTable({ rows, onChange }: Props) {
                 vendors={vendors}
                 onInput={v => set(i, { vendor_name: v })}
                 onSelect={patch => set(i, patch)}
+                onPickVendor={onPickVendor}
                 className={mCell}
                 placeholder="거래처명"
               />
@@ -163,6 +165,7 @@ export default function PaymentTable({ rows, onChange }: Props) {
                   vendors={vendors}
                   onInput={v => set(i, { vendor_name: v })}
                   onSelect={patch => set(i, patch)}
+                  onPickVendor={onPickVendor}
                   className={cell}
                   placeholder="거래처명"
                 />

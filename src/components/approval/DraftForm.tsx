@@ -17,6 +17,7 @@ import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { workKindFromIds, type WorkKind } from '@/lib/workTarget'
 import { draftTitleFromTarget } from '@/lib/approval/draftTitle'
+import { vendorDocsToAttachments } from '@/lib/approval/vendorDocs'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
 
@@ -434,7 +435,13 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           />
         </label>
       </div>
-      <div className={`${stepBlock(1)} mb-8`}><PaymentTable rows={payments} onChange={setPayments} /></div>
+      <div className={`${stepBlock(1)} mb-8`}>
+        <PaymentTable
+          rows={payments}
+          onChange={setPayments}
+          onPickVendor={v => setFiles(prev => [...prev, ...vendorDocsToAttachments(v, prev)])}
+        />
+      </div>
       <div className={`${stepBlock(2)} mb-8`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
 
       <div className={`${stepBlock(2)} mb-8`}>

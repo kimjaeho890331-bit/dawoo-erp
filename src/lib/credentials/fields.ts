@@ -46,7 +46,11 @@ export function parseUpdateInput(body: CredentialInput): Record<string, string |
   }
   if ('url' in body) patch.url = asText(body.url)
   if ('login_id' in body) patch.login_id = asText(body.login_id)
-  if ('password' in body) patch.password = asText(body.password)
+  // 수정 시 빈 비밀번호는 "그대로" — 평문을 다시 받지 않는다.
+  if ('password' in body) {
+    const password = asText(body.password)
+    if (password) patch.password = password
+  }
   if ('memo' in body) patch.memo = asText(body.memo)
   return patch
 }

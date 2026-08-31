@@ -2,6 +2,10 @@ import type { CredentialEntry } from '@/types'
 
 export type CredentialListItem = Omit<CredentialEntry, 'password'>
 
+/** 목록·단건 GET·저장 응답. password 컬럼을 넣지 않는다(복호화는 reveal POST만). */
+export const CREDENTIAL_LIST_COLUMNS =
+  'id, kind, name, url, login_id, memo, created_by, updated_at'
+
 export type CredentialInput = {
   name?: unknown
   url?: unknown

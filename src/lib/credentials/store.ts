@@ -1,6 +1,7 @@
 import type { CredentialKind } from '@/types'
 import { admin } from './guard'
 import {
+  CREDENTIAL_LIST_COLUMNS,
   omitPassword,
   type CredentialCreatePayload,
   type CredentialListItem,
@@ -10,12 +11,10 @@ import { decryptPassword, encryptPassword } from './secret'
 export type { CredentialCreatePayload, CredentialInput, CredentialListItem } from './fields'
 export { omitPassword, parseCreateInput, parseUpdateInput } from './fields'
 
-const LIST_COLUMNS = 'id, kind, name, url, login_id, memo, created_by, updated_at'
-
 export async function listCredentials(kind: CredentialKind): Promise<CredentialListItem[] | Response> {
   const { data, error } = await admin
     .from('credential_entries')
-    .select(LIST_COLUMNS)
+    .select(CREDENTIAL_LIST_COLUMNS)
     .eq('kind', kind)
     .order('updated_at', { ascending: false })
 
@@ -33,7 +32,7 @@ export async function getCredential(
 ): Promise<CredentialListItem | Response> {
   const { data, error } = await admin
     .from('credential_entries')
-    .select(LIST_COLUMNS)
+    .select(CREDENTIAL_LIST_COLUMNS)
     .eq('kind', kind)
     .eq('id', id)
     .maybeSingle()
@@ -87,7 +86,7 @@ export async function createCredential(
       created_by: createdBy,
       updated_at: new Date().toISOString(),
     })
-    .select(LIST_COLUMNS)
+    .select(CREDENTIAL_LIST_COLUMNS)
     .single()
 
   if (error) {
@@ -119,7 +118,7 @@ export async function updateCredential(
     })
     .eq('kind', kind)
     .eq('id', id)
-    .select(LIST_COLUMNS)
+    .select(CREDENTIAL_LIST_COLUMNS)
     .maybeSingle()
 
   if (error) {

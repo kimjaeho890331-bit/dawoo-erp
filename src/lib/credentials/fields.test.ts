@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { omitPassword, parseCreateInput, parseUpdateInput } from './fields'
+import { CREDENTIAL_LIST_COLUMNS, omitPassword, parseCreateInput, parseUpdateInput } from './fields'
 
 describe('parseCreateInput', () => {
   it('이름은 필수다', () => {
@@ -21,6 +21,23 @@ describe('parseCreateInput', () => {
       password: 'secret',
       memo: null,
     })
+  })
+})
+
+describe('CREDENTIAL_LIST_COLUMNS', () => {
+  it('목록 select에 password가 없다', () => {
+    const cols = CREDENTIAL_LIST_COLUMNS.split(',').map((s) => s.trim())
+    expect(cols).not.toContain('password')
+    expect(cols).toEqual([
+      'id',
+      'kind',
+      'name',
+      'url',
+      'login_id',
+      'memo',
+      'created_by',
+      'updated_at',
+    ])
   })
 })
 

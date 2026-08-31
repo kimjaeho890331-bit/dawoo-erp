@@ -6,6 +6,13 @@ import { supabase } from '@/lib/supabase'
 import { HIDDEN_MENU_PATHS, UI_HIDDEN } from '@/lib/uiHidden'
 import { canSeeLedger } from '@/lib/ledgerAccess'
 import { isKimJaehoStaffId } from '@/lib/mySitesAccess'
+import {
+  canSeePrivateIds,
+  PRIVATE_IDS_MENU,
+  PRIVATE_IDS_PATH,
+  SHARED_IDS_MENU,
+  SHARED_IDS_PATH,
+} from '@/lib/credentialAccess'
 
 const menuGroups: {
   name: string
@@ -55,6 +62,8 @@ const menuGroups: {
     items: [
       { name: '서류함', path: '/documents', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
       { name: '직원관리', path: '/staff', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+      { name: SHARED_IDS_MENU, path: SHARED_IDS_PATH, icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
+      { name: PRIVATE_IDS_MENU, path: PRIVATE_IDS_PATH, icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
     ]
   },
   {
@@ -89,6 +98,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [ledgerOk, setLedgerOk] = useState(false)
   const [mySitesOk, setMySitesOk] = useState(false)
+  const [privateIdsOk, setPrivateIdsOk] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -98,12 +108,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         if (!cancelled) {
           setLedgerOk(false)
           setMySitesOk(false)
+          setPrivateIdsOk(false)
         }
         return
       }
       if (!cancelled) setMySitesOk(isKimJaehoStaffId(id))
       const { data } = await supabase.from('staff').select('role').eq('id', id).maybeSingle()
-      if (!cancelled) setLedgerOk(canSeeLedger(data?.role))
+      if (!cancelled) {
+        setLedgerOk(canSeeLedger(data?.role))
+        setPrivateIdsOk(canSeePrivateIds(data?.role))
+      }
     })()
     return () => { cancelled = true }
   }, [pathname])
@@ -116,6 +130,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         if (hiddenPaths.has(item.path)) return false
         if (item.path === '/ledger' && !ledgerOk) return false
         if (item.path === '/my-sites' && !mySitesOk) return false
+        if (item.path === PRIVATE_IDS_PATH && !privateIdsOk) return false
         return true
       }),
     }))

@@ -24,6 +24,8 @@ describe('uiHidden', () => {
     expect(isHiddenMenuPath('/approval')).toBe(false)
     expect(isHiddenMenuPath('/vendors')).toBe(false)
     expect(isHiddenMenuPath('/staff')).toBe(false)
+    expect(isHiddenMenuPath('/ids')).toBe(false)
+    expect(isHiddenMenuPath('/ids-private')).toBe(false)
     expect(isHiddenMenuPath('/notice')).toBe(false)
     expect(isHiddenMenuPath('/dashboard')).toBe(false)
   })

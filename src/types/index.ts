@@ -401,3 +401,19 @@ export interface WeeklyReport {
   improvements: string[]; // 보완점
   aiGenerated: boolean;   // AI 생성 성공 여부 (false면 숫자만)
 }
+
+// --- 공유/중요 ID·PW (credential_entries) ---
+export const CREDENTIAL_KINDS = ['shared', 'private'] as const
+export type CredentialKind = (typeof CREDENTIAL_KINDS)[number]
+
+export interface CredentialEntry {
+  id: string
+  kind: CredentialKind
+  name: string
+  url: string | null
+  login_id: string | null
+  password: string | null
+  memo: string | null
+  created_by: string | null
+  updated_at: string
+}

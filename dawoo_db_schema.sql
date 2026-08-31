@@ -476,3 +476,24 @@ ALTER TABLE site_tasks
 
 ALTER TABLE sites
   ADD COLUMN IF NOT EXISTS hidden_from_my_sites BOOLEAN NOT NULL DEFAULT false;
+
+-- ============================================
+-- 29. 공유/중요 ID·PW (022_credential_entries.sql)
+-- ============================================
+-- /ids = kind shared (전 직원), /ids-private = kind private (관리자만).
+-- API(service_role)만 접근. anon/authenticated REVOKE. 기존 RLS 정책 변경 없음.
+-- 시드 없음.
+
+CREATE TABLE IF NOT EXISTS credential_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind TEXT NOT NULL CHECK (kind IN ('shared', 'private')),
+  name TEXT NOT NULL,
+  url TEXT,
+  login_id TEXT,
+  password TEXT,
+  memo TEXT,
+  created_by UUID REFERENCES staff(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_credential_entries_kind ON credential_entries (kind);

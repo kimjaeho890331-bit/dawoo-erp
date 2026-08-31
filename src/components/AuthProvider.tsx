@@ -30,11 +30,32 @@ export function useAuth() {
   return useContext(AuthContext)
 }
 
+// 첫 세션 확인 이후에는 리마운트·토큰 이벤트로 loading을 다시 true로 두지 않는다.
+// true로 되돌리면 ClientLayout이 페이지 전체(등록 버튼 포함)를 「로딩 중...」으로 갈아끼운다.
+let sessionResolved = false
+let cachedUser: User | null = null
+let cachedStaff: StaffInfo | null = null
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [staff, setStaff] = useState<StaffInfo | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUserState] = useState<User | null>(cachedUser)
+  const [staff, setStaffState] = useState<StaffInfo | null>(cachedStaff)
+  const [loading, setLoading] = useState(() => !sessionResolved)
+
+  const setUser = useCallback((next: User | null) => {
+    cachedUser = next
+    setUserState(next)
+  }, [])
+
+  const setStaff = useCallback((next: StaffInfo | null) => {
+    cachedStaff = next
+    setStaffState(next)
+  }, [])
+
+  const markReady = useCallback(() => {
+    sessionResolved = true
+    setLoading(false)
+  }, [])
 
   // Supabase 클라이언트를 한 번만 생성 (매 렌더 재생성 방지)
   const supabase = useMemo(
@@ -79,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // staff 조회 실패해도 로그인은 유지
       }
     },
-    [supabase],
+    [supabase, setStaff],
   )
 
   useEffect(() => {
@@ -113,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 조용히 삼키면 "로그인했는데 화면만 로그아웃"인 상태를 추적할 수 없어 로그는 남긴다.
         console.error('[auth] 세션 확인 실패:', e)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) markReady()
       }
     }
 
@@ -131,14 +152,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setStaff(null)
       }
 
-      setLoading(false)
+      // TOKEN_REFRESHED 등에서도 loading을 true로 되돌리지 않는다.
+      markReady()
     })
 
     return () => {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [supabase, fetchStaff])
+  }, [supabase, fetchStaff, markReady, setUser, setStaff])
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
@@ -146,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStaff(null)
     localStorage.removeItem('dawoo_current_staff_id')
     router.push('/login')
-  }, [supabase, router])
+  }, [supabase, router, setUser, setStaff])
 
   return (
     <AuthContext.Provider value={{ user, staff, loading, signOut }}>

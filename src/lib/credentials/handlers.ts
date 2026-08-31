@@ -7,6 +7,7 @@ import {
   deleteCredential,
   getCredential,
   listCredentials,
+  revealCredential,
   updateCredential,
 } from './store'
 
@@ -48,6 +49,16 @@ export async function handleGetOne(kind: CredentialKind, id: string) {
   const item = await getCredential(kind, id)
   if (item instanceof Response) return item
   return Response.json({ item })
+}
+
+export async function handleReveal(kind: CredentialKind, id: string) {
+  const actor = await requireCredentialStaff(kind)
+  if (actor instanceof Response) return actor
+  if (!id) return Response.json({ error: 'id가 필요합니다' }, { status: 400 })
+
+  const revealed = await revealCredential(kind, id)
+  if (revealed instanceof Response) return revealed
+  return Response.json(revealed)
 }
 
 export async function handleUpdate(kind: CredentialKind, id: string, request: NextRequest) {

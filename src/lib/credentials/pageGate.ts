@@ -3,6 +3,14 @@ import type { CredentialKind } from '@/types'
 
 export type CredentialPageGate = 'checking' | 'ok' | 'denied'
 
+/** 사이드바와 같이 localStorage 직원이 있으면 그걸 쓰고, 없으면 이메일 매핑 staff. */
+export function resolvePageStaff<T>(
+  picked: T | null | undefined,
+  authStaff: T | null | undefined,
+): T | null {
+  return picked ?? authStaff ?? null
+}
+
 /** 로그인 staff 역할로 페이지 진입을 결정한다. 목록 API 결과와는 별개다. */
 export function resolveCredentialPageGate(
   kind: CredentialKind,

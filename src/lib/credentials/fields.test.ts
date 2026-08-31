@@ -25,7 +25,7 @@ describe('parseCreateInput', () => {
 })
 
 describe('omitPassword', () => {
-  it('목록/저장 응답에서 비밀번호를 뺀다', () => {
+  it('목록·단건 GET·저장 응답에서 비밀번호를 뺀다', () => {
     expect(omitPassword({
       id: '1',
       name: '세움터',
@@ -47,5 +47,11 @@ describe('parseUpdateInput', () => {
   it('보낸 필드만 패치한다', () => {
     expect(parseUpdateInput({ memo: '현장 공용' })).toEqual({ memo: '현장 공용' })
     expect(parseUpdateInput({ url: '  ' })).toEqual({ url: null })
+  })
+
+  it('빈 비밀번호는 패치에서 빼서 기존 값을 유지한다', () => {
+    expect(parseUpdateInput({ name: '세움터', password: '' })).toEqual({ name: '세움터' })
+    expect(parseUpdateInput({ password: '   ' })).toEqual({})
+    expect(parseUpdateInput({ password: 'new-secret' })).toEqual({ password: 'new-secret' })
   })
 })

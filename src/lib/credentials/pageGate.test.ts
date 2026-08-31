@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolveCredentialPageGate,
+  resolvePageStaff,
   shouldRevokePageOnListStatus,
 } from './pageGate'
 
@@ -22,6 +23,14 @@ describe('resolveCredentialPageGate', () => {
   it('staff가 없으면 거부한다', () => {
     expect(resolveCredentialPageGate('shared', null)).toBe('denied')
     expect(resolveCredentialPageGate('private', undefined)).toBe('denied')
+  })
+})
+
+describe('resolvePageStaff', () => {
+  it('화면에서 고른 직원이 있으면 이메일 매핑보다 먼저 쓴다', () => {
+    expect(resolvePageStaff({ role: '관리자' }, { role: '직원' })).toEqual({ role: '관리자' })
+    expect(resolvePageStaff(null, { role: '직원' })).toEqual({ role: '직원' })
+    expect(resolvePageStaff(undefined, null)).toBeNull()
   })
 })
 

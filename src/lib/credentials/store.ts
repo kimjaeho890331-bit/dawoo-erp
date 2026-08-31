@@ -1,16 +1,16 @@
-import type { CredentialEntry, CredentialKind } from '@/types'
+import type { CredentialKind } from '@/types'
 import { admin } from './guard'
 import {
   omitPassword,
   type CredentialCreatePayload,
   type CredentialListItem,
 } from './fields'
+import { decryptPassword, encryptPassword } from './secret'
 
 export type { CredentialCreatePayload, CredentialInput, CredentialListItem } from './fields'
 export { omitPassword, parseCreateInput, parseUpdateInput } from './fields'
 
 const LIST_COLUMNS = 'id, kind, name, url, login_id, memo, created_by, updated_at'
-const FULL_COLUMNS = 'id, kind, name, url, login_id, password, memo, created_by, updated_at'
 
 export async function listCredentials(kind: CredentialKind): Promise<CredentialListItem[] | Response> {
   const { data, error } = await admin
@@ -30,10 +30,10 @@ export async function listCredentials(kind: CredentialKind): Promise<CredentialL
 export async function getCredential(
   kind: CredentialKind,
   id: string,
-): Promise<CredentialEntry | Response> {
+): Promise<CredentialListItem | Response> {
   const { data, error } = await admin
     .from('credential_entries')
-    .select(FULL_COLUMNS)
+    .select(LIST_COLUMNS)
     .eq('kind', kind)
     .eq('id', id)
     .maybeSingle()
@@ -45,7 +45,29 @@ export async function getCredential(
   if (!data) {
     return Response.json({ error: '항목을 찾을 수 없습니다' }, { status: 404 })
   }
-  return data as CredentialEntry
+  return omitPassword(data as CredentialListItem)
+}
+
+export async function revealCredential(
+  kind: CredentialKind,
+  id: string,
+): Promise<{ password: string | null } | Response> {
+  const { data, error } = await admin
+    .from('credential_entries')
+    .select('password')
+    .eq('kind', kind)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[credentials] 비밀번호 조회 실패')
+    return Response.json({ error: '조회에 실패했습니다' }, { status: 500 })
+  }
+  if (!data) {
+    return Response.json({ error: '항목을 찾을 수 없습니다' }, { status: 404 })
+  }
+
+  return { password: decryptPassword((data.password as string | null) ?? null) }
 }
 
 export async function createCredential(
@@ -60,7 +82,7 @@ export async function createCredential(
       name: input.name,
       url: input.url,
       login_id: input.login_id,
-      password: input.password,
+      password: encryptPassword(input.password),
       memo: input.memo,
       created_by: createdBy,
       updated_at: new Date().toISOString(),
@@ -84,10 +106,15 @@ export async function updateCredential(
     return Response.json({ error: '수정할 내용이 없습니다' }, { status: 400 })
   }
 
+  const stored: Record<string, string | null> = { ...patch }
+  if (typeof stored.password === 'string') {
+    stored.password = encryptPassword(stored.password)
+  }
+
   const { data, error } = await admin
     .from('credential_entries')
     .update({
-      ...patch,
+      ...stored,
       updated_at: new Date().toISOString(),
     })
     .eq('kind', kind)

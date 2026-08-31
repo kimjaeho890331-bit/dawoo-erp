@@ -3,18 +3,26 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Clock, ExternalLink, Plus, X } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { supabase } from '@/lib/supabase'
 import type { CredentialKind } from '@/types'
 import type { CredentialListItem } from '@/lib/credentials/fields'
 import {
   resolveCredentialPageGate,
+  resolvePageStaff,
   shouldRevokePageOnListStatus,
   type CredentialPageGate,
 } from '@/lib/credentials/pageGate'
 
 const REVEAL_MS = 8000
+const STAFF_KEY = 'dawoo_current_staff_id'
 
 function credFetch(input: string, init?: RequestInit) {
-  return fetch(input, { credentials: 'include', ...init })
+  const headers = new Headers(init?.headers)
+  if (typeof window !== 'undefined') {
+    const actorStaffId = localStorage.getItem(STAFF_KEY)
+    if (actorStaffId) headers.set('x-actor-staff-id', actorStaffId)
+  }
+  return fetch(input, { credentials: 'include', ...init, headers })
 }
 
 type FormState = {
@@ -44,11 +52,11 @@ export default function CredentialsPage({
   kind: CredentialKind
   title: string
 }) {
-  const { staff, loading: authLoading } = useAuth()
-  const [gate, setGate] = useState<CredentialPageGate>(() => {
-    if (authLoading && !staff) return 'checking'
-    return resolveCredentialPageGate(kind, staff)
-  })
+  const { staff: authStaff, loading: authLoading } = useAuth()
+  const [pickedStaff, setPickedStaff] = useState<{ id: string; role: string } | null>(null)
+  const [pickLoading, setPickLoading] = useState(true)
+  const staff = resolvePageStaff(pickedStaff, authStaff)
+  const [gate, setGate] = useState<CredentialPageGate>('checking')
   const [items, setItems] = useState<CredentialListItem[]>([])
   const [listError, setListError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -100,11 +108,38 @@ export default function CredentialsPage({
   }, [kind])
 
   useEffect(() => {
+    let cancelled = false
+    const id = typeof window !== 'undefined' ? localStorage.getItem(STAFF_KEY) : null
+    if (!id) {
+      setPickedStaff(null)
+      setPickLoading(false)
+      return
+    }
+    void Promise.resolve(
+      supabase.from('staff').select('id, role').eq('id', id).maybeSingle(),
+    )
+      .then(({ data }) => {
+        if (cancelled) return
+        setPickedStaff(data as { id: string; role: string } | null)
+        setPickLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setPickedStaff(null)
+        setPickLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     // 한 번 허용되면 staff가 잠깐 비어도(리마운트·토큰 이벤트) 등록을 유지한다.
     if (gate === 'ok') return
+    if (pickLoading) return
     if (authLoading && !staff) return
     setGate(resolveCredentialPageGate(kind, staff))
-  }, [staff, kind, authLoading, gate])
+  }, [staff, kind, authLoading, pickLoading, gate])
 
   useEffect(() => {
     if (gate === 'ok') loadItems()
@@ -117,7 +152,7 @@ export default function CredentialsPage({
     setShowForm(true)
   }
 
-  const openEdit = async (row: CredentialListItem) => {
+  const openEdit = (row: CredentialListItem) => {
     clearReveal()
     setEditId(row.id)
     setForm({
@@ -128,30 +163,18 @@ export default function CredentialsPage({
       memo: row.memo ?? '',
     })
     setShowForm(true)
-    const res = await credFetch(`${apiBase(kind)}/${row.id}`)
-    if (!res.ok) return
-    const data = await res.json().catch(() => null)
-    const item = data?.item
-    if (!item) return
-    setForm({
-      name: item.name ?? '',
-      url: item.url ?? '',
-      login_id: item.login_id ?? '',
-      password: item.password ?? '',
-      memo: item.memo ?? '',
-    })
   }
 
   const handleSave = async () => {
     if (!form.name.trim()) return
     setSaving(true)
-    const payload = {
+    const payload: Record<string, string> = {
       name: form.name.trim(),
       url: form.url,
       login_id: form.login_id,
-      password: form.password,
       memo: form.memo,
     }
+    if (form.password.trim()) payload.password = form.password
     const res = editId
       ? await credFetch(`${apiBase(kind)}/${editId}`, {
           method: 'PATCH',
@@ -190,10 +213,10 @@ export default function CredentialsPage({
       clearReveal()
       return
     }
-    const res = await credFetch(`${apiBase(kind)}/${row.id}`)
+    const res = await credFetch(`${apiBase(kind)}/${row.id}/reveal`, { method: 'POST' })
     if (!res.ok) return
     const data = await res.json().catch(() => null)
-    const password = data?.item?.password
+    const password = data?.password
     if (typeof password !== 'string' || password === '') {
       setRevealed({ id: row.id, password: '' })
       return
@@ -381,6 +404,7 @@ export default function CredentialsPage({
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                   className={inputCls}
                   autoComplete="new-password"
+                  placeholder={editId ? '비우면 유지' : ''}
                 />
               </Field>
               <Field label="메모">

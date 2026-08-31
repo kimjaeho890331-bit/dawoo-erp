@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Sidebar from "@/components/Sidebar"
 import AIAssistant from "@/components/AIAssistant"
@@ -14,10 +14,13 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const chromeShown = useRef(false)
+  if (!loading) chromeShown.current = true
 
   if (pathname === '/login') return <>{children}</>
 
-  if (loading) {
+  // 첫 세션 확인 때만 전체 화면 로딩. 이후 토큰 이벤트로 chrome(등록 버튼 포함)을 내리지 않는다.
+  if (loading && !chromeShown.current) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-page">
         <div className="text-txt-secondary">로딩 중...</div>

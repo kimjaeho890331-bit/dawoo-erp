@@ -2,15 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Clock, ExternalLink, Plus, X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { canSeePrivateIds } from '@/lib/credentialAccess'
+import { useAuth } from '@/components/AuthProvider'
 import type { CredentialKind } from '@/types'
 import type { CredentialListItem } from '@/lib/credentials/fields'
+import {
+  resolveCredentialPageGate,
+  shouldRevokePageOnListStatus,
+  type CredentialPageGate,
+} from '@/lib/credentials/pageGate'
 
-const STAFF_KEY = 'dawoo_current_staff_id'
 const REVEAL_MS = 8000
 
-type Gate = 'checking' | 'ok' | 'denied'
+function credFetch(input: string, init?: RequestInit) {
+  return fetch(input, { credentials: 'include', ...init })
+}
 
 type FormState = {
   name: string
@@ -39,8 +44,13 @@ export default function CredentialsPage({
   kind: CredentialKind
   title: string
 }) {
-  const [gate, setGate] = useState<Gate>('checking')
+  const { staff, loading: authLoading } = useAuth()
+  const [gate, setGate] = useState<CredentialPageGate>(() => {
+    if (authLoading && !staff) return 'checking'
+    return resolveCredentialPageGate(kind, staff)
+  })
   const [items, setItems] = useState<CredentialListItem[]>([])
+  const [listError, setListError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -63,44 +73,38 @@ export default function CredentialsPage({
 
   const loadItems = useCallback(async () => {
     setLoading(true)
+    setListError(null)
     try {
-      const res = await fetch(apiBase(kind))
+      const res = await credFetch(apiBase(kind))
       const data = await res.json().catch(() => ({ items: [] }))
       if (!res.ok) {
         setItems([])
-        if (res.status === 403 || res.status === 401) setGate('denied')
+        setListError(
+          typeof data?.error === 'string' && data.error
+            ? data.error
+            : '목록을 불러오지 못했습니다',
+        )
+        // 역할 게이트를 이미 통과했으면 목록 401/403으로 등록 버튼을 내리지 않는다.
+        setGate((current) =>
+          shouldRevokePageOnListStatus(current, res.status) ? 'denied' : current,
+        )
         return
       }
       setItems(Array.isArray(data.items) ? data.items : [])
     } catch {
       setItems([])
+      setListError('목록을 불러오지 못했습니다')
     } finally {
       setLoading(false)
     }
   }, [kind])
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const id = typeof window !== 'undefined' ? localStorage.getItem(STAFF_KEY) : null
-      if (!id) {
-        if (!cancelled) setGate('denied')
-        return
-      }
-      const { data: me } = await supabase.from('staff').select('id, role').eq('id', id).maybeSingle()
-      if (cancelled) return
-      if (!me) {
-        setGate('denied')
-        return
-      }
-      if (kind === 'private' && !canSeePrivateIds(me.role)) {
-        setGate('denied')
-        return
-      }
-      setGate('ok')
-    })()
-    return () => { cancelled = true }
-  }, [kind])
+    // 한 번 허용되면 staff가 잠깐 비어도(리마운트·토큰 이벤트) 등록을 유지한다.
+    if (gate === 'ok') return
+    if (authLoading && !staff) return
+    setGate(resolveCredentialPageGate(kind, staff))
+  }, [staff, kind, authLoading, gate])
 
   useEffect(() => {
     if (gate === 'ok') loadItems()
@@ -124,7 +128,7 @@ export default function CredentialsPage({
       memo: row.memo ?? '',
     })
     setShowForm(true)
-    const res = await fetch(`${apiBase(kind)}/${row.id}`)
+    const res = await credFetch(`${apiBase(kind)}/${row.id}`)
     if (!res.ok) return
     const data = await res.json().catch(() => null)
     const item = data?.item
@@ -149,12 +153,12 @@ export default function CredentialsPage({
       memo: form.memo,
     }
     const res = editId
-      ? await fetch(`${apiBase(kind)}/${editId}`, {
+      ? await credFetch(`${apiBase(kind)}/${editId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-      : await fetch(apiBase(kind), {
+      : await credFetch(apiBase(kind), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -171,7 +175,7 @@ export default function CredentialsPage({
 
   const handleDelete = async (row: CredentialListItem) => {
     if (!confirm(`"${row.name}"을(를) 삭제하시겠습니까?`)) return
-    const res = await fetch(`${apiBase(kind)}/${row.id}`, { method: 'DELETE' })
+    const res = await credFetch(`${apiBase(kind)}/${row.id}`, { method: 'DELETE' })
     if (!res.ok) {
       const data = await res.json().catch(() => null)
       alert(data?.error || '삭제에 실패했습니다')
@@ -186,7 +190,7 @@ export default function CredentialsPage({
       clearReveal()
       return
     }
-    const res = await fetch(`${apiBase(kind)}/${row.id}`)
+    const res = await credFetch(`${apiBase(kind)}/${row.id}`)
     if (!res.ok) return
     const data = await res.json().catch(() => null)
     const password = data?.item?.password
@@ -233,6 +237,17 @@ export default function CredentialsPage({
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
         {loading ? (
           <div className="py-16 text-center text-[16px] text-txt-quaternary">불러오는 중...</div>
+        ) : listError ? (
+          <div className="py-16 text-center text-[16px] text-txt-quaternary space-y-3">
+            <p>{listError}</p>
+            <button
+              type="button"
+              onClick={loadItems}
+              className="h-[36px] px-4 border border-border-primary rounded-lg text-[13px] text-txt-secondary hover:bg-surface-tertiary transition"
+            >
+              다시 시도
+            </button>
+          </div>
         ) : items.length === 0 ? (
           <div className="py-16 text-center text-[16px] text-txt-quaternary">등록된 항목이 없습니다</div>
         ) : (

@@ -1,4 +1,5 @@
-import type { CredentialEntry } from '@/types'
+import type { CredentialEntry, CredentialKind } from '@/types'
+import { sharedMemoRejectError } from './sharedMemo'
 
 export type CredentialListItem = Omit<CredentialEntry, 'password'>
 
@@ -29,19 +30,30 @@ function asText(value: unknown): string | null {
   return trimmed === '' ? null : trimmed
 }
 
-export function parseCreateInput(body: CredentialInput): CredentialCreatePayload | { error: string } {
+export function parseCreateInput(
+  body: CredentialInput,
+  kind?: CredentialKind,
+): CredentialCreatePayload | { error: string } {
   const name = asText(body.name)
   if (!name) return { error: '사이트/서비스 이름을 입력해 주세요' }
+  const memo = asText(body.memo)
+  if (kind === 'shared') {
+    const memoError = sharedMemoRejectError(memo)
+    if (memoError) return { error: memoError }
+  }
   return {
     name,
     url: asText(body.url),
     login_id: asText(body.login_id),
     password: asText(body.password),
-    memo: asText(body.memo),
+    memo,
   }
 }
 
-export function parseUpdateInput(body: CredentialInput): Record<string, string | null> | { error: string } {
+export function parseUpdateInput(
+  body: CredentialInput,
+  kind?: CredentialKind,
+): Record<string, string | null> | { error: string } {
   const patch: Record<string, string | null> = {}
   if ('name' in body) {
     const name = asText(body.name)
@@ -55,7 +67,14 @@ export function parseUpdateInput(body: CredentialInput): Record<string, string |
     const password = asText(body.password)
     if (password) patch.password = password
   }
-  if ('memo' in body) patch.memo = asText(body.memo)
+  if ('memo' in body) {
+    const memo = asText(body.memo)
+    if (kind === 'shared') {
+      const memoError = sharedMemoRejectError(memo)
+      if (memoError) return { error: memoError }
+    }
+    patch.memo = memo
+  }
   return patch
 }
 

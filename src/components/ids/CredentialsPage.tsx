@@ -13,6 +13,7 @@ import {
   hrefForCredentialUrl,
   usesMonoIdFont,
 } from '@/lib/credentials/display'
+import { visibleCredentialMemo } from '@/lib/credentials/sharedMemo'
 import {
   canPrefetchCredentialList,
   resolvePageStaff,
@@ -133,7 +134,8 @@ export default function CredentialsPage({
         }
         return
       }
-      setItems(Array.isArray(data.items) ? data.items : [])
+      const raw = Array.isArray(data.items) ? (data.items as CredentialListItem[]) : []
+      setItems(raw.map((item) => ({ ...item, memo: visibleCredentialMemo(kind, item.memo) })))
     } catch {
       if (gateRef.current === 'denied') {
         setItems([])
@@ -222,7 +224,7 @@ export default function CredentialsPage({
       url: row.url ?? '',
       login_id: row.login_id ?? '',
       password: '',
-      memo: row.memo ?? '',
+      memo: visibleCredentialMemo(kind, row.memo) ?? '',
     })
     setShowForm(true)
   }
@@ -383,6 +385,7 @@ export default function CredentialsPage({
                   {filtered.map((row) => {
                     const isOpen = revealed?.id === row.id
                     const name = collapseDisplayWhitespace(row.name)
+                    const memo = visibleCredentialMemo(kind, row.memo)
                     return (
                       <tr key={row.id} className="border-b border-border-tertiary last:border-0">
                         <td className="px-3 py-2 font-medium text-txt-primary max-w-[180px]">
@@ -433,9 +436,9 @@ export default function CredentialsPage({
                           </div>
                         </td>
                         <td className="px-3 py-2 text-txt-secondary max-w-[200px]">
-                          {row.memo ? (
-                            <span className="block truncate" title={row.memo}>
-                              {collapseDisplayWhitespace(row.memo)}
+                          {memo ? (
+                            <span className="block truncate" title={memo}>
+                              {collapseDisplayWhitespace(memo)}
                             </span>
                           ) : (
                             <span className="text-txt-quaternary">—</span>
@@ -512,6 +515,11 @@ export default function CredentialsPage({
                   rows={3}
                   className="w-full border border-border-primary rounded-lg px-3 py-2.5 text-[16px] text-txt-primary bg-surface focus:border-accent focus:ring-2 focus:ring-accent-light outline-none resize-none leading-relaxed"
                 />
+                {kind === 'shared' && (
+                  <p className="mt-1 text-[11px] text-txt-tertiary">
+                    통장·이체·OTP 비번은 여기 적지 마세요. 비밀번호 칸 또는 중요 ID/PW.
+                  </p>
+                )}
               </Field>
             </div>
             <div className="px-6 py-4 border-t border-border-tertiary flex justify-end gap-2">

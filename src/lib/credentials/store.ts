@@ -7,6 +7,12 @@ import {
   type CredentialListItem,
 } from './fields'
 import { decryptPassword, encryptPassword } from './secret'
+import { sharedMemoRejectError, visibleCredentialMemo } from './sharedMemo'
+
+function presentCredential(kind: CredentialKind, row: CredentialListItem): CredentialListItem {
+  const item = omitPassword(row)
+  return { ...item, memo: visibleCredentialMemo(kind, item.memo) }
+}
 
 export type { CredentialCreatePayload, CredentialInput, CredentialListItem } from './fields'
 export { omitPassword, parseCreateInput, parseUpdateInput } from './fields'
@@ -23,7 +29,7 @@ export async function listCredentials(kind: CredentialKind): Promise<CredentialL
     return Response.json({ error: '목록을 불러오지 못했습니다', items: [] }, { status: 500 })
   }
 
-  return ((data ?? []) as CredentialListItem[]).map((row) => omitPassword(row))
+  return ((data ?? []) as CredentialListItem[]).map((row) => presentCredential(kind, row))
 }
 
 export async function getCredential(
@@ -44,7 +50,7 @@ export async function getCredential(
   if (!data) {
     return Response.json({ error: '항목을 찾을 수 없습니다' }, { status: 404 })
   }
-  return omitPassword(data as CredentialListItem)
+  return presentCredential(kind, data as CredentialListItem)
 }
 
 export async function revealCredential(
@@ -74,6 +80,11 @@ export async function createCredential(
   input: CredentialCreatePayload,
   createdBy: string,
 ): Promise<CredentialListItem | Response> {
+  if (kind === 'shared') {
+    const memoError = sharedMemoRejectError(input.memo)
+    if (memoError) return Response.json({ error: memoError }, { status: 400 })
+  }
+
   const { data, error } = await admin
     .from('credential_entries')
     .insert({
@@ -93,7 +104,7 @@ export async function createCredential(
     console.error('[credentials] 등록 실패 name=', input.name, error.message)
     return Response.json({ error: '등록에 실패했습니다' }, { status: 500 })
   }
-  return omitPassword(data as CredentialListItem)
+  return presentCredential(kind, data as CredentialListItem)
 }
 
 export async function updateCredential(
@@ -103,6 +114,10 @@ export async function updateCredential(
 ): Promise<CredentialListItem | Response> {
   if (Object.keys(patch).length === 0) {
     return Response.json({ error: '수정할 내용이 없습니다' }, { status: 400 })
+  }
+  if (kind === 'shared' && 'memo' in patch) {
+    const memoError = sharedMemoRejectError(patch.memo)
+    if (memoError) return Response.json({ error: memoError }, { status: 400 })
   }
 
   const stored: Record<string, string | null> = { ...patch }
@@ -128,7 +143,7 @@ export async function updateCredential(
   if (!data) {
     return Response.json({ error: '항목을 찾을 수 없습니다' }, { status: 404 })
   }
-  return omitPassword(data as CredentialListItem)
+  return presentCredential(kind, data as CredentialListItem)
 }
 
 export async function deleteCredential(

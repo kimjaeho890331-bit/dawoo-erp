@@ -31,7 +31,7 @@ export async function handleCreate(kind: CredentialKind, request: NextRequest) {
     return Response.json({ error: '요청 본문이 올바르지 않습니다' }, { status: 400 })
   }
 
-  const parsed = parseCreateInput((body ?? {}) as Record<string, unknown>)
+  const parsed = parseCreateInput((body ?? {}) as Record<string, unknown>, kind)
   if ('error' in parsed) {
     return Response.json({ error: parsed.error }, { status: 400 })
   }
@@ -73,7 +73,7 @@ export async function handleUpdate(kind: CredentialKind, id: string, request: Ne
     return Response.json({ error: '요청 본문이 올바르지 않습니다' }, { status: 400 })
   }
 
-  const parsed = parseUpdateInput((body ?? {}) as Record<string, unknown>)
+  const parsed = parseUpdateInput((body ?? {}) as Record<string, unknown>, kind)
   if ('error' in parsed) {
     return Response.json({ error: parsed.error }, { status: 400 })
   }

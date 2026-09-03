@@ -1,12 +1,20 @@
-import { admin } from '@/lib/approval/guard'
+import { createClient } from '@supabase/supabase-js'
 import { attachStaffNames, type ActivityLogRow, type ActivityLogWithStaff } from '@/lib/activityLog'
+
+function reader() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
+}
 
 export async function listActivityLogs(params: {
   targetId?: string | null
   targetType?: string | null
   limit?: number
 }): Promise<{ rows: ActivityLogWithStaff[] } | { error: string; status: number }> {
-  let q = admin
+  const db = reader()
+  let q = db
     .from('activity_log')
     .select('id, staff_id, action, target_type, target_id, detail, created_at')
     .order('created_at', { ascending: false })
@@ -26,7 +34,7 @@ export async function listActivityLogs(params: {
 
   const staffById = new Map<string, string>()
   if (staffIds.length > 0) {
-    const { data: staffRows, error: staffError } = await admin
+    const { data: staffRows, error: staffError } = await db
       .from('staff')
       .select('id, name')
       .in('id', staffIds)

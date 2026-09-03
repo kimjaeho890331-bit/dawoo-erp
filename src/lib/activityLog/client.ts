@@ -1,5 +1,11 @@
-import { STAFF_STORAGE_KEY, activityLogStaffRefuseReason } from '@/lib/activityLog'
-import type { ActivityLogWithStaff } from '@/lib/activityLog'
+import { supabase } from '@/lib/supabase'
+import {
+  STAFF_STORAGE_KEY,
+  activityLogStaffRefuseReason,
+  attachStaffNames,
+  type ActivityLogRow,
+  type ActivityLogWithStaff,
+} from '@/lib/activityLog'
 
 function actorStaffIdFromStorage(): string | null {
   if (typeof window === 'undefined') return null
@@ -46,15 +52,42 @@ export async function logActivity(input: {
   }
 }
 
+async function fetchSiteActivityLogsFromClient(siteId: string): Promise<ActivityLogWithStaff[]> {
+  const { data, error } = await supabase
+    .from('activity_log')
+    .select('id, staff_id, action, target_type, target_id, detail, created_at')
+    .eq('target_id', siteId)
+    .eq('target_type', 'site')
+    .order('created_at', { ascending: false })
+    .limit(80)
+
+  if (error || !data) return []
+
+  const rows = data as ActivityLogRow[]
+  const staffIds = [...new Set(rows.map((r) => r.staff_id).filter((id): id is string => !!id))]
+  const staffById = new Map<string, string>()
+  if (staffIds.length > 0) {
+    const { data: staffRows } = await supabase.from('staff').select('id, name').in('id', staffIds)
+    for (const s of staffRows ?? []) {
+      if (s.id && s.name) staffById.set(s.id, s.name)
+    }
+  }
+  return attachStaffNames(rows, staffById)
+}
+
 export async function fetchSiteActivityLogs(
   siteId: string,
 ): Promise<ActivityLogWithStaff[]> {
-  const params = new URLSearchParams({ target_id: siteId, target_type: 'site' })
-  const res = await fetch(`/api/activity-log?${params}`, {
-    credentials: 'include',
-    headers: actorHeaders(),
-  })
-  if (!res.ok) return []
-  const body = (await res.json().catch(() => null)) as { rows?: ActivityLogWithStaff[] } | null
-  return body?.rows ?? []
+  try {
+    const params = new URLSearchParams({ target_id: siteId, target_type: 'site' })
+    const res = await fetch(`/api/activity-log?${params}`, {
+      credentials: 'include',
+      headers: actorHeaders(),
+    })
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as { rows?: ActivityLogWithStaff[] } | null
+      if (body?.rows) return body.rows
+    }
+  } catch { /* anon 조회로 이어서 */ }
+  return fetchSiteActivityLogsFromClient(siteId)
 }

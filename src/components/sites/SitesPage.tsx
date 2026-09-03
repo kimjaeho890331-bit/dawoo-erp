@@ -563,8 +563,6 @@ function SiteActivityLogs({ siteId, reloadToken }: { siteId: string; reloadToken
       <h3 className="text-[14px] font-semibold text-txt-primary mb-3">작업 이력</h3>
       {loading ? (
         <div className="text-center py-6 text-txt-quaternary text-[13px]">불러오는 중...</div>
-      ) : rows.length === 0 ? (
-        <div className="text-center py-6 text-txt-quaternary text-[13px]">이력이 없습니다</div>
       ) : (
         <table className="w-full text-[13px]">
           <thead>
@@ -575,7 +573,11 @@ function SiteActivityLogs({ siteId, reloadToken }: { siteId: string; reloadToken
             </tr>
           </thead>
           <tbody>
-            {rows.map(row => (
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-6 text-center text-txt-quaternary">이력이 없습니다</td>
+              </tr>
+            ) : rows.map(row => (
               <tr key={row.id} className="border-t border-border-tertiary">
                 <td className="py-2 text-txt-secondary whitespace-nowrap">
                   {row.created_at ? row.created_at.slice(0, 16).replace('T', ' ') : '—'}

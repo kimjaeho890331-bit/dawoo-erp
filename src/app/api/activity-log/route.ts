@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { resolveActor } from '@/lib/approval/guard'
-import { insertActivityLog } from '@/lib/activityLog/insert'
 import { listActivityLogs } from '@/lib/activityLog/list'
 
 function actorStaffIdFrom(request: NextRequest, bodyActorId?: string | null): string | null {
@@ -42,6 +40,8 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: '요청 본문이 올바르지 않습니다' }, { status: 400 })
   }
 
+  const { resolveActor } = await import('@/lib/approval/guard')
+  const { insertActivityLog } = await import('@/lib/activityLog/insert')
   const actor = await resolveActor(actorStaffIdFrom(request, body.actor_staff_id))
   if (actor instanceof Response) return actor
 

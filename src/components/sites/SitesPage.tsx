@@ -13,6 +13,9 @@ import {
 } from '@/lib/siteContract'
 import { sumExpensesBySite } from '@/lib/siteSpend'
 import { formatMoney } from '@/lib/utils/format'
+import { activityActionLabel, processorLabel, STAFF_STORAGE_KEY } from '@/lib/activityLog'
+import { fetchSiteActivityLogs, logActivity } from '@/lib/activityLog/client'
+import type { ActivityLogWithStaff } from '@/lib/activityLog'
 
 // --- 타입 ---
 interface Site {
@@ -25,6 +28,8 @@ interface Site {
   client_phone: string | null
   start_date: string | null
   end_date: string | null
+  quote_date: string | null
+  construction_start_date: string | null
   status: string
   contract_type: string | null  // 수의계약 / 입찰
   budget: number
@@ -185,6 +190,12 @@ export default function SitesPage() {
 
   const handleDelete = async (site: Site) => {
     if (!confirm(`"${site.name}" 현장을 삭제하시겠습니까?`)) return
+    await logActivity({
+      action: 'site_delete',
+      target_type: 'site',
+      target_id: site.id,
+      detail: site.name,
+    })
     await supabase.from('sites').delete().eq('id', site.id)
     loadSites()
   }
@@ -293,6 +304,8 @@ function SiteRegisterModal({
   const [clientPhone, setClientPhone] = useState(site?.client_phone || '')
   const [startDate, setStartDate] = useState(site?.start_date || '')
   const [endDate, setEndDate] = useState(site?.end_date || '')
+  const [quoteDate, setQuoteDate] = useState(site?.quote_date || '')
+  const [constructionStartDate, setConstructionStartDate] = useState(site?.construction_start_date || '')
   const [status, setStatus] = useState(site?.status || '계약')
   const [contractType, setContractType] = useState(site?.contract_type || '')
   const [budget, setBudget] = useState(site?.budget?.toString() || '0')
@@ -312,20 +325,38 @@ function SiteRegisterModal({
       client_phone: clientPhone || null,
       start_date: startDate || null,
       end_date: endDate || null,
+      quote_date: quoteDate || null,
+      construction_start_date: constructionStartDate || null,
       status,
       contract_type: contractType,
       budget: parseInt(budget) || 0,
       memo: memo || null,
     }
     const write = isEdit
-      ? () => supabase.from('sites').update(payload).eq('id', site!.id)
-      : () => supabase.from('sites').insert(payload)
-    const { error } = await write()
-    if (error && /contract_type/.test(error.message)) {
+      ? () => supabase.from('sites').update(payload).eq('id', site!.id).select('id').maybeSingle()
+      : () => supabase.from('sites').insert(payload).select('id').maybeSingle()
+    let { data, error } = await write()
+    if (error && /contract_type|quote_date|construction_start_date/.test(error.message)) {
       const fallback = { ...payload } as Record<string, unknown>
-      delete fallback.contract_type
-      if (isEdit) await supabase.from('sites').update(fallback).eq('id', site!.id)
-      else await supabase.from('sites').insert(fallback)
+      if (/contract_type/.test(error.message)) delete fallback.contract_type
+      if (/quote_date|construction_start_date/.test(error.message)) {
+        delete fallback.quote_date
+        delete fallback.construction_start_date
+      }
+      const retry = isEdit
+        ? await supabase.from('sites').update(fallback).eq('id', site!.id).select('id').maybeSingle()
+        : await supabase.from('sites').insert(fallback).select('id').maybeSingle()
+      data = retry.data
+      error = retry.error
+    }
+    const siteId = (data as { id?: string } | null)?.id || site?.id
+    if (!error && siteId) {
+      await logActivity({
+        action: isEdit ? 'site_update' : 'site_create',
+        target_type: 'site',
+        target_id: siteId,
+        detail: payload.name,
+      })
     }
     setSaving(false)
     onSaved()
@@ -350,6 +381,8 @@ function SiteRegisterModal({
             <Field label="발주처 연락처" value={clientPhone} onChange={setClientPhone} type="tel" />
           </div>
           <div className="grid grid-cols-2 gap-3">
+            <Field label="견적일" value={quoteDate} onChange={setQuoteDate} type="date" />
+            <Field label="착공일" value={constructionStartDate} onChange={setConstructionStartDate} type="date" />
             <Field label="착공예정일" value={startDate} onChange={setStartDate} type="date" />
             <Field label="준공예정일" value={endDate} onChange={setEndDate} type="date" />
           </div>
@@ -451,6 +484,8 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 }) {
   const [activeTab, setActiveTab] = useState<SiteTabKey>('기본정보')
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [activityTick, setActivityTick] = useState(0)
+  const bumpActivity = useCallback(() => setActivityTick(n => n + 1), [])
 
   const loadSchedules = useCallback(async () => {
     try {
@@ -477,7 +512,7 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
       </div>
 
       {/* 공정 캘린더 */}
-      <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} />
+      <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} onActivity={bumpActivity} />
 
       {/* 탭 */}
       <div className="flex border-b border-border-primary mt-5 mb-4">
@@ -498,10 +533,65 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
 
       <div className="bg-surface rounded-[10px] border border-border-primary p-4">
         {activeTab === '기본정보' && <TabBasicInfo site={site} onRefresh={onRefresh} />}
-        {activeTab === '현장일지' && <TabSiteLogs siteId={site.id} />}
+        {activeTab === '현장일지' && <TabSiteLogs siteId={site.id} onActivity={bumpActivity} />}
         {activeTab === '지출' && <TabExpenses siteId={site.id} />}
         {activeTab === '서류' && <TabDocuments siteId={site.id} />}
       </div>
+
+      <SiteActivityLogs siteId={site.id} reloadToken={activityTick} />
+    </div>
+  )
+}
+
+function SiteActivityLogs({ siteId, reloadToken }: { siteId: string; reloadToken: number }) {
+  const [rows, setRows] = useState<ActivityLogWithStaff[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchSiteActivityLogs(siteId).then(data => {
+      if (!cancelled) {
+        setRows(data)
+        setLoading(false)
+      }
+    })
+    return () => { cancelled = true }
+  }, [siteId, reloadToken])
+
+  return (
+    <div className="mt-4 bg-surface rounded-[10px] border border-border-primary p-4">
+      <h3 className="text-[14px] font-semibold text-txt-primary mb-3">작업 이력</h3>
+      {loading ? (
+        <div className="text-center py-6 text-txt-quaternary text-[13px]">불러오는 중...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-center py-6 text-txt-quaternary text-[13px]">이력이 없습니다</div>
+      ) : (
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="text-[11px] text-txt-tertiary">
+              <th className="py-1.5 text-left font-medium w-36">시각</th>
+              <th className="py-1.5 text-left font-medium">작업</th>
+              <th className="py-1.5 text-left font-medium w-24">처리자</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.id} className="border-t border-border-tertiary">
+                <td className="py-2 text-txt-secondary whitespace-nowrap">
+                  {row.created_at ? row.created_at.slice(0, 16).replace('T', ' ') : '—'}
+                </td>
+                <td className="py-2 text-txt-primary">
+                  {activityActionLabel(row.action)}
+                  {row.detail ? <span className="text-txt-tertiary"> · {row.detail}</span> : null}
+                </td>
+                <td className="py-2 text-txt-secondary">
+                  {processorLabel(row.staff_id, row.staff?.name)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
@@ -533,6 +623,8 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
     client_phone: site.client_phone || '',
     start_date: site.start_date || '',
     end_date: site.end_date || '',
+    quote_date: site.quote_date || '',
+    construction_start_date: site.construction_start_date || '',
     status: site.status,
     contract_type: site.contract_type || '',
     budget: site.budget.toString(),
@@ -551,6 +643,7 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
       site_manager: site.site_manager || '', site_assistant: site.site_assistant || '',
       client_manager: site.client_manager || '', client_phone: site.client_phone || '',
       start_date: site.start_date || '', end_date: site.end_date || '',
+      quote_date: site.quote_date || '', construction_start_date: site.construction_start_date || '',
       status: site.status, contract_type: site.contract_type || '',
       budget: site.budget.toString(), memo: site.memo || '',
     }
@@ -598,15 +691,20 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
       client_phone: next.client_phone || null,
       start_date: next.start_date || null,
       end_date: next.end_date || null,
+      quote_date: next.quote_date || null,
+      construction_start_date: next.construction_start_date || null,
       status: next.status,
       contract_type: next.contract_type || null,
       budget: parseInt(next.budget) || 0,
       memo: next.memo || null,
     }
     const { error } = await supabase.from('sites').update(payload).eq('id', site.id)
-    // contract_type 컬럼 없을 때 graceful fallback
-    if (error && /contract_type/.test(error.message)) {
-      delete payload.contract_type
+    if (error && /contract_type|quote_date|construction_start_date/.test(error.message)) {
+      if (/contract_type/.test(error.message)) delete payload.contract_type
+      if (/quote_date|construction_start_date/.test(error.message)) {
+        delete payload.quote_date
+        delete payload.construction_start_date
+      }
       await supabase.from('sites').update(payload).eq('id', site.id)
     }
     lastSavedRef.current = next
@@ -687,8 +785,14 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
         </Box>
       </div>
 
-      {/* 5행: 착공예정일 | 준공예정일 같은 라인 */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* 5행: 견적일 | 착공일 | 착공예정일 | 준공예정일 */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Box label="견적일">
+          <input type="date" className={inputCls} value={form.quote_date} onChange={e => u('quote_date', e.target.value)} />
+        </Box>
+        <Box label="착공일">
+          <input type="date" className={inputCls} value={form.construction_start_date} onChange={e => u('construction_start_date', e.target.value)} />
+        </Box>
         <Box label="착공예정일">
           <input type="date" className={inputCls} value={form.start_date} onChange={e => u('start_date', e.target.value)} />
         </Box>
@@ -748,7 +852,7 @@ function CompletionBadge({ score, max }: { score: number; max: number }) {
   )
 }
 
-function TabSiteLogs({ siteId }: { siteId: string }) {
+function TabSiteLogs({ siteId, onActivity }: { siteId: string; onActivity?: () => void }) {
   const [logs, setLogs] = useState<SiteLog[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editLog, setEditLog] = useState<SiteLog | null>(null)
@@ -773,7 +877,14 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
 
   const handleDelete = async (id: string) => {
     if (!confirm('현장일지를 삭제하시겠습니까?')) return
+    await logActivity({
+      action: 'site_log_delete',
+      target_type: 'site',
+      target_id: siteId,
+      detail: id,
+    })
     await supabase.from('site_logs').delete().eq('id', id)
+    onActivity?.()
     loadLogs()
   }
 
@@ -787,7 +898,7 @@ function TabSiteLogs({ siteId }: { siteId: string }) {
       {showForm && (
         <SiteLogForm siteId={siteId} log={editLog}
           onClose={() => { setShowForm(false); setEditLog(null) }}
-          onSave={() => { setShowForm(false); setEditLog(null); loadLogs() }} />
+          onSave={() => { setShowForm(false); setEditLog(null); onActivity?.(); loadLogs() }} />
       )}
 
       {loading ? (
@@ -967,7 +1078,10 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
     const autoSchedules = tomorrowSchedules.map(s =>
       s.contractor ? `${s.title}(${s.contractor})` : s.title
     )
-    const payload = {
+    const actorStaffId = typeof window !== 'undefined'
+      ? localStorage.getItem(STAFF_STORAGE_KEY)?.trim() || null
+      : null
+    const payload: Record<string, unknown> = {
       site_id: siteId,
       log_date: logDate,
       weather: joinWeather(weatherCond, weatherTemp),
@@ -977,8 +1091,15 @@ function SiteLogForm({ siteId, log, onClose, onSave }: {
       remarks: remarks || null,
       tomorrow_plan: buildTomorrowPlan(autoSchedules, tomorrowPlan),
     }
+    if (!isEdit && actorStaffId) payload.created_by = actorStaffId
     if (isEdit) await supabase.from('site_logs').update(payload).eq('id', log!.id)
     else await supabase.from('site_logs').insert(payload)
+    await logActivity({
+      action: isEdit ? 'site_log_update' : 'site_log_create',
+      target_type: 'site',
+      target_id: siteId,
+      detail: logDate,
+    })
     setSaving(false)
     onSave()
   }

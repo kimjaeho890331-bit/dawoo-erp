@@ -497,3 +497,13 @@ CREATE TABLE IF NOT EXISTS credential_entries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_credential_entries_kind ON credential_entries (kind);
+
+-- ============================================
+-- 30. 현장 견적일·착공일 (023_sites_quote_construction_dates.sql)
+-- ============================================
+-- start_date/end_date(착공예정·준공예정)와 별개. 기존 값은 복사하지 않음.
+
+ALTER TABLE sites
+  ADD COLUMN IF NOT EXISTS quote_date DATE,
+  ADD COLUMN IF NOT EXISTS construction_start_date DATE;
+

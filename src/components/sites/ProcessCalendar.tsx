@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { logActivity } from '@/lib/activityLog/client'
 
 // --- 타입 ---
 interface Schedule {
@@ -65,11 +66,13 @@ export default function ProcessCalendar({
   siteId,
   schedules,
   onReload,
+  onActivity,
   vendorList = [],
 }: {
   siteId: string
   schedules: Schedule[]
   onReload: () => void
+  onActivity?: () => void
   vendorList?: Vendor[]
 }) {
   const [month, setMonth] = useState(() => {
@@ -178,6 +181,13 @@ export default function ProcessCalendar({
         color: dragTag.color,
         confirmed: false,
       })
+      await logActivity({
+        action: 'schedule_create',
+        target_type: 'site',
+        target_id: siteId,
+        detail: dragTag.name,
+      })
+      onActivity?.()
       setDragTag(null)
       onReload()
       return
@@ -200,6 +210,13 @@ export default function ProcessCalendar({
     const duration = daysBetween(s.start_date, s.end_date) - 1
     const newEnd = addDays(targetDate, duration)
     await supabase.from('schedules').update({ start_date: targetDate, end_date: newEnd }).eq('id', s.id)
+    await logActivity({
+      action: 'schedule_update',
+      target_type: 'site',
+      target_id: siteId,
+      detail: s.title,
+    })
+    onActivity?.()
     onReload()
   }
 
@@ -250,6 +267,13 @@ export default function ProcessCalendar({
           await supabase.from('schedules').update({ end_date: targetDate }).eq('id', s.id)
         }
       }
+      await logActivity({
+        action: 'schedule_update',
+        target_type: 'site',
+        target_id: siteId,
+        detail: s.title,
+      })
+      onActivity?.()
       cleanup()
       onReload()
     }
@@ -272,7 +296,7 @@ export default function ProcessCalendar({
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-  }, [stretching, schedules, month, onReload])
+  }, [stretching, schedules, month, onReload, onActivity, siteId])
 
   // 태그 추가/삭제
   const handleAddTag = () => {
@@ -287,7 +311,15 @@ export default function ProcessCalendar({
 
   // 스케줄 삭제
   const handleDeleteSchedule = async (id: string) => {
+    const title = schedules.find(s => s.id === id)?.title
     await supabase.from('schedules').delete().eq('id', id)
+    await logActivity({
+      action: 'schedule_delete',
+      target_type: 'site',
+      target_id: siteId,
+      detail: title || id,
+    })
+    onActivity?.()
     setEditSchedule(null)
     setShowScheduleModal(false)
     onReload()
@@ -499,7 +531,7 @@ export default function ProcessCalendar({
           schedule={editSchedule}
           vendorList={vendorList}
           onClose={() => { setShowScheduleModal(false); setEditSchedule(null) }}
-          onSave={() => { setShowScheduleModal(false); setEditSchedule(null); onReload() }}
+          onSave={() => { setShowScheduleModal(false); setEditSchedule(null); onActivity?.(); onReload() }}
           onDelete={() => handleDeleteSchedule(editSchedule.id)}
         />
       )}
@@ -553,6 +585,12 @@ function ScheduleModal({
       title, start_date: startDate, end_date: endDate,
       contractor: contractor || null, workers: workers || null, memo: memo || null, confirmed, color,
     }).eq('id', schedule.id)
+    await logActivity({
+      action: 'schedule_update',
+      target_type: 'site',
+      target_id: siteId,
+      detail: title,
+    })
     setSaving(false)
     onSave()
   }

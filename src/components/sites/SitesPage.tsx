@@ -18,6 +18,7 @@ import { fetchSiteActivityLogs, logActivity } from '@/lib/activityLog/client'
 import type { ActivityLogWithStaff } from '@/lib/activityLog'
 import { SITE_INFLOW_PATHS, isSiteInflowChosen } from '@/lib/siteInflow'
 import { SITE_WORK_KINDS, isSiteWorkKindChosen } from '@/lib/siteWorkKind'
+import { createSite } from '@/lib/sites/client'
 
 // --- 타입 ---
 interface Site {
@@ -317,6 +318,7 @@ function SiteRegisterModal({
   const [budget, setBudget] = useState(site?.budget?.toString() || '0')
   const [memo, setMemo] = useState(site?.memo || '')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const canSave = name.trim().length > 0
     && isContractTypeChosen(contractType)
     && (isEdit || (isSiteInflowChosen(inflowPath) && isSiteWorkKindChosen(workKind)))
@@ -324,6 +326,7 @@ function SiteRegisterModal({
   const handleSubmit = async () => {
     if (!canSave) return
     setSaving(true)
+    setSaveError('')
     const payload = {
       name: name.trim(),
       address: address || null,
@@ -342,10 +345,26 @@ function SiteRegisterModal({
       budget: parseInt(budget) || 0,
       memo: memo || null,
     }
-    const write = isEdit
-      ? () => supabase.from('sites').update(payload).eq('id', site!.id).select('id').maybeSingle()
-      : () => supabase.from('sites').insert(payload).select('id').maybeSingle()
-    let { data, error } = await write()
+
+    if (!isEdit) {
+      const created = await createSite(payload)
+      if (!created.ok) {
+        setSaveError(created.error)
+        setSaving(false)
+        return
+      }
+      await logActivity({
+        action: 'site_create',
+        target_type: 'site',
+        target_id: created.id,
+        detail: payload.name,
+      })
+      setSaving(false)
+      onSaved()
+      return
+    }
+
+    let { data, error } = await supabase.from('sites').update(payload).eq('id', site!.id).select('id').maybeSingle()
     if (error && /contract_type|quote_date|construction_start_date|inflow_path|work_kind/.test(error.message)) {
       const fallback = { ...payload } as Record<string, unknown>
       if (/contract_type/.test(error.message)) delete fallback.contract_type
@@ -357,16 +376,14 @@ function SiteRegisterModal({
         delete fallback.inflow_path
         delete fallback.work_kind
       }
-      const retry = isEdit
-        ? await supabase.from('sites').update(fallback).eq('id', site!.id).select('id').maybeSingle()
-        : await supabase.from('sites').insert(fallback).select('id').maybeSingle()
+      const retry = await supabase.from('sites').update(fallback).eq('id', site!.id).select('id').maybeSingle()
       data = retry.data
       error = retry.error
     }
     const siteId = (data as { id?: string } | null)?.id || site?.id
     if (!error && siteId) {
       await logActivity({
-        action: isEdit ? 'site_update' : 'site_create',
+        action: 'site_update',
         target_type: 'site',
         target_id: siteId,
         detail: payload.name,
@@ -445,6 +462,7 @@ function SiteRegisterModal({
           </div>
         </div>
         <div className="modal-footer">
+          {saveError && <p className="mr-auto text-[12px] text-money-negative">{saveError}</p>}
           <button onClick={onClose} className="btn-secondary">취소</button>
           <button onClick={handleSubmit} disabled={saving || !canSave} className="btn-primary disabled:opacity-50">
             {saving ? '저장 중...' : isEdit ? '수정' : '등록'}

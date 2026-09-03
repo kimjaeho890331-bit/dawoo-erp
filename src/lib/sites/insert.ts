@@ -5,8 +5,8 @@ import type { NewSiteInsertInput } from '@/lib/sites/types'
 export type { NewSiteInsertInput }
 
 /**
- * 신규 sites INSERT만. 유입경로·공종이 허용값이 아니면 insert 하지 않는다.
- * DB NOT NULL은 건드리지 않는다. UPDATE에는 쓰지 않는다(옛 NULL 유지).
+ * 신규 sites INSERT만. 빈값·null은 미확인. 허용 외 값이면 insert 하지 않는다.
+ * DB NOT NULL은 건드리지 않는다. UPDATE에는 쓰지 않는다.
  */
 export async function insertNewSite(
   input: NewSiteInsertInput,

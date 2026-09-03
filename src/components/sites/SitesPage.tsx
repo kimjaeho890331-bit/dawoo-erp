@@ -16,8 +16,8 @@ import { formatMoney } from '@/lib/utils/format'
 import { activityActionLabel, processorLabel, STAFF_STORAGE_KEY } from '@/lib/activityLog'
 import { fetchSiteActivityLogs, logActivity } from '@/lib/activityLog/client'
 import type { ActivityLogWithStaff } from '@/lib/activityLog'
-import { SITE_INFLOW_PATHS, isSiteInflowChosen } from '@/lib/siteInflow'
-import { SITE_WORK_KINDS, isSiteWorkKindChosen } from '@/lib/siteWorkKind'
+import { SITE_INFLOW_PATHS, SITE_INFLOW_UNCONFIRMED } from '@/lib/siteInflow'
+import { SITE_WORK_KINDS, SITE_WORK_KIND_UNCONFIRMED } from '@/lib/siteWorkKind'
 import { createSite } from '@/lib/sites/client'
 
 // --- 타입 ---
@@ -311,17 +311,15 @@ function SiteRegisterModal({
   const [endDate, setEndDate] = useState(site?.end_date || '')
   const [quoteDate, setQuoteDate] = useState(site?.quote_date || '')
   const [constructionStartDate, setConstructionStartDate] = useState(site?.construction_start_date || '')
-  const [inflowPath, setInflowPath] = useState(site?.inflow_path || '')
-  const [workKind, setWorkKind] = useState(site?.work_kind || '')
+  const [inflowPath, setInflowPath] = useState(site?.inflow_path || (site ? '' : SITE_INFLOW_UNCONFIRMED))
+  const [workKind, setWorkKind] = useState(site?.work_kind || (site ? '' : SITE_WORK_KIND_UNCONFIRMED))
   const [status, setStatus] = useState(site?.status || '계약')
   const [contractType, setContractType] = useState(site?.contract_type || '')
   const [budget, setBudget] = useState(site?.budget?.toString() || '0')
   const [memo, setMemo] = useState(site?.memo || '')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const canSave = name.trim().length > 0
-    && isContractTypeChosen(contractType)
-    && (isEdit || (isSiteInflowChosen(inflowPath) && isSiteWorkKindChosen(workKind)))
+  const canSave = name.trim().length > 0 && isContractTypeChosen(contractType)
 
   const handleSubmit = async () => {
     if (!canSave) return
@@ -423,28 +421,18 @@ function SiteRegisterModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">
-                유입경로{isEdit ? '' : ' *'}
-              </label>
+              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">유입경로</label>
               <select value={inflowPath} onChange={e => setInflowPath(e.target.value)} className="input-field w-full">
-                <option value="">{isEdit ? '미지정' : '선택'}</option>
+                {isEdit && <option value="">미지정</option>}
                 {SITE_INFLOW_PATHS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
-              {!isEdit && !isSiteInflowChosen(inflowPath) && (
-                <p className="mt-1 text-[11px] text-txt-tertiary">유입경로를 고르세요</p>
-              )}
             </div>
             <div>
-              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">
-                공종{isEdit ? '' : ' *'}
-              </label>
+              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">공종</label>
               <select value={workKind} onChange={e => setWorkKind(e.target.value)} className="input-field w-full">
-                <option value="">{isEdit ? '미지정' : '선택'}</option>
+                {isEdit && <option value="">미지정</option>}
                 {SITE_WORK_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
               </select>
-              {!isEdit && !isSiteWorkKindChosen(workKind) && (
-                <p className="mt-1 text-[11px] text-txt-tertiary">공종을 고르세요</p>
-              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -4,6 +4,9 @@ import { getAuthUser } from '@/lib/auth'
 import { ensureProjectFolder, ensureSiteFolder, uploadFile, listFiles, testConnection } from '@/lib/google-drive'
 import { applyDepositAndAdvanceStatus, formatDepositMessage } from '@/lib/payments'
 import { getRegionFromAddress } from '@/lib/utils/region'
+import { insertStatusLogRow } from '@/lib/statusLog/insert'
+import { statusLogStaffRefuseReason } from '@/lib/statusLog'
+import { projectCreateRegionRefuseReason } from '@/lib/utils/projectRegion'
 
 export const maxDuration = 60
 
@@ -634,6 +637,9 @@ async function registerProject(input: Record<string, unknown>): Promise<string> 
       }
     }
 
+    const regionRefused = projectCreateRegionRefuseReason(region)
+    if (regionRefused) return JSON.stringify({ error: regionRefused })
+
     // 3. 기본 담당자 (첫 번째 직원)
     const { data: defaultStaff } = await supabaseAdmin
       .from('staff')
@@ -661,6 +667,7 @@ async function registerProject(input: Record<string, unknown>): Promise<string> 
         work_type_id: workTypeId,
         staff_id: defaultStaff?.id || null,
         city_id: cityId,
+        region,
         status: '문의',
         year: new Date().getFullYear(),
       })
@@ -806,11 +813,20 @@ async function updateProject(input: Record<string, unknown>): Promise<string> {
 async function updateStatus(input: Record<string, unknown>): Promise<string> {
   const { project_id, new_status, note } = input as Record<string, string | undefined>
   if (!project_id || !new_status) return JSON.stringify({ error: 'project_id, new_status 필수' })
+  const refused = statusLogStaffRefuseReason(_currentStaffId)
+  if (refused) return JSON.stringify({ error: refused })
   const { data: prev } = await supabaseAdmin.from('projects').select('status, building_name').eq('id', project_id).single()
   if (!prev) return JSON.stringify({ error: '프로젝트를 찾을 수 없습니다' })
+  const logged = await insertStatusLogRow({
+    staffId: _currentStaffId,
+    projectId: project_id,
+    fromStatus: prev.status,
+    toStatus: new_status,
+    note: note || 'AI 비서 변경',
+  })
+  if ('error' in logged) return JSON.stringify({ error: logged.error })
   const { error } = await supabaseAdmin.from('projects').update({ status: new_status }).eq('id', project_id)
   if (error) return JSON.stringify({ error: error.message })
-  await supabaseAdmin.from('status_logs').insert({ project_id, from_status: prev.status, to_status: new_status, note: note || 'AI 비서 변경' })
   return JSON.stringify({ success: true, building: prev.building_name, from: prev.status, to: new_status })
 }
 
@@ -1265,7 +1281,9 @@ async function matchDeposit(input: Record<string, unknown>): Promise<string> {
 // --- 입금 기록 (공통 라이브러리 사용) ---
 // 요청별 현재 사용자 컨텍스트 (POST 핸들러에서 세팅)
 let _currentStaffName: string = 'AI확인'
+let _currentStaffId: string = ''
 function setCurrentStaffName(name: string) { _currentStaffName = name }
+function setCurrentStaffId(id: string) { _currentStaffId = id }
 
 async function recordDeposit(input: Record<string, unknown>): Promise<string> {
   const { project_id, amount, payer_name, confirmer_name, payment_date } = input as Record<string, string | number | undefined>
@@ -1281,6 +1299,7 @@ async function recordDeposit(input: Record<string, unknown>): Promise<string> {
     confirmerName: confirmer,
     paymentDate: (payment_date as string) || null,
     source: 'ai',
+    staffId: _currentStaffId || null,
   })
 
   if (!result.ok) return JSON.stringify({ error: result.error })
@@ -1556,6 +1575,7 @@ export async function POST(request: NextRequest) {
       } catch { /* graceful */ }
     }
     setCurrentStaffName(currentStaffName)
+    setCurrentStaffId(staffId || '')
 
     // --- 확인 카드 [등록] 클릭 → 단일 도구 직접 실행 (Claude 재호출 없음) ---
     const { executeAction, sessionId } = body as {

@@ -43,7 +43,7 @@ export interface Staff {
   created_at?: string;
 }
 
-/** 현장관리 (sites). start_date/end_date = 착공예정·준공예정. quote_date/construction_start_date는 별개. */
+/** 현장관리 (sites). start_date/end_date = 착공예정·준공예정. quote_date/construction_start_date는 별개. inflow_path/work_kind는 신규만 필수. */
 export interface Site {
   id: string
   name: string
@@ -56,6 +56,8 @@ export interface Site {
   end_date: string | null
   quote_date: string | null
   construction_start_date: string | null
+  inflow_path: string | null
+  work_kind: string | null
   status: string
   contract_type: string | null
   budget: number
@@ -267,7 +269,7 @@ export interface ProjectListItem {
   outstanding: number;
 }
 
-// --- 단계 변경 이력 ---
+// --- 단계 변경 이력. staff_id는 신규 행만 필수(앱 레벨). 옛 행은 null 허용. ---
 export interface StatusLog {
   id: string;
   project_id: string;

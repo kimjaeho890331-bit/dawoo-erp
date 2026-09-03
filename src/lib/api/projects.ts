@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase';
+import { statusLogStaffRefuseReason } from '@/lib/statusLog';
+import { projectCreateRegionRefuseReason } from '@/lib/utils/projectRegion';
 import type { Project } from '@/types';
 
 // JOIN 셀렉트 문자열
@@ -85,6 +87,11 @@ export async function createProject(
   // JOIN 필드 제거 (DB에 없는 필드)
   const { staff, cities, work_types, ...insertData } = data as Project;
 
+  const regionRefused = projectCreateRegionRefuseReason(insertData.region)
+  if (regionRefused) {
+    throw new Error(regionRefused)
+  }
+
   const { data: created, error } = await supabase
     .from('projects')
     .insert(insertData)
@@ -138,7 +145,27 @@ export async function updateProjectStatus(
     throw new Error(`프로젝트 상태 조회 실패: ${fetchError.message}`);
   }
 
+  const refused = statusLogStaffRefuseReason(staffId);
+  if (refused) {
+    throw new Error(refused);
+  }
+
   const fromStatus = current?.status ?? null;
+
+  // status_logs에 이력 기록 (처리자 없으면 insert 거부)
+  const { error: logError } = await supabase
+    .from('status_logs')
+    .insert({
+      project_id: id,
+      staff_id: staffId,
+      from_status: fromStatus,
+      to_status: newStatus,
+      note: note ?? null,
+    });
+
+  if (logError) {
+    throw new Error(`상태 변경 이력 기록 실패: ${logError.message}`);
+  }
 
   // 상태 업데이트
   const { error: updateError } = await supabase
@@ -151,20 +178,5 @@ export async function updateProjectStatus(
 
   if (updateError) {
     throw new Error(`프로젝트 상태 변경 실패: ${updateError.message}`);
-  }
-
-  // status_logs에 이력 기록
-  const { error: logError } = await supabase
-    .from('status_logs')
-    .insert({
-      project_id: id,
-      staff_id: staffId ?? null,
-      from_status: fromStatus,
-      to_status: newStatus,
-      note: note ?? null,
-    });
-
-  if (logError) {
-    throw new Error(`상태 변경 이력 기록 실패: ${logError.message}`);
   }
 }

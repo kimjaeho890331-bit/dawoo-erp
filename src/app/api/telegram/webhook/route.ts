@@ -337,6 +337,7 @@ async function handleCallback(query: TelegramUpdate['callback_query']) {
         payerName: null,
         confirmerName,
         source: 'telegram',
+        staffId: staff?.id || null,
       })
 
       if (!result.ok) {

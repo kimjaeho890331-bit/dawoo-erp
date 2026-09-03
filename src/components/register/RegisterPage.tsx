@@ -18,6 +18,7 @@ export interface DBProject {
   staff_id: string | null
   road_address: string | null
   jibun_address: string | null
+  region: string | null
   city_id: string | null
   work_type_id: string | null
   owner_name: string | null

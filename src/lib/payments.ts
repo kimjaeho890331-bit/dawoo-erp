@@ -4,6 +4,7 @@
  * - payment_type 자동 분류 + status 자동 전환
  */
 import { createClient } from '@supabase/supabase-js'
+import { insertStatusLogRow } from '@/lib/statusLog/insert'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,6 +92,7 @@ export async function applyDepositAndAdvanceStatus(params: {
   confirmerName: string
   paymentDate?: string | null
   source: 'telegram' | 'ai' | 'manual'
+  staffId?: string | null
 }): Promise<
   | { ok: false; error: string }
   | {
@@ -116,7 +118,7 @@ export async function applyDepositAndAdvanceStatus(params: {
       statusChange: { from: string; to: string } | null
     }
 > {
-  const { projectId, amount, payerName, confirmerName, paymentDate, source } = params
+  const { projectId, amount, payerName, confirmerName, paymentDate, source, staffId } = params
   const today = paymentDate || new Date().toISOString().slice(0, 10)
 
   // 프로젝트 조회
@@ -185,12 +187,16 @@ export async function applyDepositAndAdvanceStatus(params: {
   let statusChange: { from: string; to: string } | null = null
   if (nextStatus && nextStatus !== project.status) {
     await supabaseAdmin.from('projects').update({ status: nextStatus }).eq('id', projectId)
-    await supabaseAdmin.from('status_logs').insert({
-      project_id: projectId,
-      from_status: project.status,
-      to_status: nextStatus,
+    const logged = await insertStatusLogRow({
+      staffId: staffId || '',
+      projectId,
+      fromStatus: project.status,
+      toStatus: nextStatus,
       note: `자동전환(입금 ${type})`,
     })
+    if ('error' in logged) {
+      console.error('[payments] status_logs 거부:', logged.error)
+    }
     statusChange = { from: project.status, to: nextStatus }
   }
 

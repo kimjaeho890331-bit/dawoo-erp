@@ -5,6 +5,7 @@ import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
 import { getRegionFromAddress } from '@/lib/utils/region'
+import { projectCreateRegionRefuseReason, regionNameFromCityId } from '@/lib/utils/projectRegion'
 import { resolveCityId } from '@/lib/api/cities'
 import { useAuth } from '@/components/AuthProvider'
 import type { DBProject } from '@/components/register/RegisterPage'
@@ -239,6 +240,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     // 주소에서 지역(시/군) 추출 → 기존 city 조회, 없으면 생성해 연결 (전국 대응)
     const region = getRegionFromAddress(addr.roadAddr, addr.jibunAddr)
     if (region) {
+      if (errors.city_id) {
+        setErrors(prev => ({ ...prev, city_id: false }))
+      }
       const existing = cities.find(c => c.name === region)
       if (existing) {
         setForm(prev => ({ ...prev, city_id: existing.id }))
@@ -372,22 +376,19 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         hasError = true
       }
     })
+    const region = regionNameFromCityId(form.city_id, cities)
+    if (!isEdit && projectCreateRegionRefuseReason(region)) {
+      newErrors.city_id = true
+      hasError = true
+    }
     if (hasError) {
       setErrors(newErrors)
       return
     }
 
-    // 지역(시) 미지정 경고 — 지역 없이 저장하면 지역 탭·통계에서 누락됨
-    if (!form.city_id) {
-      const proceed = window.confirm(
-        '지역(시)이 지정되지 않았습니다.\n주소 검색으로 자동 매칭되지 않았거나 비어 있습니다.\n\n이대로 저장하면 지역 탭·집계에서 누락됩니다. 그래도 등록할까요?'
-      )
-      if (!proceed) return
-    }
-
     setSaving(true)
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         building_name: form.building_name,
         road_address: form.road_address,
         jibun_address: form.jibun_address || null,
@@ -407,6 +408,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         exclusive_area: form.exclusive_area ? Number(form.exclusive_area) : null,
         water_work_type: form.water_work_type || null,
       }
+      if (region) payload.region = region
 
       if (isEdit) {
         const { error } = await supabase
@@ -417,6 +419,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
       } else {
         const { error } = await supabase.from('projects').insert({
           ...payload,
+          region,
           status: '문의',
           year: new Date().getFullYear(),
         })
@@ -520,6 +523,25 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             onChange={v => update('jibun_address', v)}
             placeholder="주소 검색 또는 직접 입력"
           />
+
+          <div>
+            <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">
+              지역{isEdit ? '' : ' *'}
+            </label>
+            <select
+              value={form.city_id}
+              onChange={e => update('city_id', e.target.value)}
+              className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light ${
+                errors.city_id ? 'border-[#fecaca] bg-red-50' : 'border-border-primary'
+              }`}
+            >
+              <option value="">{isEdit ? '미지정' : '선택'}</option>
+              {cities.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {errors.city_id && <p className="text-[11px] text-[#dc2626] mt-1">필수 입력입니다</p>}
+          </div>
 
           {/* 빌라명 (자동입력, 수정가능) */}
           <ModalField

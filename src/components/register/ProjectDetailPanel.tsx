@@ -7,6 +7,8 @@ import { validateProjectData } from '@/lib/utils/validate'
 import StepTransition from '@/components/register/StepTransition'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
+import { insertStatusLog } from '@/lib/statusLog/client'
+import { processorLabel } from '@/lib/statusLog'
 import { InfoField } from './panels/panelHelpers'
 import TabBasicInfo from './panels/TabBasicInfo'
 import TabReception from './panels/TabReception'
@@ -96,10 +98,14 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         }
         if (target !== project.status) {
           ;(async () => {
-            await supabase.from('projects').update({ status: target }).eq('id', project.id)
-            await supabase.from('status_logs').insert({
-              project_id: project.id, from_status: project.status, to_status: target, note: '자동 보정',
+            const logged = await insertStatusLog({
+              projectId: project.id,
+              fromStatus: project.status,
+              toStatus: target,
+              note: '자동 보정',
             })
+            if (!logged.ok) return
+            await supabase.from('projects').update({ status: target }).eq('id', project.id)
             onRefresh?.()
           })()
         }
@@ -404,14 +410,18 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
       // 자동 단계 전환
       const nextStatus = autoProgressStatus(dataToSave, project.status)
       if (nextStatus) {
-        await supabase.from('projects').update({ status: nextStatus }).eq('id', project.id)
-        await supabase.from('status_logs').insert({
-          project_id: project.id,
-          from_status: project.status,
-          to_status: nextStatus,
+        const logged = await insertStatusLog({
+          projectId: project.id,
+          fromStatus: project.status,
+          toStatus: nextStatus,
           note: '자동 전환',
         })
-        onRefresh?.()
+        if (!logged.ok) {
+          alert(logged.error)
+        } else {
+          await supabase.from('projects').update({ status: nextStatus }).eq('id', project.id)
+          onRefresh?.()
+        }
       }
 
       setHasChanges(false)
@@ -447,13 +457,17 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const handleStatusChange = async () => {
     if (!project || !showStatusModal) return
     try {
-      await supabase.from('projects').update({ status: showStatusModal }).eq('id', project.id)
-      await supabase.from('status_logs').insert({
-        project_id: project.id,
-        from_status: project.status,
-        to_status: showStatusModal,
+      const logged = await insertStatusLog({
+        projectId: project.id,
+        fromStatus: project.status,
+        toStatus: showStatusModal,
         note: statusReason || null,
       })
+      if (!logged.ok) {
+        alert(logged.error)
+        return
+      }
+      await supabase.from('projects').update({ status: showStatusModal }).eq('id', project.id)
       setShowStatusModal(null)
       setStatusReason('')
       onRefresh?.()
@@ -814,13 +828,13 @@ function MiniStat({ label, value, highlight }: { label: string; value: number; h
 
 // --- 탭: 이력 ---
 function TabHistory({ projectId }: { projectId: string }) {
-  const [logs, setLogs] = useState<{ from_status: string; to_status: string; note: string | null; created_at: string; staff_name: string | null }[]>([])
+  const [logs, setLogs] = useState<{ from_status: string; to_status: string; note: string | null; created_at: string; staff_id: string | null; staff_name: string | null }[]>([])
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from('status_logs')
-        .select('from_status, to_status, note, created_at, staff:staff_id ( name )')
+        .select('from_status, to_status, note, created_at, staff_id, staff:staff_id ( name )')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false })
 
@@ -830,6 +844,7 @@ function TabHistory({ projectId }: { projectId: string }) {
         to_status: item.to_status,
         note: item.note,
         created_at: item.created_at,
+        staff_id: item.staff_id ?? null,
         staff_name: item.staff?.name ?? null,
       }))
       setLogs(mapped)
@@ -864,7 +879,7 @@ function TabHistory({ projectId }: { projectId: string }) {
                 </p>
                 <p className="text-[11px] text-txt-secondary mt-0.5">
                   {new Date(item.created_at).toLocaleDateString('ko-KR')}
-                  {item.staff_name && ` · ${item.staff_name}`}
+                  {` · 처리자 ${processorLabel(item.staff_id, item.staff_name)}`}
                 </p>
                 {item.note && <p className="text-[11px] text-txt-tertiary mt-0.5">{item.note}</p>}
               </div>

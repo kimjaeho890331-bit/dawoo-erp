@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { insertStatusLog } from '@/lib/statusLog/client'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
 const PROGRESS_STEPS: ProjectStep[] = [
@@ -70,19 +71,22 @@ export default function StepTransition({ project, onStepChange }: Props) {
     setChanging(true)
     setErrors([])
     try {
+      const logged = await insertStatusLog({
+        projectId: project.id,
+        fromStatus: project.status,
+        toStatus: newStep,
+        note: null,
+      })
+      if (!logged.ok) {
+        alert(logged.error)
+        return
+      }
+
       const { error } = await supabase
         .from('projects')
         .update({ status: newStep })
         .eq('id', project.id)
       if (error) throw error
-
-      // status_logs에 기록
-      await supabase.from('status_logs').insert({
-        project_id: project.id,
-        from_status: project.status,
-        to_status: newStep,
-        note: null,
-      })
 
       onStepChange()
     } catch (err) {

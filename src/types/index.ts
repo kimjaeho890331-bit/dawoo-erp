@@ -43,7 +43,7 @@ export interface Staff {
   created_at?: string;
 }
 
-/** 현장관리 (sites). start_date/end_date = 착공예정·준공예정. quote_date/construction_start_date는 별개. inflow_path/work_kind는 신규만 필수. */
+/** 현장관리 (sites). start_date/end_date = 착공예정·준공예정. quote_date/construction_start_date는 별개. inflow_path/work_kind 빈 INSERT는 미확인. */
 export interface Site {
   id: string
   name: string

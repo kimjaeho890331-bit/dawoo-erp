@@ -43,6 +43,40 @@ export interface Staff {
   created_at?: string;
 }
 
+/** 현장관리 (sites). start_date/end_date = 착공예정·준공예정. quote_date/construction_start_date는 별개. */
+export interface Site {
+  id: string
+  name: string
+  address: string | null
+  site_manager: string | null
+  site_assistant: string | null
+  client_manager: string | null
+  client_phone: string | null
+  start_date: string | null
+  end_date: string | null
+  quote_date: string | null
+  construction_start_date: string | null
+  status: string
+  contract_type: string | null
+  budget: number
+  spent: number
+  memo: string | null
+  progress: number
+  created_at: string
+}
+
+/** 활동 로그. staff_id는 신규 행만 필수(앱 레벨). 옛 행은 null 허용. */
+export interface ActivityLog {
+  id: string
+  staff_id: string | null
+  action: string
+  target_type: string | null
+  target_id: string | null
+  detail: string | null
+  created_at: string
+  staff?: { name: string } | null
+}
+
 /** 현장 할 일 (site_tasks). is_confirmed=캘린더 확정, is_done=내 현장 완료. */
 export interface SiteTask {
   id: string;

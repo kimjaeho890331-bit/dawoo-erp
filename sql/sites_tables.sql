@@ -101,3 +101,8 @@ CREATE POLICY "schedules_all" ON schedules FOR ALL USING (true) WITH CHECK (true
 CREATE POLICY "site_logs_all" ON site_logs FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "site_photos_all" ON site_photos FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "site_documents_all" ON site_documents FOR ALL USING (true) WITH CHECK (true);
+
+-- 견적일·착공일 (023). 이 파일의 위 DROP/CREATE는 재실행하지 말 것.
+ALTER TABLE sites
+  ADD COLUMN IF NOT EXISTS quote_date DATE,
+  ADD COLUMN IF NOT EXISTS construction_start_date DATE;

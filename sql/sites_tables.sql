@@ -106,3 +106,8 @@ CREATE POLICY "site_documents_all" ON site_documents FOR ALL USING (true) WITH C
 ALTER TABLE sites
   ADD COLUMN IF NOT EXISTS quote_date DATE,
   ADD COLUMN IF NOT EXISTS construction_start_date DATE;
+
+-- 유입경로·공종 (024). 기존 행은 채우지 않는다.
+ALTER TABLE sites
+  ADD COLUMN IF NOT EXISTS inflow_path TEXT,
+  ADD COLUMN IF NOT EXISTS work_kind TEXT;

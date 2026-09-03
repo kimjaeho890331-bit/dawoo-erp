@@ -16,6 +16,8 @@ import { formatMoney } from '@/lib/utils/format'
 import { activityActionLabel, processorLabel, STAFF_STORAGE_KEY } from '@/lib/activityLog'
 import { fetchSiteActivityLogs, logActivity } from '@/lib/activityLog/client'
 import type { ActivityLogWithStaff } from '@/lib/activityLog'
+import { SITE_INFLOW_PATHS, isSiteInflowChosen } from '@/lib/siteInflow'
+import { SITE_WORK_KINDS, isSiteWorkKindChosen } from '@/lib/siteWorkKind'
 
 // --- 타입 ---
 interface Site {
@@ -30,6 +32,8 @@ interface Site {
   end_date: string | null
   quote_date: string | null
   construction_start_date: string | null
+  inflow_path: string | null
+  work_kind: string | null
   status: string
   contract_type: string | null  // 수의계약 / 입찰
   budget: number
@@ -306,12 +310,16 @@ function SiteRegisterModal({
   const [endDate, setEndDate] = useState(site?.end_date || '')
   const [quoteDate, setQuoteDate] = useState(site?.quote_date || '')
   const [constructionStartDate, setConstructionStartDate] = useState(site?.construction_start_date || '')
+  const [inflowPath, setInflowPath] = useState(site?.inflow_path || '')
+  const [workKind, setWorkKind] = useState(site?.work_kind || '')
   const [status, setStatus] = useState(site?.status || '계약')
   const [contractType, setContractType] = useState(site?.contract_type || '')
   const [budget, setBudget] = useState(site?.budget?.toString() || '0')
   const [memo, setMemo] = useState(site?.memo || '')
   const [saving, setSaving] = useState(false)
-  const canSave = name.trim().length > 0 && isContractTypeChosen(contractType)
+  const canSave = name.trim().length > 0
+    && isContractTypeChosen(contractType)
+    && (isEdit || (isSiteInflowChosen(inflowPath) && isSiteWorkKindChosen(workKind)))
 
   const handleSubmit = async () => {
     if (!canSave) return
@@ -327,6 +335,8 @@ function SiteRegisterModal({
       end_date: endDate || null,
       quote_date: quoteDate || null,
       construction_start_date: constructionStartDate || null,
+      inflow_path: inflowPath || null,
+      work_kind: workKind || null,
       status,
       contract_type: contractType,
       budget: parseInt(budget) || 0,
@@ -336,12 +346,16 @@ function SiteRegisterModal({
       ? () => supabase.from('sites').update(payload).eq('id', site!.id).select('id').maybeSingle()
       : () => supabase.from('sites').insert(payload).select('id').maybeSingle()
     let { data, error } = await write()
-    if (error && /contract_type|quote_date|construction_start_date/.test(error.message)) {
+    if (error && /contract_type|quote_date|construction_start_date|inflow_path|work_kind/.test(error.message)) {
       const fallback = { ...payload } as Record<string, unknown>
       if (/contract_type/.test(error.message)) delete fallback.contract_type
       if (/quote_date|construction_start_date/.test(error.message)) {
         delete fallback.quote_date
         delete fallback.construction_start_date
+      }
+      if (/inflow_path|work_kind/.test(error.message)) {
+        delete fallback.inflow_path
+        delete fallback.work_kind
       }
       const retry = isEdit
         ? await supabase.from('sites').update(fallback).eq('id', site!.id).select('id').maybeSingle()
@@ -389,6 +403,32 @@ function SiteRegisterModal({
           <div>
             <label className="block text-[11px] font-medium text-txt-tertiary mb-1">계약 종류 *</label>
             <ContractTypePicker value={contractType} onChange={setContractType} required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">
+                유입경로{isEdit ? '' : ' *'}
+              </label>
+              <select value={inflowPath} onChange={e => setInflowPath(e.target.value)} className="input-field w-full">
+                <option value="">{isEdit ? '미지정' : '선택'}</option>
+                {SITE_INFLOW_PATHS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              {!isEdit && !isSiteInflowChosen(inflowPath) && (
+                <p className="mt-1 text-[11px] text-txt-tertiary">유입경로를 고르세요</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">
+                공종{isEdit ? '' : ' *'}
+              </label>
+              <select value={workKind} onChange={e => setWorkKind(e.target.value)} className="input-field w-full">
+                <option value="">{isEdit ? '미지정' : '선택'}</option>
+                {SITE_WORK_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+              </select>
+              {!isEdit && !isSiteWorkKindChosen(workKind) && (
+                <p className="mt-1 text-[11px] text-txt-tertiary">공종을 고르세요</p>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -443,6 +483,11 @@ function SiteAccordion({
         <div className="flex-1 min-w-0">
           <div className="text-[14px] font-semibold text-txt-primary truncate">{site.name}</div>
           <div className="text-[12px] text-txt-secondary truncate">{site.address || '-'}</div>
+          {(site.work_kind || site.inflow_path) && (
+            <div className="text-[11px] text-txt-tertiary truncate">
+              {[site.work_kind, site.inflow_path].filter(Boolean).join(' · ')}
+            </div>
+          )}
         </div>
         <span className="w-16 shrink-0 flex justify-center">
           <ContractTypeBadge value={site.contract_type} />
@@ -627,6 +672,8 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
     end_date: site.end_date || '',
     quote_date: site.quote_date || '',
     construction_start_date: site.construction_start_date || '',
+    inflow_path: site.inflow_path || '',
+    work_kind: site.work_kind || '',
     status: site.status,
     contract_type: site.contract_type || '',
     budget: site.budget.toString(),
@@ -646,6 +693,7 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
       client_manager: site.client_manager || '', client_phone: site.client_phone || '',
       start_date: site.start_date || '', end_date: site.end_date || '',
       quote_date: site.quote_date || '', construction_start_date: site.construction_start_date || '',
+      inflow_path: site.inflow_path || '', work_kind: site.work_kind || '',
       status: site.status, contract_type: site.contract_type || '',
       budget: site.budget.toString(), memo: site.memo || '',
     }
@@ -695,17 +743,23 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
       end_date: next.end_date || null,
       quote_date: next.quote_date || null,
       construction_start_date: next.construction_start_date || null,
+      inflow_path: next.inflow_path || null,
+      work_kind: next.work_kind || null,
       status: next.status,
       contract_type: next.contract_type || null,
       budget: parseInt(next.budget) || 0,
       memo: next.memo || null,
     }
     const { error } = await supabase.from('sites').update(payload).eq('id', site.id)
-    if (error && /contract_type|quote_date|construction_start_date/.test(error.message)) {
+    if (error && /contract_type|quote_date|construction_start_date|inflow_path|work_kind/.test(error.message)) {
       if (/contract_type/.test(error.message)) delete payload.contract_type
       if (/quote_date|construction_start_date/.test(error.message)) {
         delete payload.quote_date
         delete payload.construction_start_date
+      }
+      if (/inflow_path|work_kind/.test(error.message)) {
+        delete payload.inflow_path
+        delete payload.work_kind
       }
       await supabase.from('sites').update(payload).eq('id', site.id)
     }
@@ -753,6 +807,21 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
         </Box>
         <Box label="계약 종류 *">
           <ContractTypePicker value={form.contract_type} onChange={v => u('contract_type', v)} />
+        </Box>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Box label="유입경로">
+          <select className={inputCls} value={form.inflow_path} onChange={e => u('inflow_path', e.target.value)}>
+            <option value="">미지정</option>
+            {SITE_INFLOW_PATHS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Box>
+        <Box label="공종">
+          <select className={inputCls} value={form.work_kind} onChange={e => u('work_kind', e.target.value)}>
+            <option value="">미지정</option>
+            {SITE_WORK_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
         </Box>
       </div>
 

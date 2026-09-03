@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { insertStatusLog } from '@/lib/statusLog/client'
 import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 import FileDropZone from '@/components/common/FileDropZone'
 import type { TabProps } from './panelHelpers'
@@ -54,18 +55,23 @@ export default function TabReception({ project, category, getVal, onChange, onRe
         consent_date: today,
         consent_submitter: currentStaff.name,
       }
-      if (shouldAdvance) updateData.status = '동의서'
+
+      if (shouldAdvance) {
+        const logged = await insertStatusLog({
+          projectId: project.id,
+          fromStatus: project.status,
+          toStatus: '동의서',
+          note: `동의서 회수 버튼 (${currentStaff.name})`,
+        })
+        if (!logged.ok) {
+          alert(logged.error)
+          return
+        }
+        updateData.status = '동의서'
+      }
 
       const { error } = await supabase.from('projects').update(updateData).eq('id', project.id)
       if (error) throw error
-      if (shouldAdvance) {
-        await supabase.from('status_logs').insert({
-          project_id: project.id,
-          from_status: project.status,
-          to_status: '동의서',
-          note: `동의서 회수 버튼 (${currentStaff.name})`,
-        })
-      }
       onRefresh?.()
     } catch (err) {
       console.error('동의서 회수 처리 실패:', err)

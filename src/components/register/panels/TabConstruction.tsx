@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { insertStatusLog } from '@/lib/statusLog/client'
 import FileDropZone from '@/components/common/FileDropZone'
 import PaymentTable from '@/components/register/PaymentTable'
 import type { TabProps } from './panelHelpers'
@@ -72,6 +73,16 @@ export default function TabConstruction({ project, category, getVal, onChange, c
     if (!confirm(`"${currentStaff.name}"님이 승인 처리하시겠습니까?`)) return
     setApproving(true)
     try {
+      const logged = await insertStatusLog({
+        projectId: project.id,
+        fromStatus: project.status,
+        toStatus: '승인',
+        note: `승인 버튼 (${currentStaff.name})`,
+      })
+      if (!logged.ok) {
+        alert(logged.error)
+        return
+      }
       const today = new Date().toISOString().slice(0, 10)
       const { error: uErr } = await supabase
         .from('projects')
@@ -82,12 +93,6 @@ export default function TabConstruction({ project, category, getVal, onChange, c
         })
         .eq('id', project.id)
       if (uErr) throw uErr
-      await supabase.from('status_logs').insert({
-        project_id: project.id,
-        from_status: project.status,
-        to_status: '승인',
-        note: `승인 버튼 (${currentStaff.name})`,
-      })
       onRefresh?.()
     } catch (err) {
       console.error('승인 처리 실패:', err)
@@ -103,6 +108,16 @@ export default function TabConstruction({ project, category, getVal, onChange, c
     if (!confirm('승인을 취소하고 신청서제출 단계로 되돌릴까요?')) return
     setApproving(true)
     try {
+      const logged = await insertStatusLog({
+        projectId: project.id,
+        fromStatus: project.status,
+        toStatus: '신청서제출',
+        note: '승인 취소',
+      })
+      if (!logged.ok) {
+        alert(logged.error)
+        return
+      }
       const { error: uErr } = await supabase
         .from('projects')
         .update({
@@ -112,12 +127,6 @@ export default function TabConstruction({ project, category, getVal, onChange, c
         })
         .eq('id', project.id)
       if (uErr) throw uErr
-      await supabase.from('status_logs').insert({
-        project_id: project.id,
-        from_status: project.status,
-        to_status: '신청서제출',
-        note: '승인 취소',
-      })
       onRefresh?.()
     } catch (err) {
       console.error('승인 취소 실패:', err)

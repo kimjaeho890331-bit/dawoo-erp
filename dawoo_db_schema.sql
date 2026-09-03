@@ -507,3 +507,12 @@ ALTER TABLE sites
   ADD COLUMN IF NOT EXISTS quote_date DATE,
   ADD COLUMN IF NOT EXISTS construction_start_date DATE;
 
+-- ============================================
+-- 31. 현장 유입경로·공종 (024_sites_inflow_work_kind.sql)
+-- ============================================
+-- 신규 등록만 필수. 기존 행은 채우지 않는다. RLS 변경 없음.
+
+ALTER TABLE sites
+  ADD COLUMN IF NOT EXISTS inflow_path TEXT,
+  ADD COLUMN IF NOT EXISTS work_kind TEXT;
+

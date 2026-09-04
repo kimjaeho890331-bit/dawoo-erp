@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
-import { UI_HIDDEN } from '@/lib/uiHidden'
+import { hiddenPageRedirect, UI_HIDDEN } from '@/lib/uiHidden'
 import DocumentsPage from '@/components/documents/DocumentsPage'
 
 export default function Page() {
-  if (UI_HIDDEN.documents) redirect('/dashboard')
+  const dest = hiddenPageRedirect(UI_HIDDEN.documents)
+  if (dest) redirect(dest)
   return <DocumentsPage />
 }

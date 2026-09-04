@@ -9,13 +9,27 @@ export const UI_HIDDEN = {
   kpi: true,
   aiAssistant: true,
   promo: true,
+  buildingLedger: true,
+  labor: true,
 } as const
 
 export const HIDDEN_MENU_PATHS: readonly string[] = [
   ...(UI_HIDDEN.documents ? (['/documents'] as const) : []),
   ...(UI_HIDDEN.reports ? (['/reports'] as const) : []),
   ...(UI_HIDDEN.kpi ? (['/kpi'] as const) : []),
+  ...(UI_HIDDEN.buildingLedger ? (['/register/building-ledger'] as const) : []),
+  ...(UI_HIDDEN.labor ? (['/labor'] as const) : []),
 ]
+
+/** 숨김 화면 직접 진입 시 보낼 경로. 숨기지 않으면 null. */
+export function hiddenPageRedirect(hidden: boolean): '/dashboard' | null {
+  return hidden ? '/dashboard' : null
+}
+
+/** 대시보드 AI 브리핑·주간보고서 카드/fetch를 끌지. */
+export function isDashboardAiGated(): boolean {
+  return UI_HIDDEN.aiAssistant || UI_HIDDEN.reports
+}
 
 export function isHiddenMenuPath(pathname: string): boolean {
   return HIDDEN_MENU_PATHS.some(

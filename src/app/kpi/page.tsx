@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
-import { UI_HIDDEN } from '@/lib/uiHidden'
+import { hiddenPageRedirect, UI_HIDDEN } from '@/lib/uiHidden'
 import KpiPage from '@/components/kpi/KpiPage'
 
 export default function Page() {
-  if (UI_HIDDEN.kpi) redirect('/dashboard')
+  const dest = hiddenPageRedirect(UI_HIDDEN.kpi)
+  if (dest) redirect(dest)
   return <KpiPage />
 }

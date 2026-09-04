@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { isDashboardAiGated } from '@/lib/uiHidden'
 import { ChevronDown, ListTodo, ClipboardList, Brain, Building2, FileCheck2 } from 'lucide-react'
 import { currentTurnLine } from '@/lib/approval/status'
 import type { LineRole, LineState } from '@/types/approval'
@@ -52,6 +53,8 @@ interface LineForTurn {
   state: LineState
 }
 
+const dashboardAiHidden = isDashboardAiGated()
+
 export default function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10)
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
@@ -64,7 +67,7 @@ export default function DashboardPage() {
     return localStorage.getItem(STAFF_STORAGE_KEY)
   })
   const [briefing, setBriefing] = useState<BriefingResponse | null>(null)
-  const [briefingLoading, setBriefingLoading] = useState(true)
+  const [briefingLoading, setBriefingLoading] = useState(!dashboardAiHidden)
   const [mySchedules, setMySchedules] = useState<Schedule[]>([])
   const [myTasksReceived, setMyTasksReceived] = useState<Task[]>([])  // 내가 받은 일
   const [myTasksAssigned, setMyTasksAssigned] = useState<Task[]>([])  // 내가 시킨 일
@@ -74,6 +77,7 @@ export default function DashboardPage() {
   // 주간 보고서 (월요일 기준 지난주 vs 지지난주) — 주 단위 sessionStorage 캐시
   const isMonday = now.getDay() === 1
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(() => {
+    if (dashboardAiHidden) return null
     if (typeof window === 'undefined') return null
     try {
       const c = sessionStorage.getItem(`dawoo_weekly_report_${weekKeyLocal(new Date())}`)
@@ -81,7 +85,7 @@ export default function DashboardPage() {
     } catch { return null }
   })
   useEffect(() => {
-    if (weeklyReport) return
+    if (dashboardAiHidden || weeklyReport) return
     let cancelled = false
     ;(async () => {
       try {
@@ -183,6 +187,7 @@ export default function DashboardPage() {
 
   // 브리핑 API 호출 — AI 서술/액션 포함(/api/ai/briefing). 같은 날 재방문은 sessionStorage 캐시(Claude 재호출 절감)
   const loadBriefing = useCallback(async (force = false) => {
+    if (dashboardAiHidden) { setBriefingLoading(false); return }
     if (!currentStaffId) { setBriefingLoading(false); return }  // 직원 미선택/로드실패 시 무한 로딩 방지
     const cacheKey = `dawoo_briefing_${currentStaffId}_${today}`
     if (!force) {
@@ -306,11 +311,11 @@ export default function DashboardPage() {
         <div className="bg-surface rounded-[10px] border border-border-primary px-6 py-5 border-l-4 border-l-accent">
           <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">{todayLabel}</h1>
           <p className="text-[13px] text-txt-secondary mt-0.5">
-            {greeting}, {briefing?.summary ?? '분석 준비 중...'}
+            {greeting}{!dashboardAiHidden && `, ${briefing?.summary ?? '분석 준비 중...'}`}
           </p>
         </div>
 
-        {/* 메인 그리드 — 좌: 접수 퍼널 + 주간 접수 현황 / 우: AI 비서 + 할 일 */}
+        {/* 메인 그리드 — 좌: 접수 퍼널 + 주간 접수 현황 / 우: 결재 + 할 일 */}
         <div className="grid grid-cols-[1.6fr_1fr] gap-4 items-start">
           <div className="flex flex-col gap-4">
             <FunnelCard />
@@ -325,7 +330,9 @@ export default function DashboardPage() {
               </div>
               <span className="text-lg font-semibold text-txt-primary">{approvalCount}건</span>
             </Link>
-            <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
+            {!dashboardAiHidden && (
+              <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
+            )}
             <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
             <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} onOpenDetail={setDetailTaskId} getStaffName={getStaffName} />
           </div>
@@ -339,7 +346,7 @@ export default function DashboardPage() {
         <div className="bg-surface rounded-xl border border-border-primary px-4 py-4 border-l-4 border-l-accent">
           <h1 className="text-[18px] font-semibold tracking-[-0.3px] text-txt-primary">{todayLabel}</h1>
           <p className="text-[12px] text-txt-secondary mt-0.5 line-clamp-2">
-            {greeting}, {briefing?.summary ?? '분석 준비 중...'}
+            {greeting}{!dashboardAiHidden && `, ${briefing?.summary ?? '분석 준비 중...'}`}
           </p>
         </div>
 
@@ -382,15 +389,17 @@ export default function DashboardPage() {
         </MobileAccordion>
 
         {/* AI 브리핑 */}
-        <MobileAccordion
-          title="AI 브리핑"
-          icon={<Brain size={16} />}
-          open={!!mobileOpen.briefing}
-          onToggle={() => toggleMobile('briefing')}
-          accentColor="#8B5CF6"
-        >
-          <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
-        </MobileAccordion>
+        {!dashboardAiHidden && (
+          <MobileAccordion
+            title="AI 브리핑"
+            icon={<Brain size={16} />}
+            open={!!mobileOpen.briefing}
+            onToggle={() => toggleMobile('briefing')}
+            accentColor="#8B5CF6"
+          >
+            <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
+          </MobileAccordion>
+        )}
 
         {/* 현장 스케줄 */}
         <MobileAccordion

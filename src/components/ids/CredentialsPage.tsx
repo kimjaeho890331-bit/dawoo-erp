@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Clock, ExternalLink, Plus, Search, X } from 'lucide-react'
+import { Clock, ExternalLink, Loader2, Plus, Search, X } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import type { CredentialKind } from '@/types'
@@ -16,16 +16,26 @@ import {
 import { visibleCredentialMemo } from '@/lib/credentials/sharedMemo'
 import {
   canPrefetchCredentialList,
+  readCachedPageStaff,
   resolvePageStaff,
   resolveVisibleGate,
   shouldRevokePageOnListStatus,
+  shouldShowCredentialShell,
   shouldSkipStaffRoundTrip,
+  writeCachedPageStaff,
   type CredentialPageGate,
 } from '@/lib/credentials/pageGate'
+import {
+  REVEAL_VISIBLE_MS,
+  decideRevealClick,
+  rememberRevealPassword,
+  revealErrorMessage,
+  revealPasswordCache,
+  type RevealState,
+} from '@/lib/credentials/revealUi'
 
-const REVEAL_MS = 8000
 const STAFF_KEY = 'dawoo_current_staff_id'
-const SKELETON_ROWS = 7
+const SKELETON_ROWS = 5
 
 function credFetch(input: string, init?: RequestInit) {
   const headers = new Headers(init?.headers)
@@ -69,8 +79,13 @@ export default function CredentialsPage({
   title: string
 }) {
   const { staff: authStaff, loading: authLoading } = useAuth()
-  const [pickedStaff, setPickedStaff] = useState<{ id: string; role: string } | null>(null)
-  const [pickLoading, setPickLoading] = useState(() => !shouldSkipStaffRoundTrip(authStaff))
+  const [pickedStaff, setPickedStaff] = useState<{ id: string; role: string } | null>(() =>
+    readCachedPageStaff(actorStaffIdFromStorage()),
+  )
+  const [pickLoading, setPickLoading] = useState(() => {
+    if (shouldSkipStaffRoundTrip(authStaff)) return false
+    return !readCachedPageStaff(actorStaffIdFromStorage())
+  })
   const staff = resolvePageStaff(pickedStaff, authStaff)
   const [latchedOk, setLatchedOk] = useState(
     () => resolveVisibleGate(kind, staff, { pickLoading: false, authLoading: false, latchedOk: false }) === 'ok',
@@ -91,8 +106,9 @@ export default function CredentialsPage({
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [revealed, setRevealed] = useState<{ id: string; password: string } | null>(null)
+  const [revealed, setRevealed] = useState<RevealState | null>(null)
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revealPendingId = useRef<string | null>(null)
 
   useEffect(() => {
     if (gate === 'ok') setLatchedOk(true)
@@ -103,7 +119,18 @@ export default function CredentialsPage({
       clearTimeout(revealTimer.current)
       revealTimer.current = null
     }
+    revealPendingId.current = null
     setRevealed(null)
+  }, [])
+
+  const showRevealedPassword = useCallback((id: string, password: string) => {
+    if (revealTimer.current) clearTimeout(revealTimer.current)
+    revealPendingId.current = null
+    setRevealed({ id, status: 'open', password })
+    revealTimer.current = setTimeout(() => {
+      setRevealed((curr) => (curr?.id === id && curr.status === 'open' ? null : curr))
+      revealTimer.current = null
+    }, REVEAL_VISIBLE_MS)
   }, [])
 
   useEffect(() => () => {
@@ -149,6 +176,9 @@ export default function CredentialsPage({
   }, [kind])
 
   useEffect(() => {
+    if (authStaff?.id && authStaff.role) {
+      writeCachedPageStaff({ id: authStaff.id, role: authStaff.role })
+    }
     if (shouldSkipStaffRoundTrip(authStaff)) {
       setPickLoading(false)
       return
@@ -159,13 +189,21 @@ export default function CredentialsPage({
       setPickLoading(false)
       return
     }
+    const cached = readCachedPageStaff(id)
+    if (cached) {
+      setPickedStaff(cached)
+      setPickLoading(false)
+      return
+    }
     let cancelled = false
     void Promise.resolve(
       supabase.from('staff').select('id, role').eq('id', id).maybeSingle(),
     )
       .then(({ data }) => {
         if (cancelled) return
-        setPickedStaff(data as { id: string; role: string } | null)
+        const next = data as { id: string; role: string } | null
+        if (next?.id && next.role) writeCachedPageStaff(next)
+        setPickedStaff(next)
         setPickLoading(false)
       })
       .catch(() => {
@@ -269,33 +307,54 @@ export default function CredentialsPage({
       return
     }
     if (revealed?.id === row.id) clearReveal()
+    revealPasswordCache.delete(row.id)
     loadItems({ silent: true })
   }
 
   const revealPassword = async (row: CredentialListItem) => {
-    if (revealed?.id === row.id) {
+    const decision = decideRevealClick({
+      rowId: row.id,
+      current: revealed,
+      cache: revealPasswordCache,
+      now: Date.now(),
+    })
+    if (decision.action === 'ignore') return
+    if (decision.action === 'toggle-hide') {
       clearReveal()
       return
     }
-    const res = await credFetch(`${apiBase(kind)}/${row.id}/reveal`, { method: 'POST' })
-    if (!res.ok) return
-    const data = await res.json().catch(() => null)
-    const password = data?.password
-    if (typeof password !== 'string' || password === '') {
-      setRevealed({ id: row.id, password: '' })
+    if (decision.action === 'show-cached') {
+      showRevealedPassword(row.id, decision.password)
       return
     }
-    if (revealTimer.current) clearTimeout(revealTimer.current)
-    setRevealed({ id: row.id, password })
-    revealTimer.current = setTimeout(() => {
-      setRevealed((curr) => (curr?.id === row.id ? null : curr))
-      revealTimer.current = null
-    }, REVEAL_MS)
+    revealPendingId.current = row.id
+    setRevealed({ id: row.id, status: 'pending' })
+    try {
+      const res = await credFetch(`${apiBase(kind)}/${row.id}/reveal`, { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (revealPendingId.current !== row.id) return
+      if (!res.ok) {
+        setRevealed({
+          id: row.id,
+          status: 'error',
+          message: revealErrorMessage(data?.error),
+        })
+        return
+      }
+      const password = typeof data?.password === 'string' ? data.password : ''
+      rememberRevealPassword(revealPasswordCache, row.id, password, Date.now())
+      showRevealedPassword(row.id, password)
+    } catch {
+      if (revealPendingId.current !== row.id) return
+      setRevealed({ id: row.id, status: 'error', message: '조회 실패' })
+    }
   }
 
-  if (gate === 'checking') {
-    return <div className="text-[13px] text-txt-tertiary">확인 중...</div>
-  }
+  const actorStaffId = actorStaffIdFromStorage()
+  const showShell = shouldShowCredentialShell(gate, {
+    authStaffId: authStaff?.id,
+    actorStaffId,
+  })
 
   if (gate === 'denied') {
     return (
@@ -304,6 +363,10 @@ export default function CredentialsPage({
         <p className="text-[13px] text-txt-quaternary">권한없음</p>
       </div>
     )
+  }
+
+  if (gate === 'checking' && !showShell) {
+    return <div className="text-[13px] text-txt-tertiary">확인 중...</div>
   }
 
   const emptyMessage = listError
@@ -383,7 +446,8 @@ export default function CredentialsPage({
                 </thead>
                 <tbody>
                   {filtered.map((row) => {
-                    const isOpen = revealed?.id === row.id
+                    const rowReveal = revealed?.id === row.id ? revealed : null
+                    const isOpen = rowReveal?.status === 'open'
                     const name = collapseDisplayWhitespace(row.name)
                     const memo = visibleCredentialMemo(kind, row.memo)
                     return (
@@ -418,21 +482,12 @@ export default function CredentialsPage({
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1 min-w-0">
-                            {isOpen ? (
-                              revealed.password ? (
-                                <span
-                                  className={`truncate ${idFontClass(revealed.password)} text-txt-secondary`}
-                                  title={revealed.password}
-                                >
-                                  {revealed.password}
-                                </span>
-                              ) : (
-                                <span className="text-txt-quaternary">—</span>
-                              )
-                            ) : (
-                              <span className="text-txt-secondary tracking-wider">••••••••</span>
-                            )}
-                            <RevealButton open={isOpen} onClick={() => revealPassword(row)} />
+                            <RevealValue state={rowReveal} />
+                            <RevealButton
+                              open={isOpen}
+                              pending={rowReveal?.status === 'pending'}
+                              onClick={() => revealPassword(row)}
+                            />
                           </div>
                         </td>
                         <td className="px-3 py-2 text-txt-secondary max-w-[200px]">
@@ -550,16 +605,56 @@ function idFontClass(value: string) {
   return usesMonoIdFont(value) ? 'font-mono tabular-nums' : ''
 }
 
-function RevealButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+function RevealValue({ state }: { state: RevealState | null }) {
+  if (state?.status === 'pending') {
+    return (
+      <span className="inline-flex items-center gap-1 text-txt-quaternary">
+        <Loader2 size={12} className="animate-spin text-txt-tertiary" />
+        …
+      </span>
+    )
+  }
+  if (state?.status === 'error') {
+    return <span className="truncate text-txt-quaternary">{state.message}</span>
+  }
+  if (state?.status === 'open') {
+    return state.password ? (
+      <span
+        className={`truncate ${idFontClass(state.password)} text-txt-secondary`}
+        title={state.password}
+      >
+        {state.password}
+      </span>
+    ) : (
+      <span className="text-txt-quaternary">—</span>
+    )
+  }
+  return <span className="text-txt-secondary tracking-wider">••••••••</span>
+}
+
+function RevealButton({
+  open,
+  pending,
+  onClick,
+}: {
+  open: boolean
+  pending?: boolean
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="h-7 w-7 shrink-0 flex items-center justify-center rounded-md text-txt-tertiary hover:bg-surface-tertiary hover:text-txt-primary"
+      disabled={pending}
+      className="h-7 w-7 shrink-0 flex items-center justify-center rounded-md text-txt-tertiary hover:bg-surface-tertiary hover:text-txt-primary disabled:opacity-60"
       title={open ? '숨기기' : '8초간 보기'}
-      aria-label={open ? '비밀번호 숨기기' : '비밀번호 잠시 보기'}
+      aria-label={pending ? '비밀번호 불러오는 중' : open ? '비밀번호 숨기기' : '비밀번호 잠시 보기'}
     >
-      <Clock size={14} className="text-txt-tertiary" />
+      {pending ? (
+        <Loader2 size={14} className="animate-spin text-txt-tertiary" />
+      ) : (
+        <Clock size={14} className="text-txt-tertiary" />
+      )}
     </button>
   )
 }
@@ -581,12 +676,13 @@ function MobileCard({
   onDelete,
 }: {
   row: CredentialListItem
-  revealed: { id: string; password: string } | null
+  revealed: RevealState | null
   onReveal: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
-  const isOpen = revealed?.id === row.id
+  const rowReveal = revealed?.id === row.id ? revealed : null
+  const isOpen = rowReveal?.status === 'open'
   const name = collapseDisplayWhitespace(row.name)
   return (
     <div className="px-3 py-2.5">
@@ -602,13 +698,17 @@ function MobileCard({
           )}
         </div>
         <div className="flex items-center shrink-0">
-          <RevealButton open={isOpen} onClick={onReveal} />
+          <RevealButton
+            open={isOpen}
+            pending={rowReveal?.status === 'pending'}
+            onClick={onReveal}
+          />
           <RowActions onEdit={onEdit} onDelete={onDelete} />
         </div>
       </div>
-      {isOpen && (
-        <p className={`mt-1 text-[13px] text-txt-secondary truncate ${revealed.password ? idFontClass(revealed.password) : ''}`}>
-          {revealed.password || '—'}
+      {rowReveal && (
+        <p className="mt-1 text-[13px] min-w-0">
+          <RevealValue state={rowReveal} />
         </p>
       )}
     </div>
@@ -617,18 +717,15 @@ function MobileCard({
 
 function ListSkeleton() {
   return (
-    <div>
-      <p className="px-3 py-2 text-[13px] text-txt-quaternary">불러오는 중...</p>
-      <div className="divide-y divide-border-tertiary">
-        {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-          <div key={i} className="px-3 py-2.5 flex items-center gap-3">
-            <div className="h-3 w-24 rounded bg-surface-tertiary animate-pulse" />
-            <div className="h-3 w-32 rounded bg-surface-tertiary animate-pulse hidden sm:block" />
-            <div className="h-3 w-20 rounded bg-surface-tertiary animate-pulse" />
-            <div className="h-3 w-16 rounded bg-surface-tertiary animate-pulse ml-auto" />
-          </div>
-        ))}
-      </div>
+    <div className="divide-y divide-border-tertiary" aria-busy="true" aria-label="목록 불러오는 중">
+      {Array.from({ length: SKELETON_ROWS }, (_, i) => (
+        <div key={i} className="px-3 py-2 flex items-center gap-3">
+          <div className="h-2.5 w-24 rounded bg-surface-tertiary animate-pulse" />
+          <div className="h-2.5 w-28 rounded bg-surface-tertiary animate-pulse hidden sm:block" />
+          <div className="h-2.5 w-16 rounded bg-surface-tertiary animate-pulse" />
+          <div className="h-2.5 w-12 rounded bg-surface-tertiary animate-pulse ml-auto" />
+        </div>
+      ))}
     </div>
   )
 }

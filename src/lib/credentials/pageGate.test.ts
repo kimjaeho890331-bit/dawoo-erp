@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   canPrefetchCredentialList,
+  readCachedPageStaff,
   resolveCredentialPageGate,
   resolvePageStaff,
   resolveVisibleGate,
   shouldRevokePageOnListStatus,
+  shouldShowCredentialShell,
   shouldSkipStaffRoundTrip,
+  writeCachedPageStaff,
 } from './pageGate'
 
 describe('resolveCredentialPageGate', () => {
@@ -44,12 +47,48 @@ describe('shouldSkipStaffRoundTrip / canPrefetchCredentialList', () => {
     expect(shouldSkipStaffRoundTrip({ id: '' })).toBe(false)
   })
 
+  it('같은 탭 staffId+role 캐시가 있으면 pick을 건너뛴다', () => {
+    const store = memoryStore()
+    writeCachedPageStaff({ id: 's1', role: '관리자' }, store)
+    const cached = readCachedPageStaff('s1', store)
+    expect(cached).toEqual({ id: 's1', role: '관리자' })
+    expect(readCachedPageStaff('s2', store)).toBeNull()
+    expect(shouldSkipStaffRoundTrip(null, cached)).toBe(true)
+    expect(shouldSkipStaffRoundTrip(null, null)).toBe(false)
+  })
+
   it('로그인한 staff id가 있으면 게이트 전에 목록을 미리 받는다', () => {
     expect(canPrefetchCredentialList({ authStaffId: 's1' })).toBe(true)
     expect(canPrefetchCredentialList({ actorStaffId: 's2' })).toBe(true)
     expect(canPrefetchCredentialList({ authStaffId: null, actorStaffId: null })).toBe(false)
   })
 })
+
+describe('shouldShowCredentialShell', () => {
+  it('권한없음은 셸을 그리지 않는다', () => {
+    expect(shouldShowCredentialShell('denied', { actorStaffId: 's1' })).toBe(false)
+  })
+
+  it('허용되면 셸을 그린다', () => {
+    expect(shouldShowCredentialShell('ok', {})).toBe(true)
+  })
+
+  it('확인 중이라도 staff id가 있으면 검색·등록 셸을 바로 그린다', () => {
+    expect(shouldShowCredentialShell('checking', { actorStaffId: 's1' })).toBe(true)
+    expect(shouldShowCredentialShell('checking', { authStaffId: 's2' })).toBe(true)
+    expect(shouldShowCredentialShell('checking', { authStaffId: null, actorStaffId: null })).toBe(false)
+  })
+})
+
+function memoryStore() {
+  const data = new Map<string, string>()
+  return {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      data.set(key, value)
+    },
+  }
+}
 
 describe('resolveVisibleGate', () => {
   it('staff가 있으면 확인 중을 건너뛰고 바로 역할을 본다', () => {

@@ -104,22 +104,9 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
       <div className="bg-surface w-full max-w-3xl max-h-[85dvh] overflow-y-auto rounded-t-xl border border-border-primary md:max-h-none md:overflow-hidden md:rounded-xl">
         <div className="flex items-center justify-between border-b border-border-primary px-5 py-4">
           <h2>결재선 설정</h2>
-          <div className="flex items-center gap-2">
-            {/* 자주 쓰는 결재선. 누르면 지금 목록을 갈아치우고 곧바로 적용된다. */}
-            {LINE_PRESETS.map(p => (
-              <button
-                key={p.label}
-                onClick={() => applyPreset(p)}
-                title="이 결재선으로 바로 설정합니다"
-                className="h-9 px-3 text-xs border border-border-primary rounded-lg text-txt-secondary hover:bg-surface-secondary md:h-8"
-              >
-                {p.label}
-              </button>
-            ))}
-            <button onClick={onClose} aria-label="닫기" className="-mr-2 w-11 h-11 flex items-center justify-center md:w-auto md:h-auto md:mr-0">
-              <X size={18} className="text-txt-tertiary" />
-            </button>
-          </div>
+          <button onClick={onClose} aria-label="닫기" className="-mr-2 w-11 h-11 flex items-center justify-center md:w-auto md:h-auto md:mr-0">
+            <X size={18} className="text-txt-tertiary" />
+          </button>
         </div>
 
         <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
@@ -161,8 +148,19 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
           </div>
 
           <div>
-            <div className="text-sm mb-3 text-txt-secondary">
-              아래로 갈수록 상위 결재자입니다. 마지막은 결재 역할이어야 합니다.
+            {/* 자주 쓰는 결재선. 누르면 지금 목록을 갈아치우고 곧바로 적용된다.
+                오른쪽 패널 머리에 둔다 — 결재선을 세우려고 보는 자리가 여기다. */}
+            <div className="mb-3 flex flex-wrap gap-2">
+              {LINE_PRESETS.map(p => (
+                <button
+                  key={p.label}
+                  onClick={() => applyPreset(p)}
+                  title="이 결재선으로 바로 설정합니다"
+                  className="h-8 rounded-lg border border-border-primary px-3 text-xs text-txt-secondary hover:bg-surface-secondary"
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
             <div className="border border-border-primary rounded-lg h-52 overflow-y-auto md:h-64">
               {draft.map((d, i) => (

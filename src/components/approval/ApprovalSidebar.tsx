@@ -41,11 +41,12 @@ interface Props {
   onSelectBox?: (key: BoxKey) => void
 }
 
+// 문서함 이름은 매일 훑는 글자라 흐리면 눈이 피로하다. 기본도 진한 회색으로 둔다.
 const itemCls = (active: boolean) =>
   `flex w-full items-center px-4 py-2.5 text-[13px] ${
     active
-      ? 'bg-surface-secondary font-medium text-txt-primary'
-      : 'text-txt-secondary hover:bg-surface-tertiary'
+      ? 'bg-surface-secondary font-semibold text-txt-primary'
+      : 'text-txt-primary/85 hover:bg-surface-tertiary'
   }`
 
 /**
@@ -81,9 +82,13 @@ export default function ApprovalSidebar({
       >
         <PenLine size={14} className="text-txt-tertiary" /> 기안작성
       </Link>
-      {BOXES.map(g => (
-        <div key={g.group} className="mb-7">
-          <div className="mb-2 px-4 text-label">{g.group}</div>
+      {BOXES.map((g, gi) => (
+        // 기안함·결재함·문서대장은 성격이 다른 묶음이라 경계가 보여야 한다.
+        // 그룹 이름을 진하게 쓰고, 두 번째 묶음부터 위에 구분선을 둔다.
+        <div key={g.group} className={gi === 0 ? 'mb-5' : 'mt-5 mb-5 border-t border-border-primary pt-5'}>
+          <div className="mb-2 px-4 text-[11px] font-semibold tracking-[0.3px] text-txt-secondary">
+            {g.group}
+          </div>
           {g.items.map(it =>
             onSelectBox ? (
               <button key={it.key} onClick={() => onSelectBox(it.key)} className={itemCls(box === it.key)}>

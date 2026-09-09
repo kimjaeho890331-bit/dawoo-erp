@@ -15,9 +15,9 @@
 
   /* Text — Anthropic Brand */
   --color-txt-primary: #141413;       /* Near Black */
-  --color-txt-secondary: #5e5d59;     /* Olive Gray */
-  --color-txt-tertiary: #87867f;      /* Stone Gray */
-  --color-txt-quaternary: #b0aea5;    /* Warm Silver */
+  --color-txt-secondary: #4a4945;     /* Olive Gray — 대비 8.6 */
+  --color-txt-tertiary: #6b6a63;      /* Stone Gray — 대비 5.2 (AA) */
+  --color-txt-quaternary: #8c8a82;    /* Warm Silver — 대비 3.3 */
   --color-txt-inverse: #faf9f5;       /* Ivory */
 
   /* Accent / Interactive — Anthropic Brand (Terracotta) */
@@ -65,7 +65,7 @@
   --color-money-neutral: #141413;     /* Near Black */
 
   /* Border — Anthropic Brand */
-  --color-border-primary: #e8e6dc;    /* Border Warm */
+  --color-border-primary: #d8d5c8;    /* Border Warm — 표 선이 보이게 */
   --color-border-secondary: #d1cfc5;  /* Ring Warm */
   --color-border-tertiary: #f0eee6;   /* Border Cream */
   --color-border-accent: #c96442;     /* Terracotta Brand */
@@ -133,7 +133,7 @@ h3, .text-card-title {
   font-weight: 500;
   line-height: 1.4;
   letter-spacing: 0.3px;
-  color: #87867f;                    /* Stone Gray */
+  color: #6b6a63;                    /* Stone Gray */
 }
 
 /* Money display */
@@ -244,7 +244,7 @@ table tbody tr:hover {
 .btn-inline {
   font-size: 11px;
   padding: 4px 8px;
-  color: #87867f;                    /* Stone Gray */
+  color: #6b6a63;                    /* Stone Gray */
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
 }

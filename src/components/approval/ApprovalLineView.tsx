@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, Circle, XCircle } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Circle, XCircle } from 'lucide-react'
 import { LINE_ROLE_LABEL, LINE_STATE_LABEL, type LineRole, type LineState } from '@/types/approval'
 import { shortDateTime } from '@/lib/approval/statusStyle'
 
@@ -89,17 +89,21 @@ export default function ApprovalLineView({ drafterName, drafterActedAt, lines, c
       </div>
 
       {lines.map(l => (
-        <div key={l.staff_id} className={cardCls}>
-          <div className={headCls}>
-            {LINE_ROLE_LABEL[l.role]}
-          </div>
-          <div className={bodyCls}>
-            <div className="text-[13px] font-medium">{l.name}</div>
-            {!compact && (
-              <div className={`mt-1.5 text-[12px] ${STATE_COLOR[l.state ?? 'waiting']}`}>
-                {LINE_STATE_LABEL[l.state ?? 'waiting']}
-              </div>
-            )}
+        // 카드 사이 화살표 — 결재가 어느 순서로 흐르는지 한눈에 보이게 한다.
+        <div key={l.staff_id} className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
+          <ArrowRight size={14} className="shrink-0 text-txt-tertiary" aria-hidden />
+          <div className={cardCls}>
+            <div className={headCls}>
+              {LINE_ROLE_LABEL[l.role]}
+            </div>
+            <div className={bodyCls}>
+              <div className="text-[13px] font-medium">{l.name}</div>
+              {!compact && (
+                <div className={`mt-1.5 text-[12px] ${STATE_COLOR[l.state ?? 'waiting']}`}>
+                  {LINE_STATE_LABEL[l.state ?? 'waiting']}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ))}

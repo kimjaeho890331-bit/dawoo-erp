@@ -11,9 +11,11 @@ interface Props {
   rows: PaymentRow[]
   onChange: (rows: PaymentRow[]) => void
   onPickVendor?: (vendor: VendorOption) => void
+  /** 지급 총계 줄 오른쪽에 놓을 것들(엑셀 양식·업로드). 업로드 로직은 부모가 갖고 있다. */
+  actions?: React.ReactNode
 }
 
-export default function PaymentTable({ rows, onChange, onPickVendor }: Props) {
+export default function PaymentTable({ rows, onChange, onPickVendor, actions }: Props) {
   const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
 
   // 거래처DB 후보 목록. 조회 전용 — vendors 테이블에는 쓰지 않는다.
@@ -51,6 +53,8 @@ export default function PaymentTable({ rows, onChange, onPickVendor }: Props) {
         <span className="text-label">지급 총계(원)</span>
         <span className="text-money text-[15px]">{formatMoney(total)}</span>
         <span className="hidden text-[12px] text-txt-tertiary md:inline">지급 정보 합계 자동계산</span>
+        {/* 엑셀 버튼을 여기에 둔다 — 표 위쪽에 있어야 쓰려고 스크롤을 오르내리지 않는다. */}
+        {actions && <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
 
       <div className="flex items-center justify-between border-b border-border-primary px-5 py-3">

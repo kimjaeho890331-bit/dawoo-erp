@@ -10,7 +10,7 @@ import ApprovalLineView from './ApprovalLineView'
 import PaymentTable from './PaymentTable'
 import FileAttach, { MAX_FILES, type AttachedFile } from './FileAttach'
 import MobileField from './MobileField'
-import type { ApprovalStatus, PaymentRow } from '@/types/approval'
+import { EMPTY_PAYMENT, type ApprovalStatus, type PaymentRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
@@ -19,6 +19,15 @@ import { draftTitleFromTarget } from '@/lib/approval/draftTitle'
 import { vendorDocsToAttachments } from '@/lib/approval/vendorDocs'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
+
+/**
+ * 아무것도 안 적은 지급정보 행. 화면에는 빈 줄이 하나 미리 놓여 있어야 바로 쓸 수 있는데,
+ * 그대로 저장하면 pay_request_date가 DATE NOT NULL이라 DB가 거부한다.
+ * 그래서 저장 직전에 이런 줄을 걸러낸다 — 안 적었으면 없는 줄로 본다.
+ */
+const isBlankPayment = (p: PaymentRow) =>
+  !p.vendor_name?.trim() && !p.amount && !p.pay_request_date?.trim() &&
+  !p.bank?.trim() && !p.account_no?.trim() && !p.business_no?.trim()
 
 /**
  * 모바일 기안 작성은 단계별로 나눈다. 한 화면에 다 넣으면 폰에서 끝없이 스크롤해야 하고,
@@ -36,7 +45,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
 
   const [title, setTitle] = useState('')
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY)
-  const [payments, setPayments] = useState<PaymentRow[]>([])
+  // 빈 줄 하나를 미리 놓아 "추가"를 누르지 않고 바로 쓸 수 있게 한다.
+  const [payments, setPayments] = useState<PaymentRow[]>([{ ...EMPTY_PAYMENT }])
   const [lines, setLines] = useState<LineDraft[]>([])
   const [files, setFiles] = useState<AttachedFile[]>([])
   const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
@@ -88,11 +98,12 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         supabase.from('expense_report_files').select('*').eq('report_id', sourceId).order('uploaded_at'),
       ])
 
-      setPayments((p ?? []).map(x => ({
+      const loaded = (p ?? []).map(x => ({
         vendor_name: x.vendor_name, amount: x.amount,
         pay_request_date: x.pay_request_date, bank: x.bank,
         account_no: x.account_no, business_no: x.business_no ?? '',
-      })) as PaymentRow[])
+      })) as PaymentRow[]
+      setPayments(loaded.length > 0 ? loaded : [{ ...EMPTY_PAYMENT }])
 
       if (copyFromId) {
         setLines([])
@@ -136,7 +147,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         body: JSON.stringify({
           id: reportId, actor_staff_id: actor.id, title, body_html: bodyHtml,
           site_id: siteId || null, project_id: projectId || null,
-          payments,
+          payments: payments.filter(x => !isBlankPayment(x)),
           lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
           files,
           refs: refs.map(r => r.id),
@@ -248,6 +259,34 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const mobileOnly = (n: number) => (step === n ? 'md:hidden' : 'hidden')
 
   const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0)
+
+  // 지급 정보 표 머리에 붙는 엑셀 버튼. 업로드 로직이 여기 있어 노드로 넘긴다.
+  const excelActions = (
+    <>
+      <a
+        href="/api/approval/excel-template"
+        className="flex h-8 items-center gap-1.5 rounded-lg border border-border-primary px-3 text-[13px] hover:bg-surface-secondary"
+      >
+        <Download size={14} className="text-txt-tertiary" /> 양식 받기
+      </a>
+      <label
+        className={`flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-border-primary px-3 text-[13px] hover:bg-surface-secondary ${excelBusy ? 'pointer-events-none opacity-40' : ''}`}
+      >
+        <Upload size={14} className="text-txt-tertiary" /> {excelBusy ? '업로드 중…' : '엑셀 업로드'}
+        <input
+          ref={excelInputRef}
+          type="file"
+          accept=".xlsx"
+          className="hidden"
+          disabled={excelBusy}
+          onChange={e => {
+            const f = e.target.files?.[0]
+            if (f) handleExcelUpload(f)
+          }}
+        />
+      </label>
+    </>
+  )
 
   return (
     <div className="mx-auto max-w-4xl pb-28 md:py-2 md:pb-10">
@@ -368,9 +407,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                   >
                     결재선 설정
                   </button>
-                  {lines.length > 0
-                    ? <ApprovalLineView compact drafterName={actor?.name ?? ''} lines={lines} />
-                    : <span className="self-center text-[13px] text-txt-tertiary">지정 안 됨</span>}
+                  {/* 결재자를 아직 안 골랐어도 기안자 칸은 늘 보여준다 — 누가 올리는 문서인지가 먼저다. */}
+                  <ApprovalLineView compact drafterName={actor?.name ?? ''} lines={lines} />
                 </div>
               </td>
             </tr>
@@ -387,10 +425,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       </div>
       <div className={`${step === 3 ? 'block' : 'hidden'} mb-8 md:hidden`}>
         <ApprovalLineView drafterName={actor?.name ?? ''} lines={lines} />
-      </div>
-
-      <div className={`${stepBlock(0)} mb-8 rounded-lg bg-accent-light px-5 py-3.5 text-[13px] text-accent-text`}>
-        결제 관련 지출결의서 입니다.
       </div>
 
       <h2 className={`${stepBlock(0)} mb-4`}>기안내용</h2>
@@ -433,32 +467,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         </div>
       </div>
 
-      <div className={`${stepFlex(1)} mb-3 justify-end gap-2`}>
-        <a
-          href="/api/approval/excel-template"
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-border-primary px-3 text-[13px] hover:bg-surface-secondary"
-        >
-          <Download size={14} className="text-txt-tertiary" /> 양식 받기
-        </a>
-        <label
-          className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-border-primary px-3 text-[13px] hover:bg-surface-secondary ${excelBusy ? 'pointer-events-none opacity-40' : ''}`}
-        >
-          <Upload size={14} className="text-txt-tertiary" /> {excelBusy ? '업로드 중…' : '엑셀 업로드'}
-          <input
-            ref={excelInputRef}
-            type="file"
-            accept=".xlsx"
-            className="hidden"
-            disabled={excelBusy}
-            onChange={e => {
-              const f = e.target.files?.[0]
-              if (f) handleExcelUpload(f)
-            }}
-          />
-        </label>
-      </div>
       <div className={`${stepBlock(1)} mb-8`}>
         <PaymentTable
+          actions={excelActions}
           rows={payments}
           onChange={setPayments}
           onPickVendor={v => {

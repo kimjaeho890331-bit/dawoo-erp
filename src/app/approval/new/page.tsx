@@ -1,5 +1,5 @@
-import DraftForm from '@/components/approval/DraftForm'
+import DraftPage from '@/components/approval/DraftPage'
 
 export default function Page() {
-  return <DraftForm />
+  return <DraftPage />
 }

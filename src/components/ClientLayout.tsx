@@ -28,7 +28,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="md:ml-[240px] min-h-screen bg-page">
+      <main className="md:ml-[200px] min-h-screen bg-page">
         {/* Mobile top bar */}
         <div className="md:hidden flex items-center justify-between px-4 py-3 bg-surface border-b border-border-primary sticky top-0 z-20">
           <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-tertiary">

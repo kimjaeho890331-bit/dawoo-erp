@@ -77,10 +77,16 @@ interface Props {
    * md 이상에서는 기본 모양으로 되돌아가므로, 이 값을 켜도 데스크톱은 변하지 않는다.
    */
   fullWidth?: boolean
+  /**
+   * 좁은 사이드바용. select는 기본적으로 가장 긴 항목("직원을 선택해 주세요")에
+   * 맞춰 넓어지는데, 실제로 보이는 값은 이름 세 글자다. 폭을 이름에 맞춰 고정한다.
+   * 고를 때 펼쳐지는 목록은 이 폭에 갇히지 않으므로 이름이 잘리지 않는다.
+   */
+  compact?: boolean
 }
 
 /** 현재 직원 선택 드롭다운. useActor()의 결과를 그대로 넘겨 쓴다. */
-export default function ActorPicker({ actorId, staffList, onChange, loading, className, fullWidth }: Props) {
+export default function ActorPicker({ actorId, staffList, onChange, loading, className, fullWidth, compact }: Props) {
   return (
     <div className={`flex items-center gap-2 ${className ?? ''}`}>
       <span className="text-xs text-txt-secondary shrink-0">현재 직원</span>
@@ -88,10 +94,12 @@ export default function ActorPicker({ actorId, staffList, onChange, loading, cla
         value={actorId ?? ''}
         onChange={e => onChange(e.target.value)}
         aria-label="현재 직원 선택"
-        className={`px-3 border border-border-primary rounded-lg bg-surface text-txt-primary ${
+        className={`border border-border-primary rounded-lg bg-surface text-txt-primary ${
           fullWidth
-            ? 'flex-1 min-w-0 h-11 text-base md:flex-none md:h-auto md:py-1.5 md:text-sm'
-            : 'py-1.5 text-sm'
+            ? 'px-3 flex-1 min-w-0 h-11 text-base md:flex-none md:h-auto md:py-1.5 md:text-sm'
+            : compact
+              ? 'w-[76px] min-w-0 px-1.5 py-1.5 text-sm'
+              : 'px-3 py-1.5 text-sm'
         }`}
       >
         <option value="">{loading ? '불러오는 중' : '직원을 선택해 주세요'}</option>

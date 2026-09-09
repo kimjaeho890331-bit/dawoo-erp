@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { PenLine } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ActorPicker, { useActor } from './ActorPicker'
+import ApprovalSidebar, { BOXES, BOX_META, type BoxKey } from './ApprovalSidebar'
+import { usePendingCount } from './usePendingCount'
 import { formatMoney } from '@/lib/utils/format'
 import {
   APPROVAL_STATUS_LABEL,
@@ -16,27 +19,6 @@ import { currentTurnLine } from '@/lib/approval/status'
 import { APPROVAL_STATUS_BADGE, shortDateTime } from '@/lib/approval/statusStyle'
 import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
-type BoxKey =
-  | 'draft' | 'submitted' | 'completed'
-  | 'toApprove' | 'inProgress' | 'myRejected' | 'myCompleted'
-  | 'ledger'
-
-const BOXES: { group: string; items: { key: BoxKey; label: string }[] }[] = [
-  { group: '기안함', items: [
-    { key: 'draft', label: '작성중' },
-    { key: 'submitted', label: '상신' },
-    { key: 'completed', label: '완료' },
-  ]},
-  { group: '결재함', items: [
-    { key: 'toApprove', label: '결재전' },
-    { key: 'inProgress', label: '진행중' },
-    { key: 'myRejected', label: '반려된' },
-    { key: 'myCompleted', label: '완료된' },
-  ]},
-  { group: '문서대장', items: [{ key: 'ledger', label: '전체' }] },
-]
-
-const BOX_META = BOXES.flatMap(g => g.items.map(it => ({ ...it, group: g.group })))
 
 const SELECT = 'id, doc_no, title, status, total_amount, submitted_at, site_id, project_id, staff:drafter_staff_id(name)'
 
@@ -69,10 +51,22 @@ const SUBMITTED_STATUSES: ApprovalStatus[] = ['pending', 'withdrawn', 'rejected'
 
 export default function ApprovalPage() {
   const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
-  const [box, setBox] = useState<BoxKey>('toApprove')
+  /**
+   * 어느 문서함을 보는지는 URL(?box=)이 정한다.
+   *
+   * 로컬 state로 두면 기안작성 화면에서 문서함 링크로 돌아왔을 때 열리지 않는다 —
+   * Next 라우터가 이전에 그린 /approval 화면을 캐시에서 되살려 컴포넌트가 다시
+   * 마운트되지 않고, 그래서 초기값이 다시 계산되지 않기 때문이다.
+   * URL을 진실로 두면 그 경로에서도 항상 맞고 뒤로가기도 자연스럽게 동작한다.
+   */
+  const router = useRouter()
+  const params = useSearchParams()
+  const qBox = params.get('box')
+  const box: BoxKey = BOX_META.some(m => m.key === qBox) ? (qBox as BoxKey) : 'toApprove'
+  const setBox = (key: BoxKey) => router.replace(`/approval?box=${key}`, { scroll: false })
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
-  const [pendingCount, setPendingCount] = useState(0)
+  const pendingCount = usePendingCount(actor)
   const [siteNames, setSiteNames] = useState<Record<string, string>>({})
   const [projectNames, setProjectNames] = useState<Record<string, string>>({})
 
@@ -94,38 +88,6 @@ export default function ApprovalPage() {
     siteName: r.site_id ? siteNames[r.site_id] : null,
     projectName: r.project_id ? projectNames[r.project_id] : null,
   })
-
-  // 사이드 배지 "결재전" 건수 — load()의 toApprove 판정과 반드시 같은 기준을 써야 한다.
-  // (문서가 pending이고, 내 앞 순번이 전부 처리돼 지금이 내 차례인 것만 센다.)
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (!actor) { if (!cancelled) setPendingCount(0); return }
-
-      const { data: myLines } = await supabase
-        .from('expense_report_lines')
-        .select('report_id')
-        .eq('staff_id', actor.id)
-
-      const ids = Array.from(new Set((myLines ?? []).map(l => l.report_id as string)))
-      if (ids.length === 0) { if (!cancelled) setPendingCount(0); return }
-
-      const { data } = await supabase
-        .from('expense_reports')
-        .select('id, lines:expense_report_lines(seq, staff_id, role, state)')
-        .in('id', ids)
-        .eq('status', 'pending')
-
-      if (cancelled) return
-      const withLines = (data ?? []) as unknown as { id: string; lines: LineForTurn[] }[]
-      const count = withLines.filter(r => {
-        const turn = currentTurnLine(r.lines)
-        return turn !== null && turn.staff_id === actor.id
-      }).length
-      setPendingCount(count)
-    })()
-    return () => { cancelled = true }
-  }, [actor])
 
   const load = useCallback(async () => {
     if (!actor) { setRows([]); setLoading(false); return }
@@ -216,31 +178,15 @@ export default function ApprovalPage() {
 
   return (
     <div className="-mx-4 -my-4 flex min-h-[calc(100vh-2rem)] md:-mx-8 md:-my-6 md:min-h-[calc(100vh-3rem)]">
-      <aside className="hidden w-52 shrink-0 border-r border-border-primary bg-surface py-8 md:block">
-        <div className="mx-5 mb-5">
-          <ActorPicker actorId={actorId} staffList={staffList} onChange={setActorId} loading={actorLoading} />
-        </div>
-        <Link href="/approval/new"
-          className="mx-5 mb-8 flex h-9 items-center justify-center gap-2 rounded-lg border border-border-primary text-sm text-txt-primary hover:bg-surface-secondary">
-          <PenLine size={14} className="text-txt-tertiary" /> 기안작성
-        </Link>
-        {BOXES.map(g => (
-          <div key={g.group} className="mb-7">
-            <div className="mb-2 px-5 text-label">{g.group}</div>
-            {g.items.map(it => (
-              <button key={it.key} onClick={() => setBox(it.key)}
-                className={`flex w-full items-center px-5 py-2.5 text-[13px] ${box === it.key ? 'bg-surface-secondary font-medium text-txt-primary' : 'text-txt-secondary hover:bg-surface-tertiary'}`}>
-                {it.label}
-                {it.key === 'toApprove' && pendingCount > 0 && (
-                  <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] leading-none text-txt-inverse">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        ))}
-      </aside>
+      <ApprovalSidebar
+        actorId={actorId}
+        staffList={staffList}
+        onActorChange={setActorId}
+        actorLoading={actorLoading}
+        pendingCount={pendingCount}
+        box={box}
+        onSelectBox={setBox}
+      />
 
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">
         {/*

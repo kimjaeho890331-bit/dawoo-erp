@@ -150,7 +150,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         transition-transform duration-200 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0
-        ${collapsed ? 'w-16' : 'w-[240px]'}
+        ${collapsed ? 'w-16' : 'w-[200px]'}
         bg-sidebar text-txt-inverse flex flex-col
       `}>
         {/* Mobile close button */}

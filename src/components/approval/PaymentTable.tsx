@@ -49,7 +49,8 @@ export default function PaymentTable({ rows, onChange, onPickVendor, actions }: 
 
   return (
     <div className="overflow-hidden rounded-lg border border-border-primary bg-surface">
-      <div className="flex items-center gap-3 border-b border-border-primary px-5 py-4">
+      {/* 폰에서는 엑셀 버튼 두 개가 총계와 한 줄에 다 들어가지 않아 잘린다. 넘치면 접는다. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border-primary px-5 py-4">
         <span className="text-label">지급 총계(원)</span>
         <span className="text-money text-[15px]">{formatMoney(total)}</span>
         <span className="hidden text-[12px] text-txt-tertiary md:inline">지급 정보 합계 자동계산</span>

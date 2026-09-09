@@ -12,6 +12,15 @@ export interface ActorStaff {
   name: string
 }
 
+/**
+ * 한 화면이 useActor()를 두 번 부를 수 있다 — 기안작성은 사이드바(DraftPage)와
+ * 폼(DraftForm)이 따로 부른다. 인스턴스마다 useState를 따로 들면 한쪽에서 직원을
+ * 바꿔도 다른 쪽은 옛 이름을 그대로 들고 있어, 사이드바에는 A가 떠 있는데
+ * 기안자는 B로 저장되는 일이 생긴다. 바꿀 때 같은 탭의 다른 인스턴스에도 알린다.
+ * (다른 탭은 브라우저가 보내는 storage 이벤트가 맡는다.)
+ */
+const actorListeners = new Set<(id: string) => void>()
+
 interface UseActorResult {
   /** 선택된 직원 전체 정보. staffList 로드 전이거나 선택 안 됐으면 null. */
   actor: ActorStaff | null
@@ -54,11 +63,25 @@ export function useActor(): UseActorResult {
     }
   }, [])
 
+  useEffect(() => {
+    const onLocalChange = (id: string) => setActorIdState(id)
+    actorListeners.add(onLocalChange)
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STAFF_STORAGE_KEY && e.newValue) setActorIdState(e.newValue)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      actorListeners.delete(onLocalChange)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
+
   const setActorId = useCallback((id: string) => {
-    setActorIdState(id)
     if (typeof window !== 'undefined') {
       localStorage.setItem(STAFF_STORAGE_KEY, id)
     }
+    // 자기 자신도 이 목록에 들어 있으므로 여기서 상태가 갱신된다.
+    actorListeners.forEach(fn => fn(id))
   }, [])
 
   const actor = staffList.find(s => s.id === actorId) ?? null

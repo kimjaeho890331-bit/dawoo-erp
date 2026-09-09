@@ -194,7 +194,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   }, [actor, reportId, existingStatus, title, bodyHtml, siteId, projectId, payments, lines, files, refs, router])
 
   const handleExcelUpload = useCallback(async (file: File) => {
-    if (payments.length > 0) {
+    // 빈 줄 하나는 기본으로 놓여 있다. 지울 게 정말 있을 때만 묻는다.
+    if (payments.some(p => !isBlankPayment(p))) {
       const ok = window.confirm('현재 표에 입력된 지급 정보가 모두 지워지고 엑셀 내용으로 바뀝니다. 계속할까요?')
       if (!ok) {
         if (excelInputRef.current) excelInputRef.current.value = ''
@@ -248,8 +249,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       return picked ? draftTitleFromTarget(picked) : prev
     })
   }, [sites, projects])
-
-  const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
   // 단계 이동 시 위로 올려준다. 긴 단계를 지나온 뒤 다음 단계의 중간부터 보이면
   // 무엇을 입력해야 하는지 알 수 없다.
@@ -521,7 +520,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           { label: '기안자', to: 0, value: actor?.name ?? '선택 안 됨' },
           { label: '현장', to: 0, value: workKind === 'site' ? (sites.find(s => s.id === siteId)?.name || '미선택') : workKind === 'project' ? (projects.find(p => p.id === projectId)?.building_name || '미선택') : '현장 없음' },
           { label: '기안제목', to: 0, value: title || '입력 안 됨' },
-          { label: '지급 정보', to: 1, value: `${payments.length}건 · ${formatMoney(totalAmount)}원` },
+          // 저장되는 건수와 같아야 한다 — 빈 줄은 서버로 보내지 않는다.
+          { label: '지급 정보', to: 1, value: `${payments.filter(p => !isBlankPayment(p)).length}건 · ${formatMoney(totalAmount)}원` },
           { label: '첨부·참조', to: 2, value: `첨부 ${files.length}건 · 참조 ${refs.length}건` },
           { label: '결재선', to: 3, value: lines.length > 0 ? lines.map(l => l.name).join(' → ') : '지정 안 됨' },
         ].map(item => (

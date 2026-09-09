@@ -24,7 +24,9 @@ export default function DraftPage({ reportId, copyFromId }: { reportId?: string;
         actorLoading={actorLoading}
         pendingCount={pendingCount}
       />
-      <main className="min-w-0 flex-1">
+      {/* 바깥 -mx-4/-mx-8로 레이아웃 여백을 지웠으므로 여기서 다시 준다.
+          없으면 폼이 화면 양 끝에 붙어, 같은 폼인데 /edit·/reissue와 다르게 보인다. */}
+      <main className="min-w-0 flex-1 px-4 py-4 md:px-8 md:py-6">
         <DraftForm reportId={reportId} copyFromId={copyFromId} />
       </main>
     </div>

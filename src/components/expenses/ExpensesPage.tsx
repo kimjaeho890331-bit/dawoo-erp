@@ -324,27 +324,34 @@ export default function ExpensesPage() {
             ))}
           </div>
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+            {/* 칸 너비를 내용에 맞춰 고정한다. 자동 배분에 맡기면 날짜·카테고리·작성자처럼
+                짧은 값이 두세 줄로 접히고, 정작 긴 내용·현장은 좁아진다. */}
             {filteredExpenses.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">등록된 결의서가 없습니다</div> : (
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
                 <thead><tr className="bg-surface-secondary border-b border-border-primary">
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">카테고리</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장</th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
-                  <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
+                  <th className="w-[9%] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>
+                  <th className="w-[8%] px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">카테고리</th>
+                  <th className="w-[34%] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
+                  {/* 1,000,000,000원이 한 줄에 들어가는 폭 */}
+                  <th className="w-[13%] px-4 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
+                  <th className="w-[19%] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장</th>
+                  <th className="w-[7%] px-2 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
+                  <th className="w-[10%] px-2 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
                 </tr></thead>
                 <tbody className="divide-y divide-surface-secondary">
                   {filteredExpenses.map(e => (
                     <tr key={e.id} className="hover:bg-surface-tertiary">
-                      <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{e.expense_date}</td>
-                      <td className="px-4 py-2.5"><span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span></td>
-                      <td className="px-4 py-2.5 text-txt-primary text-[13px]">{e.title}{e.memo && <span className="text-txt-tertiary ml-1 text-[11px]">{e.memo}</span>}</td>
-                      <td className="px-4 py-2.5 text-right font-medium text-txt-primary text-[13px] tabular-nums">{e.amount.toLocaleString()}원</td>
-                      <td className={`px-4 py-2.5 text-[13px] ${targetOf(e).missing ? 'text-[#b53333] font-medium' : 'text-txt-secondary'}`}>{targetOf(e).text}</td>
-                      <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{staffName(e.staff_id)}</td>
-                      <td className="px-4 py-2.5 text-center">
+                      <td className="px-4 py-2.5 text-txt-secondary text-[13px] whitespace-nowrap">{e.expense_date}</td>
+                      <td className="px-3 py-2.5"><span className={`inline-block whitespace-nowrap text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span></td>
+                      {/* 제목과 문서번호·계좌를 한 줄에 이어 붙이면 어디까지가 제목인지 읽히지 않는다. 줄을 나눈다. */}
+                      <td className="px-4 py-2.5 text-txt-primary text-[13px]">
+                        <div className="line-clamp-2">{e.title}</div>
+                        {e.memo && <div className="mt-0.5 text-txt-tertiary text-[11px] line-clamp-2">{e.memo}</div>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-medium text-txt-primary text-[13px] tabular-nums whitespace-nowrap">{e.amount.toLocaleString()}원</td>
+                      <td className={`px-4 py-2.5 text-[13px] ${targetOf(e).missing ? 'text-[#b53333] font-medium' : 'text-txt-secondary'}`}><div className="line-clamp-2">{targetOf(e).text}</div></td>
+                      <td className="px-2 py-2.5 text-txt-secondary text-[13px] whitespace-nowrap">{staffName(e.staff_id)}</td>
+                      <td className="px-2 py-2.5 whitespace-nowrap text-center">
                         <button onClick={() => openEdit(e)} className="btn-inline">수정</button>
                         <button onClick={() => handleDelete('expenses', e.id, e.title)} className="btn-inline-danger">삭제</button>
                       </td>

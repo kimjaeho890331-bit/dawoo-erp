@@ -255,7 +255,7 @@ table tbody tr:hover {
 .btn-inline-danger {
   font-size: 11px;
   padding: 4px 8px;
-  color: #b0aea5;                    /* Warm Silver */
+  color: #8c8a82;                    /* Warm Silver (짙게) — #b0aea5는 흰 배경에서 거의 보이지 않았다 */
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
 }

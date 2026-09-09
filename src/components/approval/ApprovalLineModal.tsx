@@ -5,6 +5,7 @@ import { X, Search, ChevronUp, ChevronDown, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { validateApprovalLine } from '@/lib/approval/status'
 import { sortStaffForApprovalLine } from '@/lib/approval/staffOrder'
+import { LINE_PRESETS, presetToLines, type LinePreset } from '@/lib/approval/linePresets'
 import type { LineRole } from '@/types/approval'
 
 export interface LineDraft {
@@ -69,14 +70,31 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
     setDraft(next)
   }
 
-  const apply = () => {
+  const applyLines = (lines: LineDraft[]) => {
     const err = validateApprovalLine(
-      draft.map((d, i) => ({ ...d, seq: i, state: 'waiting' as const })),
+      lines.map((d, i) => ({ ...d, seq: i, state: 'waiting' as const })),
       drafterStaffId,
     )
     if (err) { setError(err); return }
-    onChange(draft)
+    onChange(lines)
     onClose()
+  }
+
+  const apply = () => applyLines(draft)
+
+  /**
+   * 프리셋은 지금 세워둔 결재선을 갈아치우고 곧바로 적용한다 — 한 번에 끝내는 게
+   * 프리셋의 존재 이유다. 실수로 눌렀어도 다시 열어 고치면 되고, 아직 저장 전이라
+   * 잃는 것이 없다.
+   * 검증에 걸리면(기안자 본인이 프리셋에 있는 등) 닫지 않고 오류만 보여준다.
+   */
+  const applyPreset = (preset: LinePreset) => {
+    const { lines, missing } = presetToLines(preset, staffList)
+    if (missing.length > 0) {
+      setError(`직원 목록에서 ${missing.join(', ')} 님을 찾지 못했습니다`)
+      return
+    }
+    applyLines(lines)
   }
 
   return (
@@ -86,9 +104,22 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
       <div className="bg-surface w-full max-w-3xl max-h-[85dvh] overflow-y-auto rounded-t-xl border border-border-primary md:max-h-none md:overflow-hidden md:rounded-xl">
         <div className="flex items-center justify-between border-b border-border-primary px-5 py-4">
           <h2>결재선 설정</h2>
-          <button onClick={onClose} aria-label="닫기" className="-mr-2 w-11 h-11 flex items-center justify-center md:w-auto md:h-auto md:mr-0">
-            <X size={18} className="text-txt-tertiary" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 자주 쓰는 결재선. 누르면 지금 목록을 갈아치우고 곧바로 적용된다. */}
+            {LINE_PRESETS.map(p => (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p)}
+                title="이 결재선으로 바로 설정합니다"
+                className="h-9 px-3 text-xs border border-border-primary rounded-lg text-txt-secondary hover:bg-surface-secondary md:h-8"
+              >
+                {p.label}
+              </button>
+            ))}
+            <button onClick={onClose} aria-label="닫기" className="-mr-2 w-11 h-11 flex items-center justify-center md:w-auto md:h-auto md:mr-0">
+              <X size={18} className="text-txt-tertiary" />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">

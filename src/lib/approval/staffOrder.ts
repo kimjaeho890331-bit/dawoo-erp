@@ -7,7 +7,7 @@
  * 직원 12명 규모라 이름 배열로 둔다. 화면에서 순서를 조정하고 싶어지면 그때
  * staff에 정렬 컬럼을 두는 게 맞지만 지금은 과하다.
  */
-const PRIORITY = ['조혜진', '송승란', '김용이', '김재호', '김지선']
+const PRIORITY = ['송승란', '조혜진', '김용이', '김재호', '김지선']
 
 /** 지정 순서 먼저, 그 외는 이름순. 원본 배열은 건드리지 않는다. */
 export function sortStaffForApprovalLine<T extends { name: string }>(staff: T[]): T[] {

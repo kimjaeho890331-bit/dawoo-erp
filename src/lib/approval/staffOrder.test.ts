@@ -8,7 +8,7 @@ describe('sortStaffForApprovalLine', () => {
       { name: '송승란' }, { name: '조혜진' },
     ]
     expect(sortStaffForApprovalLine(input).map(s => s.name))
-      .toEqual(['조혜진', '송승란', '김용이', '김재호', '김지선'])
+      .toEqual(['송승란', '조혜진', '김용이', '김재호', '김지선'])
   })
 
   it('목록에 없는 직원은 뒤에 이름순으로 붙인다', () => {

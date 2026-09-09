@@ -8,10 +8,9 @@ import { useActor } from './ActorPicker'
 import ApprovalLineModal, { type LineDraft } from './ApprovalLineModal'
 import ApprovalLineView from './ApprovalLineView'
 import PaymentTable from './PaymentTable'
-import DetailTable from './DetailTable'
 import FileAttach, { MAX_FILES, type AttachedFile } from './FileAttach'
 import MobileField from './MobileField'
-import type { ApprovalStatus, PaymentRow, DetailRow } from '@/types/approval'
+import type { ApprovalStatus, PaymentRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
@@ -28,7 +27,7 @@ const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 
  * 데스크톱은 이 단계를 무시하고 전부 한 화면에 그린다 — 지금 쓰고 있는 화면을 바꾸지 않는다.
  * 그래서 단계는 "데이터"가 아니라 "모바일에서 무엇을 보여줄지 고르는 필터"일 뿐이다.
  */
-const STEPS = ['기안 정보', '지급 정보', '상세 내용', '첨부·참조', '결재선', '확인'] as const
+const STEPS = ['기안 정보', '지급 정보', '첨부·참조', '결재선', '확인'] as const
 const LAST_STEP = STEPS.length - 1
 
 export default function DraftForm({ reportId, copyFromId }: { reportId?: string; copyFromId?: string }) {
@@ -38,7 +37,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [title, setTitle] = useState('')
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY)
   const [payments, setPayments] = useState<PaymentRow[]>([])
-  const [details, setDetails] = useState<DetailRow[]>([])
   const [lines, setLines] = useState<LineDraft[]>([])
   const [files, setFiles] = useState<AttachedFile[]>([])
   const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
@@ -84,9 +82,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       setProjectId((r.project_id as string) || '')
       setWorkKind(workKindFromIds(r.site_id as string | null, r.project_id as string | null))
 
-      const [{ data: p }, { data: d }, { data: l }, { data: f }] = await Promise.all([
+      const [{ data: p }, { data: l }, { data: f }] = await Promise.all([
         supabase.from('expense_report_payments').select('*').eq('report_id', sourceId).order('seq'),
-        supabase.from('expense_report_details').select('*').eq('report_id', sourceId).order('seq'),
         supabase.from('expense_report_lines').select('*, staff(name)').eq('report_id', sourceId).order('seq'),
         supabase.from('expense_report_files').select('*').eq('report_id', sourceId).order('uploaded_at'),
       ])
@@ -96,10 +93,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         pay_request_date: x.pay_request_date, bank: x.bank,
         account_no: x.account_no, business_no: x.business_no ?? '',
       })) as PaymentRow[])
-      setDetails((d ?? []).map(x => ({
-        vendor_name: x.vendor_name ?? '', account: x.account ?? '', content: x.content ?? '',
-        dept_name: x.dept_name ?? '', amount: x.amount ?? 0, note: x.note ?? '',
-      })) as DetailRow[])
 
       if (copyFromId) {
         setLines([])
@@ -143,7 +136,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         body: JSON.stringify({
           id: reportId, actor_staff_id: actor.id, title, body_html: bodyHtml,
           site_id: siteId || null, project_id: projectId || null,
-          payments, details,
+          payments,
           lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
           files,
           refs: refs.map(r => r.id),
@@ -171,11 +164,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     } finally {
       setBusy(false)
     }
-  }, [actor, reportId, existingStatus, title, bodyHtml, siteId, projectId, payments, details, lines, files, refs, router])
+  }, [actor, reportId, existingStatus, title, bodyHtml, siteId, projectId, payments, lines, files, refs, router])
 
   const handleExcelUpload = useCallback(async (file: File) => {
-    if (payments.length > 0 || details.length > 0) {
-      const ok = window.confirm('현재 표에 입력된 지급 정보·상세내용이 모두 지워지고 엑셀 내용으로 바뀝니다. 계속할까요?')
+    if (payments.length > 0) {
+      const ok = window.confirm('현재 표에 입력된 지급 정보가 모두 지워지고 엑셀 내용으로 바뀝니다. 계속할까요?')
       if (!ok) {
         if (excelInputRef.current) excelInputRef.current.value = ''
         return
@@ -192,7 +185,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       if (!res.ok) { setError(json.error); return }
 
       setPayments(json.payments)
-      setDetails(json.details)
       setError(json.errors.length > 0
         ? json.errors.map((x: { sheet: string; row: number; message: string }) =>
             x.row > 0 ? `${x.sheet} ${x.row}행: ${x.message}` : `${x.sheet}: ${x.message}`).join(' / ')
@@ -203,7 +195,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       setExcelBusy(false)
       if (excelInputRef.current) excelInputRef.current.value = ''
     }
-  }, [payments, details])
+  }, [payments])
 
   // 데스크톱·모바일 두 경로가 현장 선택 시 다르게 동작하지 않도록 핸들러를 하나로 통합한다.
   // 나중에 로직을 고칠 때 한쪽만 빠뜨리는 버그를 방지한다.
@@ -335,8 +327,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
               <td className="border-b border-border-primary px-5 py-3.5">주식회사 다우건설</td>
             </tr>
             <tr>
-              <td className="px-5 py-3.5 text-label">기안자 <span className="text-danger">*</span></td>
-              <td className="px-5 py-3.5">
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">기안자 <span className="text-danger">*</span></td>
+              <td className="border-b border-border-primary px-5 py-3.5">
                 <select
                   value={actorId ?? ''}
                   onChange={e => setActorId(e.target.value)}
@@ -349,8 +341,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                   ))}
                 </select>
               </td>
-              <td className="px-5 py-3.5 text-label">현장</td>
-              <td className="px-5 py-3.5">
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">현장</td>
+              <td className="border-b border-border-primary px-5 py-3.5">
                 <WorkTargetPicker
                   compact
                   kind={workKind}
@@ -362,17 +354,38 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                 />
               </td>
             </tr>
+            {/*
+              결재선을 기안정보 표 안에 둔다. 예전에는 표 아래 별도 구역이었는데,
+              이름 몇 개만 확인하면 되는 정보가 화면을 크게 차지했다.
+            */}
+            <tr>
+              <td className="px-5 py-3.5 align-top text-label">결재선 <span className="text-danger">*</span></td>
+              <td colSpan={3} className="px-5 py-3.5">
+                <div className="flex flex-wrap items-start gap-3">
+                  <button
+                    onClick={() => setLineOpen(true)}
+                    className="h-8 shrink-0 rounded-lg border border-border-primary px-3 text-[13px] hover:bg-surface-secondary"
+                  >
+                    결재선 설정
+                  </button>
+                  {lines.length > 0
+                    ? <ApprovalLineView compact drafterName={actor?.name ?? ''} lines={lines} />
+                    : <span className="self-center text-[13px] text-txt-tertiary">지정 안 됨</span>}
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
 
-      <div className={`${stepFlex(4)} mb-3 items-center justify-between`}>
+      {/* 폰은 단계별로 넘기므로 결재선 구역이 따로 있어야 한다. 데스크톱은 위 표 안에 있다. */}
+      <div className={`${step === 3 ? 'flex' : 'hidden'} mb-3 items-center justify-between md:hidden`}>
         <h2>결재선 <span className="text-danger">*</span></h2>
-        <button onClick={() => setLineOpen(true)} className="h-11 rounded-lg border border-border-primary px-4 text-sm md:h-9 md:text-[13px]">
+        <button onClick={() => setLineOpen(true)} className="h-11 rounded-lg border border-border-primary px-4 text-sm">
           결재선 설정
         </button>
       </div>
-      <div className={`${stepBlock(4)} mb-8`}>
+      <div className={`${step === 3 ? 'block' : 'hidden'} mb-8 md:hidden`}>
         <ApprovalLineView drafterName={actor?.name ?? ''} lines={lines} />
       </div>
 
@@ -387,12 +400,12 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           className="h-11 flex-1 rounded-lg border border-border-primary px-3 text-base md:h-9 md:text-[13px]" placeholder="기안제목 입력" />
         <span className="self-end text-[12px] text-txt-tertiary md:self-auto">{title.length}/50</span>
       </div>
-      <div className={`${stepFlex(3)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>
+      <div className={`${stepFlex(2)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>
         <span className="w-20 text-label md:pt-2">파일첨부</span>
         <div className="flex-1"><FileAttach files={files} onChange={setFiles} /></div>
       </div>
 
-      <div className={`${stepFlex(3)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>
+      <div className={`${stepFlex(2)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>
         <span className="w-20 text-label md:pt-2">참조문서</span>
         <div className="flex-1">
           <div className="mb-3 flex flex-wrap gap-2">
@@ -468,7 +481,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           }}
         />
       </div>
-      <div className={`${stepBlock(2)} mb-8`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
 
       <div className={`${stepBlock(2)} mb-8`}>
         <textarea value={bodyHtml} onChange={e => setBodyHtml(e.target.value)}
@@ -483,9 +495,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           { label: '현장', to: 0, value: workKind === 'site' ? (sites.find(s => s.id === siteId)?.name || '미선택') : workKind === 'project' ? (projects.find(p => p.id === projectId)?.building_name || '미선택') : '현장 없음' },
           { label: '기안제목', to: 0, value: title || '입력 안 됨' },
           { label: '지급 정보', to: 1, value: `${payments.length}건 · ${formatMoney(totalAmount)}원` },
-          { label: '상세 내용', to: 2, value: details.length > 0 ? `${details.length}건` : '없음' },
-          { label: '첨부·참조', to: 3, value: `첨부 ${files.length}건 · 참조 ${refs.length}건` },
-          { label: '결재선', to: 4, value: lines.length > 0 ? lines.map(l => l.name).join(' → ') : '지정 안 됨' },
+          { label: '첨부·참조', to: 2, value: `첨부 ${files.length}건 · 참조 ${refs.length}건` },
+          { label: '결재선', to: 3, value: lines.length > 0 ? lines.map(l => l.name).join(' → ') : '지정 안 됨' },
         ].map(item => (
           <div key={item.label} className="flex items-start justify-between gap-4 border-b border-border-primary py-4">
             <span className="w-16 shrink-0 text-label">{item.label}</span>

@@ -16,6 +16,12 @@ interface Props {
   drafterName: string
   drafterActedAt?: string | null
   lines: LineCard[]
+  /**
+   * 기안 작성 화면의 기안정보 표 안에 들어갈 때 쓴다. 카드를 작게 줄인다 —
+   * 결재선은 이름만 확인하면 되는 정보라 자리를 많이 차지할 이유가 없다.
+   * 문서 상세 화면은 결재 이력(시각·상태)을 보는 곳이라 기본 크기를 그대로 쓴다.
+   */
+  compact?: boolean
 }
 
 const STATE_COLOR: Record<LineState, string> = {
@@ -31,7 +37,15 @@ function StateIcon({ state }: { state: LineState }) {
   return <Circle size={18} className="text-txt-tertiary shrink-0" />
 }
 
-export default function ApprovalLineView({ drafterName, drafterActedAt, lines }: Props) {
+export default function ApprovalLineView({ drafterName, drafterActedAt, lines, compact }: Props) {
+  const cardCls = compact
+    ? 'w-24 overflow-hidden rounded-lg border border-border-primary bg-surface'
+    : 'w-32 overflow-hidden rounded-lg border border-border-primary bg-surface'
+  const headCls = compact
+    ? 'border-b border-border-primary bg-surface-secondary py-1 text-center text-label'
+    : 'border-b border-border-primary bg-surface-secondary py-2 text-center text-label'
+  const bodyCls = compact ? 'px-2 py-2 text-center' : 'px-3 py-4 text-center'
+
   return (
     <>
       {/*
@@ -58,29 +72,34 @@ export default function ApprovalLineView({ drafterName, drafterActedAt, lines }:
         ))}
       </div>
 
-      <div className="hidden flex-wrap gap-3 md:flex">
-      <div className="w-32 overflow-hidden rounded-lg border border-border-primary bg-surface">
-        <div className="border-b border-border-primary bg-surface-secondary py-2 text-center text-label">
+      <div className={`hidden flex-wrap md:flex ${compact ? 'gap-2' : 'gap-3'}`}>
+      <div className={cardCls}>
+        <div className={headCls}>
           기안
         </div>
-        <div className="px-3 py-4 text-center">
+        <div className={bodyCls}>
           <div className="text-[13px] font-medium">{drafterName}</div>
-          <div className="mt-1.5 text-[12px] text-txt-tertiary">
-            {drafterActedAt ? new Date(drafterActedAt).toLocaleString('ko-KR') : ' '}
-          </div>
+          {/* 작게 쓸 때는 기안 시각을 접는다 — 아직 저장 전이라 늘 비어 있다. */}
+          {!compact && (
+            <div className="mt-1.5 text-[12px] text-txt-tertiary">
+              {drafterActedAt ? new Date(drafterActedAt).toLocaleString('ko-KR') : ' '}
+            </div>
+          )}
         </div>
       </div>
 
       {lines.map(l => (
-        <div key={l.staff_id} className="w-32 overflow-hidden rounded-lg border border-border-primary bg-surface">
-          <div className="border-b border-border-primary bg-surface-secondary py-2 text-center text-label">
+        <div key={l.staff_id} className={cardCls}>
+          <div className={headCls}>
             {LINE_ROLE_LABEL[l.role]}
           </div>
-          <div className="px-3 py-4 text-center">
+          <div className={bodyCls}>
             <div className="text-[13px] font-medium">{l.name}</div>
-            <div className={`mt-1.5 text-[12px] ${STATE_COLOR[l.state ?? 'waiting']}`}>
-              {LINE_STATE_LABEL[l.state ?? 'waiting']}
-            </div>
+            {!compact && (
+              <div className={`mt-1.5 text-[12px] ${STATE_COLOR[l.state ?? 'waiting']}`}>
+                {LINE_STATE_LABEL[l.state ?? 'waiting']}
+              </div>
+            )}
           </div>
         </div>
       ))}

@@ -70,18 +70,6 @@ export interface ExpenseReportPayment {
   expense_id: string | null
 }
 
-export interface ExpenseReportDetail {
-  id: string
-  report_id: string
-  seq: number
-  vendor_name: string | null
-  account: string | null
-  content: string | null
-  dept_name: string | null
-  amount: number | null
-  note: string | null
-}
-
 export interface ExpenseReportLine {
   id: string
   report_id: string
@@ -123,20 +111,7 @@ export interface PaymentRow {
   business_no: string
 }
 
-export interface DetailRow {
-  vendor_name: string
-  account: string
-  content: string
-  dept_name: string
-  amount: number
-  note: string
-}
-
 export const EMPTY_PAYMENT: PaymentRow = {
   vendor_name: '', amount: 0, pay_request_date: '',
   bank: '', account_no: '', business_no: '',
-}
-
-export const EMPTY_DETAIL: DetailRow = {
-  vendor_name: '', account: '', content: '', dept_name: '', amount: 0, note: '',
 }

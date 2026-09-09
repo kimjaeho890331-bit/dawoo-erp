@@ -6,10 +6,6 @@ interface PaymentInput {
   vendor_name: string; amount: number; pay_request_date: string
   bank: string; account_no: string; business_no?: string | null
 }
-interface DetailInput {
-  vendor_name?: string | null; account?: string | null; content?: string | null
-  dept_name?: string | null; amount?: number | null; note?: string | null
-}
 interface LineInput { staff_id: string; role: 'approval' | 'cooperation' }
 interface FileInput { file_name: string; file_url: string; size: number; source?: 'manual' | 'vendor' }
 
@@ -21,7 +17,6 @@ interface Body {
   site_id?: string | null
   project_id?: string | null
   payments: PaymentInput[]
-  details: DetailInput[]
   lines: LineInput[]
   files?: FileInput[]
   refs?: string[]
@@ -36,7 +31,6 @@ export async function POST(request: NextRequest) {
 
   // 요청 본문에 필드가 통째로 누락될 수 있으므로 안전하게 기본값을 둔다
   const payments = body.payments ?? []
-  const details = body.details ?? []
   const lines = body.lines ?? []
   const files = body.files ?? []
   const refs = body.refs ?? []
@@ -92,15 +86,6 @@ export async function POST(request: NextRequest) {
     if (delPaymentsError) {
       return Response.json(
         { error: `기존 지급 정보 삭제 실패: ${delPaymentsError.message}` },
-        { status: 500 },
-      )
-    }
-
-    const { error: delDetailsError } = await admin
-      .from('expense_report_details').delete().eq('report_id', reportId)
-    if (delDetailsError) {
-      return Response.json(
-        { error: `기존 상세내용 삭제 실패: ${delDetailsError.message}` },
         { status: 500 },
       )
     }
@@ -161,27 +146,6 @@ export async function POST(request: NextRequest) {
     if (paymentsError) {
       return Response.json(
         { error: `지급 정보 저장 실패: ${paymentsError.message}` },
-        { status: 500 },
-      )
-    }
-  }
-
-  if (details.length > 0) {
-    const { error: detailsError } = await admin.from('expense_report_details').insert(
-      details.map((d, i) => ({
-        report_id: reportId,
-        seq: i,
-        vendor_name: d.vendor_name ?? null,
-        account: d.account ?? null,
-        content: d.content ?? null,
-        dept_name: d.dept_name ?? null,
-        amount: d.amount ?? null,
-        note: d.note ?? null,
-      })),
-    )
-    if (detailsError) {
-      return Response.json(
-        { error: `상세내용 저장 실패: ${detailsError.message}` },
         { status: 500 },
       )
     }

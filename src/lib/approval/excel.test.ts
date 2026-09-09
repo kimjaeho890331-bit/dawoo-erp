@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest'
 import { buildTemplate, parseWorkbook, normalizeDate, toAmount } from './excel'
 
 const PAYMENT_HEADERS = ['거래처명', '지급금액', '지급요청일', '은행', '계좌번호', '사업자등록번호']
-const DETAIL_HEADERS = ['거래처명', '계정', '내용', '부서명', '금액', '비고']
 
 /** 시트 이름·헤더·데이터 행을 받아 메모리에서 xlsx 버퍼를 만든다. */
 async function buildWorkbookBuffer(
@@ -57,7 +56,6 @@ describe('buildTemplate + parseWorkbook 왕복', () => {
     const buf = await buildTemplate()
     const out = await parseWorkbook(buf)
     expect(out.payments).toEqual([])
-    expect(out.details).toEqual([])
     expect(out.errors).toEqual([])
   })
 })
@@ -73,7 +71,6 @@ describe('parseWorkbook', () => {
           ['상수도자재', '5,000,000', '2026/7/4', '신한은행', '987-654-321', ''],
         ],
       },
-      { name: '상세내용', headers: DETAIL_HEADERS, rows: [] },
     ])
 
     const out = await parseWorkbook(buf)
@@ -98,7 +95,6 @@ describe('parseWorkbook', () => {
         headers: PAYMENT_HEADERS,
         rows: [['㈜다우건설', '금액없음', '2026.07.24', '국민은행', '123-456-789', '']],
       },
-      { name: '상세내용', headers: DETAIL_HEADERS, rows: [] },
     ])
 
     const out = await parseWorkbook(buf)
@@ -114,7 +110,6 @@ describe('parseWorkbook', () => {
         headers: PAYMENT_HEADERS,
         rows: [['㈜다우건설', 9900000, '내일', '국민은행', '123-456-789', '']],
       },
-      { name: '상세내용', headers: DETAIL_HEADERS, rows: [] },
     ])
 
     const out = await parseWorkbook(buf)
@@ -133,7 +128,6 @@ describe('parseWorkbook', () => {
           ['㈜다우건설', 9900000, '2026.07.24', '국민은행', '123-456-789', ''],
         ],
       },
-      { name: '상세내용', headers: DETAIL_HEADERS, rows: [] },
     ])
 
     const out = await parseWorkbook(buf)
@@ -151,28 +145,6 @@ describe('parseWorkbook', () => {
     const out = await parseWorkbook(buf)
 
     expect(out.payments).toEqual([])
-    expect(out.details).toEqual([])
-    expect(out.errors).toEqual([
-      { sheet: '지급정보', row: 0, message: '지급정보 시트를 찾을 수 없습니다' },
-      { sheet: '상세내용', row: 0, message: '상세내용 시트를 찾을 수 없습니다' },
-    ])
-  })
-
-  it('상세내용 시트만 있고 지급정보 시트가 없으면 지급정보만 에러로 담기고 상세내용은 정상 파싱된다', async () => {
-    const buf = await buildWorkbookBuffer([
-      {
-        name: '상세내용',
-        headers: DETAIL_HEADERS,
-        rows: [['㈜다우건설', '자재비', '수도관 자재', '현장1팀', 500000, '']],
-      },
-    ])
-
-    const out = await parseWorkbook(buf)
-
-    expect(out.payments).toEqual([])
-    expect(out.details).toEqual([
-      { vendor_name: '㈜다우건설', account: '자재비', content: '수도관 자재', dept_name: '현장1팀', amount: 500000, note: '' },
-    ])
     expect(out.errors).toEqual([
       { sheet: '지급정보', row: 0, message: '지급정보 시트를 찾을 수 없습니다' },
     ])

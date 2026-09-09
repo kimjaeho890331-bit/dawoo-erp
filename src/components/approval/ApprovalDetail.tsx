@@ -15,7 +15,7 @@ import {
 } from '@/lib/approval/status'
 import {
   APPROVAL_STATUS_LABEL, LINE_ROLE_LABEL, LINE_STATE_LABEL,
-  type ExpenseReport, type ExpenseReportPayment, type ExpenseReportDetail,
+  type ExpenseReport, type ExpenseReportPayment,
   type ExpenseReportLine, type ExpenseReportFile,
 } from '@/types/approval'
 import { APPROVAL_STATUS_BADGE } from '@/lib/approval/statusStyle'
@@ -44,7 +44,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const [report, setReport] = useState<ExpenseReport | null>(null)
   const [drafterName, setDrafterName] = useState('')
   const [payments, setPayments] = useState<ExpenseReportPayment[]>([])
-  const [details, setDetails] = useState<ExpenseReportDetail[]>([])
   const [lines, setLines] = useState<LineWithStaff[]>([])
   const [files, setFiles] = useState<ExpenseReportFile[]>([])
   const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
@@ -79,9 +78,8 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       siteId: rest.site_id, projectId: rest.project_id, siteName, projectName,
     }))
 
-    const [{ data: p }, { data: d }, { data: l }, { data: f }, { data: rf }] = await Promise.all([
+    const [{ data: p }, { data: l }, { data: f }, { data: rf }] = await Promise.all([
       supabase.from('expense_report_payments').select('*').eq('report_id', reportId).order('seq'),
-      supabase.from('expense_report_details').select('*').eq('report_id', reportId).order('seq'),
       supabase.from('expense_report_lines').select('*, staff(name)').eq('report_id', reportId).order('seq'),
       supabase.from('expense_report_files').select('*').eq('report_id', reportId).order('uploaded_at'),
       supabase
@@ -90,7 +88,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         .eq('report_id', reportId),
     ])
     setPayments((p ?? []) as ExpenseReportPayment[])
-    setDetails((d ?? []) as ExpenseReportDetail[])
     setLines((l ?? []) as LineWithStaff[])
     setFiles((f ?? []) as ExpenseReportFile[])
     setRefs((rf ?? []).map((x: Record<string, unknown>) =>
@@ -266,55 +263,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
           </tbody>
         </table>
       </div>
-
-      {details.length > 0 && (
-        <div className="mb-8 overflow-hidden rounded-lg border border-border-primary bg-surface">
-          <div className="border-b border-border-primary px-5 py-4 text-card-title">상세 내용</div>
-
-          {/* 상세내용 — 모바일 */}
-          <div className="px-4 py-4 md:hidden">
-            {details.map(d => (
-              <MobileCard key={d.id}>
-                <div className="mb-2 flex items-baseline justify-between gap-3">
-                  <span className="text-[15px] font-medium text-txt-primary">{d.content || d.vendor_name || '내용 없음'}</span>
-                  {d.amount ? (
-                    <span className="text-money shrink-0 text-[15px] text-txt-primary">{formatMoney(d.amount)}</span>
-                  ) : null}
-                </div>
-                <MobileField label="거래처명" value={d.vendor_name ?? ''} />
-                <MobileField label="계정" value={d.account ?? ''} />
-                <MobileField label="부서명" value={d.dept_name ?? ''} />
-                <MobileField label="비고" value={d.note ?? ''} />
-              </MobileCard>
-            ))}
-          </div>
-
-          <table className="hidden w-full table-fixed md:table">
-            <thead>
-              <tr>
-                <th className="border-r border-border-primary px-4 py-3 text-left">거래처명</th>
-                <th className="border-r border-border-primary px-4 py-3 text-left">계정</th>
-                <th className="border-r border-border-primary px-4 py-3 text-left">내용</th>
-                <th className="border-r border-border-primary px-4 py-3 text-left">부서명</th>
-                <th className="border-r border-border-primary px-4 py-3 text-right">금액</th>
-                <th className="px-4 py-3 text-left">비고</th>
-              </tr>
-            </thead>
-            <tbody>
-              {details.map(d => (
-                <tr key={d.id} className="border-t border-border-primary">
-                  <td className="border-r border-border-primary px-4 py-3">{d.vendor_name ?? ''}</td>
-                  <td className="border-r border-border-primary px-4 py-3">{d.account ?? ''}</td>
-                  <td className="border-r border-border-primary px-4 py-3">{d.content ?? ''}</td>
-                  <td className="border-r border-border-primary px-4 py-3">{d.dept_name ?? ''}</td>
-                  <td className="text-money border-r border-border-primary px-4 py-3 text-right">{d.amount ? formatMoney(d.amount) : ''}</td>
-                  <td className="px-4 py-3">{d.note ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {report.body_html && (
         <div className="mb-8 rounded-lg border border-border-primary bg-surface px-5 py-4 text-[13px] leading-relaxed">{report.body_html}</div>

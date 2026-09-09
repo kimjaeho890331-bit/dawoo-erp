@@ -1,11 +1,9 @@
 import ExcelJS from 'exceljs'
-import type { PaymentRow, DetailRow } from '@/types/approval'
+import type { PaymentRow } from '@/types/approval'
 
 const PAYMENT_SHEET = '지급정보'
-const DETAIL_SHEET = '상세내용'
 
 const PAYMENT_HEADERS = ['거래처명', '지급금액', '지급요청일', '은행', '계좌번호', '사업자등록번호']
-const DETAIL_HEADERS = ['거래처명', '계정', '내용', '부서명', '금액', '비고']
 
 export interface ParseError {
   sheet: string
@@ -42,11 +40,6 @@ export async function buildTemplate(): Promise<Buffer> {
   ps.getRow(1).font = { bold: true }
   ps.columns = PAYMENT_HEADERS.map(() => ({ width: 20 }))
 
-  const ds = wb.addWorksheet(DETAIL_SHEET)
-  ds.addRow(DETAIL_HEADERS)
-  ds.getRow(1).font = { bold: true }
-  ds.columns = DETAIL_HEADERS.map(() => ({ width: 18 }))
-
   return Buffer.from(await wb.xlsx.writeBuffer())
 }
 
@@ -64,14 +57,12 @@ function cellText(row: ExcelJS.Row, col: number): string {
  */
 export async function parseWorkbook(buffer: Buffer): Promise<{
   payments: PaymentRow[]
-  details: DetailRow[]
   errors: ParseError[]
 }> {
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(buffer as unknown as ArrayBuffer)
 
   const payments: PaymentRow[] = []
-  const details: DetailRow[] = []
   const errors: ParseError[] = []
 
   const ps = wb.getWorksheet(PAYMENT_SHEET)
@@ -106,28 +97,5 @@ export async function parseWorkbook(buffer: Buffer): Promise<{
     })
   }
 
-  const ds = wb.getWorksheet(DETAIL_SHEET)
-  if (!ds) {
-    errors.push({ sheet: DETAIL_SHEET, row: 0, message: `${DETAIL_SHEET} 시트를 찾을 수 없습니다` })
-  } else {
-    ds.eachRow((row, n) => {
-      if (n === 1) return
-      const cells = [1, 2, 3, 4, 6].map(c => cellText(row, c))
-      const amountRaw = row.getCell(5).value
-      if (cells.every(c => !c) && (amountRaw === null || amountRaw === undefined)) return
-
-      const amount = amountRaw === null || amountRaw === undefined ? 0 : toAmount(amountRaw)
-      if (amount === null) {
-        errors.push({ sheet: DETAIL_SHEET, row: n, message: '금액이 숫자가 아닙니다' })
-        return
-      }
-
-      details.push({
-        vendor_name: cells[0], account: cells[1], content: cells[2],
-        dept_name: cells[3], amount, note: cells[4],
-      })
-    })
-  }
-
-  return { payments, details, errors }
+  return { payments, errors }
 }

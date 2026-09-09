@@ -11,7 +11,7 @@ interface DetailInput {
   dept_name?: string | null; amount?: number | null; note?: string | null
 }
 interface LineInput { staff_id: string; role: 'approval' | 'cooperation' }
-interface FileInput { file_name: string; file_url: string; size: number }
+interface FileInput { file_name: string; file_url: string; size: number; source?: 'manual' | 'vendor' }
 
 interface Body {
   id?: string
@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
       files.map(f => ({
         report_id: reportId,
         file_name: f.file_name, file_url: f.file_url, size: f.size,
+        source: f.source ?? 'manual',
       })),
     )
     if (filesError) {

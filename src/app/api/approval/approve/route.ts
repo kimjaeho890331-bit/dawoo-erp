@@ -5,6 +5,7 @@ import {
 } from '@/lib/approval/status'
 import { issueDocNo } from '@/lib/approval/docNo'
 import { paymentsToExpenses } from '@/lib/approval/toExpense'
+import { pickReceiptUrl } from '@/lib/approval/receipt'
 import { sendPush } from '@/lib/push/send'
 import { EXPENSE_CATEGORIES, type ExpenseReport } from '@/types/approval'
 
@@ -91,10 +92,9 @@ async function completeApproval({
 
   const { data: files, error: filesError } = await admin
     .from('expense_report_files')
-    .select('file_url')
+    .select('file_url, source')
     .eq('report_id', id)
     .order('uploaded_at')
-    .limit(1)
 
   if (filesError) {
     return Response.json(
@@ -107,7 +107,7 @@ async function completeApproval({
     report: { ...report, doc_no: docNo },
     payments: payments ?? [],
     category,
-    firstFileUrl: files?.[0]?.file_url ?? null,
+    firstFileUrl: pickReceiptUrl(files ?? []),
   })
 
   let created = 0

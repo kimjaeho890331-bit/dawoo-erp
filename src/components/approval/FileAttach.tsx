@@ -7,9 +7,13 @@ export interface AttachedFile {
   file_name: string
   file_url: string
   size: number
+  /** 'manual' = 직접 올림, 'vendor' = 거래처DB에서 자동 첨부 */
+  source: 'manual' | 'vendor'
 }
 
-const MAX_FILES = 10
+// 자동 첨부(거래처 서류)도 이 상한을 지켜야 한다. 값을 두 곳에 따로 두면
+// 하나만 고치고 다른 쪽을 잊어 상한이 무의미해지는 버그가 재발한다.
+export const MAX_FILES = 10
 const MAX_SIZE = 20 * 1024 * 1024
 const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'gif', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'pdf', 'hwp']
 
@@ -54,7 +58,7 @@ export default function FileAttach({ files, onChange }: Props) {
         const json = await res.json()
         if (!res.ok) { setError(json.error ?? '업로드 실패'); continue }
 
-        added.push({ file_name: file.name, file_url: json.url, size: file.size })
+        added.push({ file_name: file.name, file_url: json.url, size: file.size, source: 'manual' })
       }
 
       onChange([...files, ...added])
@@ -77,6 +81,9 @@ export default function FileAttach({ files, onChange }: Props) {
           <span key={i} className="flex items-center gap-2 rounded-lg bg-surface-secondary px-3 py-1.5 text-[13px]">
             <Paperclip size={14} className="text-txt-tertiary" />
             {f.file_name}
+            {f.source === 'vendor' && (
+              <span className="rounded bg-surface-tertiary px-1 text-[10px] text-txt-tertiary">거래처</span>
+            )}
             <button onClick={() => onChange(files.filter((_, idx) => idx !== i))} aria-label={`${f.file_name} 삭제`}
               className="inline-flex h-6 w-6 items-center justify-center">
               <X size={14} className="text-txt-tertiary" />

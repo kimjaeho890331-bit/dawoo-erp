@@ -9,13 +9,15 @@ import ApprovalLineModal, { type LineDraft } from './ApprovalLineModal'
 import ApprovalLineView from './ApprovalLineView'
 import PaymentTable from './PaymentTable'
 import DetailTable from './DetailTable'
-import FileAttach, { type AttachedFile } from './FileAttach'
+import FileAttach, { MAX_FILES, type AttachedFile } from './FileAttach'
 import MobileField from './MobileField'
 import type { ApprovalStatus, PaymentRow, DetailRow } from '@/types/approval'
 import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
-import { workKindFromIds, type WorkKind } from '@/lib/workTarget'
+import { workKindFromIds, projectLabel, type WorkKind } from '@/lib/workTarget'
+import { draftTitleFromTarget } from '@/lib/approval/draftTitle'
+import { vendorDocsToAttachments } from '@/lib/approval/vendorDocs'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
 
@@ -203,6 +205,31 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     }
   }, [payments, details])
 
+  // 데스크톱·모바일 두 경로가 현장 선택 시 다르게 동작하지 않도록 핸들러를 하나로 통합한다.
+  // 나중에 로직을 고칠 때 한쪽만 빠뜨리는 버그를 방지한다.
+  const handleWorkTargetChange = useCallback((next: { kind: WorkKind; siteId: string; projectId: string }) => {
+    setWorkKind(next.kind)
+    setSiteId(next.siteId)
+    setProjectId(next.projectId)
+    // 제목이 비어 있을 때만 채운다 — 손으로 고친 제목이 날아가면 안 된다
+    setTitle(prev => {
+      if (prev.trim()) return prev
+      let picked: string | undefined
+      if (next.siteId) {
+        picked = sites.find(s => s.id === next.siteId)?.name
+      } else {
+        // building_name만 쓰면 동·호가 빠진다. 화면 목록(WorkTargetPicker)과 같은
+        // projectLabel로 만들어야 "대광빌라 F동 302호"처럼 동·호가 제목에 남고,
+        // 이 제목이 그대로 expenses.title로 복사돼도 어느 세대 건인지 알 수 있다.
+        const project = projects.find(p => p.id === next.projectId)
+        picked = project ? projectLabel(project) : undefined
+      }
+      // picked가 빈 문자열/공백뿐이면 draftTitleFromTarget이 ''을 돌려주고,
+      // 그때는 아래 삼항이 prev(기존 동작)를 지킨다 — 억지로 채우지 않는다.
+      return picked ? draftTitleFromTarget(picked) : prev
+    })
+  }, [sites, projects])
+
   const vendors = payments.map(p => p.vendor_name).filter(Boolean)
 
   // 단계 이동 시 위로 올려준다. 긴 단계를 지나온 뒤 다음 단계의 중간부터 보이면
@@ -287,7 +314,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
             projectId={projectId}
             sites={sites}
             projects={projects}
-            onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+            onChange={handleWorkTargetChange}
           />
         </div>
       </div>
@@ -331,7 +358,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                   projectId={projectId}
                   sites={sites}
                   projects={projects}
-                  onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
+                  onChange={handleWorkTargetChange}
                 />
               </td>
             </tr>
@@ -417,7 +444,30 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           />
         </label>
       </div>
-      <div className={`${stepBlock(1)} mb-8`}><PaymentTable rows={payments} onChange={setPayments} /></div>
+      <div className={`${stepBlock(1)} mb-8`}>
+        <PaymentTable
+          rows={payments}
+          onChange={setPayments}
+          onPickVendor={v => {
+            const toAdd = vendorDocsToAttachments(v, files)
+            // 서류가 등록 안 된 거래처는 toAdd가 빈 배열이다 — 이 경우 파일도, 오류도 건드리지 않는다.
+            if (toAdd.length === 0) return
+
+            // 상한(MAX_FILES)은 FileAttach.tsx 한 곳에서만 정의한다. 자동 첨부가 직접 올리기와
+            // 다른 상한을 쓰면(또는 상한 자체가 없으면) 직접 올린 파일이 상한 근처일 때
+            // 거래처를 고르는 것만으로 조용히 상한을 넘게 된다.
+            const room = Math.max(0, MAX_FILES - files.length)
+            const fit = toAdd.slice(0, room)
+            if (fit.length > 0) setFiles(prev => [...prev, ...fit])
+
+            // 자리가 모자라 일부를 못 붙였으면 조용히 버리지 않고 알린다.
+            // 전부 붙었을 때는 오류를 띄우지 않는다 — 기존에 떠 있던 다른 오류는 그대로 둔다.
+            if (fit.length < toAdd.length) {
+              setError(`첨부는 최대 ${MAX_FILES}개까지 가능합니다 — 거래처 서류 일부를 붙이지 못했습니다`)
+            }
+          }}
+        />
+      </div>
       <div className={`${stepBlock(2)} mb-8`}><DetailTable rows={details} vendors={vendors} onChange={setDetails} /></div>
 
       <div className={`${stepBlock(2)} mb-8`}>

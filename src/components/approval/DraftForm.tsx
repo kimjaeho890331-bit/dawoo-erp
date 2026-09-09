@@ -30,6 +30,19 @@ const isBlankPayment = (p: PaymentRow) =>
   !p.bank?.trim() && !p.account_no?.trim() && !p.business_no?.trim()
 
 /**
+ * 쓰다 만 줄에 지급요청일이 없으면 무엇을 채워야 하는지 알려준다.
+ *
+ * pay_request_date는 DATE NOT NULL이라 빈 값이면 DB가 거부하는데, 그대로 두면
+ * `invalid input syntax for type date: ""` 같은 문구가 사용자에게 그대로 나온다.
+ * 특히 거래처를 고르면 은행·계좌는 자동으로 채워지고 날짜만 비어 있어서 밟기 쉽다.
+ * 아무것도 안 적은 줄은 저장 전에 걸러지므로 여기서 보지 않는다.
+ */
+const missingDateRow = (rows: PaymentRow[]): number | null => {
+  const i = rows.findIndex(p => !isBlankPayment(p) && !p.pay_request_date?.trim())
+  return i === -1 ? null : i + 1
+}
+
+/**
  * 모바일 기안 작성은 단계별로 나눈다. 한 화면에 다 넣으면 폰에서 끝없이 스크롤해야 하고,
  * 어디까지 채웠는지 알 수 없다.
  *
@@ -129,6 +142,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
 
   const save = useCallback(async (thenSubmit: boolean) => {
     if (!actor) { setError('기안자를 선택해 주세요'); return }
+
+    const rowNo = missingDateRow(payments)
+    if (rowNo !== null) { setError(`지급 정보 ${rowNo}행의 지급요청일을 입력해 주세요`); return }
 
     if (thenSubmit) {
       const lineErr = validateApprovalLine(

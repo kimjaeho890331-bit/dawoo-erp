@@ -16,7 +16,7 @@ import {
   type LineState,
 } from '@/types/approval'
 import { currentTurnLine } from '@/lib/approval/status'
-import { APPROVAL_STATUS_BADGE, shortDateTime } from '@/lib/approval/statusStyle'
+import { APPROVAL_STATUS_BADGE, listDateTime, shortDateTime } from '@/lib/approval/statusStyle'
 import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 
 
@@ -276,13 +276,19 @@ export default function ApprovalPage() {
               <table className="w-full table-fixed">
                 <thead>
                   <tr>
-                    <th className="w-[16%] px-4 py-3 text-left">문서번호</th>
-                    <th className="px-4 py-3 text-left">기안제목</th>
-                    <th className="w-[14%] px-4 py-3 text-left">현장</th>
-                    <th className="w-[12%] px-4 py-3 text-left">기안자</th>
-                    <th className="w-[14%] px-4 py-3 text-right">지급총계</th>
-                    <th className="w-[16%] px-4 py-3 text-left">상신일시</th>
-                    <th className="w-[10%] px-4 py-3 text-left">상태</th>
+                    {/*
+                      칸 너비는 실제로 들어가는 내용에 맞춘다.
+                      기안제목·현장은 길어서 넓게 주고 최대 두 줄까지만 보인다.
+                      지급총계는 10억(1,000,000,000)이 한 줄에 들어갈 만큼,
+                      상신일시는 짧은 형식이 한 줄에 들어갈 만큼만 준다.
+                    */}
+                    <th className="w-[12%] px-4 py-3 text-left">문서번호</th>
+                    <th className="w-[26%] px-4 py-3 text-left">기안제목</th>
+                    <th className="w-[21%] px-4 py-3 text-left">현장</th>
+                    <th className="w-[7%] px-4 py-3 text-left">기안자</th>
+                    <th className="w-[13%] px-4 py-3 text-right">지급총계</th>
+                    <th className="w-[14%] px-2 py-3 text-left">상신일시</th>
+                    <th className="w-[7%] px-2 py-3 text-left">상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -290,17 +296,18 @@ export default function ApprovalPage() {
                     <tr key={r.id} className="border-t border-border-primary">
                       <td className="px-4 py-3 text-txt-tertiary">{r.doc_no ?? '-'}</td>
                       <td className="px-4 py-3">
-                        <Link href={`/approval/${r.id}`} className="text-txt-primary hover:underline">{r.title}</Link>
+                        {/* 제목은 길어도 두 줄까지만. 그 이상은 줄 높이가 들쭉날쭉해 표가 읽기 어렵다. */}
+                        <Link href={`/approval/${r.id}`} className="line-clamp-2 text-txt-primary hover:underline">{r.title}</Link>
                       </td>
                       <td className={`px-4 py-3 ${targetOf(r).missing ? 'font-medium text-danger' : 'text-txt-primary'}`}>
-                        {targetOf(r).text}
+                        <span className="line-clamp-2">{targetOf(r).text}</span>
                       </td>
                       <td className="px-4 py-3 text-txt-primary">{r.staff?.name ?? ''}</td>
-                      <td className="text-money px-4 py-3 text-right text-txt-primary">{formatMoney(r.total_amount)}</td>
-                      <td className="px-4 py-3 text-txt-secondary">
-                        {r.submitted_at ? new Date(r.submitted_at).toLocaleString('ko-KR') : '-'}
+                      <td className="text-money px-4 py-3 text-right whitespace-nowrap text-txt-primary">{formatMoney(r.total_amount)}</td>
+                      <td className="px-2 py-3 whitespace-nowrap text-txt-secondary">
+                        {listDateTime(r.submitted_at)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-3">
                         <span className={`inline-block ${APPROVAL_STATUS_BADGE[r.status]}`}>
                           {APPROVAL_STATUS_LABEL[r.status]}
                         </span>

@@ -180,17 +180,29 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
               </td>
             </tr>
             <tr>
-              <td className="px-5 py-3.5 text-label">기안자</td>
-              <td className="px-5 py-3.5">{drafterName}</td>
-              <td className="px-5 py-3.5 text-label">현장</td>
-              <td className={`px-5 py-3.5 ${targetText.missing ? 'font-medium text-danger' : ''}`}>{targetText.text}</td>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">기안자</td>
+              <td className="border-b border-border-primary px-5 py-3.5">{drafterName}</td>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">현장</td>
+              <td className={`border-b border-border-primary px-5 py-3.5 ${targetText.missing ? 'font-medium text-danger' : ''}`}>{targetText.text}</td>
+            </tr>
+            {/*
+              결재선을 기안정보 표 안에 둔다 — 기안작성 화면과 같은 자리다.
+              단, 여기서는 compact를 쓰지 않는다. 작게 쓰면 결재 상태(대기·승인·반려)와
+              시각이 접히는데, 문서 상세는 그 이력을 보러 오는 화면이다.
+            */}
+            <tr>
+              <td className="px-5 py-3.5 align-top text-label">결재선</td>
+              <td colSpan={3} className="px-5 py-3.5">
+                <ApprovalLineView drafterName={drafterName} drafterActedAt={report.submitted_at} lines={cards} />
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <h2 className="mb-3">결재선</h2>
-      <div className="mb-8">
+      {/* 폰에는 위 표가 없으므로 결재선 구역이 따로 있어야 한다. */}
+      <h2 className="mb-3 md:hidden">결재선</h2>
+      <div className="mb-8 md:hidden">
         <ApprovalLineView drafterName={drafterName} drafterActedAt={report.submitted_at} lines={cards} />
       </div>
 

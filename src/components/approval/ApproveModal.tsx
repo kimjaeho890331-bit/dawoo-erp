@@ -20,13 +20,18 @@ interface Props {
   /** 지금 이 결재를 누르는 사람. 서버가 요구하는 actor_staff_id로 그대로 전달된다. */
   actorId: string
   actorName: string
+  /**
+   * 열릴 때 고를 갈래. 하단의 '반려' 버튼으로 들어오면 'reject'로 열려
+   * 사유 칸이 바로 보인다. 안 주면 지금처럼 '승인'으로 연다.
+   */
+  initialMode?: 'approve' | 'reject'
 }
 
 export default function ApproveModal({
   open, title, drafterName, totalAmount, paymentCount, isFinal, resumeOnly, docNo, onClose, onDone, reportId,
-  actorId, actorName,
+  actorId, actorName, initialMode = 'approve',
 }: Props) {
-  const [mode, setMode] = useState<'approve' | 'reject'>('approve')
+  const [mode, setMode] = useState<'approve' | 'reject'>(initialMode)
   const [category, setCategory] = useState<string>('')
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
@@ -35,12 +40,12 @@ export default function ApproveModal({
   // 모달이 열릴 때 상태 초기화
   useEffect(() => {
     if (open) {
-      setMode('approve')
+      setMode(initialMode)
       setCategory('')
       setComment('')
       setError(null)
     }
-  }, [open])
+  }, [open, initialMode])
 
   if (!open) return null
 
@@ -134,10 +139,16 @@ export default function ApproveModal({
           )}
 
           <div className="mb-2 text-label">
-            결재의견 {mode === 'reject' && <span className="text-danger">*</span>}
+            {mode === 'reject' ? <>반려 사유 <span className="text-danger">*</span></> : '결재의견'}
           </div>
           <textarea value={comment} onChange={e => setComment(e.target.value)}
-            className="w-full h-20 px-3 py-2 text-base border border-border-primary rounded-lg md:text-sm" />
+            placeholder={mode === 'reject' ? '기안자가 무엇을 고쳐야 하는지 적어 주세요' : undefined}
+            className="w-full h-20 px-3 py-2 text-base border border-border-primary rounded-lg placeholder:text-txt-quaternary md:text-sm" />
+          {mode === 'reject' && (
+            <p className="mt-2 text-xs text-txt-tertiary">
+              반려하면 문서가 기안자에게 돌아가고 알림이 갑니다. 기안자가 고쳐서 다시 상신하면 결재선은 1차부터 진행됩니다.
+            </p>
+          )}
 
           {error && <div className="mt-3 text-sm text-danger">{error}</div>}
         </div>
@@ -146,7 +157,9 @@ export default function ApproveModal({
           <button onClick={onClose} disabled={busy}
             className="flex-1 min-h-11 text-sm border border-border-primary rounded-lg disabled:opacity-40 md:flex-none md:min-h-0 md:px-5 md:py-2">취소</button>
           <button onClick={submit} disabled={busy}
-            className="flex-1 min-h-11 text-sm rounded-lg bg-accent text-txt-inverse disabled:opacity-40 md:flex-none md:min-h-0 md:px-5 md:py-2">결재</button>
+            className={`flex-1 min-h-11 text-sm rounded-lg text-txt-inverse disabled:opacity-40 md:flex-none md:min-h-0 md:px-5 md:py-2 ${mode === 'reject' ? 'bg-danger' : 'bg-accent'}`}>
+            {busy ? '처리 중' : mode === 'reject' ? '반려 발송' : '결재'}
+          </button>
         </div>
       </div>
     </div>

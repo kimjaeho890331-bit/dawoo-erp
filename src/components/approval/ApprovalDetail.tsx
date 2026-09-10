@@ -48,6 +48,8 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const [files, setFiles] = useState<ExpenseReportFile[]>([])
   const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
   const [modal, setModal] = useState(false)
+  /** 하단의 어느 버튼으로 열었는지 — 모달이 그 갈래로 열린다. */
+  const [modalMode, setModalMode] = useState<'approve' | 'reject'>('approve')
   const [error, setError] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState<ActionKey | null>(null)
   const [targetText, setTargetText] = useState({ text: '현장 없음', missing: true })
@@ -350,8 +352,20 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
             {actionBusy === 'cancel' ? '처리 중' : '결재취소'}
           </button>
         )}
+        {/*
+          반려는 예전에도 됐지만 '결재'를 누른 뒤 모달 안에서 갈래를 바꿔야 해서
+          있는 줄 모르고 지나쳤다. 문서를 기안자에게 되돌리는 건 승인만큼 자주
+          필요한 일이라 버튼을 밖으로 꺼낸다.
+          resumeOnly(결재가 끝난 문서의 마무리 처리)일 때는 반려할 수 없다.
+        */}
+        {showApprove && !resumeOnly && (
+          <button onClick={() => { setModalMode('reject'); setModal(true) }} disabled={busy}
+            className={`${ACTION_BTN} border border-danger text-danger disabled:opacity-40`}>
+            반려
+          </button>
+        )}
         {showApprove && (
-          <button onClick={() => setModal(true)} disabled={busy}
+          <button onClick={() => { setModalMode('approve'); setModal(true) }} disabled={busy}
             className={`${ACTION_BTN} bg-accent text-txt-inverse disabled:opacity-40`}>
             결재
           </button>
@@ -370,6 +384,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         docNo={report.doc_no}
         actorId={actor?.id ?? ''}
         actorName={actor?.name ?? ''}
+        initialMode={modalMode}
         onClose={() => setModal(false)}
         onDone={() => { setModal(false); load() }}
       />

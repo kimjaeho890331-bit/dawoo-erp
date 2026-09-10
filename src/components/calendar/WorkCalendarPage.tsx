@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
 import StaffColorPopover from './StaffColorPopover'
@@ -75,6 +76,9 @@ function daysBetween(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000) + 1
 }
 
+/** 달력 격자의 한 칸. inMonth가 false면 앞뒤로 붙은 옆 달 날짜다. */
+type DayCell = { date: string; day: number; inMonth: boolean }
+
 // 15개 시 + 동 목록 (홍보현황용 샘플)
 const CITIES_SMALL = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남']
 const CITIES_WATER = ['수원', '성남', '안양', '부천', '안산', '시흥', '군포']
@@ -84,6 +88,7 @@ const CITIES_WATER = ['수원', '성남', '안양', '부천', '안산', '시흥'
 // ============================================================
 export default function WorkCalendarPage() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'promo'>('calendar')
+  const [query, setQuery] = useState('')
   const [month, setMonth] = useState(() => todayMonthKST())
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [staffList, setStaffList] = useState<Staff[]>([])
@@ -110,21 +115,31 @@ export default function WorkCalendarPage() {
   const firstDow = new Date(month.year, month.month, 1).getDay()
   const monthLabel = `${month.year}년 ${month.month + 1}월`
 
+  // 격자에 실제로 그려지는 날짜 범위. 앞뒤 빈칸을 옆 달 날짜로 채우므로
+  // 8월 격자에는 7월 말과 9월 초가 함께 들어간다. 일정도 이 범위로 불러와야
+  // 9월 1일 칸이 빈 채로 남지 않는다.
+  const gridStart = useMemo(() => {
+    const d = new Date(month.year, month.month, 1 - firstDow)
+    return ds(d.getFullYear(), d.getMonth(), d.getDate())
+  }, [month, firstDow])
+  const gridCells = Math.ceil((firstDow + daysInMonth) / 7) * 7
+  const gridEnd = useMemo(() => addDays(gridStart, gridCells - 1), [gridStart, gridCells])
+
   // 데이터 로드 — 재조회 시 loading을 다시 켜지 않음 (그리드가 잠깐 사라지며 페이지 높이가
   // 줄어들어 스크롤이 상단으로 점프하는 문제 방지). 로딩 표시는 최초 1회만.
   const loadData = useCallback(async () => {
     const [sr, stf] = await Promise.all([
       supabase.from('schedules').select('*')
         .neq('schedule_type', 'site')
-        .gte('end_date', ds(month.year, month.month, 1))
-        .lte('start_date', ds(month.year, month.month, daysInMonth))
+        .gte('end_date', gridStart)
+        .lte('start_date', gridEnd)
         .order('start_date'),
       supabase.from('staff').select('*').order('name'),
     ])
     if (!sr.error) setSchedules((sr.data as Schedule[]) || [])
     if (!stf.error) setStaffList((stf.data as Staff[]) || [])
     setLoading(false)
-  }, [month, daysInMonth])
+  }, [gridStart, gridEnd])
   useEffect(() => { loadData() }, [loadData])
 
   // 최초 진입 시 오늘 날짜가 화면에 보이도록 스크롤 (1회만)
@@ -149,6 +164,39 @@ export default function WorkCalendarPage() {
   const nextMonth = () => setMonth(m => m.month === 11 ? { year: m.year + 1, month: 0 } : { year: m.year, month: m.month + 1 })
   const goToday = () => setMonth(todayMonthKST())
 
+  /**
+   * 검색은 두 가지를 동시에 한다.
+   *  - 지금 보고 있는 달: filtered가 걸러내 달력에 일치하는 일정만 남는다.
+   *  - 나머지 달: 아래 목록에 날짜와 함께 뜨고, 누르면 그 달로 넘어가며 일정이 열린다.
+   * 달력에 남은 것만 보면 "그 일정이 없다"고 오해하게 되므로 둘 다 필요하다.
+   */
+  const [hits, setHits] = useState<Schedule[]>([])
+  const [searching, setSearching] = useState(false)
+  useEffect(() => {
+    const q = query.trim()
+    if (!q) { setHits([]); setSearching(false); return }
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      // %와 _는 ilike의 와일드카드다. 그대로 넘기면 엉뚱한 게 걸린다.
+      const safe = q.replace(/[%_,]/g, ' ')
+      const { data } = await supabase.from('schedules').select('*')
+        .neq('schedule_type', 'site')
+        .or(`title.ilike.%${safe}%,memo.ilike.%${safe}%`)
+        .order('start_date', { ascending: false })
+        .limit(50)
+      setHits((data as Schedule[]) || [])
+      setSearching(false)
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  /** 검색 결과에서 고른 일정으로 이동 — 그 달로 넘기고 상세를 연다. */
+  const goToSchedule = (s: Schedule) => {
+    const d = new Date(s.start_date)
+    setMonth({ year: d.getUTCFullYear(), month: d.getUTCMonth() })
+    setEditSchedule(s); setShowModal(true)
+  }
+
   const toggleStaff = (id: string) => setActiveStaff(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   // staff.color 우선, 미지정 시 id 해시로 fallback 팔레트 매핑
@@ -168,28 +216,38 @@ export default function WorkCalendarPage() {
     }
   }
 
-  const filtered = useMemo(() =>
-    schedules.filter(s => {
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return schedules.filter(s => {
+      // 검색어가 있으면 제목·메모로 먼저 걸러낸다
+      if (q && !`${s.title ?? ''} ${s.memo ?? ''}`.toLowerCase().includes(q)) return false
       if (activeStaff.size === 0) return true
       // 다중 담당자 필터: staff_id 또는 staff_ids 중 하나라도 매칭되면 노출
       if (s.staff_id && activeStaff.has(s.staff_id)) return true
       if (s.staff_ids && s.staff_ids.some(id => activeStaff.has(id))) return true
       return false
     })
-  , [schedules, activeStaff])
+  }, [schedules, activeStaff, query])
 
-  // 주 단위 그룹
+  // 주 단위 그룹. 앞뒤 빈칸을 옆 달 날짜로 채우므로 칸마다 실제 날짜를 들고 있다.
   const weeks = useMemo(() => {
-    const r: (number | null)[][] = []; let w: (number | null)[] = []
-    for (let i = 0; i < firstDow; i++) w.push(null)
-    for (let d = 1; d <= daysInMonth; d++) { w.push(d); if (w.length === 7) { r.push(w); w = [] } }
-    if (w.length) { while (w.length < 7) w.push(null); r.push(w) }
+    const r: DayCell[][] = []
+    for (let i = 0; i < gridCells; i++) {
+      const date = addDays(gridStart, i)
+      const dt = new Date(date)
+      if (i % 7 === 0) r.push([])
+      r[r.length - 1].push({
+        date,
+        day: dt.getUTCDate(),
+        inMonth: dt.getUTCMonth() === month.month && dt.getUTCFullYear() === month.year,
+      })
+    }
     return r
-  }, [daysInMonth, firstDow])
+  }, [gridStart, gridCells, month])
 
-  const getWeekBars = useCallback((week: (number | null)[]) => {
-    const wd = week.map(d => d ? ds(month.year, month.month, d) : null)
-    const ws = wd.find(d => d) || '', we = [...wd].reverse().find(d => d) || ''
+  const getWeekBars = useCallback((week: DayCell[]) => {
+    const wd = week.map(c => c.date)
+    const ws = wd[0], we = wd[wd.length - 1]
     return filtered.filter(s => s.start_date <= we && s.end_date >= ws).sort((a, b) => {
       if (!a.start_time && !b.start_time) return 0
       if (!a.start_time) return -1
@@ -279,8 +337,26 @@ export default function WorkCalendarPage() {
           )}
         </div>
         {(activeTab === 'calendar' || UI_HIDDEN.promo) && (
-          <button onClick={() => { setEditSchedule(null); setSelectedDate(today); setShowModal(true) }}
-            className="px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shadow-sm">+ 일정 추가</button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-tertiary" />
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="일정 검색"
+                aria-label="일정 검색"
+                className="h-9 w-[150px] rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-sm text-txt-primary placeholder:text-txt-quaternary focus:w-[220px] focus:outline-none focus:ring-1 focus:ring-accent transition-[width]"
+              />
+              {query && (
+                <button onClick={() => setQuery('')} aria-label="검색어 지우기"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-txt-tertiary hover:bg-surface-secondary">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <button onClick={() => { setEditSchedule(null); setSelectedDate(today); setShowModal(true) }}
+              className="px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shadow-sm shrink-0">+ 일정 추가</button>
+          </div>
         )}
       </div>
 
@@ -343,6 +419,40 @@ export default function WorkCalendarPage() {
             )
           })()}
 
+          {/* 검색 결과 — 달력은 이번 달만 걸러내므로, 다른 달에 있는 건 여기서만 보인다 */}
+          {query.trim() && (
+            <div className="bg-surface rounded-[10px] border border-border-primary mb-4 overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-border-tertiary px-4 py-2.5">
+                <span className="text-xs font-semibold text-txt-secondary">
+                  &lsquo;{query.trim()}&rsquo; 검색 결과
+                </span>
+                <span className="text-xs text-txt-tertiary">
+                  {searching ? '찾는 중...' : `${hits.length}건${hits.length === 50 ? ' 이상' : ''}`}
+                </span>
+              </div>
+              {!searching && hits.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-txt-tertiary">일치하는 일정이 없습니다</div>
+              ) : (
+                <div className="max-h-56 overflow-y-auto divide-y divide-surface-secondary">
+                  {hits.map(s => {
+                    const inView = s.start_date >= gridStart && s.start_date <= gridEnd
+                    const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
+                    const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean).join(', ')
+                    return (
+                      <button key={s.id} onClick={() => goToSchedule(s)}
+                        className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-surface-tertiary">
+                        <span className="w-[86px] shrink-0 text-[12px] tabular-nums text-txt-secondary">{s.start_date}</span>
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-txt-primary">{s.title}</span>
+                        {names && <span className="shrink-0 text-[12px] text-txt-tertiary">{names}</span>}
+                        {inView && <span className="shrink-0 rounded-full bg-surface-secondary px-2 py-0.5 text-[11px] text-txt-secondary">이번 달</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 캘린더 */}
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3 border-b border-border-tertiary">
@@ -377,28 +487,28 @@ export default function WorkCalendarPage() {
                   return (
                     <div key={wi} className="border-b border-surface-secondary last:border-b-0">
                       <div className="grid grid-cols-7">
-                        {week.map((day, di) => {
-                          const d = day ? ds(month.year, month.month, day) : ''
+                        {week.map((cell, di) => {
+                          const d = cell.date
                           return (
-                            <div key={di} ref={d === today ? todayCellRef : undefined} className={`px-2 py-2 text-sm border-r border-surface-secondary last:border-r-0 hover:bg-blue-50/30 ${!day ? 'bg-surface-secondary/30' : ''} ${day ? 'cursor-pointer' : ''}`}
-                              onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
-                              title={day ? '더블클릭 → 일정 추가' : ''}
-                              onDragOver={day ? handleDragOver : undefined}
-                              onDrop={day ? (e) => handleDrop(e, d) : undefined}>
-                              {day && <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-medium
-                                ${d === today ? 'bg-accent text-white' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{day}</span>}
+                            <div key={di} ref={d === today ? todayCellRef : undefined} className={`px-2 py-2 text-sm border-r border-surface-secondary last:border-r-0 cursor-pointer hover:bg-blue-50/30 ${!cell.inMonth ? 'bg-surface-secondary/30' : ''}`}
+                              onDoubleClick={() => { setSelectedDate(d); setEditSchedule(null); setShowModal(true) }}
+                              title="더블클릭 → 일정 추가"
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, d)}>
+                              {/* 옆 달 날짜는 흐리게 — 이번 달과 섞여 보이면 날짜를 잘못 읽는다 */}
+                              <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-medium
+                                ${d === today ? 'bg-accent text-white' : !cell.inMonth ? 'text-txt-quaternary' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-secondary'}`}>{cell.day}</span>
                             </div>
                           )
                         })}
                       </div>
                       <div className="relative grid grid-cols-7" style={{ minHeight: Math.max(ah + 4, 128) }}>
-                        {week.map((day, di) => {
-                          const d = day ? ds(month.year, month.month, day) : ''
-                          return <div key={di} className={`border-r border-surface-secondary last:border-r-0 ${day ? 'cursor-pointer' : ''}`}
-                            onDoubleClick={() => { if (day) { setSelectedDate(d); setEditSchedule(null); setShowModal(true) } }}
-                            onDragOver={day ? handleDragOver : undefined}
-                            onDrop={day ? (e) => handleDrop(e, d) : undefined} />
-                        })}
+                        {week.map((cell, di) => (
+                          <div key={di} className={`border-r border-surface-secondary last:border-r-0 cursor-pointer ${!cell.inMonth ? 'bg-surface-secondary/30' : ''}`}
+                            onDoubleClick={() => { setSelectedDate(cell.date); setEditSchedule(null); setShowModal(true) }}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, cell.date)} />
+                        ))}
                         {rows.map((row: any[], ri) => row.map((bar: any) => {
                           const s = bar.schedule as Schedule
                           // 색상 고정 제거 — 담당자별 색상만 사용
@@ -443,6 +553,20 @@ export default function WorkCalendarPage() {
                 })}
               </div>
             )}
+
+            {/* 아래쪽 달 이동 — 긴 달을 다 내려온 뒤 위로 되돌아가지 않아도 되게 */}
+            <div className="flex items-center justify-center gap-2 border-t border-border-tertiary px-5 py-3">
+              <button onClick={prevMonth}
+                className="flex h-8 items-center gap-1 rounded-lg px-3 text-sm text-txt-secondary hover:bg-surface-secondary">
+                <span className="text-lg leading-none">&lsaquo;</span> 이전달
+              </button>
+              <button onClick={goToday}
+                className="rounded-lg border border-border-primary px-3 py-1.5 text-xs font-medium text-txt-secondary hover:bg-surface-tertiary">오늘</button>
+              <button onClick={nextMonth}
+                className="flex h-8 items-center gap-1 rounded-lg px-3 text-sm text-txt-secondary hover:bg-surface-secondary">
+                다음달 <span className="text-lg leading-none">&rsaquo;</span>
+              </button>
+            </div>
           </div>
 
           {/* 오늘 일정 */}

@@ -325,18 +325,24 @@ export default function ExpensesPage() {
           </div>
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
             {/* 칸 너비를 내용에 맞춰 고정한다. 자동 배분에 맡기면 날짜·카테고리·작성자처럼
-                짧은 값이 두세 줄로 접히고, 정작 긴 내용·현장은 좁아진다. */}
+                짧은 값이 두세 줄로 접힌다.
+                폭은 퍼센트가 아니라 픽셀이다 — 퍼센트로 두면 화면이 좁아질 때 칸이 같이
+                줄고, 한 줄로 고정한 값들은 접히지도 못해 잘려 나간다. 1024px 노트북에서
+                날짜·카테고리·관리가 실제로 잘렸다. 남는 폭은 제목이 받고, 그래도 모자라면
+                잘리는 대신 표가 가로로 밀린다. */}
             {filteredExpenses.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">등록된 결의서가 없습니다</div> : (
-              <table className="w-full table-fixed text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] table-fixed text-sm">
                 <thead><tr className="bg-surface-secondary border-b border-border-primary">
-                  <th className="w-[9%] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>
-                  <th className="w-[8%] px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">카테고리</th>
-                  <th className="w-[34%] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
+                  <th className="w-[104px] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>
+                  <th className="w-[92px] px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">카테고리</th>
+                  {/* 폭을 주지 않는 유일한 칸 — 남는 자리를 전부 받는다 */}
+                  <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
                   {/* 1,000,000,000원이 한 줄에 들어가는 폭 */}
-                  <th className="w-[13%] px-4 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
-                  <th className="w-[19%] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장</th>
-                  <th className="w-[7%] px-2 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
-                  <th className="w-[10%] px-2 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
+                  <th className="w-[148px] px-4 py-2.5 text-right text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">금액</th>
+                  <th className="w-[224px] px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장</th>
+                  <th className="w-[76px] px-2 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">작성자</th>
+                  <th className="w-[100px] px-2 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">관리</th>
                 </tr></thead>
                 <tbody className="divide-y divide-surface-secondary">
                   {filteredExpenses.map(e => (
@@ -359,6 +365,7 @@ export default function ExpensesPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </>

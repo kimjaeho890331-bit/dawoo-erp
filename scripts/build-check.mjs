@@ -10,8 +10,22 @@
  * 결과물 경로는 평소와 같다.
  */
 import { execSync } from 'node:child_process'
+import { readFileSync, writeFileSync } from 'node:fs'
 
-execSync('next build', {
-  stdio: 'inherit',
-  env: { ...process.env, NEXT_DIST_DIR: '.next-build' },
-})
+// next build는 next-env.d.ts와 tsconfig.json을 자기 distDir에 맞춰 고쳐 쓴다.
+// 그대로 두면 커밋된 파일이 gitignore된 .next-build를 가리키게 되고(새로 받은
+// 사람에겐 없는 경로다), 개발 서버를 다시 켜면 또 .next로 돌아가 작업 트리가
+// 계속 더러워진다. 원래 내용을 기억했다가 되돌려 놓는다.
+const TOUCHED = ['next-env.d.ts', 'tsconfig.json']
+const before = new Map(TOUCHED.map(f => [f, readFileSync(f, 'utf8')]))
+
+try {
+  execSync('next build', {
+    stdio: 'inherit',
+    env: { ...process.env, NEXT_DIST_DIR: '.next-build' },
+  })
+} finally {
+  for (const [file, original] of before) {
+    if (readFileSync(file, 'utf8') !== original) writeFileSync(file, original)
+  }
+}

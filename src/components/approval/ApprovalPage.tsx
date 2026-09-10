@@ -47,7 +47,9 @@ const MY_DRAFT_STATUS: Record<'draft' | 'completed', ApprovalStatus> = {
   completed: 'approved',
 }
 
-const SUBMITTED_STATUSES: ApprovalStatus[] = ['pending', 'withdrawn', 'rejected']
+// 반려는 빠져 있다 — 결재함 · 반려된으로 옮겼다. 두 곳에 겹쳐 두면
+// 되돌아온 문서를 어디서 처리해야 하는지 헷갈린다.
+const SUBMITTED_STATUSES: ApprovalStatus[] = ['pending', 'withdrawn']
 
 export default function ApprovalPage() {
   const { actor, actorId, setActorId, staffList, loading: actorLoading } = useActor()
@@ -93,7 +95,7 @@ export default function ApprovalPage() {
     if (!actor) { setRows([]); setLoading(false); return }
     setLoading(true)
 
-    // 기안함 — 내가 기안자인 문서. 작성중/완료는 한 상태, 상신은 진행·회수·반려를 한 목록.
+    // 기안함 — 내가 기안자인 문서. 작성중/완료는 한 상태, 상신은 진행·회수를 한 목록.
     if (box === 'submitted') {
       const { data } = await supabase
         .from('expense_reports')
@@ -138,20 +140,34 @@ export default function ApprovalPage() {
       .eq('staff_id', actor.id)
 
     const ids = Array.from(new Set((myLines ?? []).map(l => l.report_id as string)))
-    if (ids.length === 0) { setRows([]); setLoading(false); return }
 
     if (box === 'myRejected' || box === 'myCompleted') {
       const status: ApprovalStatus = box === 'myRejected' ? 'rejected' : 'approved'
-      const { data } = await supabase
-        .from('expense_reports')
-        .select(SELECT)
-        .in('id', ids)
-        .eq('status', status)
-        .order('submitted_at', { ascending: false, nullsFirst: false })
-      setRows((data ?? []) as unknown as Row[])
+
+      const byLine = ids.length > 0
+        ? (await supabase.from('expense_reports').select(SELECT)
+            .in('id', ids).eq('status', status)).data ?? []
+        : []
+
+      // 반려된 문서는 기안자도 여기서 본다. 되돌아온 문서를 어디서 찾아야 하는지
+      // 기안자와 결재자가 같은 자리를 보게 하려는 것 — 결재선에 없어도 담긴다.
+      const byDrafter = box === 'myRejected'
+        ? (await supabase.from('expense_reports').select(SELECT)
+            .eq('drafter_staff_id', actor.id).eq('status', status)).data ?? []
+        : []
+
+      // 내가 기안자이면서 결재선에도 있으면 두 번 담기므로 id로 합친다.
+      const merged = new Map<string, unknown>()
+      for (const r of [...byLine, ...byDrafter]) merged.set((r as { id: string }).id, r)
+      const rows = ([...merged.values()] as unknown as Row[])
+        .sort((a, b) => (b.submitted_at ?? '').localeCompare(a.submitted_at ?? ''))
+
+      setRows(rows)
       setLoading(false)
       return
     }
+
+    if (ids.length === 0) { setRows([]); setLoading(false); return }
 
     // 결재전 / 진행중 — 둘 다 status='pending'이지만 "지금 내 차례인가"로 갈린다.
     // 문서별 결재선 전체를 함께 조회해 currentTurnLine으로 판정한다(서버와 같은 함수 공유).

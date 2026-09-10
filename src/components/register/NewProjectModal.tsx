@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { selectableStaff } from '@/lib/staff/selectable'
 import { formatPhone } from '@/lib/utils/format'
 import { getRegionFromAddress } from '@/lib/utils/region'
 import { projectCreateRegionRefuseReason, regionNameFromCityId } from '@/lib/utils/projectRegion'
@@ -66,7 +67,7 @@ interface Props {
 export default function NewProjectModal({ category, onClose, onSubmit, editProject }: Props) {
   const { staff: currentStaff } = useAuth()
   const isEdit = !!editProject
-  const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
+  const [staff, setStaff] = useState<{ id: string; name: string; resign_date?: string | null }[]>([])
   const [cities, setCities] = useState<{ id: string; name: string }[]>([])
   const [workTypes, setWorkTypes] = useState<{ id: string; name: string }[]>([])
   const [saving, setSaving] = useState(false)
@@ -118,7 +119,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
   useEffect(() => {
     async function load() {
       const [staffRes, citiesRes, typesRes] = await Promise.all([
-        supabase.from('staff').select('id, name').order('name'),
+        supabase.from('staff').select('id, name, resign_date').order('name'),
         supabase.from('cities').select('id, name').order('name'),
         supabase
           .from('work_types')
@@ -127,6 +128,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
       ])
 
       const staffData = staffRes.data || []
+      // 기본 담당자는 재직자 중에서 고른다 — 퇴사자가 기본으로 잡히면 안 된다
+      const assignable = selectableStaff(staffData)
       const citiesData = citiesRes.data || []
       const typesData = (typesRes.data || []) as { id: string; name: string }[]
 
@@ -148,7 +151,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           tenant_phone: editProject.tenant_phone || '',
           note: editProject.note || '',
           work_type_id: editProject.work_type_id || typesData[0]?.id || '',
-          staff_id: editProject.staff_id || staffData[0]?.id || '',
+          staff_id: editProject.staff_id || assignable[0]?.id || '',
           // 지역은 자동 폴백 금지 — 미지정이면 빈 값 유지(과천 오분류 방지)
           city_id: editProject.city_id || '',
           support_program: editProject.support_program || '',
@@ -163,8 +166,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
       } else {
         // 신규등록 기본값 — 로그인 유저를 담당직원 기본값으로
         const defaultStaffId = currentStaff?.id
-          ? staffData.find(s => s.id === currentStaff.id)?.id || staffData[0]?.id || ''
-          : staffData[0]?.id || ''
+          ? assignable.find(s => s.id === currentStaff.id)?.id || assignable[0]?.id || ''
+          : assignable[0]?.id || ''
         setForm(prev => ({
           ...prev,
           staff_id: defaultStaffId,
@@ -689,7 +692,8 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                 onChange={e => update('staff_id', e.target.value)}
                 className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
               >
-                {staff.map(s => (
+                {/* 새로 접수하는 건이므로 재직자만 */}
+                {selectableStaff(staff).map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>

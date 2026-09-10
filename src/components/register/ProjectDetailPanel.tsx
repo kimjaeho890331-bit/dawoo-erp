@@ -51,7 +51,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
   const [apiFieldsLocked, setApiFieldsLocked] = useState(true)
   const [editingMemo, setEditingMemo] = useState(false)
   const [editingInfo, setEditingInfo] = useState(false)
-  const [staffOptions, setStaffOptions] = useState<{ id: string; name: string }[]>([])
+  const [staffOptions, setStaffOptions] = useState<{ id: string; name: string; resign_date?: string | null }[]>([])
   const [showStatusModal, setShowStatusModal] = useState<'취소' | '문의(예약)' | null>(null)
   const [statusReason, setStatusReason] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -116,7 +116,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
   // 직원 목록 로드
   useEffect(() => {
-    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+    supabase.from('staff').select('id, name, resign_date').order('name').then(({ data }) => {
       setStaffOptions(data || [])
     })
   }, [])
@@ -682,7 +682,10 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
                   className="w-full h-[28px] px-2 text-[12px] bg-white border border-[#c96442] rounded focus:outline-none focus:ring-2 focus:ring-[#c96442]/10"
                 >
                   <option value="">선택</option>
-                  {staffOptions.map(s => (
+                  {/* 퇴사자는 새로 못 고르되 이미 이 건의 담당이면 남긴다.
+                      아래 '담당자' 표시는 staffOptions 전체에서 이름을 찾으므로
+                      여기서 걸러도 지난 접수건의 이름은 그대로 보인다. */}
+                  {staffOptions.filter(s => !s.resign_date || s.id === getVal('staff_id')).map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { selectableStaff } from '@/lib/staff/selectable'
 
 // 대시보드 등 기존 화면과 동일한 localStorage 키를 재사용한다.
 // 새 신원 개념을 만들지 않고, 이미 골라둔 "현재 직원"을 결재 화면에서도 그대로 이어받는다.
@@ -10,6 +11,8 @@ const STAFF_STORAGE_KEY = 'dawoo_current_staff_id'
 export interface ActorStaff {
   id: string
   name: string
+  /** 채워져 있으면 퇴사자. 고를 수 있는 목록에서 뺀다. */
+  resign_date?: string | null
 }
 
 /**
@@ -51,11 +54,13 @@ export function useActor(): UseActorResult {
     let cancelled = false
     supabase
       .from('staff')
-      .select('id, name')
+      .select('id, name, resign_date')
       .order('name')
       .then(({ data }) => {
         if (cancelled) return
-        setStaffList((data ?? []) as ActorStaff[])
+        // 퇴사자는 고를 수 없다. 여기 목록은 "지금 누구로 쓰는가"를 정하는 데만
+        // 쓰이고 옛 문서의 이름은 문서마다 따로 읽어오므로, 걸러도 잃는 게 없다.
+        setStaffList(selectableStaff((data ?? []) as ActorStaff[]))
         setLoading(false)
       })
     return () => {

@@ -34,6 +34,8 @@ interface Staff {
   id: string
   name: string
   role: string
+  /** 채워져 있으면 퇴사자. 색깔 칩에는 남기고 담당자 배정에서만 뺀다. */
+  resign_date?: string | null
   color?: string | null
 }
 
@@ -1691,7 +1693,9 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
           </div>
           {staffExpanded && (
             <div className="p-2 bg-surface-tertiary/40 rounded-lg flex flex-wrap gap-2">
-              {staffList.map(s => (
+              {/* 퇴사자는 새로 배정할 수 없다. 다만 이미 이 일정에 들어 있으면
+                  남겨 둔다 — 안 그러면 뺄 방법이 없어진다. */}
+              {staffList.filter(s => !s.resign_date || selectedStaffIds.includes(s.id)).map(s => (
                 <label key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] cursor-pointer transition-colors ${
                   selectedStaffIds.includes(s.id) ? 'border-accent bg-accent/10 text-accent font-medium' : 'border-border-primary bg-surface text-txt-secondary hover:border-accent'
                 }`}>

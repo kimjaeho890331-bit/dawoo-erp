@@ -135,11 +135,11 @@ export function StaffIdSelect({ label, value, onChange }: {
   value: string | null | undefined
   onChange: (v: string | null) => void
 }) {
-  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+  const [staffList, setStaffList] = useState<{ id: string; name: string; resign_date?: string | null }[]>([])
   const hasValue = !!value
 
   useEffect(() => {
-    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+    supabase.from('staff').select('id, name, resign_date').order('name').then(({ data }) => {
       setStaffList(data || [])
     })
   }, [])
@@ -155,7 +155,9 @@ export function StaffIdSelect({ label, value, onChange }: {
         }`}
       >
         <option value="">선택</option>
-        {staffList.map(s => (
+        {/* 퇴사자는 새로 고를 수 없다. 이미 이 건의 담당자면 남겨 둔다 —
+            빼버리면 칸이 빈칸으로 보여 담당자가 지워진 줄 안다. */}
+        {staffList.filter(s => !s.resign_date || s.id === value).map(s => (
           <option key={s.id} value={s.id}>{s.name}</option>
         ))}
       </select>
@@ -169,11 +171,11 @@ export function StaffSelect({ label, value, onChange }: {
   value: string | null | undefined
   onChange: (v: string | null) => void
 }) {
-  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+  const [staffList, setStaffList] = useState<{ id: string; name: string; resign_date?: string | null }[]>([])
   const hasValue = value !== null && value !== undefined && value !== ''
 
   useEffect(() => {
-    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
+    supabase.from('staff').select('id, name, resign_date').order('name').then(({ data }) => {
       setStaffList(data || [])
     })
   }, [])
@@ -189,7 +191,8 @@ export function StaffSelect({ label, value, onChange }: {
         }`}
       >
         <option value="">선택</option>
-        {staffList.map(s => (
+        {/* 이름으로 저장하는 칸이라 현재 값과 이름으로 견준다 */}
+        {staffList.filter(s => !s.resign_date || s.name === value).map(s => (
           <option key={s.id} value={s.name}>{s.name}</option>
         ))}
       </select>

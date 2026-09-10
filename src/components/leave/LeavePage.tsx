@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { ClipboardList, Calendar, AlertTriangle, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { selectableStaff } from '@/lib/staff/selectable'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
@@ -29,6 +30,8 @@ interface Staff {
   role: string
   position?: string | null
   join_date: string | null
+  /** 채워져 있으면 퇴사자 — 연차 대상에서 뺀다 */
+  resign_date?: string | null
   color?: string | null
 }
 
@@ -135,7 +138,16 @@ export default function LeavePage() {
   const getUsed = (id: string) => requests.filter(r => r.staff_id === id && r.status === '승인').reduce((s, r) => s + r.days, 0)
 
   // 직책+직급 순 정렬 (현황 카드 + 이름 칩 공용)
-  const sortedStaff = useMemo(() => [...staffList].sort(compareStaffByRank), [staffList])
+  /**
+   * 연차 현황 카드·직원 칩·신청 대상은 재직자만이다. 퇴사자에게 남은 연차를
+   * 세는 것은 뜻이 없다.
+   * getName()은 위의 staffList(전원)를 그대로 쓴다 — 퇴사자가 남긴 지난 신청
+   * 기록에서 이름이 사라지면 안 된다.
+   */
+  const sortedStaff = useMemo(
+    () => selectableStaff(staffList).sort(compareStaffByRank),
+    [staffList],
+  )
 
   // 이름(직원) 선택을 먼저 적용한 뒤 상태 필터 — 상태 개수 배지도 선택한 사람 기준으로 표시
   const staffScoped = filterStaffId ? requests.filter(r => r.staff_id === filterStaffId) : requests
@@ -262,7 +274,8 @@ export default function LeavePage() {
 
   const openCreate = () => {
     // 현재 직원을 기본 선택 (목록에 실제 존재할 때만) — 없으면 첫 직원
-    const defaultId = staffList.find(s => s.id === myStaffId)?.id || staffList[0]?.id || ''
+    // 기본값도 고를 수 있는 사람 중에서 — 퇴사자가 기본으로 잡히면 저장이 막힌다
+    const defaultId = sortedStaff.find(s => s.id === myStaffId)?.id || sortedStaff[0]?.id || ''
     setEditingId(null); setFormStaffId(defaultId); setFormLeaveType('연차'); setFormSubtype('')
     const today = new Date().toISOString().slice(0, 10)
     setFormStartDate(today); setFormEndDate(today); setFormReason('')
@@ -458,12 +471,12 @@ export default function LeavePage() {
               {/* 직원 — 목록에서 직접 선택 (공유 방식) */}
               <div>
                 <label className="label-field">직원</label>
-                {staffList.length === 0 ? (
+                {sortedStaff.length === 0 ? (
                   <p className="text-[12px] text-txt-tertiary">등록된 직원이 없습니다. 직원관리에서 먼저 등록해주세요.</p>
                 ) : (
                   <select value={formStaffId} onChange={e => setFormStaffId(e.target.value)}
                     className="input-field w-full">
-                    {staffList.map(s => {
+                    {sortedStaff.map(s => {
                       const total = calcTotalLeave(s.join_date)
                       const remain = total - getUsed(s.id)
                       return <option key={s.id} value={s.id}>{s.name} (잔여 {remain}일)</option>

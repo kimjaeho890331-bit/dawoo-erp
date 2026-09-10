@@ -685,7 +685,7 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
     budget: site.budget.toString(),
     memo: site.memo || '',
   })
-  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([])
+  const [staffList, setStaffList] = useState<{ id: string; name: string; resign_date?: string | null }[]>([])
   const [expenseTotal, setExpenseTotal] = useState(0)
   const [savedAt, setSavedAt] = useState<string>('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -710,8 +710,8 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
 
   // 직원 목록 로드 (드롭다운용)
   useEffect(() => {
-    supabase.from('staff').select('id, name').order('name').then(({ data }) => {
-      if (data) setStaffList(data as { id: string; name: string }[])
+    supabase.from('staff').select('id, name, resign_date').order('name').then(({ data }) => {
+      if (data) setStaffList(data as { id: string; name: string; resign_date?: string | null }[])
     })
   }, [])
 
@@ -838,16 +838,20 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
 
       {/* 3행: 현장소장 | 현장보조 — 직원 드롭다운 */}
       <div className="grid grid-cols-2 gap-3">
+        {/* 퇴사자는 새로 못 고르되, 이미 이 현장의 담당이면 남겨 둔다 —
+            빼버리면 칸이 빈칸이 되어 담당자가 지워진 줄 안다. */}
         <Box label="현장소장">
           <select className={inputCls} value={form.site_manager} onChange={e => u('site_manager', e.target.value)}>
             <option value="">선택</option>
-            {staffList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            {staffList.filter(s => !s.resign_date || s.name === form.site_manager)
+              .map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
         </Box>
         <Box label="현장보조">
           <select className={inputCls} value={form.site_assistant} onChange={e => u('site_assistant', e.target.value)}>
             <option value="">선택</option>
-            {staffList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            {staffList.filter(s => !s.resign_date || s.name === form.site_assistant)
+              .map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
         </Box>
       </div>

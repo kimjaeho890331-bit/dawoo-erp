@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { formatPhone, formatMoney } from '@/lib/utils/format'
 import { generateInviteCode } from '@/lib/staff/inviteCode'
+import { RESIGN_CONFIRM_MESSAGE } from '@/lib/staff/selectable'
 import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex, getContrastText } from '@/lib/staff-colors'
 
 interface Staff {
@@ -624,6 +625,12 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
 
   const handleSave = async () => {
     if (!name.trim()) return
+
+    // 퇴사로 바꿔 저장할 때만 묻는다. 이미 퇴사자인 사람을 고쳐 저장할 때는
+    // 새로 바뀌는 게 없으므로 다시 묻지 않는다.
+    const turningResigned = status === '퇴사' && !item?.resign_date
+    if (turningResigned && !confirm(`"${name.trim()}" ${RESIGN_CONFIRM_MESSAGE}`)) return
+
     setSaving(true)
     const payload: Record<string, unknown> = {
       name: name.trim(),

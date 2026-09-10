@@ -7,6 +7,7 @@ import { validateApprovalLine } from '@/lib/approval/status'
 import { sortStaffForApprovalLine } from '@/lib/approval/staffOrder'
 import { LINE_PRESETS, presetToLines, type LinePreset } from '@/lib/approval/linePresets'
 import type { LineRole } from '@/types/approval'
+import { selectableStaff } from '@/lib/staff/selectable'
 
 export interface LineDraft {
   staff_id: string
@@ -14,7 +15,7 @@ export interface LineDraft {
   role: LineRole
 }
 
-interface StaffRow { id: string; name: string }
+interface StaffRow { id: string; name: string; resign_date?: string | null }
 
 interface Props {
   open: boolean
@@ -42,14 +43,17 @@ export default function ApprovalLineModal({ open, drafterStaffId, value, onChang
 
   useEffect(() => {
     if (!open) return
-    supabase.from('staff').select('id, name').then(({ data }) => {
+    // 퇴사자까지 다 받는다 — 아래 candidates에서만 뺀다. 이미 결재선에 들어가
+    // 있는 사람의 이름을 staffList로 찾으므로(add·presetToLines), 여기서 거르면
+    // 예전에 짜둔 결재선에서 이름이 사라진다.
+    supabase.from('staff').select('id, name, resign_date').then(({ data }) => {
       setStaffList(sortStaffForApprovalLine((data ?? []) as StaffRow[]))
     })
   }, [open])
 
   if (!open) return null
 
-  const candidates = staffList.filter(
+  const candidates = selectableStaff(staffList).filter(
     s => s.id !== drafterStaffId && s.name.includes(keyword) && !draft.some(d => d.staff_id === s.id),
   )
 

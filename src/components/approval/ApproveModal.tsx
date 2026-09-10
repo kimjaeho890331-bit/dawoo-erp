@@ -25,11 +25,13 @@ interface Props {
    * 사유 칸이 바로 보인다. 안 주면 지금처럼 '승인'으로 연다.
    */
   initialMode?: 'approve' | 'reject'
+  /** 내 다음 차례인 결재자. 승인하면 누구에게 가는지 알려주는 데 쓴다. 최종 결재자면 null. */
+  nextApproverName?: string | null
 }
 
 export default function ApproveModal({
   open, title, drafterName, totalAmount, paymentCount, isFinal, resumeOnly, docNo, onClose, onDone, reportId,
-  actorId, actorName, initialMode = 'approve',
+  actorId, actorName, initialMode = 'approve', nextApproverName = null,
 }: Props) {
   const [mode, setMode] = useState<'approve' | 'reject'>(initialMode)
   const [category, setCategory] = useState<string>('')
@@ -120,6 +122,19 @@ export default function ApproveModal({
             </div>
           )}
 
+          {/*
+            중간 결재자는 승인해도 눈에 띄는 변화가 없어, 눌러도 넘어갔는지 모른 채
+            같은 문서를 다시 열어보게 된다. 승인이 무엇을 하는지 먼저 알려준다.
+            최종 결재자는 아래에서 계정과목과 함께 따로 안내한다.
+          */}
+          {mode === 'approve' && !isFinal && !resumeOnly && (
+            <div className="mb-4 rounded-lg bg-surface-secondary p-2.5 text-xs text-txt-secondary">
+              {nextApproverName
+                ? <>승인하면 다음 결재자 <span className="font-medium text-txt-primary">{nextApproverName}</span>에게 넘어갑니다. 되돌리려면 반려해야 합니다.</>
+                : <>승인하면 다음 결재자에게 넘어갑니다. 되돌리려면 반려해야 합니다.</>}
+            </div>
+          )}
+
           {mode === 'approve' && isFinal && (
             <>
               <div className="mb-2 text-label">계정과목 <span className="text-danger">*</span></div>
@@ -158,7 +173,7 @@ export default function ApproveModal({
             className="flex-1 min-h-11 text-sm border border-border-primary rounded-lg disabled:opacity-40 md:flex-none md:min-h-0 md:px-5 md:py-2">취소</button>
           <button onClick={submit} disabled={busy}
             className={`flex-1 min-h-11 text-sm rounded-lg text-txt-inverse disabled:opacity-40 md:flex-none md:min-h-0 md:px-5 md:py-2 ${mode === 'reject' ? 'bg-danger' : 'bg-accent'}`}>
-            {busy ? '처리 중' : mode === 'reject' ? '반려 발송' : '결재'}
+            {busy ? '처리 중' : mode === 'reject' ? '반려 발송' : '승인'}
           </button>
         </div>
       </div>

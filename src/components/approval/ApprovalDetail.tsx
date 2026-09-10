@@ -130,6 +130,11 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const showApprove = canApproveNow || canResumeNow
   const resumeOnly = !canApproveNow && canResumeNow
   const final = actor ? isFinalApprover(lines, actor.id) : false
+
+  // 대기 중인 행을 seq 순으로 놓으면 [0]이 지금 내 차례, [1]이 그다음 사람이다.
+  // 승인 확인 문구에서 "누구에게 넘어가는지" 알려주는 데 쓴다.
+  const nextApproverName =
+    lines.filter(l => l.state === 'waiting').sort((a, b) => a.seq - b.seq)[1]?.staff?.name ?? null
   const busy = actionBusy !== null
 
   return (
@@ -385,6 +390,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         actorId={actor?.id ?? ''}
         actorName={actor?.name ?? ''}
         initialMode={modalMode}
+        nextApproverName={nextApproverName}
         onClose={() => setModal(false)}
         onDone={() => { setModal(false); load() }}
       />

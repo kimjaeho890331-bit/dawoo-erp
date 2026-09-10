@@ -338,6 +338,7 @@ export default function WorkCalendarPage() {
         </div>
         {(activeTab === 'calendar' || UI_HIDDEN.promo) && (
           <div className="flex items-center gap-2">
+            {/* 폰에서는 150px 고정 — 더 넓히면 320px 화면에서 '+ 일정 추가'를 밀어낸다 */}
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-tertiary" />
               <input
@@ -345,7 +346,7 @@ export default function WorkCalendarPage() {
                 onChange={e => setQuery(e.target.value)}
                 placeholder="일정 검색"
                 aria-label="일정 검색"
-                className="h-9 w-[150px] rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-sm text-txt-primary placeholder:text-txt-quaternary focus:w-[220px] focus:outline-none focus:ring-1 focus:ring-accent transition-[width]"
+                className="h-9 w-[130px] rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-sm text-txt-primary placeholder:text-txt-quaternary focus:outline-none focus:ring-1 focus:ring-accent md:w-[220px]"
               />
               {query && (
                 <button onClick={() => setQuery('')} aria-label="검색어 지우기"
@@ -362,6 +363,42 @@ export default function WorkCalendarPage() {
 
       {activeTab === 'calendar' || UI_HIDDEN.promo ? (
         <>
+          {/* 검색 결과 — 달력은 보고 있는 달만 걸러내므로, 다른 달에 있는 건 여기서만 보인다.
+              모바일·데스크톱 공용이라 좌우 분기 밖에 둔다. */}
+          {query.trim() && (
+            <div className="bg-surface rounded-[10px] border border-border-primary mb-4 overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-border-tertiary px-4 py-2.5">
+                <span className="text-xs font-semibold text-txt-secondary">
+                  &lsquo;{query.trim()}&rsquo; 검색 결과
+                </span>
+                <span className="text-xs text-txt-tertiary">
+                  {searching ? '찾는 중...' : `${hits.length}건${hits.length === 50 ? ' 이상' : ''}`}
+                </span>
+              </div>
+              {!searching && hits.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-txt-tertiary">일치하는 일정이 없습니다</div>
+              ) : (
+                <div className="max-h-56 overflow-y-auto divide-y divide-surface-secondary">
+                  {hits.map(s => {
+                    const inView = s.start_date >= gridStart && s.start_date <= gridEnd
+                    const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
+                    const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean).join(', ')
+                    return (
+                      <button key={s.id} onClick={() => goToSchedule(s)}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-surface-tertiary md:gap-3 md:py-2">
+                        <span className="w-[86px] shrink-0 text-[12px] tabular-nums text-txt-secondary">{s.start_date}</span>
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-txt-primary">{s.title}</span>
+                        {/* 폰에서는 제목이 먼저다 — 담당자·배지는 자리가 있을 때만 */}
+                        {names && <span className="hidden shrink-0 text-[12px] text-txt-tertiary sm:inline">{names}</span>}
+                        {inView && <span className="hidden shrink-0 rounded-full bg-surface-secondary px-2 py-0.5 text-[11px] text-txt-secondary sm:inline">이번 달</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Mobile calendar view */}
           <div className="md:hidden">
             <MobileCalendarView
@@ -418,40 +455,6 @@ export default function WorkCalendarPage() {
               />
             )
           })()}
-
-          {/* 검색 결과 — 달력은 이번 달만 걸러내므로, 다른 달에 있는 건 여기서만 보인다 */}
-          {query.trim() && (
-            <div className="bg-surface rounded-[10px] border border-border-primary mb-4 overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-border-tertiary px-4 py-2.5">
-                <span className="text-xs font-semibold text-txt-secondary">
-                  &lsquo;{query.trim()}&rsquo; 검색 결과
-                </span>
-                <span className="text-xs text-txt-tertiary">
-                  {searching ? '찾는 중...' : `${hits.length}건${hits.length === 50 ? ' 이상' : ''}`}
-                </span>
-              </div>
-              {!searching && hits.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-txt-tertiary">일치하는 일정이 없습니다</div>
-              ) : (
-                <div className="max-h-56 overflow-y-auto divide-y divide-surface-secondary">
-                  {hits.map(s => {
-                    const inView = s.start_date >= gridStart && s.start_date <= gridEnd
-                    const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
-                    const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean).join(', ')
-                    return (
-                      <button key={s.id} onClick={() => goToSchedule(s)}
-                        className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-surface-tertiary">
-                        <span className="w-[86px] shrink-0 text-[12px] tabular-nums text-txt-secondary">{s.start_date}</span>
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-txt-primary">{s.title}</span>
-                        {names && <span className="shrink-0 text-[12px] text-txt-tertiary">{names}</span>}
-                        {inView && <span className="shrink-0 rounded-full bg-surface-secondary px-2 py-0.5 text-[11px] text-txt-secondary">이번 달</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* 캘린더 */}
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
@@ -847,24 +850,39 @@ function MobileCalendarView({
     setSelectedDate(todayKST())
   }
 
+  // 격자에 그려지는 날짜 범위 — 앞뒤 빈칸을 옆 달 날짜로 채운다 (데스크톱과 같은 규칙)
+  const gridStart = useMemo(() => {
+    const d = new Date(month.year, month.month, 1 - firstDow)
+    return ds(d.getFullYear(), d.getMonth(), d.getDate())
+  }, [month, firstDow])
+  const gridCells = Math.ceil((firstDow + daysInMonth) / 7) * 7
+
   // Build calendar grid weeks
   const weeks = useMemo(() => {
-    const r: (number | null)[][] = []; let w: (number | null)[] = []
-    for (let i = 0; i < firstDow; i++) w.push(null)
-    for (let d = 1; d <= daysInMonth; d++) { w.push(d); if (w.length === 7) { r.push(w); w = [] } }
-    if (w.length) { while (w.length < 7) w.push(null); r.push(w) }
+    const r: DayCell[][] = []
+    for (let i = 0; i < gridCells; i++) {
+      const date = addDays(gridStart, i)
+      const dt = new Date(date)
+      if (i % 7 === 0) r.push([])
+      r[r.length - 1].push({
+        date,
+        day: dt.getUTCDate(),
+        inMonth: dt.getUTCMonth() === month.month && dt.getUTCFullYear() === month.year,
+      })
+    }
     return r
-  }, [daysInMonth, firstDow])
+  }, [gridStart, gridCells, month])
 
-  // Map of dateString -> schedules for that date
+  // Map of dateString -> schedules for that date. 옆 달 칸도 눌러서 볼 수 있어야 하므로
+  // 이번 달이 아니라 격자 전체를 채운다.
   const dateScheduleMap = useMemo(() => {
     const map: Record<string, Schedule[]> = {}
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = ds(month.year, month.month, d)
+    for (let i = 0; i < gridCells; i++) {
+      const dateStr = addDays(gridStart, i)
       map[dateStr] = schedules.filter(s => s.start_date <= dateStr && s.end_date >= dateStr)
     }
     return map
-  }, [schedules, month, daysInMonth])
+  }, [schedules, gridStart, gridCells])
 
   // Schedules for the selected date
   const selectedSchedules = useMemo(() => {
@@ -939,47 +957,55 @@ function MobileCalendarView({
             <div className="px-1 pb-2">
               {weeks.map((week, wi) => (
                 <div key={wi} className="grid grid-cols-7">
-                  {week.map((day, di) => {
-                    const dateStr = day ? ds(month.year, month.month, day) : ''
+                  {week.map((cell, di) => {
+                    const dateStr = cell.date
                     const isToday = dateStr === today
                     const isSelected = dateStr === selectedDate
-                    const daySchedules = day ? (dateScheduleMap[dateStr] || []) : []
+                    const daySchedules = dateScheduleMap[dateStr] || []
                     const dotCount = Math.min(daySchedules.length, 3)
 
                     return (
                       <button
                         key={di}
-                        disabled={!day}
-                        onClick={() => { if (day) setSelectedDate(dateStr) }}
-                        className={`flex flex-col items-center justify-center py-1.5 ${day ? 'cursor-pointer' : ''}`}
+                        onClick={() => setSelectedDate(dateStr)}
+                        className="flex cursor-pointer flex-col items-center justify-center py-1.5"
                       >
-                        {day ? (
-                          <>
-                            <span className={`flex items-center justify-center w-9 h-9 rounded-full text-[13px] font-medium transition-colors
-                              ${isToday ? 'bg-accent text-white' : isSelected ? 'bg-accent/10 text-accent' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-primary'}`}>
-                              {day}
-                            </span>
-                            <div className="flex items-center gap-[3px] h-[6px] mt-0.5">
-                              {dotCount > 0 && Array.from({ length: dotCount }).map((_, i) => {
-                                const sc = daySchedules[i]
-                                return (
-                                  <span
-                                    key={i}
-                                    className="w-[5px] h-[5px] rounded-full"
-                                    style={{ backgroundColor: sc ? getColor(sc) : '#CBD5E1' }}
-                                  />
-                                )
-                              })}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="w-9 h-9" />
-                        )}
+                        {/* 옆 달 날짜는 흐리게 — 이번 달과 섞이면 날짜를 잘못 읽는다 */}
+                        <span className={`flex items-center justify-center w-9 h-9 rounded-full text-[13px] font-medium transition-colors
+                          ${isToday ? 'bg-accent text-white' : isSelected ? 'bg-accent/10 text-accent' : !cell.inMonth ? 'text-txt-quaternary' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-txt-primary'}`}>
+                          {cell.day}
+                        </span>
+                        <div className="flex items-center gap-[3px] h-[6px] mt-0.5">
+                          {dotCount > 0 && Array.from({ length: dotCount }).map((_, i) => {
+                            const sc = daySchedules[i]
+                            return (
+                              <span
+                                key={i}
+                                className={`w-[5px] h-[5px] rounded-full ${!cell.inMonth ? 'opacity-50' : ''}`}
+                                style={{ backgroundColor: sc ? getColor(sc) : '#CBD5E1' }}
+                              />
+                            )
+                          })}
+                        </div>
                       </button>
                     )
                   })}
                 </div>
               ))}
+            </div>
+
+            {/* 아래쪽 달 이동 — 다 내려온 자리에서 바로 넘길 수 있게 */}
+            <div className="flex items-center justify-center gap-1 border-t border-border-tertiary px-4 py-2.5">
+              <button onClick={prevMonth}
+                className="flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] text-txt-secondary hover:bg-surface-secondary">
+                <span className="text-base leading-none">&lsaquo;</span> 이전달
+              </button>
+              <button onClick={goToday}
+                className="rounded-md border border-border-primary px-2 py-1 text-[11px] font-medium text-txt-secondary hover:bg-surface-tertiary">오늘</button>
+              <button onClick={nextMonth}
+                className="flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] text-txt-secondary hover:bg-surface-secondary">
+                다음달 <span className="text-base leading-none">&rsaquo;</span>
+              </button>
             </div>
           </>
         )}

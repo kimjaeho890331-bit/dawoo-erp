@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { PenLine } from 'lucide-react'
+import { PenLine, Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ActorPicker, { useActor } from './ActorPicker'
 import ApprovalSidebar, { BOXES, BOX_META, type BoxKey } from './ApprovalSidebar'
@@ -67,6 +67,10 @@ export default function ApprovalPage() {
   const box: BoxKey = BOX_META.some(m => m.key === qBox) ? (qBox as BoxKey) : 'toApprove'
   const setBox = (key: BoxKey) => router.replace(`/approval?box=${key}`, { scroll: false })
   const [rows, setRows] = useState<Row[]>([])
+  const [query, setQuery] = useState('')
+  // 문서함을 옮기면 검색어를 지운다 — 남아 있으면 다른 함이 비어 보여 문서가
+  // 없는 줄 안다.
+  useEffect(() => { setQuery('') }, [box])
   const [loading, setLoading] = useState(true)
   const pendingCount = usePendingCount(actor)
   const [siteNames, setSiteNames] = useState<Record<string, string>>({})
@@ -90,6 +94,25 @@ export default function ApprovalPage() {
     siteName: r.site_id ? siteNames[r.site_id] : null,
     projectName: r.project_id ? projectNames[r.project_id] : null,
   })
+
+  /**
+   * 쌓이기만 하는 함에만 검색을 둔다. 문서대장과 기안함·완료는 해를 넘겨 계속
+   * 늘어나서 눈으로 훑기 어렵다. 나머지 함은 처리할 것만 잠깐 담겼다 빠지므로
+   * 검색칸이 자리만 차지한다.
+   */
+  const searchable = box === 'ledger' || box === 'completed'
+
+  // 목록은 이미 전부 받아와 있으므로 화면에서 거른다 — 글자를 칠 때마다 바로 좁혀진다.
+  const visibleRows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!searchable || !q) return rows
+    return rows.filter(r =>
+      [r.doc_no ?? '', r.title ?? '', targetOf(r).text, r.staff?.name ?? '']
+        .join(' ').toLowerCase().includes(q),
+    )
+    // targetOf는 siteNames·projectNames를 읽으므로 그 둘이 바뀌면 다시 계산해야 한다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, query, searchable, siteNames, projectNames])
 
   const load = useCallback(async () => {
     if (!actor) { setRows([]); setLoading(false); return }
@@ -251,18 +274,43 @@ export default function ApprovalPage() {
           <div className="py-16 text-center text-[13px] text-txt-tertiary">직원을 선택해 주세요</div>
         ) : (
           <>
-            <div className="mb-5 md:mb-6">
-              <h1 className="hidden md:block">지출결의</h1>
-              <p className="text-[13px] text-txt-secondary md:mt-2">
-                {currentBox ? `${currentBox.group} · ${currentBox.label} · ` : ''}
-                총 {rows.length}건
-              </p>
+            <div className="mb-5 flex items-start justify-between gap-3 md:mb-6">
+              <div className="min-w-0">
+                <h1 className="hidden md:block">지출결의</h1>
+                <p className="text-[13px] text-txt-secondary md:mt-2">
+                  {currentBox ? `${currentBox.group} · ${currentBox.label} · ` : ''}
+                  총 {visibleRows.length}건
+                  {/* 걸러낸 상태에서는 전체가 몇 건인지도 알려준다 */}
+                  {searchable && query.trim() && visibleRows.length !== rows.length && (
+                    <span className="text-txt-tertiary"> (전체 {rows.length}건)</span>
+                  )}
+                </p>
+              </div>
+
+              {searchable && (
+                <div className="relative shrink-0">
+                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-tertiary" />
+                  <input
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="문서번호·제목·현장·기안자"
+                    aria-label="문서 검색"
+                    className="h-9 w-[150px] rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-sm text-txt-primary placeholder:text-txt-quaternary focus:outline-none focus:ring-1 focus:ring-accent md:w-[240px]"
+                  />
+                  {query && (
+                    <button onClick={() => setQuery('')} aria-label="검색어 지우기"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-txt-tertiary hover:bg-surface-secondary">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 모바일 목록 — 6칸 표를 폰에서 그리면 한 칸이 30px이 되어 글자가 세로로 접힌다.
                 카드 한 장이 문서 한 건이고, 카드 전체가 탭 영역이다. */}
             <div className="flex flex-col gap-3 md:hidden">
-              {rows.map(r => (
+              {visibleRows.map(r => (
                 <Link
                   key={r.id}
                   href={`/approval/${r.id}`}
@@ -283,8 +331,10 @@ export default function ApprovalPage() {
                   </div>
                 </Link>
               ))}
-              {!loading && rows.length === 0 && (
-                <div className="py-16 text-center text-[13px] text-txt-tertiary">문서가 없습니다</div>
+              {!loading && visibleRows.length === 0 && (
+                <div className="py-16 text-center text-[13px] text-txt-tertiary">
+                  {query.trim() ? '검색 결과가 없습니다' : '문서가 없습니다'}
+                </div>
               )}
             </div>
 
@@ -308,7 +358,7 @@ export default function ApprovalPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(r => (
+                  {visibleRows.map(r => (
                     <tr key={r.id} className="border-t border-border-primary">
                       <td className="px-4 py-3 text-txt-tertiary">{r.doc_no ?? '-'}</td>
                       <td className="px-4 py-3">
@@ -330,8 +380,10 @@ export default function ApprovalPage() {
                       </td>
                     </tr>
                   ))}
-                  {!loading && rows.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-16 text-center text-txt-tertiary">문서가 없습니다</td></tr>
+                  {!loading && visibleRows.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-16 text-center text-txt-tertiary">
+                      {query.trim() ? '검색 결과가 없습니다' : '문서가 없습니다'}
+                    </td></tr>
                   )}
                 </tbody>
               </table>

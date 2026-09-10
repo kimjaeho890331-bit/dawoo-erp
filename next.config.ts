@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 빌드 결과를 담을 폴더. 기본은 .next 그대로라 배포(Vercel)에는 아무 영향이 없다.
+  // 개발 서버가 떠 있는 채로 빌드를 돌리면 둘이 같은 .next를 두고 다투다
+  // Turbopack 캐시가 깨진다("Another write batch or compaction is already active").
+  // 그래서 확인용 빌드(npm run build:check)만 다른 폴더를 쓰게 해, 빌드하려고
+  // 개발 서버를 끄지 않아도 되게 한다.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+
   // 개발 서버를 폰에서 열어 화면을 확인할 때 필요하다. Next는 다른 호스트에서 오는
   // /_next 개발 리소스 요청을 기본으로 막는데, 막히면 JS가 로드되지 않아 화면이
   // "로딩 중…"에서 멈춘다. 개발 서버에만 적용되는 설정이라 배포본에는 영향이 없다.

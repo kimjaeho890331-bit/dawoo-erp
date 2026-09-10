@@ -11,3 +11,4 @@ tsconfig.tsbuildinfo
 .env*
 supabase/.temp/
 .obsidian/
+.next-build/

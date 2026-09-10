@@ -79,6 +79,46 @@ function daysBetween(a: string, b: string) {
 /** 달력 격자의 한 칸. inMonth가 false면 앞뒤로 붙은 옆 달 날짜다. */
 type DayCell = { date: string; day: number; inMonth: boolean }
 
+/**
+ * 일정 검색 + 일정 추가.
+ * 데스크톱은 페이지 헤더에, 폰은 '다우 업무 캘린더' 제목 옆에 붙는다.
+ *
+ * compact(폰)에서는 가로가 모자라므로 검색란이 남는 자리를 받아 늘었다 줄었다 하고,
+ * 버튼 글자도 줄인다. 320px 화면에서도 세 요소가 한 줄에 들어가야 한다.
+ */
+function CalendarActions({ query, onQueryChange, onAdd, compact }: {
+  query: string
+  onQueryChange: (v: string) => void
+  onAdd: () => void
+  compact?: boolean
+}) {
+  return (
+    <div className={`flex items-center gap-2 ${compact ? 'min-w-0 flex-1' : ''}`}>
+      {/* 폰에서는 안내글이 '일정 검색'이면 잘린다. 돋보기가 뜻을 이미 말해주므로 짧게 쓴다. */}
+      <div className={`relative ${compact ? 'min-w-0 flex-1' : ''}`}>
+        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-tertiary" />
+        <input
+          value={query}
+          onChange={e => onQueryChange(e.target.value)}
+          placeholder={compact ? '검색' : '일정 검색'}
+          aria-label="일정 검색"
+          className={`h-9 rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-sm text-txt-primary placeholder:text-txt-quaternary focus:outline-none focus:ring-1 focus:ring-accent ${compact ? 'w-full min-w-0' : 'w-[220px]'}`}
+        />
+        {query && (
+          <button onClick={() => onQueryChange('')} aria-label="검색어 지우기"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-txt-tertiary hover:bg-surface-secondary">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      <button onClick={onAdd}
+        className={`shrink-0 whitespace-nowrap rounded-lg bg-accent font-medium text-white shadow-sm hover:bg-accent-hover ${compact ? 'px-2.5 py-2 text-[13px]' : 'px-4 py-2 text-sm'}`}>
+        + 일정 추가
+      </button>
+    </div>
+  )
+}
+
 // 15개 시 + 동 목록 (홍보현황용 샘플)
 const CITIES_SMALL = ['수원', '성남', '안양', '부천', '광명', '시흥', '안산', '군포', '의왕', '과천', '용인', '화성', '오산', '평택', '하남']
 const CITIES_WATER = ['수원', '성남', '안양', '부천', '안산', '시흥', '군포']
@@ -196,6 +236,45 @@ export default function WorkCalendarPage() {
     setMonth({ year: d.getUTCFullYear(), month: d.getUTCMonth() })
     setEditSchedule(s); setShowModal(true)
   }
+
+  /**
+   * 검색 결과 목록. 달력은 보고 있는 달만 걸러내므로 다른 달 결과는 여기서만 보인다.
+   * 검색란 바로 아래에 있어야 하는데 그 위치가 화면마다 다르다 — 데스크톱은 페이지
+   * 헤더 밑, 폰은 '다우 업무 캘린더' 제목줄 밑이라 두 곳에서 각각 그린다.
+   */
+  const searchPanel = query.trim() ? (
+    <div className="bg-surface rounded-[10px] border border-border-primary mb-4 overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-border-tertiary px-4 py-2.5">
+        <span className="text-xs font-semibold text-txt-secondary">
+          &lsquo;{query.trim()}&rsquo; 검색 결과
+        </span>
+        <span className="text-xs text-txt-tertiary">
+          {searching ? '찾는 중...' : `${hits.length}건${hits.length === 50 ? ' 이상' : ''}`}
+        </span>
+      </div>
+      {!searching && hits.length === 0 ? (
+        <div className="px-4 py-6 text-center text-sm text-txt-tertiary">일치하는 일정이 없습니다</div>
+      ) : (
+        <div className="max-h-56 overflow-y-auto divide-y divide-surface-secondary">
+          {hits.map(s => {
+            const inView = s.start_date >= gridStart && s.start_date <= gridEnd
+            const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
+            const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean).join(', ')
+            return (
+              <button key={s.id} onClick={() => goToSchedule(s)}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-surface-tertiary md:gap-3 md:py-2">
+                <span className="w-[86px] shrink-0 text-[12px] tabular-nums text-txt-secondary">{s.start_date}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-txt-primary">{s.title}</span>
+                {/* 폰에서는 제목이 먼저다 — 담당자·배지는 자리가 있을 때만 */}
+                {names && <span className="hidden shrink-0 text-[12px] text-txt-tertiary sm:inline">{names}</span>}
+                {inView && <span className="hidden shrink-0 rounded-full bg-surface-secondary px-2 py-0.5 text-[11px] text-txt-secondary sm:inline">이번 달</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  ) : null
 
   const toggleStaff = (id: string) => setActiveStaff(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
@@ -336,69 +415,20 @@ export default function WorkCalendarPage() {
             </div>
           )}
         </div>
+        {/* 폰에서는 이 자리에 두지 않는다 — 아래 '다우 업무 캘린더' 제목 옆으로 간다 */}
         {(activeTab === 'calendar' || UI_HIDDEN.promo) && (
-          <div className="flex items-center gap-2">
-            {/* 폰에서는 150px 고정 — 더 넓히면 320px 화면에서 '+ 일정 추가'를 밀어낸다 */}
-            <div className="relative">
-              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-tertiary" />
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="일정 검색"
-                aria-label="일정 검색"
-                className="h-9 w-[130px] rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-sm text-txt-primary placeholder:text-txt-quaternary focus:outline-none focus:ring-1 focus:ring-accent md:w-[220px]"
-              />
-              {query && (
-                <button onClick={() => setQuery('')} aria-label="검색어 지우기"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-txt-tertiary hover:bg-surface-secondary">
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-            <button onClick={() => { setEditSchedule(null); setSelectedDate(today); setShowModal(true) }}
-              className="px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover shadow-sm shrink-0">+ 일정 추가</button>
+          <div className="hidden md:block">
+            <CalendarActions
+              query={query}
+              onQueryChange={setQuery}
+              onAdd={() => { setEditSchedule(null); setSelectedDate(today); setShowModal(true) }}
+            />
           </div>
         )}
       </div>
 
       {activeTab === 'calendar' || UI_HIDDEN.promo ? (
         <>
-          {/* 검색 결과 — 달력은 보고 있는 달만 걸러내므로, 다른 달에 있는 건 여기서만 보인다.
-              모바일·데스크톱 공용이라 좌우 분기 밖에 둔다. */}
-          {query.trim() && (
-            <div className="bg-surface rounded-[10px] border border-border-primary mb-4 overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-border-tertiary px-4 py-2.5">
-                <span className="text-xs font-semibold text-txt-secondary">
-                  &lsquo;{query.trim()}&rsquo; 검색 결과
-                </span>
-                <span className="text-xs text-txt-tertiary">
-                  {searching ? '찾는 중...' : `${hits.length}건${hits.length === 50 ? ' 이상' : ''}`}
-                </span>
-              </div>
-              {!searching && hits.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-txt-tertiary">일치하는 일정이 없습니다</div>
-              ) : (
-                <div className="max-h-56 overflow-y-auto divide-y divide-surface-secondary">
-                  {hits.map(s => {
-                    const inView = s.start_date >= gridStart && s.start_date <= gridEnd
-                    const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
-                    const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean).join(', ')
-                    return (
-                      <button key={s.id} onClick={() => goToSchedule(s)}
-                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-surface-tertiary md:gap-3 md:py-2">
-                        <span className="w-[86px] shrink-0 text-[12px] tabular-nums text-txt-secondary">{s.start_date}</span>
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-txt-primary">{s.title}</span>
-                        {/* 폰에서는 제목이 먼저다 — 담당자·배지는 자리가 있을 때만 */}
-                        {names && <span className="hidden shrink-0 text-[12px] text-txt-tertiary sm:inline">{names}</span>}
-                        {inView && <span className="hidden shrink-0 rounded-full bg-surface-secondary px-2 py-0.5 text-[11px] text-txt-secondary sm:inline">이번 달</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Mobile calendar view */}
           <div className="md:hidden">
             <MobileCalendarView
@@ -411,6 +441,9 @@ export default function WorkCalendarPage() {
               onScheduleClick={(s) => { setEditSchedule(s); setShowModal(true) }}
               onAddSchedule={(date) => { setSelectedDate(date); setEditSchedule(null); setShowModal(true) }}
               onOpenDailyLog={() => setShowDailyLog(true)}
+              query={query}
+              onQueryChange={setQuery}
+              searchResults={searchPanel}
             />
           </div>
 
@@ -455,6 +488,8 @@ export default function WorkCalendarPage() {
               />
             )
           })()}
+
+          {searchPanel}
 
           {/* 캘린더 */}
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
@@ -824,6 +859,9 @@ function MobileCalendarView({
   onScheduleClick,
   onAddSchedule,
   onOpenDailyLog,
+  query,
+  onQueryChange,
+  searchResults,
 }: {
   schedules: Schedule[]
   staffList: Staff[]
@@ -834,6 +872,10 @@ function MobileCalendarView({
   onScheduleClick: (s: Schedule) => void
   onAddSchedule: (date: string) => void
   onOpenDailyLog: () => void
+  query: string
+  onQueryChange: (v: string) => void
+  /** 검색 결과 목록. 검색란 바로 아래여야 하므로 제목줄 다음에 그린다. */
+  searchResults: React.ReactNode
 }) {
   const today = useTodayKST()
   const [selectedDate, setSelectedDate] = useState(today)
@@ -926,10 +968,15 @@ function MobileCalendarView({
 
   return (
     <div className="space-y-3">
-      {/* Header */}
-      <div className="text-[18px] font-semibold text-txt-primary tracking-[-0.3px]">
-        다우 업무 캘린더
+      {/* Header — 제목 오른쪽에 검색·추가를 함께 둔다 */}
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-[16px] font-semibold text-txt-primary tracking-[-0.3px]">
+          다우 업무 캘린더
+        </span>
+        <CalendarActions compact query={query} onQueryChange={onQueryChange} onAdd={() => onAddSchedule(selectedDate)} />
       </div>
+
+      {searchResults}
 
       {/* Month navigation */}
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">

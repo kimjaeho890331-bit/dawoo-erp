@@ -46,7 +46,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
   const [payments, setPayments] = useState<ExpenseReportPayment[]>([])
   const [lines, setLines] = useState<LineWithStaff[]>([])
   const [files, setFiles] = useState<ExpenseReportFile[]>([])
-  const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
   const [modal, setModal] = useState(false)
   /** 하단의 어느 버튼으로 열었는지 — 모달이 그 갈래로 열린다. */
   const [modalMode, setModalMode] = useState<'approve' | 'reject'>('approve')
@@ -80,20 +79,14 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       siteId: rest.site_id, projectId: rest.project_id, siteName, projectName,
     }))
 
-    const [{ data: p }, { data: l }, { data: f }, { data: rf }] = await Promise.all([
+    const [{ data: p }, { data: l }, { data: f }] = await Promise.all([
       supabase.from('expense_report_payments').select('*').eq('report_id', reportId).order('seq'),
       supabase.from('expense_report_lines').select('*, staff(name)').eq('report_id', reportId).order('seq'),
       supabase.from('expense_report_files').select('*').eq('report_id', reportId).order('uploaded_at'),
-      supabase
-        .from('expense_report_refs')
-        .select('ref_report_id, expense_reports!expense_report_refs_ref_report_id_fkey(id, doc_no, title)')
-        .eq('report_id', reportId),
     ])
     setPayments((p ?? []) as ExpenseReportPayment[])
     setLines((l ?? []) as LineWithStaff[])
     setFiles((f ?? []) as ExpenseReportFile[])
-    setRefs((rf ?? []).map((x: Record<string, unknown>) =>
-      x.expense_reports as { id: string; doc_no: string | null; title: string }))
   }, [reportId])
 
   useEffect(() => { load() }, [load])
@@ -215,19 +208,6 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
                 className="flex items-center gap-2 py-2.5 text-[13px] text-accent-text hover:underline md:py-1.5">
                 <Paperclip size={14} className="text-txt-tertiary" /> {f.file_name}
               </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {refs.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-3">참조문서</h2>
-          <div className="flex flex-col gap-1">
-            {refs.map(r => (
-              <Link key={r.id} href={`/approval/${r.id}`} className="py-2.5 text-[13px] text-accent-text hover:underline md:py-1.5">
-                {r.doc_no ?? ''} {r.title}
-              </Link>
             ))}
           </div>
         </div>

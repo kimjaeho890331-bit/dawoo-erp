@@ -5,6 +5,7 @@ import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle, Upload, Ta
 import { supabase } from '@/lib/supabase'
 import { formatMoney, parseMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
+import SettlementTab from '@/components/expenses/SettlementTab'
 import { projectLabel, workKindFromIds, workTargetLabel, type WorkKind } from '@/lib/workTarget'
 
 // --- 타입 ---
@@ -55,7 +56,7 @@ interface CardMapping {
 }
 
 interface Staff { id: string; name: string }
-interface Site { id: string; name: string }
+interface Site { id: string; name: string; contract_type?: string | null; status?: string | null }
 interface Project { id: string; building_name: string | null; ho: string | null; dong: string | null }
 
 // 이상 탐지 규칙
@@ -83,7 +84,7 @@ const CAT_COLOR: Record<string, string> = {
 const SEVERITY_COLOR = { high: 'bg-red-50 border-red-200 text-red-700', medium: 'bg-yellow-50 border-yellow-200 text-yellow-700', low: 'bg-blue-50 border-blue-200 text-blue-700' }
 const SEVERITY_LABEL = { high: '주의', medium: '확인', low: '참고' }
 
-type Tab = 'expense' | 'fixed' | 'card'
+type Tab = 'expense' | 'fixed' | 'card' | 'settle'
 
 // ===== 이상 탐지 엔진 =====
 function detectAnomalies(txns: CardTransaction[], staffList: Staff[]): Anomaly[] {
@@ -210,7 +211,7 @@ export default function ExpensesPage() {
       supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
       supabase.from('card_mappings').select('*'),
       supabase.from('staff').select('id, name'),
-      supabase.from('sites').select('id, name'),
+      supabase.from('sites').select('id, name, contract_type, status'),
       supabase.from('projects').select('id, building_name, ho, dong').order('created_at', { ascending: false }),
     ])
     if (!expR.error) setExpenses(expR.data || [])
@@ -276,6 +277,7 @@ export default function ExpensesPage() {
               { key: 'expense' as Tab, label: '지출결의서' },
               { key: 'fixed' as Tab, label: '고정지출' },
               { key: 'card' as Tab, label: '카드분석' },
+              { key: 'settle' as Tab, label: '정산' },
             ].map(t => (
               <button key={t.key} onClick={() => { setTab(t.key); setFilterCat('전체') }}
                 className={`px-4 py-1.5 text-sm rounded-md transition ${tab === t.key ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>
@@ -287,7 +289,7 @@ export default function ExpensesPage() {
             ))}
           </div>
         </div>
-        {tab !== 'card' && (
+        {(tab === 'expense' || tab === 'fixed') && (
           <button onClick={openCreate}
             className="btn-primary">
             + {tab === 'expense' ? '결의서 작성' : '고정지출 등록'}
@@ -400,6 +402,16 @@ export default function ExpensesPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* === 정산 — 현장·지원사업별 실지출 합계. 사이드바 메뉴가 아니라 이 페이지 탭이다. === */}
+      {tab === 'settle' && (
+        <SettlementTab
+          expenses={expenses}
+          sites={siteList}
+          projects={projectList}
+          staffName={staffName}
+        />
       )}
 
       {/* === 카드분석 === */}

@@ -14,7 +14,7 @@ import { EMPTY_PAYMENT, type ApprovalStatus, type PaymentRow } from '@/types/app
 import { validateApprovalLine } from '@/lib/approval/status'
 import { formatMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
-import { workKindFromIds, projectLabel, type WorkKind } from '@/lib/workTarget'
+import { workKindFromIds, projectLabel, selectedWorkTarget, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
 import { draftTitleFromTarget } from '@/lib/approval/draftTitle'
 import { vendorDocsToAttachments } from '@/lib/approval/vendorDocs'
 
@@ -49,7 +49,7 @@ const missingDateRow = (rows: PaymentRow[]): number | null => {
  * 데스크톱은 이 단계를 무시하고 전부 한 화면에 그린다 — 지금 쓰고 있는 화면을 바꾸지 않는다.
  * 그래서 단계는 "데이터"가 아니라 "모바일에서 무엇을 보여줄지 고르는 필터"일 뿐이다.
  */
-const STEPS = ['기안 정보', '지급 정보', '첨부·참조', '결재선', '확인'] as const
+const STEPS = ['기안 정보', '지급 정보', '첨부', '결재선', '확인'] as const
 const LAST_STEP = STEPS.length - 1
 
 export default function DraftForm({ reportId, copyFromId }: { reportId?: string; copyFromId?: string }) {
@@ -62,8 +62,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [payments, setPayments] = useState<PaymentRow[]>([{ ...EMPTY_PAYMENT }])
   const [lines, setLines] = useState<LineDraft[]>([])
   const [files, setFiles] = useState<AttachedFile[]>([])
-  const [refs, setRefs] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
-  const [refPool, setRefPool] = useState<{ id: string; doc_no: string | null; title: string }[]>([])
   const [lineOpen, setLineOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -72,23 +70,18 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [existingStatus, setExistingStatus] = useState<ApprovalStatus | null>(null)
   const [siteId, setSiteId] = useState('')
   const [projectId, setProjectId] = useState('')
-  const [sites, setSites] = useState<{ id: string; name: string }[]>([])
-  const [projects, setProjects] = useState<{ id: string; building_name: string | null; ho: string | null; dong: string | null }[]>([])
+  const [sites, setSites] = useState<WorkSiteOption[]>([])
+  const [projects, setProjects] = useState<WorkProjectOption[]>([])
   /** 모바일 단계. 데스크톱에서는 이 값이 바뀌지 않고, 화면도 이 값을 보지 않는다. */
   const [step, setStep] = useState(0)
   const excelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    supabase
-      .from('expense_reports')
-      .select('id, doc_no, title')
-      .eq('status', 'approved')
-      .order('completed_at', { ascending: false })
-      .limit(50)
-      .then(({ data }) => setRefPool(data ?? []))
-    supabase.from('sites').select('id, name').order('name').then(({ data }) => setSites((data ?? []) as { id: string; name: string }[]))
+    supabase.from('sites').select('id, name, contract_type, status').order('name').then(({ data }) => {
+      setSites((data ?? []) as WorkSiteOption[])
+    })
     supabase.from('projects').select('id, building_name, ho, dong').order('created_at', { ascending: false }).then(({ data }) => {
-      setProjects((data ?? []) as { id: string; building_name: string | null; ho: string | null; dong: string | null }[])
+      setProjects((data ?? []) as WorkProjectOption[])
     })
   }, [])
 
@@ -128,13 +121,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           role: x.role as LineDraft['role'],
         })))
         setFiles((f ?? []) as AttachedFile[])
-
-        const { data: rf } = await supabase
-          .from('expense_report_refs')
-          .select('ref_report_id, expense_reports!expense_report_refs_ref_report_id_fkey(id, doc_no, title)')
-          .eq('report_id', sourceId)
-        setRefs((rf ?? []).map((x: Record<string, unknown>) =>
-          x.expense_reports as { id: string; doc_no: string | null; title: string }))
       }
     }
     load()
@@ -166,7 +152,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           payments: payments.filter(x => !isBlankPayment(x)),
           lines: lines.map(l => ({ staff_id: l.staff_id, role: l.role })),
           files,
-          refs: refs.map(r => r.id),
         }),
       })
       const json = await res.json()
@@ -191,7 +176,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     } finally {
       setBusy(false)
     }
-  }, [actor, reportId, existingStatus, title, bodyHtml, siteId, projectId, payments, lines, files, refs, router])
+  }, [actor, reportId, existingStatus, title, bodyHtml, siteId, projectId, payments, lines, files, router])
 
   const handleExcelUpload = useCallback(async (file: File) => {
     // 빈 줄 하나는 기본으로 놓여 있다. 지울 게 정말 있을 때만 묻는다.
@@ -454,34 +439,6 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         <div className="flex-1"><FileAttach files={files} onChange={setFiles} /></div>
       </div>
 
-      <div className={`${stepFlex(2)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>
-        <span className="w-20 text-label md:pt-2">참조문서</span>
-        <div className="flex-1">
-          <div className="mb-3 flex flex-wrap gap-2">
-            {refs.map(r => (
-              <span key={r.id} className="flex items-center gap-2 rounded-lg bg-surface-secondary px-3 py-1.5 text-[13px]">
-                {r.doc_no ?? ''} {r.title}
-                <button onClick={() => setRefs(refs.filter(x => x.id !== r.id))} aria-label="참조 해제" className="text-txt-tertiary">×</button>
-              </span>
-            ))}
-          </div>
-          <select
-            value=""
-            onChange={e => {
-              const found = refPool.find(r => r.id === e.target.value)
-              if (found && !refs.some(x => x.id === found.id)) setRefs([...refs, found])
-            }}
-            aria-label="참조문서 추가"
-            className="h-11 w-full rounded-lg border border-border-primary bg-surface px-3 text-base text-txt-primary md:h-9 md:w-auto md:text-[13px]"
-          >
-            <option value="">완료된 문서 추가</option>
-            {refPool.filter(r => r.id !== reportId).map(r => (
-              <option key={r.id} value={r.id}>{r.doc_no ?? ''} {r.title}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       <div className={`${stepBlock(1)} mb-8`}>
         <PaymentTable
           actions={excelActions}
@@ -518,11 +475,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       <div className={`${mobileOnly(LAST_STEP)} mb-5`}>
         {[
           { label: '기안자', to: 0, value: actor?.name ?? '선택 안 됨' },
-          { label: '현장', to: 0, value: workKind === 'site' ? (sites.find(s => s.id === siteId)?.name || '미선택') : workKind === 'project' ? (projects.find(p => p.id === projectId)?.building_name || '미선택') : '현장 없음' },
+          { label: '현장', to: 0, value: selectedWorkTarget({ sites, projects, siteId, projectId })?.label ?? (workKind ? '미선택' : '현장 없음') },
           { label: '기안제목', to: 0, value: title || '입력 안 됨' },
           // 저장되는 건수와 같아야 한다 — 빈 줄은 서버로 보내지 않는다.
           { label: '지급 정보', to: 1, value: `${payments.filter(p => !isBlankPayment(p)).length}건 · ${formatMoney(totalAmount)}원` },
-          { label: '첨부·참조', to: 2, value: `첨부 ${files.length}건 · 참조 ${refs.length}건` },
+          { label: '첨부', to: 2, value: `첨부 ${files.length}건` },
           { label: '결재선', to: 3, value: lines.length > 0 ? lines.map(l => l.name).join(' → ') : '지정 안 됨' },
         ].map(item => (
           <div key={item.label} className="flex items-start justify-between gap-4 border-b border-border-primary py-4">

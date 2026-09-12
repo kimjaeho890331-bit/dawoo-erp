@@ -5,6 +5,7 @@ import {
   searchWorkTargets,
   selectedWorkTarget,
   siteContractSource,
+  WORK_SOURCE_FILTERS,
   workKindFromIds,
   workSourceLabel,
   workTargetLabel,
@@ -48,10 +49,13 @@ describe('workTarget', () => {
     expect(isSiteCompleted(null)).toBe(false)
   })
 
-  it('입찰·수의는 구분하고 null/기타는 미분류다', () => {
+  it('출처 칩·라벨은 운영 실값 입찰/수의계약/지원사업이다', () => {
+    expect(WORK_SOURCE_FILTERS.map(f => f.label)).toEqual(['전체', '입찰', '수의계약', '지원사업'])
     expect(siteContractSource('입찰')).toBe('bid')
     expect(siteContractSource('수의계약')).toBe('private')
-    expect(siteContractSource('수의')).toBe('private')
+    expect(workSourceLabel('bid')).toBe('입찰')
+    expect(workSourceLabel('private')).toBe('수의계약')
+    expect(workSourceLabel('project')).toBe('지원사업')
     expect(siteContractSource(null)).toBe('unclassified')
     expect(siteContractSource('기타')).toBe('unclassified')
     expect(workSourceLabel('unclassified')).toBe('미분류')
@@ -62,7 +66,7 @@ describe('workTarget', () => {
     expect(searchWorkTargets({ sites, projects, query: '   ' })).toEqual([])
   })
 
-  it('전체 검색은 입찰·수의·미분류·지원사업을 이름으로 찾는다', () => {
+  it('전체 검색은 입찰·수의계약·미분류·지원사업을 이름으로 찾는다', () => {
     const hits = searchWorkTargets({ sites, projects, query: '현장' })
     expect(hits.map(h => h.id).sort()).toEqual(['s-null', 's-priv-short'])
     expect(hits.find(h => h.id === 's-null')?.sourceLabel).toBe('미분류')
@@ -73,11 +77,17 @@ describe('workTarget', () => {
     })])
   })
 
-  it('입찰·수의 칩은 해당 contract_type만, 미분류는 전체에만 남긴다', () => {
-    expect(searchWorkTargets({ sites, projects, query: '잠원', source: 'bid' }).map(h => h.id)).toEqual(['s-bid'])
-    expect(searchWorkTargets({ sites, projects, query: '화서', source: 'private' }).map(h => h.id)).toEqual(['s-priv'])
-    expect(searchWorkTargets({ sites, projects, query: '수의', source: 'private' }).map(h => h.id)).toEqual(['s-priv-short'])
+  it('입찰·수의계약 칩은 해당 contract_type만, 미분류는 전체에만 남긴다', () => {
+    const bid = searchWorkTargets({ sites, projects, query: '잠원', source: 'bid' })
+    expect(bid.map(h => h.id)).toEqual(['s-bid'])
+    expect(bid[0]?.sourceLabel).toBe('입찰')
+
+    const priv = searchWorkTargets({ sites, projects, query: '화서', source: 'private' })
+    expect(priv.map(h => h.id)).toEqual(['s-priv'])
+    expect(priv[0]?.sourceLabel).toBe('수의계약')
+
     expect(searchWorkTargets({ sites, projects, query: '미분류', source: 'bid' })).toEqual([])
+    expect(searchWorkTargets({ sites, projects, query: '미분류', source: 'private' })).toEqual([])
     expect(searchWorkTargets({ sites, projects, query: '미분류', source: 'all' }).map(h => h.id)).toEqual(['s-null'])
     expect(searchWorkTargets({ sites, projects, query: '대광', source: 'project' }).map(h => h.id)).toEqual(['p1'])
     expect(searchWorkTargets({ sites, projects, query: '잠원', source: 'project' })).toEqual([])

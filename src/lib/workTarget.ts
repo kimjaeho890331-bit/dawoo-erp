@@ -1,8 +1,8 @@
-import { contractTypeKind } from './siteContract'
+import { CONTRACT_TYPE_BID, CONTRACT_TYPE_PRIVATE, contractTypeKind } from './siteContract'
 
 export type WorkKind = '' | 'site' | 'project'
 
-/** 현장 고르기 출처 필터. 입찰·수의는 sites.contract_type, 지원사업은 projects. */
+/** 현장 고르기 출처 필터. 입찰·수의계약은 sites.contract_type 실값, 지원사업은 projects. */
 export type WorkSourceFilter = 'all' | 'bid' | 'private' | 'project'
 
 export type WorkSiteSource = 'bid' | 'private' | 'unclassified'
@@ -37,8 +37,8 @@ export const SITE_COMPLETED_STATUSES = ['정산완료'] as const
 
 export const WORK_SOURCE_FILTERS: { key: WorkSourceFilter; label: string }[] = [
   { key: 'all', label: '전체' },
-  { key: 'bid', label: '입찰' },
-  { key: 'private', label: '수의' },
+  { key: 'bid', label: CONTRACT_TYPE_BID },
+  { key: 'private', label: CONTRACT_TYPE_PRIVATE },
   { key: 'project', label: '지원사업' },
 ]
 
@@ -83,8 +83,8 @@ export function siteContractSource(contractType?: string | null): WorkSiteSource
 }
 
 export function workSourceLabel(source: WorkTargetSource): string {
-  if (source === 'bid') return '입찰'
-  if (source === 'private') return '수의'
+  if (source === 'bid') return CONTRACT_TYPE_BID
+  if (source === 'private') return CONTRACT_TYPE_PRIVATE
   if (source === 'project') return '지원사업'
   return '미분류'
 }
@@ -136,7 +136,7 @@ export function selectedWorkTarget(opts: {
 }
 
 /**
- * 입찰·수의(sites)와 지원사업을 이름(접수 건은 projectLabel)으로 찾는다.
+ * 입찰·수의계약(sites.contract_type)과 지원사업을 이름(접수 건은 projectLabel)으로 찾는다.
  * 완료 현장은 기본 제외. 이미 고른 완료 현장은 selectedSiteId로 남겨 둔다.
  * 빈 검색어는 결과를 비운다 — 긴 목록을 드롭다운으로 쏟지 않기 위함.
  */

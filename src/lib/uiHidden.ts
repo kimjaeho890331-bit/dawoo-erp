@@ -9,7 +9,7 @@ export const UI_HIDDEN = {
   kpi: true,
   aiAssistant: true,
   promo: true,
-  buildingLedger: true,
+  buildingLedger: false,
   labor: true,
 } as const
 

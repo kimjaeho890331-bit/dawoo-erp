@@ -14,22 +14,22 @@ describe('uiHidden', () => {
     expect(UI_HIDDEN.kpi).toBe(true)
     expect(UI_HIDDEN.aiAssistant).toBe(true)
     expect(UI_HIDDEN.promo).toBe(true)
-    expect(UI_HIDDEN.buildingLedger).toBe(true)
+    expect(UI_HIDDEN.buildingLedger).toBe(false)
     expect(UI_HIDDEN.labor).toBe(true)
 
     expect(HIDDEN_MENU_PATHS).toEqual([
       '/documents',
       '/reports',
       '/kpi',
-      '/register/building-ledger',
       '/labor',
     ])
+    expect(HIDDEN_MENU_PATHS).not.toContain('/register/building-ledger')
     expect(isHiddenMenuPath('/documents')).toBe(true)
     expect(isHiddenMenuPath('/documents/water')).toBe(true)
     expect(isHiddenMenuPath('/reports')).toBe(true)
     expect(isHiddenMenuPath('/kpi')).toBe(true)
-    expect(isHiddenMenuPath('/register/building-ledger')).toBe(true)
-    expect(isHiddenMenuPath('/register/building-ledger/queue')).toBe(true)
+    expect(isHiddenMenuPath('/register/building-ledger')).toBe(false)
+    expect(isHiddenMenuPath('/register/building-ledger/queue')).toBe(false)
     expect(isHiddenMenuPath('/labor')).toBe(true)
     expect(isHiddenMenuPath('/labor/export')).toBe(true)
 
@@ -50,7 +50,7 @@ describe('uiHidden', () => {
   it('페이지 가드는 숨김이면 대시보드로 보낸다', () => {
     expect(hiddenPageRedirect(true)).toBe('/dashboard')
     expect(hiddenPageRedirect(false)).toBeNull()
-    expect(hiddenPageRedirect(UI_HIDDEN.buildingLedger)).toBe('/dashboard')
+    expect(hiddenPageRedirect(UI_HIDDEN.buildingLedger)).toBeNull()
     expect(hiddenPageRedirect(UI_HIDDEN.labor)).toBe('/dashboard')
     expect(hiddenPageRedirect(UI_HIDDEN.documents)).toBe('/dashboard')
     expect(hiddenPageRedirect(UI_HIDDEN.reports)).toBe('/dashboard')

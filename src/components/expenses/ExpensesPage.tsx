@@ -55,7 +55,7 @@ interface CardMapping {
 }
 
 interface Staff { id: string; name: string }
-interface Site { id: string; name: string }
+interface Site { id: string; name: string; contract_type?: string | null; status?: string | null }
 interface Project { id: string; building_name: string | null; ho: string | null; dong: string | null }
 
 // 이상 탐지 규칙
@@ -210,7 +210,7 @@ export default function ExpensesPage() {
       supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
       supabase.from('card_mappings').select('*'),
       supabase.from('staff').select('id, name'),
-      supabase.from('sites').select('id, name'),
+      supabase.from('sites').select('id, name, contract_type, status'),
       supabase.from('projects').select('id, building_name, ho, dong').order('created_at', { ascending: false }),
     ])
     if (!expR.error) setExpenses(expR.data || [])

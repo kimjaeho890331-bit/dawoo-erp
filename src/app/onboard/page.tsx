@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 import { Loader2, ShieldCheck, UserCheck, ArrowRight, Check } from 'lucide-react'
 
 interface StaffOption {
@@ -22,11 +22,6 @@ export default function OnboardPage() {
   const [error, setError] = useState('')
   const [userEmail, setUserEmail] = useState('')
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -37,7 +32,7 @@ export default function OnboardPage() {
       setUserEmail(user.email || '')
     }
     checkAuth()
-  }, [supabase, router])
+  }, [router])
 
   const handleVerifyCode = async () => {
     if (!inviteCode.trim()) {
@@ -77,7 +72,7 @@ export default function OnboardPage() {
         return
       }
 
-      const linkedStaffIds = new Set((linkedRows || []).map(r => r.staff_id))
+      const linkedStaffIds = new Set((linkedRows || []).map((r: { staff_id: string }) => r.staff_id))
 
       const { data: staff, error: staffError } = await supabase
         .from('staff')
@@ -91,7 +86,7 @@ export default function OnboardPage() {
         return
       }
 
-      setStaffList((staff || []).filter(s => !linkedStaffIds.has(s.id)))
+      setStaffList((staff || []).filter((s: StaffOption) => !linkedStaffIds.has(s.id)))
       setStep('select')
     } catch {
       setError('서버 오류가 발생했습니다')

@@ -1,10 +1,18 @@
-# RLS 설계안 (실행 금지)
+# RLS 설계안 (ENABLE는 Stage 2)
 
-이 문서는 설계만 한다. **지금은 `ENABLE ROW LEVEL SECURITY`를 추가로 적용하지 않는다.**
+이 문서는 정책 설계와 적용 순서를 적는다. **Stage 2 배포 확인 전에는 `ENABLE ROW LEVEL SECURITY`를 추가로 적용하지 않는다.**
 이미 켜진 테이블의 RLS를 끄지도, 꺼진 테이블에 ENABLE 마이그레이션을 넣지도 않는다.
 
-화면 대부분이 `src/lib/supabase.ts` anon 클라이언트(세션 JWT 없음)로 직접 SELECT/INSERT/UPDATE/DELETE 한다.
-꺼진 테이블에 RLS를 켜면 접수대장·지출·직원·거래처가 빈 화면이 된다.
+## 단계
+
+| 단계 | 상태 | 내용 |
+|------|------|------|
+| **Stage 1** | **완료** | 화면 데이터 읽기/쓰기가 AuthProvider와 같은 `@supabase/ssr` 쿠키 세션 클라이언트(`createBrowserSupabaseClient` → `src/lib/supabase.ts`)를 쓴다. 로그인 JWT가 `from(...)` 요청에 실린다. 로그아웃이면 staff 세션 JWT가 없다. 이 단계에서는 ENABLE RLS / `schedules`·`sites` 정책 조이기 없음. |
+| **Stage 2** | **대기** | Stage 1을 배포한 뒤, 로그인 화면이 실제로 보이는지 확인한 다음에만 staff-session 정책을 적용한다. **anon은 empty/deny** — 로그인 JWT가 없는 요청은 회사 데이터가 비어 있거나 거절되어야 한다. ENABLE은 그때, 테이블 하나씩. |
+
+Stage 2를 지금 하면 안 되는 이유: 클라이언트를 바꿔도 배포·실로그인 확인 전에 정책을 조이면, JWT가 빠지거나 쿠키가 안 실리는 환경에서 ERP 전체가 빈 화면이 된다. `schedules`/`sites` 기존 정책도 아직 조이지 않는다.
+
+화면 데이터는 `src/lib/supabase.ts` 세션 브라우저 클라이언트다. 꺼진 테이블에 RLS를 지금 켜면, 배포 확인 전에 JWT가 빠지는 환경에서 접수대장·지출·직원·거래처가 빈 화면이 된다.
 
 - 이 PR에서 마이그레이션으로 ENABLE 하지 않는다.
 - `supabase/migrations/007_rls_all_tables.sql`을 재실행하지 않는다.
@@ -20,7 +28,7 @@
 
 - `expense_report_details` / `expense_report_refs` / `doc_sequences` 등 위 목록 밖은 **미확인**. 조사 항목.
 - `credential_entries`는 022 의도와 같이 **REVOKE anon/authenticated + service_role만**일 가능성이 크다. 실제 GRANT/REVOKE·정책 이름은 아래 조사 항목.
-- `schedules` / `sites`는 RLS on인데 화면은 anon 클라이언트로 읽는다. **정책이 열려 있거나(예: `USING (true)`), 다른 우회가 있는지 조사 필요.** 지금은 정책을 조이지 않는다.
+- `schedules` / `sites`는 RLS on이다. Stage 1부터 화면은 세션 클라이언트로 읽는다. **정책이 열려 있거나(예: `USING (true)`), 다른 우회가 있는지 조사 필요.** 지금은 정책을 조이지 않는다.
 
 ### 조사 항목 (Studio / `pg_policies` — 아직 실행하지 말 것)
 
@@ -32,41 +40,41 @@
 4. RLS off 테이블 — GRANT가 PUBLIC/anon에 열려 있는지.
 5. 미확인: `expense_report_details`, `expense_report_refs`, `doc_sequences`, `site_tasks` / `site_logs` / `site_photos`.
 
-## 왜 지금은 추가로 켜면 깨지나
+## 왜 Stage 2(ENABLE/조이기)는 배포 확인 뒤에만
 
-1. 프론트 데이터 클라이언트는 anon 키 + persistSession off다. 로그인 쿠키 JWT가 실리지 않는다.
+1. **Stage 1 완료.** 프론트 데이터 클라이언트는 Auth와 같은 `@supabase/ssr` 쿠키 세션이다. 로그인하면 JWT가 실린다. 로그아웃(anon)은 staff 세션이 없다. 아직 대부분의 테이블은 RLS off라 anon도 행을 볼 수 있다 — Stage 2에서 anon empty/deny로 바꾼다.
 2. 서버 API는 민감 작업에 `SUPABASE_SERVICE_ROLE_KEY`를 쓴다(아래 목록). service_role은 RLS를 우회한다.
-3. 과거 `001_enable_rls.sql` / `007_rls_all_tables.sql`은 `authenticated USING (true)`라 anon 경로와 충돌한다. 운영 on/off는 그 파일과 **이미 다르다.**
+3. 과거 `001_enable_rls.sql` / `007_rls_all_tables.sql`은 `authenticated USING (true)`라, JWT가 빠진 anon 경로와 충돌한다. 운영 on/off는 그 파일과 **이미 다르다.**
 4. `staff_emails`는 015에서 RLS를 의도적으로 끄고 만들었고, 운영도 off다.
 
-전제: 프론트를 `@supabase/ssr` 세션 클라이언트로 바꾸거나, 민감 테이블 CRUD를 API로 옮긴 뒤에만 정책을 조인다. **off → on ENABLE는 그 다음.**
+전제: Stage 1 배포 후 로그인 SELECT가 살아 있는지 확인한 뒤에만 정책을 조인다. **off → on ENABLE는 Stage 2.** anon은 empty/deny.
 
 ## 테이블별 목표
 
 | 테이블 | 운영 RLS | 목표 | 앱 경로 | 나중에 |
 |--------|----------|------|---------|--------|
 | `credential_entries` | on | anon/authenticated REVOKE, service_role만 | API만 (`/api/ids*`) | 정책/GRANT 조사 후 유지. ENABLE 추가 없음. 비밀번호는 앱 암호화 |
-| `schedules` | on | 로그인 직원 | 화면 anon CRUD | 정책 조사만. 조이기/ENABLE 추가 금지 |
-| `sites` | on | 로그인 직원. 신규 insert는 API | 목록/수정 anon, POST `/api/sites`는 service_role | 정책 조사만. 목록 API 이전 뒤에 조이기 |
-| `staff` | off | 읽기: 로그인. 쓰기: 관리자 또는 service_role | 화면 anon `select *` | ENABLE 하지 말 것. 세션 클라이언트 후 검토 |
+| `schedules` | on | 로그인 직원 | 화면 세션 클라이언트 CRUD | 정책 조사만. 조이기/ENABLE 추가 금지 |
+| `sites` | on | 로그인 직원. 신규 insert는 API | 목록/수정 세션 클라이언트, POST `/api/sites`는 service_role | 정책 조사만. 목록 API 이전 뒤에 조이기 |
+| `staff` | off | 읽기: 로그인. 쓰기: 관리자 또는 service_role | 화면 세션 `select *` | ENABLE 하지 말 것. Stage 2에서 검토 |
 | `staff_emails` | off | service_role만 | 로그인 매핑 API | ENABLE 하지 말 것. 이후 REVOKE+API만 |
 | `expense_reports` + `_payments` `_lines` `_files` | off | service_role만 (결재 API) | `/api/approval/*` | ENABLE 하지 말 것 |
-| `expenses` | off | 로그인 직원 또는 API만 | 화면 anon CRUD + 일부 API | ENABLE 하지 말 것 |
-| `projects` | off | 로그인 직원 | `src/lib/api/projects.ts` 등 anon | ENABLE 하지 말 것 |
-| `vendors` | off | 로그인 직원 | 화면 anon CRUD | ENABLE 하지 말 것 |
-| `notices` (선택) | off | 읽기: 로그인. 쓰기: 관리자 | 화면 anon CRUD | ENABLE 하지 말 것 |
-| `activity_log` | off | insert: 로그인+staff_id. select: 로그인 | `/api/activity-log` + 화면 fallback anon | ENABLE 하지 말 것. fallback 제거가 먼저 |
+| `expenses` | off | 로그인 직원 또는 API만 | 화면 세션 CRUD + 일부 API | ENABLE 하지 말 것 |
+| `projects` | off | 로그인 직원 | `src/lib/api/projects.ts` 등 세션 클라이언트 | ENABLE 하지 말 것 |
+| `vendors` | off | 로그인 직원 | 화면 세션 CRUD | ENABLE 하지 말 것 |
+| `notices` (선택) | off | 읽기: 로그인. 쓰기: 관리자 | 화면 세션 CRUD | ENABLE 하지 말 것 |
+| `activity_log` | off | insert: 로그인+staff_id. select: 로그인 | `/api/activity-log` + 화면 fallback 세션 | ENABLE 하지 말 것. fallback 제거가 먼저 |
 
 `doc_sequences`는 채번용 — 목표 service_role만. 운영 RLS는 미확인.
 
-## 적용 순서 (나중, ENABLE 추가 금지인 지금과 구분)
+## 적용 순서 (Stage 1 완료 / Stage 2는 배포 확인 후)
 
-1. 위 조사 항목으로 정책/GRANT를 적는다. **ENABLE 실행 없음.**
-2. 프론트 데이터 클라이언트를 로그인 JWT가 실리는 클라이언트로 바꾸거나, 민감 테이블을 API만 쓰게 옮긴다.
-3. 화면마다 로그인 상태로 SELECT가 살아 있는지 확인한다. 로그아웃(anon)은 빈 결과여야 한다.
+1. 위 조사 항목으로 정책/GRANT를 적는다. **지금은 ENABLE 실행 없음.**
+2. **완료 (Stage 1).** 프론트 데이터 클라이언트는 로그인 JWT가 실리는 `@supabase/ssr` 세션 클라이언트다. (`createBrowserSupabaseClient`)
+3. **Stage 2 직전.** 화면마다 로그인 상태로 SELECT가 살아 있는지 배포에서 확인한다. 그 다음 정책 적용 후 로그아웃(anon)은 빈 결과/거절이어야 한다.
 4. 이미 on인 `credential_entries`는 GRANT/정책만 확인·유지(REVOKE 패턴이면 유지).
 5. 이미 on인 `schedules` / `sites`는 정책이 열린 이유를 확인한 뒤, API 이전 후에만 조인다. ENABLE를 다시 치지 않는다.
-6. off인 `staff_emails` · `expense_*` · `staff` · `projects` · `vendors` · `expenses` · `activity_log` · `notices`는 **세션/API 이전 전에는 ENABLE 하지 않는다.**
+6. off인 `staff_emails` · `expense_*` · `staff` · `projects` · `vendors` · `expenses` · `activity_log` · `notices`는 **Stage 1 배포 확인 전에는 ENABLE 하지 않는다.**
 
 한 테이블씩. 깨지면 그 테이블만 롤백한다. 전 테이블 일괄 ENABLE 금지.
 
@@ -106,7 +114,7 @@
 | `/api/push/subscribe` | `push_subscriptions` |
 | `src/app/auth/callback` | `staff` |
 
-로그인만 확인하고 쓰는 경로(`/api/activity-log` GET, `/api/sites` POST의 auth)와, 화면 anon 직접 접근이 섞여 있다. RLS를 켜려면 이 두 경로를 먼저 하나로 맞춘다.
+로그인만 확인하고 쓰는 경로(`/api/activity-log` GET, `/api/sites` POST의 auth)와, 화면 세션 클라이언트 직접 접근이 섞여 있다. Stage 2에서 RLS를 켜려면 anon empty/deny와 service_role API 경로를 테이블마다 맞춘다.
 
 ## 하지 말 것
 

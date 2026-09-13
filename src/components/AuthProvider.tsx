@@ -1,9 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
-import type { User } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 
 interface StaffInfo {
   id: string
@@ -57,16 +57,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false)
   }, [])
 
-  // Supabase 클라이언트를 한 번만 생성 (매 렌더 재생성 방지)
-  const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      ),
-    [],
-  )
-
   const fetchStaff = useCallback(
     async (email: string) => {
       try {
@@ -100,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // staff 조회 실패해도 로그인은 유지
       }
     },
-    [supabase, setStaff],
+    [setStaff],
   )
 
   useEffect(() => {
@@ -142,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event: AuthChangeEvent, session: Session | null) => {
       const currentUser = session?.user ?? null
       setUser(currentUser)
 
@@ -160,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [supabase, fetchStaff, markReady, setUser, setStaff])
+  }, [fetchStaff, markReady, setUser, setStaff])
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
@@ -168,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStaff(null)
     localStorage.removeItem('dawoo_current_staff_id')
     router.push('/login')
-  }, [supabase, router, setUser, setStaff])
+  }, [router, setUser, setStaff])
 
   return (
     <AuthContext.Provider value={{ user, staff, loading, signOut }}>

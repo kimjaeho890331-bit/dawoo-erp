@@ -88,6 +88,6 @@ export async function fetchSiteActivityLogs(
       const body = (await res.json().catch(() => null)) as { rows?: ActivityLogWithStaff[] } | null
       if (body?.rows) return body.rows
     }
-  } catch { /* anon 조회로 이어서 */ }
+  } catch { /* 세션 클라이언트 조회로 이어서 */ }
   return fetchSiteActivityLogsFromClient(siteId)
 }

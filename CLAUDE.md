@@ -157,7 +157,7 @@ VAPID_SUBJECT               # 웹푸시 발신자 (mailto:), 미설정 시 dawoo
 | docs/REPORT_KPI.md | 보고서 + KPI 배점표 |
 | docs/AGENT.md | AI 에이전트 (접수/서류/조회팀 통합) |
 | docs/AI_RULES.md | AI 행동규칙 (문지기/비서/분석가 + 대표/직원 규칙) |
-| docs/SECURITY_RLS_PLAN.md | RLS 설계안만 (지금은 ENABLE 금지) |
+| docs/SECURITY_RLS_PLAN.md | RLS 설계안. Stage 1(세션 클라이언트) 완료, Stage 2 ENABLE는 배포 확인 후 |
 | docs/API_ADDRESS.md | 주소/건축물대장 API 연동 가이드 |
 | docs/DRIVE_STRUCTURE.md | 구글드라이브 폴더 구조 (Phase 2) |
 | dawoo_db_schema.sql | DB 스키마 |

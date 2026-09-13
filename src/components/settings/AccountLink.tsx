@@ -19,7 +19,7 @@ interface StaffOption {
  * 관리자가 일일이 물어보는 대신 각자 로그인한 상태에서 자기 이름을 한 번
  * 고르면 연결되게 한다.
  *
- * 조회(staff_emails, staff 목록)는 이 프로젝트 방침대로 anon 클라이언트로 직접 하고,
+ * 조회(staff_emails, staff 목록)는 Auth와 같은 세션 브라우저 클라이언트로 하고,
  * 연결(쓰기)만 서버 라우트(/api/staff/link-account)를 거친다 — 그래야 세션 이메일을
  * 서버가 확정해서 남의 계정에 잘못 붙는 걸 막을 수 있다.
  */

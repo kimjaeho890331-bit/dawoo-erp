@@ -9,6 +9,7 @@
 - **AI**: Claude API (Anthropic)
 - **PDF**: pypdf (폼필드 자동입력)
 - **배포**: Vercel
+- 공유/중요 ID 비밀번호 암호화는 Vercel에 `CREDENTIAL_SECRET`을 고정해야 한다.
 
 ## 프로젝트 구조
 ```

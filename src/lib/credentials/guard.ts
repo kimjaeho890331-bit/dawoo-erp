@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { headers } from 'next/headers'
 import { getAuthUser } from '@/lib/auth'
+import { canSeePrivateIds } from '@/lib/credentialAccess'
 import { credentialDenyBody } from './access'
 import {
   pickEmailMappedStaff,
@@ -87,4 +88,12 @@ export async function requireCredentialStaff(
   kind: CredentialKind,
 ): Promise<ResolvedCredentialStaff | Response> {
   return resolveStaffFromAuth(kind)
+}
+
+/** 재암호화 등 관리자 전용. staff.role === 관리자. */
+export async function requireAdminStaff(): Promise<ResolvedCredentialStaff | Response> {
+  const actor = await resolveStaffFromAuth('shared')
+  if (actor instanceof Response) return actor
+  if (!canSeePrivateIds(actor.staff.role)) return deny('권한없음', 403)
+  return actor
 }

@@ -1,5 +1,6 @@
 import { admin } from '@/lib/approval/guard'
 import {
+  activityLogSecretRefuseReason,
   activityLogStaffRefuseReason,
   type ActivityLogRow,
 } from '@/lib/activityLog'
@@ -24,6 +25,9 @@ export async function insertActivityLog(
 
   const action = input.action?.trim()
   if (!action) return { error: '작업을 입력해 주세요', status: 400 }
+
+  const secretRefused = activityLogSecretRefuseReason(action, input.detail)
+  if (secretRefused) return { error: secretRefused, status: 400 }
 
   const { data: staff, error: staffError } = await admin
     .from('staff')

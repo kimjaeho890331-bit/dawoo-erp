@@ -9,7 +9,7 @@ export const UI_HIDDEN = {
   kpi: true,
   aiAssistant: true,
   promo: true,
-  buildingLedger: false,
+  buildingLedger: false, // false면 사이드바 지원사업「건축물대장 발급」+ /register/building-ledger
   labor: true,
 } as const
 

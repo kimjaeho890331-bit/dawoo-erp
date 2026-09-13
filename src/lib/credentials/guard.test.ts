@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { canSeePrivateIds } from '@/lib/credentialAccess'
 import { pickEmailMappedStaff, resolveCredentialActor, type CredentialStaff } from './resolveStaff'
 
 const adminStaff: CredentialStaff = { id: 's-admin', name: '관리자', role: '관리자' }
@@ -97,6 +98,14 @@ describe('resolveCredentialActor', () => {
         lookup: { byId: vi.fn().mockResolvedValue(adminStaff), byEmail: vi.fn() },
       }),
     ).resolves.toEqual({ ok: true, staff: adminStaff, authEmail: 'admin@dawoo.co.kr' })
+  })
+})
+
+describe('requireAdminStaff 역할', () => {
+  it('재암호화는 관리자만 통과한다', () => {
+    expect(canSeePrivateIds('관리자')).toBe(true)
+    expect(canSeePrivateIds('직원')).toBe(false)
+    expect(canSeePrivateIds('대표')).toBe(false)
   })
 })
 

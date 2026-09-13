@@ -128,11 +128,13 @@ src/app/[기능명]/page.tsx                  ← 라우트 (import만)
 | `/api/storage/upload·delete` | 파일 업로드/삭제 |
 | `/api/approval/*` | 지출결의서 결재 액션 (상신·승인·반려·회수·취소·엑셀) |
 | `/api/push/subscribe` | 웹푸시 구독 등록 |
+| `/api/ids/reencrypt` | ID/PW 일회성 재암호화 (관리자, 건수만) |
 
 ## 환경변수 (.env.local)
 ```
 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY  # API Route 전용
+CREDENTIAL_SECRET          # ID/PW 암호화. Vercel에 고정. 없으면 평문 저장하지 않고 저장 실패.
 ANTHROPIC_API_KEY          # Claude
 ADDRESS_API_KEY            # 도로명주소 (Juso)
 BUILDING_API_KEY           # 건축물대장 (공공데이터포털)
@@ -155,6 +157,7 @@ VAPID_SUBJECT               # 웹푸시 발신자 (mailto:), 미설정 시 dawoo
 | docs/REPORT_KPI.md | 보고서 + KPI 배점표 |
 | docs/AGENT.md | AI 에이전트 (접수/서류/조회팀 통합) |
 | docs/AI_RULES.md | AI 행동규칙 (문지기/비서/분석가 + 대표/직원 규칙) |
+| docs/SECURITY_RLS_PLAN.md | RLS 설계안만 (지금은 ENABLE 금지) |
 | docs/API_ADDRESS.md | 주소/건축물대장 API 연동 가이드 |
 | docs/DRIVE_STRUCTURE.md | 구글드라이브 폴더 구조 (Phase 2) |
 | dawoo_db_schema.sql | DB 스키마 |

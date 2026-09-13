@@ -7,6 +7,14 @@ import {
   type CredentialListItem,
 } from './fields'
 import { decryptPassword, encryptPassword } from './secret'
+
+function encryptOrFail(value: string | null): string | null | Response {
+  try {
+    return encryptPassword(value)
+  } catch {
+    return Response.json({ error: '비밀번호를 저장할 수 없습니다' }, { status: 500 })
+  }
+}
 import { sharedMemoRejectError, visibleCredentialMemo } from './sharedMemo'
 
 function presentCredential(kind: CredentialKind, row: CredentialListItem): CredentialListItem {
@@ -85,6 +93,9 @@ export async function createCredential(
     if (memoError) return Response.json({ error: memoError }, { status: 400 })
   }
 
+  const password = encryptOrFail(input.password)
+  if (password instanceof Response) return password
+
   const { data, error } = await admin
     .from('credential_entries')
     .insert({
@@ -92,7 +103,7 @@ export async function createCredential(
       name: input.name,
       url: input.url,
       login_id: input.login_id,
-      password: encryptPassword(input.password),
+      password,
       memo: input.memo,
       created_by: createdBy,
       updated_at: new Date().toISOString(),
@@ -122,7 +133,9 @@ export async function updateCredential(
 
   const stored: Record<string, string | null> = { ...patch }
   if (typeof stored.password === 'string') {
-    stored.password = encryptPassword(stored.password)
+    const password = encryptOrFail(stored.password)
+    if (password instanceof Response) return password
+    stored.password = password
   }
 
   const { data, error } = await admin

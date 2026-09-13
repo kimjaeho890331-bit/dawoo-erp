@@ -33,6 +33,18 @@ export function activityLogStaffRefuseReason(
   return null
 }
 
+const ACTIVITY_SECRET_RE = /enc:v1:|(?:password|비밀번호|비번)\s*[:=]/i
+
+/** activity_log에 비밀번호·암호문을 넣지 않는다. */
+export function activityLogSecretRefuseReason(
+  action: string | null | undefined,
+  detail: string | null | undefined,
+): string | null {
+  const text = `${action ?? ''}\n${detail ?? ''}`
+  if (ACTIVITY_SECRET_RE.test(text)) return '비밀번호는 기록할 수 없습니다'
+  return null
+}
+
 /** staff_id 없으면 빈칸. 이름 추측하지 않음. */
 export function processorLabel(
   staffId: string | null | undefined,

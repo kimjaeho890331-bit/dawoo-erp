@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activityLogSecretRefuseReason,
   activityLogStaffRefuseReason,
   attachStaffNames,
   isRealStaffId,
@@ -31,6 +32,14 @@ describe('activityLogStaffRefuseReason', () => {
 
   it('실제 staff id면 통과한다', () => {
     expect(activityLogStaffRefuseReason(STAFF)).toBeNull()
+  })
+})
+
+describe('activityLogSecretRefuseReason', () => {
+  it('비밀번호·암호문 필드는 거절한다', () => {
+    expect(activityLogSecretRefuseReason('login', 'password:')).toBe('비밀번호는 기록할 수 없습니다')
+    expect(activityLogSecretRefuseReason('enc:v1:', null)).toBe('비밀번호는 기록할 수 없습니다')
+    expect(activityLogSecretRefuseReason('site_create', '현장A')).toBeNull()
   })
 })
 

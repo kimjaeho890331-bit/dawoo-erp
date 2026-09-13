@@ -1,0 +1,71 @@
+-- docs/security/rls-draft.sql
+-- 설계 초안만. 실행하지 말 것. supabase/migrations 에 넣지 말 것.
+-- ENABLE ROW LEVEL SECURITY 추가 금지. 테이블 DROP 금지.
+--
+-- 운영 현황 (ENABLE 추가 금지):
+--   RLS on : credential_entries, schedules, sites
+--   RLS off: activity_log, expense_reports, expense_report_payments,
+--            expense_report_lines, expense_report_files, expenses,
+--            notices, projects, staff, staff_emails, vendors
+--   미확인: expense_report_details, expense_report_refs, doc_sequences 등
+--
+-- credential_entries 는 REVOKE anon/authenticated + service_role 패턴일 가능성.
+-- 정책 목록은 설계안 조사 항목. 여기서 ENABLE/REVOKE 실행하지 말 것.
+
+-- =============================================================================
+-- 조사만 (주석). Studio 또는 읽기 SQL. 이 파일로 적용하지 말 것.
+-- =============================================================================
+-- -- SELECT tablename, rowsecurity FROM pg_tables
+-- --  WHERE schemaname = 'public'
+-- --    AND tablename IN (
+-- --      'credential_entries','schedules','sites',
+-- --      'activity_log','expense_reports','expense_report_payments',
+-- --      'expense_report_lines','expense_report_files','expenses',
+-- --      'notices','projects','staff','staff_emails','vendors'
+-- --    )
+-- --  ORDER BY tablename;
+-- --
+-- -- SELECT tablename, policyname, roles, cmd, qual, with_check
+-- --  FROM pg_policies
+-- --  WHERE schemaname = 'public'
+-- --    AND tablename IN ('credential_entries','schedules','sites')
+-- --  ORDER BY tablename, policyname;
+-- --
+-- -- SELECT table_name, grantee, privilege_type
+-- --  FROM information_schema.role_table_grants
+-- --  WHERE table_schema = 'public'
+-- --    AND table_name IN ('credential_entries','schedules','sites')
+-- --    AND grantee IN ('anon','authenticated','service_role','PUBLIC')
+-- --  ORDER BY table_name, grantee;
+
+-- =============================================================================
+-- 이미 RLS on — ENABLE 다시 치지 말 것
+-- =============================================================================
+-- -- credential_entries: 유지 후보 (REVOKE + service_role). 정책 목록은 조사.
+-- -- REVOKE ALL ON TABLE credential_entries FROM PUBLIC, anon, authenticated;
+-- -- GRANT ALL ON TABLE credential_entries TO service_role;
+--
+-- -- schedules / sites: 정책이 열린 이유를 조사한 뒤에만 조이기.
+-- -- ENABLE 추가 금지. 지금은 정책 CREATE/DROP 실행하지 말 것.
+
+-- =============================================================================
+-- RLS off — 지금은 ENABLE 금지 (세션/API 이전 후 재검토)
+-- =============================================================================
+-- -- ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE staff_emails ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE expense_reports ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE expense_report_payments ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE expense_report_lines ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE expense_report_files ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE vendors ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
+
+-- =============================================================================
+-- 롤백 (깨진 테이블만, DROP TABLE 금지)
+-- =============================================================================
+-- -- DROP POLICY IF EXISTS <policy> ON <table>;
+-- -- GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO anon, authenticated;
+-- -- 이미 on인 테이블을 함부로 DISABLE 하지 말 것 (schedules/sites/credential_entries).

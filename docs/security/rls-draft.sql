@@ -1,81 +1,71 @@
 -- docs/security/rls-draft.sql
 -- 설계 초안만. 실행하지 말 것. supabase/migrations 에 넣지 말 것.
--- ENABLE ROW LEVEL SECURITY 를 지금 적용하면 화면이 깨진다.
--- 테이블 DROP 금지.
+-- ENABLE ROW LEVEL SECURITY 추가 금지. 테이블 DROP 금지.
+--
+-- 운영 현황 (ENABLE 추가 금지):
+--   RLS on : credential_entries, schedules, sites
+--   RLS off: activity_log, expense_reports, expense_report_payments,
+--            expense_report_lines, expense_report_files, expenses,
+--            notices, projects, staff, staff_emails, vendors
+--   미확인: expense_report_details, expense_report_refs, doc_sequences 등
+--
+-- credential_entries 는 REVOKE anon/authenticated + service_role 패턴일 가능성.
+-- 정책 목록은 설계안 조사 항목. 여기서 ENABLE/REVOKE 실행하지 말 것.
 
 -- =============================================================================
--- 전제 (주석)
---   1) 프론트 anon 클라이언트를 세션 JWT 클라이언트로 바꾸거나
---   2) 아래 테이블 CRUD를 API(service_role)로만 옮긴 뒤에만 검토.
+-- 조사만 (주석). Studio 또는 읽기 SQL. 이 파일로 적용하지 말 것.
 -- =============================================================================
+-- -- SELECT tablename, rowsecurity FROM pg_tables
+-- --  WHERE schemaname = 'public'
+-- --    AND tablename IN (
+-- --      'credential_entries','schedules','sites',
+-- --      'activity_log','expense_reports','expense_report_payments',
+-- --      'expense_report_lines','expense_report_files','expenses',
+-- --      'notices','projects','staff','staff_emails','vendors'
+-- --    )
+-- --  ORDER BY tablename;
+-- --
+-- -- SELECT tablename, policyname, roles, cmd, qual, with_check
+-- --  FROM pg_policies
+-- --  WHERE schemaname = 'public'
+-- --    AND tablename IN ('credential_entries','schedules','sites')
+-- --  ORDER BY tablename, policyname;
+-- --
+-- -- SELECT table_name, grantee, privilege_type
+-- --  FROM information_schema.role_table_grants
+-- --  WHERE table_schema = 'public'
+-- --    AND table_name IN ('credential_entries','schedules','sites')
+-- --    AND grantee IN ('anon','authenticated','service_role','PUBLIC')
+-- --  ORDER BY table_name, grantee;
 
--- --- credential_entries (022와 동일 방향, 재실행 검토용) ---
--- -- ALTER TABLE credential_entries ENABLE ROW LEVEL SECURITY;  -- 지금 실행 금지
+-- =============================================================================
+-- 이미 RLS on — ENABLE 다시 치지 말 것
+-- =============================================================================
+-- -- credential_entries: 유지 후보 (REVOKE + service_role). 정책 목록은 조사.
 -- -- REVOKE ALL ON TABLE credential_entries FROM PUBLIC, anon, authenticated;
 -- -- GRANT ALL ON TABLE credential_entries TO service_role;
+--
+-- -- schedules / sites: 정책이 열린 이유를 조사한 뒤에만 조이기.
+-- -- ENABLE 추가 금지. 지금은 정책 CREATE/DROP 실행하지 말 것.
 
--- --- staff_emails ---
--- -- ALTER TABLE staff_emails ENABLE ROW LEVEL SECURITY;  -- 지금 실행 금지
--- -- REVOKE ALL ON TABLE staff_emails FROM PUBLIC, anon, authenticated;
--- -- GRANT ALL ON TABLE staff_emails TO service_role;
-
--- --- staff (세션 클라이언트 이후) ---
--- -- ALTER TABLE staff ENABLE ROW LEVEL SECURITY;  -- 지금 실행 금지
--- -- CREATE POLICY staff_select_auth ON staff FOR SELECT TO authenticated USING (true);
--- -- -- 쓰기는 관리자/API만. staff.role 클레임이 JWT에 없으므로 당분간 service_role 쓰기.
-
--- --- expense_reports / 자식 ---
--- -- ALTER TABLE expense_reports ENABLE ROW LEVEL SECURITY;  -- 지금 실행 금지
+-- =============================================================================
+-- RLS off — 지금은 ENABLE 금지 (세션/API 이전 후 재검토)
+-- =============================================================================
+-- -- ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE staff_emails ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE expense_reports ENABLE ROW LEVEL SECURITY;
 -- -- ALTER TABLE expense_report_payments ENABLE ROW LEVEL SECURITY;
--- -- ALTER TABLE expense_report_details ENABLE ROW LEVEL SECURITY;
 -- -- ALTER TABLE expense_report_lines ENABLE ROW LEVEL SECURITY;
 -- -- ALTER TABLE expense_report_files ENABLE ROW LEVEL SECURITY;
--- -- ALTER TABLE expense_report_refs ENABLE ROW LEVEL SECURITY;
--- -- ALTER TABLE doc_sequences ENABLE ROW LEVEL SECURITY;
--- -- REVOKE ALL ON TABLE expense_reports FROM PUBLIC, anon, authenticated;
--- -- REVOKE ALL ON TABLE expense_report_payments FROM PUBLIC, anon, authenticated;
--- -- REVOKE ALL ON TABLE expense_report_details FROM PUBLIC, anon, authenticated;
--- -- REVOKE ALL ON TABLE expense_report_lines FROM PUBLIC, anon, authenticated;
--- -- REVOKE ALL ON TABLE expense_report_files FROM PUBLIC, anon, authenticated;
--- -- REVOKE ALL ON TABLE expense_report_refs FROM PUBLIC, anon, authenticated;
--- -- REVOKE ALL ON TABLE doc_sequences FROM PUBLIC, anon, authenticated;
--- -- GRANT ALL ON TABLE expense_reports TO service_role;
--- -- GRANT ALL ON TABLE expense_report_payments TO service_role;
--- -- GRANT ALL ON TABLE expense_report_details TO service_role;
--- -- GRANT ALL ON TABLE expense_report_lines TO service_role;
--- -- GRANT ALL ON TABLE expense_report_files TO service_role;
--- -- GRANT ALL ON TABLE expense_report_refs TO service_role;
--- -- GRANT ALL ON TABLE doc_sequences TO service_role;
-
--- --- expenses / sites / projects / vendors / schedules ---
--- -- ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;  -- 지금 실행 금지
--- -- ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 -- -- ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 -- -- ALTER TABLE vendors ENABLE ROW LEVEL SECURITY;
--- -- ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
--- -- CREATE POLICY expenses_auth_all ON expenses FOR ALL TO authenticated USING (true) WITH CHECK (true);
--- -- CREATE POLICY sites_auth_all ON sites FOR ALL TO authenticated USING (true) WITH CHECK (true);
--- -- CREATE POLICY projects_auth_all ON projects FOR ALL TO authenticated USING (true) WITH CHECK (true);
--- -- CREATE POLICY vendors_auth_all ON vendors FOR ALL TO authenticated USING (true) WITH CHECK (true);
--- -- CREATE POLICY schedules_auth_all ON schedules FOR ALL TO authenticated USING (true) WITH CHECK (true);
--- -- REVOKE ALL ON TABLE expenses FROM anon;
--- -- REVOKE ALL ON TABLE sites FROM anon;
--- -- REVOKE ALL ON TABLE projects FROM anon;
--- -- REVOKE ALL ON TABLE vendors FROM anon;
--- -- REVOKE ALL ON TABLE schedules FROM anon;
+-- -- ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+-- -- ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
 
--- --- activity_log ---
--- -- ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;  -- 지금 실행 금지
--- -- CREATE POLICY activity_log_select_auth ON activity_log FOR SELECT TO authenticated USING (true);
--- -- REVOKE ALL ON TABLE activity_log FROM anon;
--- -- -- INSERT는 API(service_role)만.
-
--- --- notices (선택) ---
--- -- ALTER TABLE notices ENABLE ROW LEVEL SECURITY;  -- 지금 실행 금지
--- -- CREATE POLICY notices_select_auth ON notices FOR SELECT TO authenticated USING (true);
--- -- REVOKE ALL ON TABLE notices FROM anon;
-
--- --- 롤백 (깨진 테이블만, DROP TABLE 금지) ---
--- -- DROP POLICY IF EXISTS staff_select_auth ON staff;
--- -- GRANT SELECT, INSERT, UPDATE, DELETE ON staff TO anon, authenticated;
--- -- ALTER TABLE staff DISABLE ROW LEVEL SECURITY;
+-- =============================================================================
+-- 롤백 (깨진 테이블만, DROP TABLE 금지)
+-- =============================================================================
+-- -- DROP POLICY IF EXISTS <policy> ON <table>;
+-- -- GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO anon, authenticated;
+-- -- 이미 on인 테이블을 함부로 DISABLE 하지 말 것 (schedules/sites/credential_entries).

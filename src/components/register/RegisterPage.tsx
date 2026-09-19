@@ -5,6 +5,7 @@ import { X, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
 import { insertStatusLog } from '@/lib/statusLog/client'
+import { useCurrentStaff } from '@/components/register/panels/panelHelpers'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
 
@@ -294,6 +295,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const [sortBy, setSortBy] = useState<SortKey>('default')
   const [outstandingOnly, setOutstandingOnly] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [myFirst, setMyFirst] = useState(true)
+  const currentStaff = useCurrentStaff()
 
   // 데이터 로드
   const loadProjects = useCallback(async () => {
@@ -480,8 +483,15 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         })
     }
 
+    // 내 담당 우선: 선택된 직원이 담당인 건을 맨 위로 (그룹 내에서는 위 정렬 유지 — sort는 안정 정렬)
+    if (myFirst && currentStaff.id) {
+      sorted.sort((a, b) =>
+        (a.staff_id === currentStaff.id ? 0 : 1) - (b.staff_id === currentStaff.id ? 0 : 1)
+      )
+    }
+
     return sorted
-  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortBy, outstandingOnly])
+  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortBy, outstandingOnly, myFirst, currentStaff.id])
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null
 
@@ -616,6 +626,19 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
               <option key={o.key} value={o.key}>{o.label}</option>
             ))}
           </select>
+          {currentStaff.id && (
+            <button
+              onClick={() => setMyFirst(v => !v)}
+              title={currentStaff.name ? `${currentStaff.name} 담당 건을 맨 위로` : ''}
+              className={`h-[36px] px-3 rounded-lg text-[12px] font-medium border transition-colors whitespace-nowrap ${
+                myFirst
+                  ? 'bg-accent-light text-accent border-accent'
+                  : 'bg-surface text-txt-secondary border-border-primary hover:border-accent hover:text-accent'
+              }`}
+            >
+              내 담당 우선
+            </button>
+          )}
           <button
             onClick={() => setOutstandingOnly(v => !v)}
             className={`h-[36px] px-3 rounded-lg text-[12px] font-medium border transition-colors whitespace-nowrap ${

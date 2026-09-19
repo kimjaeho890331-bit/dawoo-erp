@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Trash2, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { recalcProjectPaymentTotals } from '@/lib/utils/recalcPayment'
 
 interface Payment {
   id: string
@@ -81,13 +82,8 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
       })
       if (error) throw error
 
-      // projects 테이블 미수금/수금액 업데이트 (total_cost는 이미 all-inclusive)
-      const newCollected = collected + Number(newPayment.amount)
-      const newOutstanding = Math.max(0, totalCost - newCollected)
-      await supabase.from('projects').update({
-        outstanding: newOutstanding,
-        collected: newCollected,
-      }).eq('id', projectId)
+      // projects 미수금/수금액 갱신 — 전액 재합산 (증감분 방식은 동시 편집 시 어긋남)
+      await recalcProjectPaymentTotals(projectId, totalCost)
 
       setNewPayment({ payment_type: PAYMENT_TYPES[0], amount: '', payment_date: '', payer_name: '' })
       setShowAddRow(false)
@@ -104,12 +100,8 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
     try {
       await supabase.from('payments').delete().eq('id', payment.id)
 
-      const newCollected = collected - payment.amount
-      const newOutstanding = Math.max(0, totalCost - newCollected)
-      await supabase.from('projects').update({
-        outstanding: newOutstanding,
-        collected: newCollected,
-      }).eq('id', projectId)
+      // 전액 재합산으로 갱신
+      await recalcProjectPaymentTotals(projectId, totalCost)
 
       await loadPayments()
     } catch (err) {

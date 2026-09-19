@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
-import { X } from 'lucide-react'
+import { X, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatPhone } from '@/lib/utils/format'
+import { insertStatusLog } from '@/lib/statusLog/client'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
 
@@ -108,6 +109,38 @@ const PROGRESS_STEPS: ProjectStep[] = [
 const STEP_LABELS_SHORT = ['문의','실측','견적','동의','신청','승인','착공','공사','완료','입금']
 
 const IN_PROGRESS_STEPS: ProjectStep[] = PROGRESS_STEPS.filter(s => s !== '입금')
+
+// 목록에서 바로 선택 가능한 단계 (10단계 + 특수 상태)
+const STATUS_SELECT_OPTIONS = [...PROGRESS_STEPS, '취소', '문의(예약)']
+
+// 미수금은 저장된 outstanding 컬럼 대신 실시간 계산 (총공사비 수정 시 낡은 값 방지)
+function getOutstanding(p: DBProject): number {
+  return Math.max(0, (p.total_cost || 0) - (p.collected || 0))
+}
+
+// 연도 분류: year 컬럼 → 없으면 등록일 기준 (접수일 공란 건도 누락되지 않도록)
+function getProjectYear(p: DBProject): number {
+  if (p.year) return p.year
+  if (p.created_at) return new Date(p.created_at).getFullYear()
+  return new Date().getFullYear()
+}
+
+// 정렬 옵션
+const SORT_OPTIONS = [
+  { key: 'default', label: '기본 (단계순)' },
+  { key: 'receipt_new', label: '접수 최신순' },
+  { key: 'receipt_old', label: '접수 오래된순' },
+  { key: 'name', label: '빌라명순' },
+  { key: 'outstanding', label: '미수금 큰순' },
+  { key: 'staff', label: '담당자순' },
+] as const
+
+type SortKey = (typeof SORT_OPTIONS)[number]['key']
+
+// 접수일 기준 정렬용 (접수일 → 실측일 → 등록일 순으로 대체)
+function getReceiptSortDate(p: DBProject): string {
+  return p.receipt_date || p.survey_date || (p.created_at ? p.created_at.slice(0, 10) : '')
+}
 
 function matchesStatusFilter(step: string, filter: StatusFilter): boolean {
   switch (filter) {
@@ -257,7 +290,10 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const [projects, setProjects] = useState<DBProject[]>([])
   const [cities, setCities] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [selectedYear, setSelectedYear] = useState<number | '전체'>(new Date().getFullYear())
+  const [sortBy, setSortBy] = useState<SortKey>('default')
+  const [outstandingOnly, setOutstandingOnly] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   // 데이터 로드
   const loadProjects = useCallback(async () => {
@@ -352,13 +388,19 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     return () => { supabase.removeChannel(channel) }
   }, [loadProjects])
 
+  // 연도 범위 내 프로젝트 (탭 건수·지역 건수도 연도 기준으로 일치)
+  const yearScopedProjects = useMemo(() => {
+    if (selectedYear === '전체') return projects
+    return projects.filter(p => getProjectYear(p) === selectedYear)
+  }, [projects, selectedYear])
+
   // 상태별 건수
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {
       '진행중': 0, '접수': 0, '승인': 0, '완료': 0,
-      '취소': 0, '문의(예약)': 0, '전체': projects.length,
+      '취소': 0, '문의(예약)': 0, '전체': yearScopedProjects.length,
     }
-    projects.forEach(p => {
+    yearScopedProjects.forEach(p => {
       STATUS_TABS.forEach(tab => {
         if (tab.key !== '전체' && matchesStatusFilter(p.status, tab.key)) {
           counts[tab.key]++
@@ -366,7 +408,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       })
     })
     return counts
-  }, [projects])
+  }, [yearScopedProjects])
 
   // 최종 필터링
   const filteredProjects = useMemo(() => {
@@ -374,11 +416,21 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
     result = result.filter(p => matchesStatusFilter(p.status, statusFilter))
 
+    // 연도 필터 (정산 카드와 동일 기준: year 컬럼 → 등록일)
+    if (selectedYear !== '전체') {
+      result = result.filter(p => getProjectYear(p) === selectedYear)
+    }
+
     if (selectedCities.length > 0) {
       result = result.filter(p => {
         const cityName = p.cities?.name
         return cityName ? selectedCities.includes(cityName) : false
       })
+    }
+
+    // 미수금 건만
+    if (outstandingOnly) {
+      result = result.filter(p => p.total_cost > 0 && getOutstanding(p) > 0)
     }
 
     if (searchQuery.trim()) {
@@ -388,34 +440,119 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         (p.owner_name || '').toLowerCase().includes(q) ||
         (p.owner_phone || '').includes(q) ||
         (p.road_address || '').toLowerCase().includes(q) ||
+        (p.jibun_address || '').toLowerCase().includes(q) ||
+        (p.dong || '').toLowerCase().includes(q) ||
+        (p.ho || '').toLowerCase().includes(q) ||
+        (p.staff?.name || '').toLowerCase().includes(q) ||
         (p.note || '').toLowerCase().includes(q)
       )
     }
 
-    // 정렬: 단계 낮은 순 → 같은 단계면 실측일순
-    result.sort((a, b) => {
-      const aIdx = PROGRESS_STEPS.indexOf(a.status as ProjectStep)
-      const bIdx = PROGRESS_STEPS.indexOf(b.status as ProjectStep)
-      // 취소/문의(예약)은 맨 뒤
-      const aStep = aIdx >= 0 ? aIdx : 99
-      const bStep = bIdx >= 0 ? bIdx : 99
-      if (aStep !== bStep) return aStep - bStep
-      // 같은 단계: 실측일(survey_date) 오래된 순
-      const aDate = a.survey_date || '9999'
-      const bDate = b.survey_date || '9999'
-      return aDate.localeCompare(bDate)
-    })
+    // 정렬
+    const sorted = [...result]
+    switch (sortBy) {
+      case 'receipt_new':
+        sorted.sort((a, b) => getReceiptSortDate(b).localeCompare(getReceiptSortDate(a)))
+        break
+      case 'receipt_old':
+        sorted.sort((a, b) => getReceiptSortDate(a).localeCompare(getReceiptSortDate(b)))
+        break
+      case 'name':
+        sorted.sort((a, b) => (a.building_name || '').localeCompare(b.building_name || '', 'ko'))
+        break
+      case 'outstanding':
+        sorted.sort((a, b) => getOutstanding(b) - getOutstanding(a))
+        break
+      case 'staff':
+        sorted.sort((a, b) => (a.staff?.name || 'ㅎㅎㅎ').localeCompare(b.staff?.name || 'ㅎㅎㅎ', 'ko'))
+        break
+      default:
+        // 기본: 단계 낮은 순 → 같은 단계면 실측일 오래된 순, 취소/예약 맨 뒤
+        sorted.sort((a, b) => {
+          const aIdx = PROGRESS_STEPS.indexOf(a.status as ProjectStep)
+          const bIdx = PROGRESS_STEPS.indexOf(b.status as ProjectStep)
+          const aStep = aIdx >= 0 ? aIdx : 99
+          const bStep = bIdx >= 0 ? bIdx : 99
+          if (aStep !== bStep) return aStep - bStep
+          const aDate = a.survey_date || '9999'
+          const bDate = b.survey_date || '9999'
+          return aDate.localeCompare(bDate)
+        })
+    }
 
-    return result
-  }, [projects, statusFilter, selectedCities, searchQuery])
+    return sorted
+  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortBy, outstandingOnly])
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null
 
   const toggleCity = (cityName: string) => {
-    // 1개씩만 선택 (같은 거 누르면 해제)
+    // 다중 선택 (누르면 추가, 다시 누르면 해제)
     setSelectedCities(prev =>
-      prev.includes(cityName) ? [] : [cityName]
+      prev.includes(cityName) ? prev.filter(c => c !== cityName) : [...prev, cityName]
     )
+  }
+
+  // 목록에서 단계 바로 변경 (이력 기록 후 상태 업데이트)
+  const handleStatusChange = async (project: DBProject, newStatus: string) => {
+    if (newStatus === project.status) return
+    const logged = await insertStatusLog({
+      projectId: project.id,
+      fromStatus: project.status,
+      toStatus: newStatus,
+      note: '목록에서 변경',
+    })
+    if (!logged.ok) { alert(logged.error); return }
+    const { error } = await supabase.from('projects').update({ status: newStatus }).eq('id', project.id)
+    if (error) { alert(`단계 변경 실패: ${error.message}`); return }
+    loadProjects()
+  }
+
+  // 엑셀 내보내기 (현재 필터된 목록)
+  const handleExport = async () => {
+    if (filteredProjects.length === 0) { alert('내보낼 데이터가 없습니다.'); return }
+    setExporting(true)
+    try {
+      const rows = filteredProjects.map(p => ({
+        staff_name: p.staff?.name || '',
+        building_name: p.building_name || '',
+        dong: p.dong || '',
+        ho: p.ho || '',
+        owner_name: p.owner_name || '',
+        owner_phone: p.owner_phone ? formatPhone(p.owner_phone) : '',
+        road_address: p.road_address || '',
+        city_name: p.cities?.name || '',
+        program: category === '소규모' ? (p.support_program || p.work_types?.name || '') : (p.water_work_type || p.work_types?.name || ''),
+        status: p.status,
+        receipt_date: p.receipt_date || '',
+        survey_date: p.survey_date || '',
+        approval_received_date: p.approval_received_date || '',
+        construction_date: p.construction_date || '',
+        total_cost: p.total_cost || 0,
+        collected: p.collected || 0,
+        outstanding: getOutstanding(p),
+        note: p.note || '',
+      }))
+      const res = await fetch('/api/register/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category,
+          yearLabel: selectedYear === '전체' ? '전체' : `${selectedYear}년`,
+          statusLabel: statusFilter,
+          rows,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${category}접수대장_${selectedYear === '전체' ? '전체' : selectedYear}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(`엑셀 저장 실패: ${err instanceof Error ? err.message : err}`)
+    } finally { setExporting(false) }
   }
 
   const handleProjectCreated = () => {
@@ -462,57 +599,81 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       {/* 상단 헤더 */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-[18px] md:text-[22px] font-semibold tracking-[-0.4px] text-txt-primary whitespace-nowrap">{category} 접수대장</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <input
             type="text"
-            placeholder="빌라명, 소유주, 연락처 검색..."
+            placeholder="빌라명, 동·호, 소유주, 연락처, 담당자 검색..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-72 px-4 input-field"
           />
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as SortKey)}
+            className="h-[36px] px-2 text-[12px] border border-border-primary rounded-lg bg-surface focus:outline-none focus:border-accent text-txt-secondary"
+          >
+            {SORT_OPTIONS.map(o => (
+              <option key={o.key} value={o.key}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setOutstandingOnly(v => !v)}
+            className={`h-[36px] px-3 rounded-lg text-[12px] font-medium border transition-colors whitespace-nowrap ${
+              outstandingOnly
+                ? 'bg-red-50 text-red-600 border-red-300'
+                : 'bg-surface text-txt-secondary border-border-primary hover:border-red-300 hover:text-red-500'
+            }`}
+          >
+            미수금만
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="h-[36px] px-3 rounded-lg text-[12px] font-medium border border-border-primary bg-surface text-txt-secondary hover:bg-surface-tertiary transition-colors flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50"
+          >
+            <Download size={13} className="text-txt-tertiary" />
+            {exporting ? '생성 중...' : '엑셀 저장'}
+          </button>
           <button
             onClick={() => setShowNewModal(true)}
-            className="btn-primary"
+            className="btn-primary whitespace-nowrap"
           >
             + 신규등록
           </button>
         </div>
       </div>
 
-      {/* 연간 금액 정산 */}
+      {/* 연간 금액 정산 (연도 선택은 아래 목록에도 함께 적용) */}
       {(() => {
-        const getProjectYear = (p: DBProject): number => {
-          if (p.year) return p.year
-          if (p.created_at) return new Date(p.created_at).getFullYear()
-          return new Date().getFullYear()
-        }
         const availableYears = Array.from(new Set(projects.map(getProjectYear))).sort((a, b) => b - a)
         if (availableYears.length === 0) availableYears.push(new Date().getFullYear())
-        const yearProjects = projects.filter(p => getProjectYear(p) === selectedYear && p.status !== '취소' && p.status !== '문의(예약)')
+        const yearProjects = yearScopedProjects.filter(p => p.status !== '취소' && p.status !== '문의(예약)')
         // total_cost는 이미 self + city + additional 합산된 값 (all-inclusive)
         const totalRevenue = yearProjects.reduce((s, p) => s + (p.total_cost || 0), 0)
         const totalCollected = yearProjects.reduce((s, p) => s + (p.collected || 0), 0)
-        const totalOutstanding = yearProjects.reduce((s, p) => s + (p.outstanding || 0), 0)
+        const totalOutstanding = yearProjects.reduce((s, p) => s + getOutstanding(p), 0)
         return (
           <div className="mb-5">
             <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-2">
                 <h2 className="text-[13px] font-semibold text-txt-primary">연간 금액 정산</h2>
                 <select
-                  value={selectedYear}
-                  onChange={e => setSelectedYear(Number(e.target.value))}
+                  value={selectedYear === '전체' ? '전체' : String(selectedYear)}
+                  onChange={e => setSelectedYear(e.target.value === '전체' ? '전체' : Number(e.target.value))}
                   className="h-7 px-2 text-[12px] border border-border-primary rounded-md bg-surface focus:outline-none focus:border-[#c96442]"
                 >
                   {availableYears.map(y => (
-                    <option key={y} value={y}>{y}년</option>
+                    <option key={y} value={String(y)}>{y}년</option>
                   ))}
+                  <option value="전체">전체 연도</option>
                 </select>
+                <span className="text-[11px] text-txt-quaternary">목록에도 적용됨</span>
               </div>
               <span className="text-[11px] text-txt-tertiary">취소·예약 제외</span>
             </div>
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
-                <p className="text-xs text-txt-tertiary font-medium mb-1">{selectedYear}년 건수</p>
+                <p className="text-xs text-txt-tertiary font-medium mb-1">{selectedYear === '전체' ? '전체' : `${selectedYear}년`} 건수</p>
                 <p className="text-2xl font-bold tabular-nums">{yearProjects.length}</p>
               </div>
               <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
@@ -574,13 +735,13 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
       {/* (상태 필터 탭은 위에서 프로세스 가이드와 함께 렌더됨) */}
 
-      {/* 지역 필터 (1개씩 선택 + 건수 표시) */}
+      {/* 지역 필터 (다중 선택 + 건수 표시) */}
       {(() => {
         const cityNames = [...new Set(projects.map(p => p.cities?.name).filter(Boolean) as string[])].sort()
         if (cityNames.length === 0) return null
-        // 지역별 건수 (현재 탭 기준)
+        // 지역별 건수 (현재 탭·연도 기준)
         const cityCounts: Record<string, number> = {}
-        projects.forEach(p => {
+        yearScopedProjects.forEach(p => {
           const cn = p.cities?.name
           if (cn && matchesStatusFilter(p.status, statusFilter)) {
             cityCounts[cn] = (cityCounts[cn] || 0) + 1
@@ -727,12 +888,18 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                     <td className="px-3 py-1.5 text-txt-tertiary max-w-[140px] truncate" title={project.note || ''}>
                       {project.note || '-'}
                     </td>
-                    <td className="px-3 py-1.5">
-                      <span className={`badge ${getStepBadgeColor(project.status)}`}>
-                        <span className="inline-block w-[5px] h-[5px] rounded-full mr-1" style={{backgroundColor: 'currentColor', opacity: 0.7}} />
-                        {project.status}
-                      </span>
-                      {project.outstanding > 0 && project.total_cost > 0 &&
+                    <td className="px-3 py-1.5" onClick={e => e.stopPropagation()}>
+                      <select
+                        value={project.status}
+                        onChange={e => handleStatusChange(project, e.target.value)}
+                        className={`badge border-0 cursor-pointer appearance-auto pr-1 ${getStepBadgeColor(project.status)}`}
+                        title="단계 바로 변경"
+                      >
+                        {STATUS_SELECT_OPTIONS.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      {getOutstanding(project) > 0 && project.total_cost > 0 &&
                         ['완료서류제출', '입금'].includes(project.status) && (
                         <span className="ml-1 text-[10px] font-semibold text-money-negative">미수금</span>
                       )}
@@ -758,7 +925,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         {filteredProjects.length > 0 && (
           <>
             {' / '}총공사비 <span className="tabular-nums">{filteredProjects.reduce((s, p) => s + p.total_cost, 0).toLocaleString()}원</span>
-            {' / '}미수금 <span className="tabular-nums">{filteredProjects.reduce((s, p) => s + p.outstanding, 0).toLocaleString()}원</span>
+            {' / '}미수금 <span className="tabular-nums">{filteredProjects.reduce((s, p) => s + getOutstanding(p), 0).toLocaleString()}원</span>
           </>
         )}
       </div>

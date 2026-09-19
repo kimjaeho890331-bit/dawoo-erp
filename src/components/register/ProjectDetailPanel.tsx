@@ -9,6 +9,7 @@ import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
 import { insertStatusLog } from '@/lib/statusLog/client'
 import { processorLabel } from '@/lib/statusLog'
+import { recalcProjectPaymentTotals, touchesMoneyFields } from '@/lib/utils/recalcPayment'
 import { InfoField } from './panels/panelHelpers'
 import TabBasicInfo from './panels/TabBasicInfo'
 import TabReception from './panels/TabReception'
@@ -98,6 +99,19 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         }
         if (target !== project.status) {
           ;(async () => {
+            // 마지막 단계 변경이 사람이 내린 것(하향)이면 자동 보정으로 되올리지 않음
+            const { data: lastLog } = await supabase
+              .from('status_logs')
+              .select('from_status, to_status')
+              .eq('project_id', project.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            if (lastLog) {
+              const fromIdx = ORDER.indexOf(lastLog.from_status)
+              const toIdx = ORDER.indexOf(lastLog.to_status)
+              if (fromIdx >= 0 && toIdx >= 0 && toIdx < fromIdx) return
+            }
             const logged = await insertStatusLog({
               projectId: project.id,
               fromStatus: project.status,
@@ -341,6 +355,11 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
           .eq('id', project.id)
         if (error) throw error
         await syncSchedules(dataToSave)
+        // 총공사비 관련 필드가 바뀌면 미수금/수금액 재계산
+        if (touchesMoneyFields(dataToSave)) {
+          const newTotal = typeof dataToSave.total_cost === 'number' ? dataToSave.total_cost : project.total_cost
+          await recalcProjectPaymentTotals(project.id, newTotal).catch(() => {})
+        }
         // editData에서 저장된 필드만 제거 (새로 입력 중인 필드는 유지)
         setEditData(prev => {
           const next = { ...prev }
@@ -406,6 +425,12 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
       // 날짜 변경 시 캘린더 동기화
       await syncSchedules(dataToSave)
+
+      // 총공사비 관련 필드가 바뀌면 미수금/수금액 재계산
+      if (touchesMoneyFields(dataToSave)) {
+        const newTotal = typeof dataToSave.total_cost === 'number' ? dataToSave.total_cost : project.total_cost
+        await recalcProjectPaymentTotals(project.id, newTotal).catch(() => {})
+      }
 
       // 자동 단계 전환
       const nextStatus = autoProgressStatus(dataToSave, project.status)

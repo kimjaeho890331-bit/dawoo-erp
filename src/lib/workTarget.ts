@@ -14,6 +14,7 @@ export type WorkSiteOption = {
   name: string
   contract_type?: string | null
   status?: string | null
+  budget?: number | null
 }
 
 export type WorkProjectOption = {
@@ -21,6 +22,7 @@ export type WorkProjectOption = {
   building_name?: string | null
   ho?: string | null
   dong?: string | null
+  total_cost?: number | null
 }
 
 export type WorkTargetHit = {

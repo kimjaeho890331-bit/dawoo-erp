@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { LABOR_CATEGORY, MATERIAL_CATEGORY, SITE_OVERHEAD_CATEGORY } from './expenseCategory'
 import {
   buildSettlementGroups,
   expensesForGroup,
   filterSettlementGroups,
+  groupCompletionMargin,
   settlementKeyOf,
   settlementTotals,
 } from './expenseSettlement'
@@ -82,5 +84,23 @@ describe('expenseSettlement', () => {
       { source: 'bid' },
     )
     expect(settlementTotals(groups)).toEqual({ total: 3500, count: 2 })
+  })
+
+  it('가정산은 계약−자재비−노무비−현장경비이고, 제목만 노무인 건은 노무에 넣지 않는다', () => {
+    const sitesWithBudget = [{ ...sites[0], budget: 10000 }]
+    const rows = [
+      { id: 'm', site_id: 's-bid', project_id: null, amount: 1000, category: MATERIAL_CATEGORY },
+      { id: 'l', site_id: 's-bid', project_id: null, amount: 2500, category: LABOR_CATEGORY },
+      { id: 'o', site_id: 's-bid', project_id: null, amount: 400, category: SITE_OVERHEAD_CATEGORY },
+      { id: 'x', site_id: 's-bid', project_id: null, amount: 9000, category: '기타', title: '일용직' },
+    ]
+    expect(groupCompletionMargin(
+      { kind: 'site', id: 's-bid' },
+      rows,
+      sitesWithBudget,
+      [],
+    )).toEqual({
+      contract: 10000, material: 1000, labor: 2500, overhead: 400, margin: 6100,
+    })
   })
 })

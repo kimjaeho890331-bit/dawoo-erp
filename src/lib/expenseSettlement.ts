@@ -1,3 +1,4 @@
+import { completionMargin } from './expenseCategory'
 import {
   isSiteCompleted,
   projectLabel,
@@ -19,6 +20,7 @@ export type SettlementExpense = {
   project_id?: string | null
   amount: number | null | undefined
   title?: string
+  item?: string | null
   category?: string
   expense_date?: string
   staff_id?: string | null
@@ -146,3 +148,32 @@ export function expensesForGroup(
 export function settlementTotals(groups: SettlementGroup[]): { total: number; count: number } {
   return groups.reduce((s, g) => ({ total: s.total + g.total, count: s.count + g.count }), { total: 0, count: 0 })
 }
+
+/** 그룹의 계약금액. 현장은 budget, 지원사업은 total_cost. 없으면 0 — 추정하지 않는다. */
+export function groupContractAmount(
+  group: Pick<SettlementGroup, 'kind' | 'id'>,
+  sites: WorkSiteOption[],
+  projects: WorkProjectOption[],
+): number {
+  if (group.kind === 'site' && group.id) {
+    return Number(sites.find(s => s.id === group.id)?.budget) || 0
+  }
+  if (group.kind === 'project' && group.id) {
+    return Number(projects.find(p => p.id === group.id)?.total_cost) || 0
+  }
+  return 0
+}
+
+/** 준공 가정산. 노무는 category=노무비만 사용한다. */
+export function groupCompletionMargin(
+  group: Pick<SettlementGroup, 'kind' | 'id'>,
+  expenses: SettlementExpense[],
+  sites: WorkSiteOption[],
+  projects: WorkProjectOption[],
+) {
+  return completionMargin({
+    contract: groupContractAmount(group, sites, projects),
+    expenses: expensesForGroup(expenses, group),
+  })
+}
+

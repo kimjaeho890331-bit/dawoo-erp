@@ -7,6 +7,12 @@ import { formatMoney, parseMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import SettlementTab from '@/components/expenses/SettlementTab'
 import { projectLabel, workKindFromIds, workTargetLabel, type WorkKind } from '@/lib/workTarget'
+import {
+  EXPENSE_CATEGORIES,
+  LABOR_CATEGORY,
+  suggestedLaborCategory,
+  validateLaborExpense,
+} from '@/lib/expenseCategory'
 
 // --- 타입 ---
 interface Expense {
@@ -56,8 +62,8 @@ interface CardMapping {
 }
 
 interface Staff { id: string; name: string }
-interface Site { id: string; name: string; contract_type?: string | null; status?: string | null }
-interface Project { id: string; building_name: string | null; ho: string | null; dong: string | null }
+interface Site { id: string; name: string; contract_type?: string | null; status?: string | null; budget?: number | null }
+interface Project { id: string; building_name: string | null; ho: string | null; dong: string | null; total_cost?: number | null }
 
 // 이상 탐지 규칙
 interface Anomaly {
@@ -67,7 +73,7 @@ interface Anomaly {
   transactions: CardTransaction[]
 }
 
-const EXPENSE_CATS = ['식대', '교통비', '자재비', '현장경비', '노무비', '사무용품', '기타'] as const
+const EXPENSE_CATS = EXPENSE_CATEGORIES
 const FIXED_CATS = ['임대료', '보험료', '통신비', '차량유지', '급여', '세금', '구독료', '기타'] as const
 const CARD_CATS = ['식대', '주유', '자재', '사무용품', '접대', '교통', '편의점', '기타'] as const
 
@@ -211,8 +217,8 @@ export default function ExpensesPage() {
       supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
       supabase.from('card_mappings').select('*'),
       supabase.from('staff').select('id, name'),
-      supabase.from('sites').select('id, name, contract_type, status'),
-      supabase.from('projects').select('id, building_name, ho, dong').order('created_at', { ascending: false }),
+      supabase.from('sites').select('id, name, contract_type, status, budget'),
+      supabase.from('projects').select('id, building_name, ho, dong, total_cost').order('created_at', { ascending: false }),
     ])
     if (!expR.error) setExpenses(expR.data || [])
     if (!fixR.error) setFixedExpenses(fixR.data || [])
@@ -959,23 +965,57 @@ function UnifiedModal({ tab, item, staffList, siteList, projectList, onClose, on
   const [payDay, setPayDay] = useState(item?.pay_day?.toString() || '1')
   const [autoPay, setAutoPay] = useState(item?.auto_pay ?? false)
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const cats = tab === 'expense' ? EXPENSE_CATS : FIXED_CATS
   if (!category && cats.length) setTimeout(() => setCategory(cats[0]), 0)
 
+  const laborForm = tab === 'expense' && (category === LABOR_CATEGORY || Boolean(suggestedLaborCategory(title)))
+
   const handleSave = async () => {
     if (!title.trim() || !amount) return
-    setSaving(true)
+    setFormError(null)
     if (tab === 'expense') {
-      const p = { category, title: title.trim(), amount: parseInt(amount), expense_date: expDate, site_id: siteId || null, staff_id: staffId || null, receipt_url: null, memo: memo || null, project_id: projectId || null }
-      if (isEdit) await supabase.from('expenses').update(p).eq('id', item.id)
-      else await supabase.from('expenses').insert(p)
-    } else if (tab === 'fixed') {
+      const nextCategory = suggestedLaborCategory(title) ?? category
+      const laborErr = validateLaborExpense({
+        category: nextCategory,
+        title: title.trim(),
+        amount: parseInt(amount),
+        expense_date: expDate,
+        site_id: siteId || null,
+        project_id: projectId || null,
+      })
+      if (laborErr) { setFormError(laborErr); return }
+      setSaving(true)
+      const res = await fetch('/api/expenses', {
+        method: isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: isEdit ? item.id : undefined,
+          category: nextCategory,
+          title: title.trim(),
+          amount: parseInt(amount),
+          expense_date: expDate,
+          site_id: siteId || null,
+          staff_id: staffId || null,
+          receipt_url: null,
+          memo: memo || null,
+          project_id: projectId || null,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      setSaving(false)
+      if (!res.ok) { setFormError(json.error || '저장에 실패했습니다'); return }
+      onSaved()
+      return
+    }
+    if (tab === 'fixed') {
+      setSaving(true)
       const p = { category, title: title.trim(), amount: parseInt(amount), pay_day: parseInt(payDay) || 1, auto_pay: autoPay, memo: memo || null }
       if (isEdit) await supabase.from('fixed_expenses').update(p).eq('id', item.id)
       else await supabase.from('fixed_expenses').insert(p)
+      setSaving(false); onSaved()
     }
-    setSaving(false); onSaved()
   }
 
   return (
@@ -997,7 +1037,12 @@ function UnifiedModal({ tab, item, staffList, siteList, projectList, onClose, on
           </div>
           <div>
             <label className="label-required">내용 *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="지출 내용"
+            <input value={title} onChange={e => {
+              const next = e.target.value
+              setTitle(next)
+              const suggested = suggestedLaborCategory(next)
+              if (suggested) setCategory(suggested)
+            }} placeholder="지출 내용"
               className="input-field w-full" />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1014,7 +1059,7 @@ function UnifiedModal({ tab, item, staffList, siteList, projectList, onClose, on
               </div>
             ) : (
               <div>
-                <label className="label-field">지출일</label>
+                <label className={laborForm ? 'label-required' : 'label-field'}>지출일 {laborForm ? '*' : ''}</label>
                 <input type="date" value={expDate}
                   onChange={e => setExpDate(e.target.value)}
                   className="input-field w-full" />
@@ -1030,7 +1075,9 @@ function UnifiedModal({ tab, item, staffList, siteList, projectList, onClose, on
           {tab === 'expense' && (
             <div className="space-y-3">
               <div>
-                <label className="label-field">현장</label>
+                <label className={laborForm ? 'label-required' : 'label-field'}>
+                  현장 {laborForm ? '*' : ''}
+                </label>
                 <WorkTargetPicker
                   kind={workKind}
                   siteId={siteId}
@@ -1039,6 +1086,11 @@ function UnifiedModal({ tab, item, staffList, siteList, projectList, onClose, on
                   projects={projectList}
                   onChange={next => { setWorkKind(next.kind); setSiteId(next.siteId); setProjectId(next.projectId) }}
                 />
+                {laborForm && (
+                  <p className="mt-1.5 text-[11px] text-txt-tertiary">
+                    노무비는 현장 또는 지원사업을 연결해야 준공 가정산에 반영됩니다.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label-field">작성자</label>
@@ -1056,6 +1108,7 @@ function UnifiedModal({ tab, item, staffList, siteList, projectList, onClose, on
               className="textarea-field w-full" />
           </div>
         </div>
+        {formError && <div className="px-6 pb-2 text-sm text-danger">{formError}</div>}
         <div className="modal-footer">
           <button onClick={onClose} className="btn-secondary">취소</button>
           <button onClick={handleSave} disabled={saving || !title.trim() || !amount}

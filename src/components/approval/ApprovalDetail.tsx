@@ -383,6 +383,9 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         actorName={actor?.name ?? ''}
         initialMode={modalMode}
         nextApproverName={nextApproverName}
+        siteId={report.site_id}
+        projectId={report.project_id}
+        paymentPayees={payments.map(p => p.vendor_name)}
         onClose={() => setModal(false)}
         onDone={() => { setModal(false); load() }}
       />

@@ -539,3 +539,30 @@ ALTER TABLE sites ALTER COLUMN work_kind SET DEFAULT '미확인';
 UPDATE sites SET inflow_path = '미확인' WHERE inflow_path IS NULL;
 UPDATE sites SET work_kind = '미확인' WHERE work_kind IS NULL;
 
+-- ============================================
+-- 33. 노무비 현장 연결 (026_labor_expense_work_target.sql)
+-- ============================================
+-- 준공 가정산(계약−자재비−노무비−현장경비)의 노무 키는 「노무비」.
+-- 신규 노무비 행만 site_id 또는 project_id 필수. 기존 미연결은 유지(NOT VALID).
+-- 분명한 제목→카테고리만 고친다. site 추정 없음. RLS 켜지 않음.
+
+ALTER TABLE expenses
+  DROP CONSTRAINT IF EXISTS expenses_labor_needs_work_target;
+ALTER TABLE expenses
+  ADD CONSTRAINT expenses_labor_needs_work_target
+  CHECK (
+    category IS DISTINCT FROM '노무비'
+    OR site_id IS NOT NULL
+    OR project_id IS NOT NULL
+  ) NOT VALID;
+
+ALTER TABLE expense_reports
+  DROP CONSTRAINT IF EXISTS expense_reports_labor_needs_work_target;
+ALTER TABLE expense_reports
+  ADD CONSTRAINT expense_reports_labor_needs_work_target
+  CHECK (
+    category IS DISTINCT FROM '노무비'
+    OR site_id IS NOT NULL
+    OR project_id IS NOT NULL
+  ) NOT VALID;
+

@@ -4,9 +4,15 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
 import { formatMoney } from '@/lib/utils/format'
 import {
+  LABOR_CATEGORY,
+  laborReviewReasonLabel,
+  laborReviewRows,
+} from '@/lib/expenseCategory'
+import {
   buildSettlementGroups,
   expensesForGroup,
   filterSettlementGroups,
+  groupCompletionMargin,
   settlementTotals,
   type SettlementExpense,
   type SettlementGroup,
@@ -43,12 +49,39 @@ export default function SettlementTab({
     [groups, query, source, includeCompleted],
   )
   const totals = useMemo(() => settlementTotals(visible), [visible])
+  const review = useMemo(() => laborReviewRows(expenses), [expenses])
 
   return (
     <div className="space-y-3">
       <p className="text-[12px] text-txt-tertiary">
-        지출결의서에 등록된 금액만 현장·지원사업별로 합산합니다.
+        지출결의서에 등록된 금액만 현장·지원사업별로 합산합니다. 준공 가정산의 노무는 「{LABOR_CATEGORY}」만 뺍니다.
       </p>
+
+      {review.length > 0 && (
+        <div className="rounded-[10px] border border-border-primary bg-surface">
+          <div className="border-b border-border-primary px-4 py-2.5">
+            <div className="text-[13px] font-medium text-txt-primary">가정산 검토 · {review.length}건</div>
+            <p className="mt-0.5 text-[11px] text-txt-tertiary">
+              제목만 노무이거나 현장이 없는 건입니다. 현장을 자동으로 연결하지 않습니다.
+            </p>
+          </div>
+          <div className="max-h-56 divide-y divide-surface-secondary overflow-y-auto">
+            {review.map(row => (
+              <div key={row.id} className="flex items-start justify-between gap-4 px-4 py-2.5">
+                <div className="min-w-0">
+                  <div className="text-[13px] text-txt-primary">{row.title || '제목 없음'}</div>
+                  <div className="mt-0.5 text-[11px] text-txt-tertiary">
+                    {[row.category || '미분류', ...row.reviewReasons.map(laborReviewReasonLabel)].join(' · ')}
+                  </div>
+                </div>
+                <span className="shrink-0 text-[13px] tabular-nums text-txt-primary">
+                  {formatMoney(row.amount || 0) || '0'}원
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="relative">
         <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-txt-tertiary" />
@@ -109,6 +142,7 @@ export default function SettlementTab({
                     group={g}
                     open={openKey === g.key}
                     expenses={openKey === g.key ? expensesForGroup(expenses, g) : []}
+                    margin={openKey === g.key ? groupCompletionMargin(g, expenses, sites, projects) : null}
                     staffName={staffName}
                     onToggle={() => setOpenKey(prev => prev === g.key ? null : g.key)}
                   />
@@ -130,12 +164,14 @@ function SettlementRow({
   group,
   open,
   expenses,
+  margin,
   staffName,
   onToggle,
 }: {
   group: SettlementGroup
   open: boolean
   expenses: SettlementExpense[]
+  margin: ReturnType<typeof groupCompletionMargin> | null
   staffName: (id: string | null) => string
   onToggle: () => void
 }) {
@@ -161,6 +197,15 @@ function SettlementRow({
       {open && (
         <tr>
           <td colSpan={4} className="bg-surface-secondary px-4 py-3">
+            {margin && margin.contract > 0 && (
+              <div className="mb-3 grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-5">
+                <MarginCell label="계약" value={margin.contract} />
+                <MarginCell label="자재비" value={margin.material} />
+                <MarginCell label={LABOR_CATEGORY} value={margin.labor} />
+                <MarginCell label="현장경비" value={margin.overhead} />
+                <MarginCell label="가정산" value={margin.margin} emphasize />
+              </div>
+            )}
             {expenses.length === 0 ? (
               <div className="text-[13px] text-txt-tertiary">내역이 없습니다</div>
             ) : (
@@ -184,5 +229,16 @@ function SettlementRow({
         </tr>
       )}
     </>
+  )
+}
+
+function MarginCell({ label, value, emphasize }: { label: string; value: number; emphasize?: boolean }) {
+  return (
+    <div className="rounded-lg bg-surface px-3 py-2">
+      <div className="text-[11px] text-txt-tertiary">{label}</div>
+      <div className={`mt-0.5 tabular-nums ${emphasize ? 'font-medium text-txt-primary' : 'text-txt-secondary'}`}>
+        {formatMoney(value) || '0'}원
+      </div>
+    </div>
   )
 }

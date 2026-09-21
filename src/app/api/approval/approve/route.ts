@@ -8,6 +8,7 @@ import { paymentsToExpenses } from '@/lib/approval/toExpense'
 import { pickReceiptUrl } from '@/lib/approval/receipt'
 import { sendPush } from '@/lib/push/send'
 import { EXPENSE_CATEGORIES, type ExpenseReport } from '@/types/approval'
+import { suggestedLaborCategory, validateLaborApproval } from '@/lib/expenseCategory'
 
 /**
  * 최종 승인 완료 처리(채번 + 지출 생성 + 문서 확정)를 실행한다.
@@ -210,6 +211,26 @@ export async function POST(request: NextRequest) {
 
   if (final && !(EXPENSE_CATEGORIES as readonly string[]).includes(category ?? '')) {
     return Response.json({ error: '계정과목을 선택해 주세요' }, { status: 400 })
+  }
+
+  if (final) {
+    const { data: approvePayments, error: approvePaymentsError } = await admin
+      .from('expense_report_payments')
+      .select('vendor_name, amount, pay_request_date')
+      .eq('report_id', id)
+      .order('seq')
+    if (approvePaymentsError) {
+      return Response.json({ error: `지급 정보 조회 실패: ${approvePaymentsError.message}` }, { status: 500 })
+    }
+    const laborErr = validateLaborApproval({
+      title: report.title,
+      category: category ?? suggestedLaborCategory(report.title),
+      site_id: report.site_id,
+      project_id: report.project_id,
+      payments: approvePayments ?? [],
+      mode: 'approve',
+    })
+    if (laborErr) return Response.json({ error: laborErr }, { status: 400 })
   }
 
   if (normal) {

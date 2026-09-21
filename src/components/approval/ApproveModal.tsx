@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { formatMoney } from '@/lib/utils/format'
 import { EXPENSE_CATEGORIES } from '@/types/approval'
+import { LABOR_CATEGORY, suggestedLaborCategory, validateLaborApproval } from '@/lib/expenseCategory'
 
 interface Props {
   open: boolean
@@ -27,11 +28,15 @@ interface Props {
   initialMode?: 'approve' | 'reject'
   /** 내 다음 차례인 결재자. 승인하면 누구에게 가는지 알려주는 데 쓴다. 최종 결재자면 null. */
   nextApproverName?: string | null
+  siteId?: string | null
+  projectId?: string | null
+  paymentPayees?: string[]
 }
 
 export default function ApproveModal({
   open, title, drafterName, totalAmount, paymentCount, isFinal, resumeOnly, docNo, onClose, onDone, reportId,
   actorId, actorName, initialMode = 'approve', nextApproverName = null,
+  siteId = null, projectId = null, paymentPayees = [],
 }: Props) {
   const [mode, setMode] = useState<'approve' | 'reject'>(initialMode)
   const [category, setCategory] = useState<string>('')
@@ -43,11 +48,11 @@ export default function ApproveModal({
   useEffect(() => {
     if (open) {
       setMode(initialMode)
-      setCategory('')
+      setCategory(suggestedLaborCategory(title) ?? '')
       setComment('')
       setError(null)
     }
-  }, [open, initialMode])
+  }, [open, initialMode, title])
 
   if (!open) return null
 
@@ -63,6 +68,22 @@ export default function ApproveModal({
     if (mode === 'approve' && isFinal && !category) {
       setError('계정과목을 선택해 주세요')
       return
+    }
+    if (mode === 'approve' && isFinal) {
+      const laborErr = validateLaborApproval({
+        title,
+        category,
+        site_id: siteId,
+        project_id: projectId,
+        payments: paymentPayees.map(name => ({
+          vendor_name: name, amount: 1, pay_request_date: 'ok',
+        })),
+        mode: 'approve',
+      })
+      if (laborErr) {
+        setError(laborErr)
+        return
+      }
     }
 
     setBusy(true)
@@ -144,6 +165,11 @@ export default function ApproveModal({
                 <option value="">선택</option>
                 {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              {suggestedLaborCategory(title) === LABOR_CATEGORY && (
+                <p className="text-xs text-txt-secondary mb-2">
+                  제목이 노무비입니다. 계정과목을 노무비로 두고, 현장이 연결된 문서만 승인됩니다.
+                </p>
+              )}
               <p className="text-xs text-txt-tertiary mb-4">
                 {docNo
                   ? `문서번호 ${docNo}로 지급정보 ${paymentCount}건이 지출관리에 등록됩니다`

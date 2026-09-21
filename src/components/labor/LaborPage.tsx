@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, Trash2, Download, FileCheck, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import WorkTargetPicker from '@/components/common/WorkTargetPicker'
+import { workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
+import { LABOR_CATEGORY, validateLaborExpense } from '@/lib/expenseCategory'
 
 // --- 타입 ---
 export interface LaborRecord {
@@ -135,6 +138,11 @@ export default function LaborPage() {
   const [nameDropdown, setNameDropdown] = useState<string | null>(null) // 열려있는 근무자 드롭다운의 record id
   const [exporting, setExporting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [workKind, setWorkKind] = useState<WorkKind>('')
+  const [siteId, setSiteId] = useState('')
+  const [projectId, setProjectId] = useState('')
+  const [sites, setSites] = useState<WorkSiteOption[]>([])
+  const [projects, setProjects] = useState<WorkProjectOption[]>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const pendingPatch = useRef(new Map<string, Partial<LaborRecord>>())
@@ -195,6 +203,14 @@ export default function LaborPage() {
   useEffect(() => { fetchRecords() }, [fetchRecords])
   useEffect(() => { fetchWorkers() }, [fetchWorkers])
   useEffect(() => { fetchRates() }, [fetchRates])
+  useEffect(() => {
+    supabase.from('sites').select('id, name, contract_type, status').order('name').then(({ data }) => {
+      setSites((data ?? []) as WorkSiteOption[])
+    })
+    supabase.from('projects').select('id, building_name, ho, dong').order('created_at', { ascending: false }).then(({ data }) => {
+      setProjects((data ?? []) as WorkProjectOption[])
+    })
+  }, [])
 
   // 드롭다운 바깥 클릭 시 닫기
   useEffect(() => {
@@ -349,14 +365,32 @@ export default function LaborPage() {
       const c = calcRow(r, rates)
       return `${r.worker_name}: ${c.workDays}일 × ${fmt(r.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`
     }).join('\n')
-    const { error } = await supabase.from('expenses').insert({
-      category: '노무비', title, amount: totalNet,
-      expense_date: new Date().toISOString().slice(0, 10),
-      memo, site_id: null, staff_id: null, receipt_url: null,
+    const expenseDate = new Date().toISOString().slice(0, 10)
+    const laborErr = validateLaborExpense({
+      category: LABOR_CATEGORY,
+      title,
+      amount: totalNet,
+      expense_date: expenseDate,
+      site_id: siteId || null,
+      project_id: projectId || null,
+      payee: names.join(', '),
+      requirePayee: true,
     })
+    if (laborErr) { alert(laborErr); setSubmitting(false); return }
+    const res = await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: LABOR_CATEGORY, title, amount: totalNet,
+        expense_date: expenseDate, memo,
+        site_id: siteId || null, project_id: projectId || null,
+        staff_id: null, receipt_url: null, payee: names.join(', '),
+      }),
+    })
+    const json = await res.json().catch(() => ({}))
     setSubmitting(false)
-    if (error) { alert(`결재 생성 실패: ${error.message}`); return }
-    alert('지출결의서가 생성되었습니다. [업무 > 지출결의서]에서 확인하세요.')
+    if (!res.ok) { alert(`결재 생성 실패: ${json.error || res.statusText}`); return }
+    alert('노무비가 지출에 등록되었습니다. [업무 > 지출]에서 확인하세요.')
   }
 
   // --- 합계 ---
@@ -379,7 +413,22 @@ export default function LaborPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">일용직 근무관리</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="min-w-[220px] max-w-sm">
+            <WorkTargetPicker
+              compact
+              kind={workKind}
+              siteId={siteId}
+              projectId={projectId}
+              sites={sites}
+              projects={projects}
+              onChange={next => {
+                setWorkKind(next.kind || workKindFromIds(next.siteId, next.projectId))
+                setSiteId(next.siteId)
+                setProjectId(next.projectId)
+              }}
+            />
+          </div>
           <button onClick={handleExport} disabled={exporting}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition disabled:opacity-50">
             <Download size={15} className="text-txt-tertiary" />

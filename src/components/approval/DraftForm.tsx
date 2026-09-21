@@ -17,6 +17,7 @@ import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { workKindFromIds, projectLabel, selectedWorkTarget, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
 import { draftTitleFromTarget } from '@/lib/approval/draftTitle'
 import { vendorDocsToAttachments } from '@/lib/approval/vendorDocs'
+import { suggestedLaborCategory, validateLaborApproval } from '@/lib/expenseCategory'
 
 const DEFAULT_BODY = '※ 첨부 파일에 견적서, 세금계산서 첨부할 것!!'
 
@@ -140,6 +141,15 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       if (lineErr) { setError(lineErr); return }
     }
 
+    const laborErr = validateLaborApproval({
+      title,
+      site_id: siteId,
+      project_id: projectId,
+      payments: payments.filter(x => !isBlankPayment(x)),
+      mode: thenSubmit ? 'submit' : 'save',
+    })
+    if (laborErr) { setError(laborErr); return }
+
     setBusy(true); setError(null)
 
     try {
@@ -245,6 +255,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     // 그 단계에서 확인할 수 있는 것만 본다. 전체 검증은 상신할 때 서버가 다시 한다.
     if (step === 0 && !actor) { setError('기안자를 선택해 주세요'); return }
     if (step === 0 && !title.trim()) { setError('기안제목을 입력해 주세요'); return }
+    if (step === 0 && suggestedLaborCategory(title) && !siteId && !projectId) {
+      setError('노무비는 현장 또는 지원사업을 연결해야 합니다'); return
+    }
     // 지급 정보는 비워둔 채로도 다음 단계·상신이 가능하다 — 계좌가 아직 안 나온
     // 상태에서 결재를 먼저 올리는 실무가 있어서 막지 않는다.
     setError(null)
@@ -259,6 +272,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const mobileOnly = (n: number) => (step === n ? 'md:hidden' : 'hidden')
 
   const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0)
+  const laborDraft = Boolean(suggestedLaborCategory(title))
 
   // 지급 정보 표 머리에 붙는 엑셀 버튼. 업로드 로직이 여기 있어 노드로 넘긴다.
   const excelActions = (
@@ -338,7 +352,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           </select>
         </div>
         <div className="pt-3">
-          <label className="mb-1.5 block text-label">현장</label>
+          <label className="mb-1.5 block text-label">
+            현장 {laborDraft && <span className="text-danger">*</span>}
+          </label>
           <WorkTargetPicker
             kind={workKind}
             siteId={siteId}
@@ -380,7 +396,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
                   ))}
                 </select>
               </td>
-              <td className="border-b border-border-primary px-5 py-3.5 text-label">현장</td>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">
+                현장 {laborDraft && <span className="text-danger">*</span>}
+              </td>
               <td className="border-b border-border-primary px-5 py-3.5">
                 <WorkTargetPicker
                   compact
@@ -432,6 +450,9 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         <span className="w-20 text-label">기안제목 <span className="text-danger">*</span></span>
         <input value={title} onChange={e => setTitle(e.target.value.slice(0, 50))}
           className="h-11 flex-1 rounded-lg border border-border-primary px-3 text-base md:h-9 md:text-[13px]" placeholder="기안제목 입력" />
+        {laborDraft && (
+          <span className="text-[11px] text-txt-tertiary md:ml-0">노무 제목은 현장 연결과 지급 대상이 필요합니다</span>
+        )}
         <span className="self-end text-[12px] text-txt-tertiary md:self-auto">{title.length}/50</span>
       </div>
       <div className={`${stepFlex(2)} mb-8 flex-col gap-2 md:flex-row md:gap-4`}>

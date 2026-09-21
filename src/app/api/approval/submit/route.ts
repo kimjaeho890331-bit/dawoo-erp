@@ -3,6 +3,7 @@ import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { canSubmit, currentTurnLine, validateApprovalLine } from '@/lib/approval/status'
 import { sendPush } from '@/lib/push/send'
 import { formatMoney } from '@/lib/utils/format'
+import { suggestedLaborCategory, validateLaborApproval } from '@/lib/expenseCategory'
 
 export async function POST(request: NextRequest) {
   const { id, actor_staff_id } = (await request.json()) as { id: string; actor_staff_id?: string }
@@ -21,11 +22,26 @@ export async function POST(request: NextRequest) {
   const lineErr = validateApprovalLine(loaded.lines, staff.id)
   if (lineErr) return Response.json({ error: lineErr }, { status: 400 })
 
-  // 지급 정보는 상신을 막지 않는다. 계좌·거래처가 아직 안 나온 상태에서도 결재를
-  // 먼저 올려야 하는 실무가 있어서, 예전에 여기서 하던 필수값 검사를 걷어냈다.
-  // 빈 값으로 승인되면 그만큼 비어 있는 expenses가 생기므로, 채우는 책임은 결재자에게 있다.
-  // (지급요청일만은 expense_report_payments.pay_request_date가 DATE NOT NULL이라
-  //  DB가 저장 단계에서 이미 막는다 — 여기서 다시 볼 필요가 없다.)
+  const { data: submitPayments, error: submitPaymentsError } = await admin
+    .from('expense_report_payments')
+    .select('vendor_name, amount, pay_request_date')
+    .eq('report_id', id)
+    .order('seq')
+  if (submitPaymentsError) {
+    return Response.json({ error: `지급 정보 조회 실패: ${submitPaymentsError.message}` }, { status: 500 })
+  }
+
+  const laborErr = validateLaborApproval({
+    title: loaded.report.title,
+    category: loaded.report.category ?? suggestedLaborCategory(loaded.report.title),
+    site_id: loaded.report.site_id,
+    project_id: loaded.report.project_id,
+    payments: submitPayments ?? [],
+    mode: 'submit',
+  })
+  if (laborErr) return Response.json({ error: laborErr }, { status: 400 })
+
+  // 일반 결의는 지급 정보가 비어 있어도 상신할 수 있다. 노무비만 위에서 막는다.
 
   // 재상신: state만 되돌리고 acted_at·comment는 남긴다
   // → 결재자가 자기가 왜 반려했는지(누가, 언제, 무슨 의견) 다시 볼 수 있어야 한다

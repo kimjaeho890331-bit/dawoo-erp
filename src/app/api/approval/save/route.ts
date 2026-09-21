@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { validateApprovalLine, canEdit } from '@/lib/approval/status'
+import { suggestedLaborCategory, validateLaborApproval } from '@/lib/expenseCategory'
 
 interface PaymentInput {
   vendor_name: string; amount: number; pay_request_date: string
@@ -40,6 +41,16 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: '기안제목은 50자까지 입력할 수 있습니다' }, { status: 400 })
   }
 
+  const laborErr = validateLaborApproval({
+    title: body.title,
+    category: suggestedLaborCategory(body.title),
+    site_id: body.site_id,
+    project_id: body.project_id,
+    payments,
+    mode: 'save',
+  })
+  if (laborErr) return Response.json({ error: laborErr }, { status: 400 })
+
   // 결재선은 비어 있어도 임시저장은 되지만, 내용이 있으면 규칙을 지켜야 한다
   if (lines.length > 0) {
     const err = validateApprovalLine(
@@ -52,6 +63,7 @@ export async function POST(request: NextRequest) {
   const total = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
   const siteId = body.site_id || null
   const projectId = body.project_id || null
+  const laborCategory = suggestedLaborCategory(body.title)
 
   let reportId = body.id
 
@@ -70,6 +82,7 @@ export async function POST(request: NextRequest) {
       site_id: siteId,
       project_id: projectId,
       updated_at: new Date().toISOString(),
+      ...(laborCategory ? { category: laborCategory } : {}),
     }).eq('id', reportId)
 
     if (updateError) {
@@ -115,6 +128,7 @@ export async function POST(request: NextRequest) {
       total_amount: total,
       site_id: siteId,
       project_id: projectId,
+      ...(laborCategory ? { category: laborCategory } : {}),
     }).select('id').single()
 
     if (error || !data) {

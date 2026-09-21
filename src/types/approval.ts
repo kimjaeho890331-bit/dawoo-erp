@@ -31,11 +31,14 @@ export const LINE_STATE_LABEL: Record<LineState, string> = {
   rejected: '반려',
 }
 
-// 계정과목 — ExpensesPage.tsx의 EXPENSE_CATS와 동일해야 한다
-export const EXPENSE_CATEGORIES = [
-  '식대', '교통비', '자재비', '현장경비', '노무비', '사무용품', '기타',
-] as const
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]
+// 계정과목 — src/lib/expenseCategory.ts가 단일 출처. 준공 가정산 키와 같다.
+export {
+  EXPENSE_CATEGORIES,
+  LABOR_CATEGORY,
+  MATERIAL_CATEGORY,
+  SITE_OVERHEAD_CATEGORY,
+  type ExpenseCategory,
+} from '@/lib/expenseCategory'
 
 export const FORM_ABBR = 'CDV'
 

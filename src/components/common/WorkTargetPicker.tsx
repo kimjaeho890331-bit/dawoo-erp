@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import {
+  isBrowsableSource,
   searchWorkTargets,
   selectedWorkTarget,
   WORK_SEARCH_LIMIT,
@@ -24,6 +25,7 @@ export default function WorkTargetPicker({
   projects,
   onChange,
   compact,
+  floating,
 }: {
   kind: WorkKind
   siteId: string
@@ -32,6 +34,8 @@ export default function WorkTargetPicker({
   projects: WorkProjectOption[]
   onChange: (next: { kind: WorkKind; siteId: string; projectId: string }) => void
   compact?: boolean
+  /** 결과 목록을 아래 내용 위에 띄운다 (목록이 화면을 밀어내지 않게) */
+  floating?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<WorkSourceFilter>('all')
@@ -61,6 +65,7 @@ export default function WorkTargetPicker({
       onChange({ kind: 'project', siteId: '', projectId: hit.id })
     }
     setQuery('')
+    setSource('all')
   }
 
   const clear = () => {
@@ -80,7 +85,7 @@ export default function WorkTargetPicker({
     : 'input-field w-full pl-9 text-base md:text-[13px]'
 
   return (
-    <div className="space-y-2">
+    <div className="relative space-y-2">
       {selected ? (
         <div className="flex items-center gap-2 rounded-lg bg-surface-secondary px-3 py-1.5">
           <span className="min-w-0 flex-1 truncate text-[13px] text-txt-primary">
@@ -121,7 +126,7 @@ export default function WorkTargetPicker({
             key={opt.key}
             type="button"
             aria-pressed={source === opt.key}
-            onClick={() => setSource(opt.key)}
+            onClick={() => setSource(source === opt.key ? 'all' : opt.key)}
             className={chipCls(source === opt.key)}
           >
             {opt.label}
@@ -138,14 +143,14 @@ export default function WorkTargetPicker({
         </label>
       </div>
 
-      {query.trim() ? (
+      {query.trim() || isBrowsableSource(source) ? (
         <div
           role="listbox"
           aria-label="현장 검색 결과"
-          className="max-h-52 overflow-y-auto rounded-lg border border-border-primary bg-surface"
+          className={`max-h-52 overflow-y-auto rounded-lg border border-border-primary bg-surface ${floating ? 'absolute left-0 right-0 top-full z-30 shadow-lg' : ''}`}
         >
           {hits.length === 0 ? (
-            <div className="px-3 py-3 text-[13px] text-txt-tertiary">검색 결과가 없습니다</div>
+            <div className="px-3 py-3 text-[13px] text-txt-tertiary">{query.trim() ? '검색 결과가 없습니다' : '해당하는 현장이 없습니다'}</div>
           ) : (
             hits.map(hit => {
               const active = hit.kind === 'site' ? hit.id === siteId : hit.id === projectId
@@ -171,7 +176,7 @@ export default function WorkTargetPicker({
               )
             })
           )}
-          {hits.length === WORK_SEARCH_LIMIT && (
+          {query.trim() && hits.length === WORK_SEARCH_LIMIT && (
             <div className="px-3 py-2 text-[11px] text-txt-tertiary">상위 20건입니다. 검색어를 더 넣어 주세요.</div>
           )}
         </div>

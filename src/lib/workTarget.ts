@@ -141,7 +141,12 @@ export function selectedWorkTarget(opts: {
  * 입찰·수의계약(sites.contract_type)과 지원사업을 이름(접수 건은 projectLabel)으로 찾는다.
  * 완료 현장은 기본 제외. 이미 고른 완료 현장은 selectedSiteId로 남겨 둔다.
  * 빈 검색어는 결과를 비운다 — 긴 목록을 드롭다운으로 쏟지 않기 위함.
+ * 단, 입찰·수의계약을 골랐을 때는 검색어 없이도 그 구분의 현장을 전부 보여 준다(현장 수가 적다).
  */
+export function isBrowsableSource(source: WorkSourceFilter): boolean {
+  return source === 'bid' || source === 'private'
+}
+
 export function searchWorkTargets(opts: {
   sites: WorkSiteOption[]
   projects: WorkProjectOption[]
@@ -152,11 +157,12 @@ export function searchWorkTargets(opts: {
   limit?: number
 }): WorkTargetHit[] {
   const query = opts.query.trim()
-  if (!query) return []
-
   const source = opts.source ?? 'all'
+  const browsing = !query && isBrowsableSource(source)
+  if (!query && !browsing) return []
+
   const includeCompleted = opts.includeCompleted ?? false
-  const limit = opts.limit ?? WORK_SEARCH_LIMIT
+  const limit = opts.limit ?? (browsing ? Infinity : WORK_SEARCH_LIMIT)
   const hits: WorkTargetHit[] = []
 
   if (source !== 'project') {

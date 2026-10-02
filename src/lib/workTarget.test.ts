@@ -66,6 +66,14 @@ describe('workTarget', () => {
     expect(searchWorkTargets({ sites, projects, query: '   ' })).toEqual([])
   })
 
+  it('입찰·수의계약 칩은 검색어 없이도 그 구분 현장을 전부 보여 준다', () => {
+    expect(searchWorkTargets({ sites, projects, query: '', source: 'bid' }).map(h => h.id)).toEqual(['s-bid'])
+    expect(searchWorkTargets({ sites, projects, query: '', source: 'private' }).map(h => h.id)).toEqual(['s-priv', 's-priv-short'])
+    expect(searchWorkTargets({ sites, projects, query: '', source: 'bid', includeCompleted: true }).map(h => h.id)).toEqual(['s-bid', 's-done'])
+    expect(searchWorkTargets({ sites, projects, query: '', source: 'project' })).toEqual([])
+    expect(searchWorkTargets({ sites, projects, query: '', source: 'all' })).toEqual([])
+  })
+
   it('전체 검색은 입찰·수의계약·미분류·지원사업을 이름으로 찾는다', () => {
     const hits = searchWorkTargets({ sites, projects, query: '현장' })
     expect(hits.map(h => h.id).sort()).toEqual(['s-null', 's-priv-short'])

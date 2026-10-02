@@ -400,6 +400,7 @@ export default function LaborPage() {
           <div className="min-w-[220px] max-w-sm">
             <WorkTargetPicker
               compact
+              floating
               kind={workKind}
               siteId={siteId}
               projectId={projectId}

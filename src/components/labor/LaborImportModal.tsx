@@ -80,7 +80,6 @@ export default function LaborImportModal({ file, onClose, onImported }: {
 }) {
   const [parsed, setParsed] = useState<LaborImportResult | null>(null)
   const [rates, setRates] = useState<LaborRates | null>(null)
-  const [ratesSaved, setRatesSaved] = useState(true)
   const [existing, setExisting] = useState<LaborRecord[]>([])
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<Set<number>>(new Set())
@@ -97,15 +96,14 @@ export default function LaborImportModal({ file, onClose, onImported }: {
         if (!res.ok) throw new Error(json.error || '엑셀을 읽지 못했습니다.')
         const result = json as LaborImportResult
 
-        const [rateInfo, { data, error: dbErr }] = await Promise.all([
+        const [monthRates, { data, error: dbErr }] = await Promise.all([
           loadLaborRates(result.year, result.month),
           supabase.from('labor_records').select('*').eq('year', result.year).eq('month', result.month),
         ])
         if (dbErr) throw new Error(`기존 기록을 확인하지 못했습니다: ${dbErr.message}`)
         if (!alive) return
         setParsed(result)
-        setRates(rateInfo.rates)
-        setRatesSaved(rateInfo.saved)
+        setRates(monthRates)
         setExisting((data ?? []) as LaborRecord[])
       } catch (err) {
         if (alive) setError(err instanceof Error ? err.message : String(err))
@@ -140,13 +138,6 @@ export default function LaborImportModal({ file, onClose, onImported }: {
   const handleImport = async () => {
     if (!parsed || !rates || pickedRows.length === 0) return
     setSaving(true)
-    // 그 달 요율이 따로 저장돼 있지 않으면 지금 쓴 요율을 고정한다.
-    // 안 그러면 나중에 다른 달 요율을 고칠 때 이 달의 자동계산 값이 같이 움직인다.
-    if (!ratesSaved) {
-      const { error: rateErr } = await supabase.from('labor_rates')
-        .upsert({ year: parsed.year, month: parsed.month, rates, updated_at: new Date().toISOString() })
-      if (rateErr) { setSaving(false); alert(`요율 저장 실패: ${rateErr.message}`); return }
-    }
     const payload = pickedRows.map((r, i) => ({ ...r.insert, sort_order: existing.length + i }))
     const { error: insErr } = await supabase.from('labor_records').insert(payload)
     setSaving(false)

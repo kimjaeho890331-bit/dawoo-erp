@@ -1,12 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, Trash2, Download, Upload, FileCheck, ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Trash2, Download, Upload, FileCheck, ChevronDown, Percent } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
 import { LABOR_CATEGORY, validateLaborExpense } from '@/lib/expenseCategory'
+import { DEFAULT_RATES, pickRates, type LaborRates, type LaborRateRow } from '@/lib/labor/rates'
 import LaborImportModal from './LaborImportModal'
+
+export { DEFAULT_RATES, type LaborRates }
 
 // --- 타입 ---
 export interface LaborRecord {
@@ -43,26 +47,10 @@ interface WorkerInfo {
   account_number: string | null
 }
 
-// --- 공제 요율 (% 단위, 화면에서 직접 수정 → 월별 저장) ---
-export interface LaborRates {
-  income: number     // 소득세: (일급-15만) × 요율
-  resident: number   // 주민세: 소득세 × 요율
-  employment: number // 고용보험: 총지급액 × 요율
-  pension: number    // 국민연금: 총지급액 × 요율
-  health: number     // 건강보험: 총지급액 × 요율
-  longterm: number   // 장기요양: 건강보험 × 요율
-}
-
-export const DEFAULT_RATES: LaborRates = { income: 2.7, resident: 10, employment: 0.9, pension: 4.5, health: 3.43, longterm: 11.52 }
-
-// 요율: 해당 월 → 없으면 가장 최근 월 요율 → 기본값. saved = 그 달 요율이 따로 저장돼 있는지
-export async function loadLaborRates(year: number, month: number): Promise<{ rates: LaborRates; saved: boolean }> {
-  const { data } = await supabase.from('labor_rates').select('rates')
-    .eq('year', year).eq('month', month).maybeSingle()
-  if (data?.rates) return { rates: { ...DEFAULT_RATES, ...data.rates }, saved: true }
-  const { data: latest } = await supabase.from('labor_rates').select('rates')
-    .order('year', { ascending: false }).order('month', { ascending: false }).limit(1).maybeSingle()
-  return { rates: latest?.rates ? { ...DEFAULT_RATES, ...latest.rates } : DEFAULT_RATES, saved: false }
+// 그 달에 적용되는 요율 (요율 설정 화면에서 정한 "적용 시작월" 기준)
+export async function loadLaborRates(year: number, month: number): Promise<LaborRates> {
+  const { data } = await supabase.from('labor_rates').select('year, month, rates')
+  return pickRates((data ?? []) as LaborRateRow[], year, month)
 }
 
 // --- 공제 계산 (요율 기반 자동산출, 수동값 있으면 우선) ---
@@ -95,21 +83,9 @@ const COL_TOTAL = COL_WIDTHS.reduce((a, b) => a + b, 0)
 // 타이핑이 멎고 이만큼 지나면 DB에 쓴다 (키 입력마다 쏘지 않으려고)
 const SAVE_DELAY = 600
 
-// --- 요율 헤더 input (직접 수정 → 월별 저장) ---
-function RateInput({ value, onSave }: { value: number; onSave: (v: string, flush?: boolean) => void }) {
-  const [draft, setDraft] = useState<string | null>(null)
-  return (
-    <span className="inline-flex items-center justify-center gap-px">
-      <input
-        type="text" value={draft ?? String(value)}
-        onChange={e => { setDraft(e.target.value); onSave(e.target.value) }}
-        onBlur={e => { const typed = draft !== null; setDraft(null); if (typed) onSave(e.target.value, true) }}
-        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-        className="w-[34px] bg-transparent outline-none text-[9px] text-center text-accent-text font-semibold border-b border-dashed border-border-secondary focus:border-accent"
-      />
-      <span className="text-[9px]">%</span>
-    </span>
-  )
+// --- 요율 헤더 표시 (수정은 요율 설정 화면에서) ---
+function RateLabel({ value }: { value: number }) {
+  return <span className="text-[9px] text-accent-text font-semibold">{value}%</span>
 }
 
 // --- 공용 셀 input ---
@@ -164,7 +140,6 @@ export default function LaborPage() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const pendingPatch = useRef(new Map<string, Partial<LaborRecord>>())
-  const rateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const daysInMonth = new Date(year, month, 0).getDate()
 
@@ -192,25 +167,9 @@ export default function LaborPage() {
   }, [])
 
   const fetchRates = useCallback(async () => {
-    setRates((await loadLaborRates(year, month)).rates)
+    setRates(await loadLaborRates(year, month))
   }, [year, month])
 
-  // 요율 수정 → 화면은 즉시(전 행 재산출), DB 저장은 타이핑이 멎으면 한 번
-  const saveRate = (field: keyof LaborRates, raw: string, flush = false) => {
-    const v = parseFloat(raw)
-    if (isNaN(v) || v < 0) return
-    const next = { ...rates, [field]: v }
-    setRates(next)
-    if (rateTimer.current) clearTimeout(rateTimer.current)
-    const write = async () => {
-      rateTimer.current = null
-      const { error } = await supabase.from('labor_rates')
-        .upsert({ year, month, rates: next, updated_at: new Date().toISOString() })
-      if (error) alert(`요율 저장 실패: ${error.message}`)
-    }
-    if (flush) write()
-    else rateTimer.current = setTimeout(write, SAVE_DELAY)
-  }
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
   useEffect(() => { fetchWorkers() }, [fetchWorkers])
@@ -453,6 +412,11 @@ export default function LaborPage() {
               }}
             />
           </div>
+          <Link href="/labor/rates"
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition">
+            <Percent size={15} className="text-txt-tertiary" />
+            요율 설정
+          </Link>
           <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden"
             onChange={e => { setImportFile(e.target.files?.[0] ?? null); e.target.value = '' }} />
           <button onClick={() => { flushPending(); fileInputRef.current?.click() }}
@@ -521,9 +485,9 @@ export default function LaborPage() {
                 <th className={thCls}></th>
                 <th className={thCls}>일수</th>
                 <th className={thCls} rowSpan={2}>총지급액</th>
-                <th className={thCls}>소득세<br /><RateInput value={rates.income} onSave={(v, f) => saveRate('income', v, f)} /></th>
-                <th className={thCls}>국민연금<br /><RateInput value={rates.pension} onSave={(v, f) => saveRate('pension', v, f)} /></th>
-                <th className={thCls}>건강보험<br /><RateInput value={rates.health} onSave={(v, f) => saveRate('health', v, f)} /></th>
+                <th className={thCls}>소득세<br /><RateLabel value={rates.income} /></th>
+                <th className={thCls}>국민연금<br /><RateLabel value={rates.pension} /></th>
+                <th className={thCls}>건강보험<br /><RateLabel value={rates.health} /></th>
                 <th className={thCls} rowSpan={2}>공제합계</th>
                 <th className={thCls} rowSpan={2}>실 지급액</th>
                 <th className={thCls}>지급일</th>
@@ -535,9 +499,9 @@ export default function LaborPage() {
                 <th className={thCls}>계좌번호</th>
                 {days2.map(d => <th key={d} className={`${thCls} px-0! ${d > daysInMonth ? 'opacity-30' : ''}`}>{d}</th>)}
                 <th className={thCls}>일급</th>
-                <th className={thCls}>주민세<br /><RateInput value={rates.resident} onSave={(v, f) => saveRate('resident', v, f)} /></th>
-                <th className={thCls}>고용보험<br /><RateInput value={rates.employment} onSave={(v, f) => saveRate('employment', v, f)} /></th>
-                <th className={thCls}>장기요양<br /><RateInput value={rates.longterm} onSave={(v, f) => saveRate('longterm', v, f)} /></th>
+                <th className={thCls}>주민세<br /><RateLabel value={rates.resident} /></th>
+                <th className={thCls}>고용보험<br /><RateLabel value={rates.employment} /></th>
+                <th className={thCls}>장기요양<br /><RateLabel value={rates.longterm} /></th>
                 <th className={thCls}>현장명</th>
                 <th className={thCls}>비고</th>
               </tr>
@@ -566,8 +530,8 @@ export default function LaborPage() {
       </button>
 
       <p className="text-xs text-txt-quaternary leading-relaxed">
-        · 공제 6종은 표 머리글의 <b>요율을 직접 수정</b>할 수 있고(해당 월에 저장됨), 입력한 요율대로 자동 산출되어 -금액으로 표시됩니다.<br />
-        · 요율로 바꾸든 칸에 금액을 직접 치든 <b>타이핑하는 즉시</b> 공제합계·실지급액·상단 합계가 다시 계산되고 저장됩니다.<br />
+        · 공제 6종은 표 머리글에 보이는 요율대로 자동 산출되어 -금액으로 표시됩니다. 요율은 위 <b>요율 설정</b>에서 고칩니다.<br />
+        · 칸에 금액을 직접 치면 <b>타이핑하는 즉시</b> 공제합계·실지급액·상단 합계가 다시 계산되고 저장됩니다.<br />
         · 소득세는 일급 15만원 초과분 × 요율(일 세액 1,000원 미만 소액부징수), 주민세는 소득세 × 요율, 장기요양은 건강보험 × 요율, 나머지는 총지급액 × 요율 기준입니다.<br />
         · 공제 대상이 아닌 근무자는 <b>해당 칸을 비우고 Enter</b>(또는 0 입력) → 요율과 무관하게 0으로 확정됩니다.<br />
         · 그 칸에서 <b>Esc</b>를 누르면 수기값을 버리고 다시 요율 자동계산으로 돌아갑니다(회색 글씨 = 자동, 진한 글씨 = 수기).<br />

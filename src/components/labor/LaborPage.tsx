@@ -87,6 +87,11 @@ export function calcRow(r: LaborRecord, rates: LaborRates) {
 
 const fmt = (n: number) => (n ? n.toLocaleString() : '')
 
+// 표 열 너비(비율). 가로 스크롤 없이 한 화면에 들어오도록 표 폭에 맞춰 나눈다.
+// 체크 | 근무자 | 주민번호·연락처 | 은행·계좌 | 날짜 16칸 | 일수·일급 | 총지급액 | 공제 3칸 | 공제합계 | 실지급액 | 지급일·현장명 | 공종·비고 | 삭제
+const COL_WIDTHS = [24, 68, 122, 112, ...Array<number>(16).fill(24), 58, 66, 58, 58, 58, 56, 66, 74, 62, 22]
+const COL_TOTAL = COL_WIDTHS.reduce((a, b) => a + b, 0)
+
 // 타이핑이 멎고 이만큼 지나면 DB에 쓴다 (키 입력마다 쏘지 않으려고)
 const SAVE_DELAY = 600
 
@@ -131,7 +136,7 @@ function CellInput({ value, onSave, onReset, className = '', align = 'left', pla
         // draft를 비워 두면 이후 blur가 저장을 건너뛰므로 되돌린 값이 그대로 남는다
         else if (e.key === 'Escape' && onReset) { setDraft(null); onReset() }
       }}
-      className={`w-full bg-transparent outline-none text-[12px] px-1 py-0.5 focus:bg-accent-light rounded text-${align} ${className}`}
+      className={`w-full min-w-0 bg-transparent outline-none text-[12px] px-0.5 py-0.5 focus:bg-accent-light rounded text-${align} ${className}`}
     />
   )
 }
@@ -500,37 +505,41 @@ export default function LaborPage() {
         {loading ? (
           <div className="p-12 text-center text-txt-tertiary">로딩 중...</div>
         ) : (
-          <table className="border-collapse w-max min-w-full">
+          <table className="border-collapse table-fixed w-full min-w-[1180px]">
+            <colgroup>
+              {COL_WIDTHS.map((w, i) => <col key={i} style={{ width: `${(w / COL_TOTAL) * 100}%` }} />)}
+            </colgroup>
             <thead>
               <tr>
                 <th className={thCls} rowSpan={2}>
                   <input type="checkbox" checked={records.length > 0 && checked.size === records.length} onChange={toggleAll} />
                 </th>
-                <th className={`${thCls} min-w-[80px]`} rowSpan={2}>근무자</th>
-                <th className={`${thCls} min-w-[110px]`} rowSpan={2}>주민등록번호</th>
-                <th className={`${thCls} min-w-[100px]`} rowSpan={2}>연락처</th>
-                <th className={`${thCls} min-w-[110px]`}>은행명</th>
-                {days1.map(d => <th key={d} className={`${thCls} w-7`}>{d}</th>)}
+                <th className={thCls} rowSpan={2}>근무자</th>
+                <th className={thCls}>주민등록번호</th>
+                <th className={thCls}>은행명</th>
+                {days1.map(d => <th key={d} className={`${thCls} px-0!`}>{d}</th>)}
+                <th className={thCls}></th>
                 <th className={thCls}>일수</th>
-                <th className={`${thCls} min-w-[80px]`} rowSpan={2}>총지급액</th>
+                <th className={thCls} rowSpan={2}>총지급액</th>
                 <th className={thCls}>소득세<br /><RateInput value={rates.income} onSave={(v, f) => saveRate('income', v, f)} /></th>
                 <th className={thCls}>국민연금<br /><RateInput value={rates.pension} onSave={(v, f) => saveRate('pension', v, f)} /></th>
                 <th className={thCls}>건강보험<br /><RateInput value={rates.health} onSave={(v, f) => saveRate('health', v, f)} /></th>
-                <th className={`${thCls} min-w-[70px]`} rowSpan={2}>공제합계</th>
-                <th className={`${thCls} min-w-[80px]`} rowSpan={2}>실 지급액</th>
-                <th className={`${thCls} min-w-[90px]`} rowSpan={2}>지급일</th>
-                <th className={`${thCls} min-w-[90px]`} rowSpan={2}>현장명</th>
-                <th className={`${thCls} min-w-[80px]`} rowSpan={2}>공종</th>
-                <th className={`${thCls} min-w-[80px]`} rowSpan={2}>비고</th>
+                <th className={thCls} rowSpan={2}>공제합계</th>
+                <th className={thCls} rowSpan={2}>실 지급액</th>
+                <th className={thCls}>지급일</th>
+                <th className={thCls}>공종</th>
                 <th className={thCls} rowSpan={2}></th>
               </tr>
               <tr>
+                <th className={thCls}>연락처</th>
                 <th className={thCls}>계좌번호</th>
-                {days2.map(d => <th key={d} className={`${thCls} w-7 ${d > daysInMonth ? 'opacity-30' : ''}`}>{d}</th>)}
+                {days2.map(d => <th key={d} className={`${thCls} px-0! ${d > daysInMonth ? 'opacity-30' : ''}`}>{d}</th>)}
                 <th className={thCls}>일급</th>
                 <th className={thCls}>주민세<br /><RateInput value={rates.resident} onSave={(v, f) => saveRate('resident', v, f)} /></th>
                 <th className={thCls}>고용보험<br /><RateInput value={rates.employment} onSave={(v, f) => saveRate('employment', v, f)} /></th>
                 <th className={thCls}>장기요양<br /><RateInput value={rates.longterm} onSave={(v, f) => saveRate('longterm', v, f)} /></th>
+                <th className={thCls}>현장명</th>
+                <th className={thCls}>비고</th>
               </tr>
             </thead>
             <tbody>
@@ -590,7 +599,7 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
   deleteRow: (id: string) => void
 }) {
   const dayCell = (d: number) => (
-    <td key={d} className={`${tdCls} w-7 ${d > daysInMonth ? 'bg-surface-secondary' : ''}`}>
+    <td key={d} className={`${tdCls} px-0! ${d > daysInMonth ? 'bg-surface-secondary' : ''}`}>
       {d <= daysInMonth && (
         <CellInput value={r.day_values?.[String(d)]?.toString() || ''} align="center"
           onSave={(v, f) => setDayValue(r, d, v, f)} />
@@ -601,7 +610,7 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
   const dedCell = (field: keyof LaborRecord, effectiveVal: number) => {
     const isManual = (r[field] as number | null) != null
     return (
-      <td className={`${tdCls} min-w-[60px]`}>
+      <td className={tdCls}>
         <CellInput value={effectiveVal ? `-${effectiveVal.toLocaleString()}` : (isManual ? '0' : '')}
           align="right" className={isManual ? 'font-medium text-txt-primary' : 'text-txt-tertiary'}
           onSave={(v, f) => setDeduction(r, field, v, f)}
@@ -609,6 +618,7 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
       </td>
     )
   }
+  // 한 사람이 두 줄: 윗줄 주민번호·은행·1~15일·지급일·공종 / 아랫줄 연락처·계좌·16~31일·현장명·비고
   return (
     <>
       <tr className="border-t-2 border-border-primary">
@@ -640,19 +650,16 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
             </div>
           )}
         </td>
-        <td className={`${tdCls}`} rowSpan={2}>
+        <td className={tdCls}>
           <CellInput value={r.resident_id || ''} placeholder="000000-0000000" align="center"
             onSave={(v, f) => patchRecord(r.id, { resident_id: v || null }, f)} />
-        </td>
-        <td className={`${tdCls}`} rowSpan={2}>
-          <CellInput value={r.phone || ''} placeholder="010-" align="center"
-            onSave={(v, f) => patchRecord(r.id, { phone: v || null }, f)} />
         </td>
         <td className={tdCls}>
           <CellInput value={r.bank_name || ''} placeholder="은행명(예금주)"
             onSave={(v, f) => patchRecord(r.id, { bank_name: v || null }, f)} />
         </td>
         {days1.map(dayCell)}
+        <td className={`${tdCls} bg-surface-secondary`}></td>
         <td className={`${tdCls} text-center text-txt-secondary tabular-nums`}>{c.workDays || ''}</td>
         <td className={`${tdCls} text-right font-semibold tabular-nums pr-1.5`} rowSpan={2}>{fmt(c.total)}</td>
         {dedCell('ded_income_tax', c.income)}
@@ -660,35 +667,31 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
         {dedCell('ded_health', c.health)}
         <td className={`${tdCls} text-right tabular-nums pr-1.5`} rowSpan={2}>{fmt(c.dedSum)}</td>
         <td className={`${tdCls} text-right font-semibold text-accent-text tabular-nums pr-1.5`} rowSpan={2}>{fmt(c.netPay)}</td>
-        <td className={tdCls} rowSpan={2}>
-          <CellInput value={r.payment_date || ''} placeholder="지급일"
+        <td className={tdCls}>
+          <CellInput value={r.payment_date || ''} placeholder="지급일" align="center"
             onSave={(v, f) => patchRecord(r.id, { payment_date: v || null }, f)} />
         </td>
-        <td className={tdCls} rowSpan={2}>
-          <CellInput value={r.site_name || ''} placeholder="현장명"
-            onSave={(v, f) => patchRecord(r.id, { site_name: v || null }, f)} />
-        </td>
-        <td className={tdCls} rowSpan={2}>
+        <td className={tdCls}>
           <CellInput value={r.work_type || ''} placeholder="공종"
             onSave={(v, f) => patchRecord(r.id, { work_type: v || null }, f)} />
         </td>
-        <td className={tdCls} rowSpan={2}>
-          <CellInput value={r.note || ''} placeholder="비고"
-            onSave={(v, f) => patchRecord(r.id, { note: v || null }, f)} />
-        </td>
         <td className={`${tdCls} text-center`} rowSpan={2}>
-          <button onClick={() => deleteRow(r.id)} className="text-txt-quaternary hover:text-red-500 transition">
+          <button onClick={() => deleteRow(r.id)} className="text-txt-quaternary hover:text-danger transition">
             <Trash2 size={14} />
           </button>
         </td>
       </tr>
       <tr>
         <td className={tdCls}>
+          <CellInput value={r.phone || ''} placeholder="010-" align="center"
+            onSave={(v, f) => patchRecord(r.id, { phone: v || null }, f)} />
+        </td>
+        <td className={tdCls}>
           <CellInput value={r.account_number || ''} placeholder="계좌번호"
             onSave={(v, f) => patchRecord(r.id, { account_number: v || null }, f)} />
         </td>
         {days2.map(dayCell)}
-        <td className={`${tdCls} min-w-[70px]`}>
+        <td className={tdCls}>
           <CellInput value={r.daily_wage != null ? String(r.daily_wage) : ''} placeholder="일급" align="right"
             onSave={(v, f) => {
               const n = Number(v.replace(/[^\d]/g, ''))
@@ -698,6 +701,14 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
         {dedCell('ded_resident_tax', c.resident)}
         {dedCell('ded_employment', c.employment)}
         {dedCell('ded_longterm', c.longterm)}
+        <td className={tdCls}>
+          <CellInput value={r.site_name || ''} placeholder="현장명"
+            onSave={(v, f) => patchRecord(r.id, { site_name: v || null }, f)} />
+        </td>
+        <td className={tdCls}>
+          <CellInput value={r.note || ''} placeholder="비고"
+            onSave={(v, f) => patchRecord(r.id, { note: v || null }, f)} />
+        </td>
       </tr>
     </>
   )

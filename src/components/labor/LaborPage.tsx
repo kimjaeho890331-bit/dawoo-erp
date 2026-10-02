@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, Trash2, Download, FileCheck, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, Download, Upload, FileCheck, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
 import { LABOR_CATEGORY, validateLaborExpense } from '@/lib/expenseCategory'
+import LaborImportModal from './LaborImportModal'
 
 // --- 타입 ---
 export interface LaborRecord {
@@ -53,6 +54,16 @@ export interface LaborRates {
 }
 
 export const DEFAULT_RATES: LaborRates = { income: 2.7, resident: 10, employment: 0.9, pension: 4.5, health: 3.43, longterm: 11.52 }
+
+// 요율: 해당 월 → 없으면 가장 최근 월 요율 → 기본값. saved = 그 달 요율이 따로 저장돼 있는지
+export async function loadLaborRates(year: number, month: number): Promise<{ rates: LaborRates; saved: boolean }> {
+  const { data } = await supabase.from('labor_rates').select('rates')
+    .eq('year', year).eq('month', month).maybeSingle()
+  if (data?.rates) return { rates: { ...DEFAULT_RATES, ...data.rates }, saved: true }
+  const { data: latest } = await supabase.from('labor_rates').select('rates')
+    .order('year', { ascending: false }).order('month', { ascending: false }).limit(1).maybeSingle()
+  return { rates: latest?.rates ? { ...DEFAULT_RATES, ...latest.rates } : DEFAULT_RATES, saved: false }
+}
 
 // --- 공제 계산 (요율 기반 자동산출, 수동값 있으면 우선) ---
 const roundDown10 = (n: number) => Math.floor(n / 10) * 10
@@ -143,6 +154,8 @@ export default function LaborPage() {
   const [projectId, setProjectId] = useState('')
   const [sites, setSites] = useState<WorkSiteOption[]>([])
   const [projects, setProjects] = useState<WorkProjectOption[]>([])
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const pendingPatch = useRef(new Map<string, Partial<LaborRecord>>())
@@ -173,14 +186,8 @@ export default function LaborPage() {
     }
   }, [])
 
-  // 요율 로드: 해당 월 → 없으면 가장 최근 월 요율 → 기본값
   const fetchRates = useCallback(async () => {
-    const { data } = await supabase.from('labor_rates').select('rates')
-      .eq('year', year).eq('month', month).maybeSingle()
-    if (data?.rates) { setRates({ ...DEFAULT_RATES, ...data.rates }); return }
-    const { data: latest } = await supabase.from('labor_rates').select('rates')
-      .order('year', { ascending: false }).order('month', { ascending: false }).limit(1).maybeSingle()
-    setRates(latest?.rates ? { ...DEFAULT_RATES, ...latest.rates } : DEFAULT_RATES)
+    setRates((await loadLaborRates(year, month)).rates)
   }, [year, month])
 
   // 요율 수정 → 화면은 즉시(전 행 재산출), DB 저장은 타이핑이 멎으면 한 번
@@ -330,6 +337,15 @@ export default function LaborPage() {
 
   const checkedRecords = records.filter(r => checked.has(r.id))
 
+  // --- 엑셀 불러오기: 저장이 끝나면 그 파일의 달로 화면을 옮긴다 ---
+  const handleImported = (y: number, m: number, count: number) => {
+    setImportFile(null)
+    if (y === year && m === month) { fetchRecords(); fetchRates() }
+    else { setYear(y); setMonth(m) }
+    fetchWorkers()
+    alert(`${y}년 ${m}월에 ${count}줄을 불러왔습니다.`)
+  }
+
   // --- 엑셀 저장 (체크된 근무자) ---
   const handleExport = async () => {
     if (checkedRecords.length === 0) { alert('엑셀로 저장할 근무자를 체크해주세요.'); return }
@@ -410,6 +426,9 @@ export default function LaborPage() {
 
   return (
     <div className="p-6 space-y-5">
+      {importFile && (
+        <LaborImportModal file={importFile} onClose={() => setImportFile(null)} onImported={handleImported} />
+      )}
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">일용직 근무관리</h1>
@@ -429,6 +448,13 @@ export default function LaborPage() {
               }}
             />
           </div>
+          <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden"
+            onChange={e => { setImportFile(e.target.files?.[0] ?? null); e.target.value = '' }} />
+          <button onClick={() => { flushPending(); fileInputRef.current?.click() }}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition">
+            <Upload size={15} className="text-txt-tertiary" />
+            엑셀 불러오기
+          </button>
           <button onClick={handleExport} disabled={exporting}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition disabled:opacity-50">
             <Download size={15} className="text-txt-tertiary" />
@@ -448,7 +474,7 @@ export default function LaborPage() {
           <span className="text-sm text-txt-tertiary">연도 / 월</span>
           <select value={year} onChange={e => setYear(Number(e.target.value))}
             className="border border-border-primary rounded-lg px-3 h-[34px] text-sm outline-none focus:border-accent">
-            {Array.from({ length: 6 }, (_, i) => now.getFullYear() - 3 + i).map(y => (
+            {[...new Set([year, ...Array.from({ length: 6 }, (_, i) => now.getFullYear() - 3 + i)])].sort().map(y => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>

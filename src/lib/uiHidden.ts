@@ -10,7 +10,7 @@ export const UI_HIDDEN = {
   aiAssistant: true,
   promo: true,
   buildingLedger: false, // false면 사이드바 지원사업「건축물대장 발급」+ /register/building-ledger
-  labor: true,
+  labor: false,
 } as const
 
 export const HIDDEN_MENU_PATHS: readonly string[] = [

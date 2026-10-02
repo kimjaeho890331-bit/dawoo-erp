@@ -15,13 +15,12 @@ describe('uiHidden', () => {
     expect(UI_HIDDEN.aiAssistant).toBe(true)
     expect(UI_HIDDEN.promo).toBe(true)
     expect(UI_HIDDEN.buildingLedger).toBe(false)
-    expect(UI_HIDDEN.labor).toBe(true)
+    expect(UI_HIDDEN.labor).toBe(false)
 
     expect(HIDDEN_MENU_PATHS).toEqual([
       '/documents',
       '/reports',
       '/kpi',
-      '/labor',
     ])
     expect(HIDDEN_MENU_PATHS).not.toContain('/register/building-ledger')
     expect(isHiddenMenuPath('/documents')).toBe(true)
@@ -30,8 +29,8 @@ describe('uiHidden', () => {
     expect(isHiddenMenuPath('/kpi')).toBe(true)
     expect(isHiddenMenuPath('/register/building-ledger')).toBe(false)
     expect(isHiddenMenuPath('/register/building-ledger/queue')).toBe(false)
-    expect(isHiddenMenuPath('/labor')).toBe(true)
-    expect(isHiddenMenuPath('/labor/export')).toBe(true)
+    expect(isHiddenMenuPath('/labor')).toBe(false)
+    expect(isHiddenMenuPath('/labor/export')).toBe(false)
 
     expect(isHiddenMenuPath('/register/small')).toBe(false)
     expect(isHiddenMenuPath('/calendar/work')).toBe(false)
@@ -51,7 +50,7 @@ describe('uiHidden', () => {
     expect(hiddenPageRedirect(true)).toBe('/dashboard')
     expect(hiddenPageRedirect(false)).toBeNull()
     expect(hiddenPageRedirect(UI_HIDDEN.buildingLedger)).toBeNull()
-    expect(hiddenPageRedirect(UI_HIDDEN.labor)).toBe('/dashboard')
+    expect(hiddenPageRedirect(UI_HIDDEN.labor)).toBeNull()
     expect(hiddenPageRedirect(UI_HIDDEN.documents)).toBe('/dashboard')
     expect(hiddenPageRedirect(UI_HIDDEN.reports)).toBe('/dashboard')
     expect(hiddenPageRedirect(UI_HIDDEN.kpi)).toBe('/dashboard')

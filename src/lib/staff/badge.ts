@@ -5,7 +5,7 @@
  * 여러 명이 붙은 일정은 "몇 명인지"가 한눈에 보여야 한다.
  *
  *   1명    →  태        (김태정)
- *   2명    →  태덕      (김태정, 김덕민)
+ *   2명    →  태/덕     (김태정, 김덕민 — 두 사람임이 바로 보이게 /로 끊는다)
  *   3명 이상 → 태+2     (첫 사람 + 나머지 인원수)
  *
  * 전체 이름은 바의 title(마우스 올림)에서 따로 보여준다.
@@ -25,6 +25,6 @@ export function staffInitial(name: string): string {
 export function staffBadgeLabel(names: string[]): string {
   if (names.length === 0) return ''
   if (names.length === 1) return staffInitial(names[0])
-  if (names.length === 2) return staffInitial(names[0]) + staffInitial(names[1])
+  if (names.length === 2) return `${staffInitial(names[0])}/${staffInitial(names[1])}`
   return `${staffInitial(names[0])}+${names.length - 1}`
 }

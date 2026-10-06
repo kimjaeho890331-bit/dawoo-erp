@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
+import { staffBadgeLabel } from '@/lib/staff/badge'
 import StaffColorPopover from './StaffColorPopover'
 import { UI_HIDDEN } from '@/lib/uiHidden'
 import { todayKST, todayMonthKST, todayDowKST } from '@/lib/utils/date'
@@ -341,8 +342,12 @@ export default function WorkCalendarPage() {
       // 다중 담당자: staff_ids 우선, 없으면 staff_id fallback
       const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
       const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean) as string[]
-      const sn = names.length === 0 ? undefined : names.length === 1 ? names[0] : `${names[0]} 외${names.length - 1}`
-      return { schedule: s, left: (si / 7) * 100, width: ((ei - si + 1) / 7) * 100, si, ei, staffName: sn }
+      // 배지는 좁아서 줄여 쓰고(태 / 태덕 / 태+2), 전체 이름은 title로 넘긴다.
+      return {
+        schedule: s, left: (si / 7) * 100, width: ((ei - si + 1) / 7) * 100, si, ei,
+        staffBadge: staffBadgeLabel(names),
+        staffName: names.join(', '),
+      }
     }).filter(Boolean) as any[]
   }, [filtered, month, staffList])
 
@@ -570,10 +575,10 @@ export default function WorkCalendarPage() {
                               }}
                               title={`${bar.staffName || ''} ${s.title}\n${s.memo || ''}`}>
                               <div className="flex items-center gap-1 truncate">
-                                {bar.staffName && (
-                                  <span className="shrink-0 w-[16px] h-[16px] rounded-full flex items-center justify-center text-[10px] font-bold"
+                                {bar.staffBadge && (
+                                  <span className={`shrink-0 h-[16px] min-w-[16px] rounded-full flex items-center justify-center text-[10px] font-bold leading-none ${bar.staffBadge.length > 1 ? 'px-1' : ''}`}
                                     style={{ backgroundColor: s.confirmed ? 'rgba(255,255,255,0.3)' : barColor, color: s.confirmed ? confirmedText : getContrastText(barColor) }}>
-                                    {bar.staffName.length >= 2 ? bar.staffName.charAt(1) : bar.staffName.charAt(0)}
+                                    {bar.staffBadge}
                                   </span>
                                 )}
                                 {s.start_date === s.end_date && s.start_time && (

@@ -950,13 +950,10 @@ function MobileCalendarView({
   const selectedDateObj = new Date(selectedDate + 'T00:00:00')
   const selectedDateLabel = `${selectedDateObj.getMonth() + 1}월 ${selectedDateObj.getDate()}일 (${dayNames[selectedDateObj.getDay()]})`
 
-  // Get staff name for a schedule
-  const getStaffName = (s: Schedule) => {
+  // 담당자 이름 목록. 배지(현/재)와 전체 이름 모두 여기서 나온다.
+  const getStaffNames = (s: Schedule): string[] => {
     const ids = (s.staff_ids && s.staff_ids.length > 0) ? s.staff_ids : (s.staff_id ? [s.staff_id] : [])
-    const names = ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean) as string[]
-    if (names.length === 0) return null
-    if (names.length === 1) return names[0]
-    return `${names[0]} 외${names.length - 1}`
+    return ids.map(id => staffList.find(st => st.id === id)?.name).filter(Boolean) as string[]
   }
 
   // Get schedule time label
@@ -1085,7 +1082,8 @@ function MobileCalendarView({
               const isSameDay = s.start_date === s.end_date
               const isTimeType = isSameDay && !!s.start_time
               const isRangeType = !isSameDay
-              const staffName = getStaffName(s)
+              const staffNames = getStaffNames(s)
+              const staffBadge = staffBadgeLabel(staffNames)
               const color = getColor(s)
               const typeLabel = TYPE_LABELS[s.schedule_type] || s.schedule_type
 
@@ -1096,8 +1094,18 @@ function MobileCalendarView({
                   onClick={() => onScheduleClick(s)}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Color indicator */}
-                    <span className="shrink-0 mt-1 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                    {/* 담당자 배지 — 데스크톱 일정 바와 같은 규칙(현 / 현재 / 승+2).
+                        담당자 색을 그대로 쓰므로 예전 색 점 역할까지 겸한다. */}
+                    {staffBadge ? (
+                      <span
+                        className={`shrink-0 mt-0.5 h-[18px] min-w-[18px] rounded-full flex items-center justify-center text-[10px] font-bold leading-none ${staffBadge.length > 1 ? 'px-1' : ''}`}
+                        style={{ backgroundColor: color, color: getContrastText(color) }}
+                      >
+                        {staffBadge}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 mt-1 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                    )}
 
                     <div className="flex-1 min-w-0">
                       {/* Time + Title */}
@@ -1110,8 +1118,12 @@ function MobileCalendarView({
 
                       {/* Staff + Type */}
                       <div className="flex items-center gap-2 mt-0.5">
-                        {staffName && <span className="text-[11px] text-txt-secondary">{staffName}</span>}
-                        {staffName && <span className="text-txt-quaternary">·</span>}
+                        {/* 모바일은 마우스 올림이 없어 줄임 표시만 두면 누군지 알 수 없다.
+                            목록은 자리가 있으니 전체 이름을 그대로 적는다. */}
+                        {staffNames.length > 0 && (
+                          <span className="text-[11px] text-txt-secondary truncate">{staffNames.join(', ')}</span>
+                        )}
+                        {staffNames.length > 0 && <span className="text-txt-quaternary">·</span>}
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                           s.schedule_type === 'project' ? 'bg-blue-50 text-blue-600' :
                           s.schedule_type === 'ai' ? 'bg-cyan-50 text-cyan-700' :

@@ -223,27 +223,29 @@ export default function WeeklyIntakeCard() {
 
       {/* ===== 이번 주 접수 내역 표 ===== */}
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden flex flex-col">
-        <div className="px-4 py-3 border-b border-border-tertiary flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-txt-primary">이번 주 접수 내역</span>
-            <span className="text-[11px] text-txt-tertiary">{thisWeekRows.length}건</span>
+        {/* 폰에서는 제목줄과 탭줄을 나눈다. 한 줄에 다 넣으면 폭이 모자라
+            "1건"이 1/건으로 쪼개지고 탭 글자까지 세로로 깨진다. */}
+        <div className="px-4 py-3 border-b border-border-tertiary flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[13px] font-semibold text-txt-primary whitespace-nowrap">이번 주 접수 내역</span>
+            <span className="text-[11px] text-txt-tertiary whitespace-nowrap">{thisWeekRows.length}건</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
             <div className="flex gap-1">
               {tabs.map(t => (
                 <button key={t.key} onClick={() => setFilter(t.key)}
-                  className={`text-[11px] px-2.5 py-1 rounded-md transition-colors ${filter === t.key ? 'bg-accent text-white' : 'text-txt-secondary border border-border-primary hover:bg-surface-tertiary'}`}>
+                  className={`text-[11px] px-2.5 py-1 rounded-md transition-colors whitespace-nowrap shrink-0 ${filter === t.key ? 'bg-accent text-white' : 'text-txt-secondary border border-border-primary hover:bg-surface-tertiary'}`}>
                   {t.label}
                 </button>
               ))}
             </div>
-            <a href="/register/small" className="text-[12px] text-accent hover:underline flex items-center gap-0.5 shrink-0">접수대장 <ArrowRight size={13} /></a>
+            <a href="/register/small" className="text-[12px] text-accent hover:underline flex items-center gap-0.5 shrink-0 whitespace-nowrap">접수대장 <ArrowRight size={13} /></a>
           </div>
         </div>
 
         {/* 헤더 행 */}
-        <div className="grid grid-cols-[40px_44px_minmax(0,1fr)_44px_58px_60px_84px] gap-1.5 px-4 py-2 text-[11px] text-txt-tertiary border-b border-border-tertiary">
-          <span>날짜</span><span>분류</span><span>현장/빌라</span><span>지역</span><span className="text-right">공사비</span><span>상태</span><span>담당</span>
+        <div className="grid grid-cols-[34px_38px_minmax(0,1fr)_60px] sm:grid-cols-[40px_44px_minmax(0,1fr)_44px_58px_60px_84px] gap-1.5 px-4 py-2 text-[11px] text-txt-tertiary border-b border-border-tertiary">
+          <span>날짜</span><span>분류</span><span className="truncate">현장/빌라</span><span className="hidden sm:block">지역</span><span className="hidden sm:block text-right">공사비</span><span className="hidden sm:block">상태</span><span>담당</span>
         </div>
 
         <div className="max-h-[300px] overflow-y-auto">
@@ -255,7 +257,7 @@ export default function WeeklyIntakeCard() {
             const cat = catOf(r)
             const href = cat === '수도' ? `/register/water?project=${r.id}` : `/register/small?project=${r.id}`
             return (
-              <a key={r.id} href={href} className="grid grid-cols-[40px_44px_minmax(0,1fr)_44px_58px_60px_84px] gap-1.5 items-center px-4 min-h-[34px] py-1 border-b border-border-tertiary last:border-0 hover:bg-surface-tertiary transition-colors">
+              <a key={r.id} href={href} className="grid grid-cols-[34px_38px_minmax(0,1fr)_60px] sm:grid-cols-[40px_44px_minmax(0,1fr)_44px_58px_60px_84px] gap-1.5 items-center px-4 min-h-[34px] py-1 border-b border-border-tertiary last:border-0 hover:bg-surface-tertiary transition-colors">
                 <span className="text-[11px] text-txt-tertiary">{dateLabel(r.created_at)}</span>
                 <span className="text-[10.5px] font-medium px-0 py-0.5 rounded text-center"
                   style={cat === '수도' ? { color: C_WATER_TX, background: C_WATER_BG }
@@ -264,11 +266,11 @@ export default function WeeklyIntakeCard() {
                   {cat ?? '기타'}
                 </span>
                 <span className="text-[12.5px] text-txt-primary truncate">{buildingLabel(r)}</span>
-                <span className="text-[11px] text-txt-secondary truncate">{regionLabel(r)}</span>
-                <span className="text-[11px] text-txt-primary text-right tabular-nums">{costLabel(r.total_cost)}</span>
-                <span className="text-[11px] text-txt-secondary truncate" title={r.status ?? ''}>{r.status ?? '—'}</span>
+                <span className="hidden sm:block text-[11px] text-txt-secondary truncate">{regionLabel(r)}</span>
+                <span className="hidden sm:block text-[11px] text-txt-primary text-right tabular-nums">{costLabel(r.total_cost)}</span>
+                <span className="hidden sm:block text-[11px] text-txt-secondary truncate" title={r.status ?? ''}>{r.status ?? '—'}</span>
                 <span className="flex items-center gap-1 min-w-0" title={r.staff?.name ?? '미지정'}>
-                  <span className="w-[18px] h-[18px] rounded-full bg-surface-tertiary text-txt-secondary text-[9.5px] flex items-center justify-center shrink-0">{r.staff?.name?.charAt(0) ?? '–'}</span>
+                  <span className="hidden sm:flex w-[18px] h-[18px] rounded-full bg-surface-tertiary text-txt-secondary text-[9.5px] items-center justify-center shrink-0">{r.staff?.name?.charAt(0) ?? '–'}</span>
                   <span className="text-[11px] text-txt-secondary truncate">{r.staff?.name ?? '미지정'}</span>
                 </span>
               </a>

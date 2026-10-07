@@ -157,14 +157,16 @@ export default function FunnelCard() {
   )
 
   const funnelRow = (label: string, color: string, bg: string, tx: string, f: FunnelStat, withApprove: boolean) => (
-    <div className="grid grid-cols-[52px_repeat(4,1fr)] gap-3 items-center py-2 border-b border-border-tertiary last:border-0">
+    <div className="grid grid-cols-[44px_repeat(4,1fr)] gap-1.5 sm:grid-cols-[52px_repeat(4,1fr)] sm:gap-3 items-center py-2 border-b border-border-tertiary last:border-0">
       <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded text-center" style={{ color: tx, background: bg }}>{label}</span>
       {stageCell(f.calls, f.calls, color, true)}
       {stageCell(f.meets, f.calls, color, false)}
       {stageCell(f.intakes, f.calls, color, false)}
       {withApprove ? stageCell(f.approved, f.calls, color, false) : (
-        <div className="text-[11px] text-txt-quaternary leading-snug" title="수도는 별도 승인 절차가 없어 신청 접수가 곧 승인입니다">
-          신청 = 승인
+        <div className="text-[10px] sm:text-[11px] text-txt-quaternary leading-snug whitespace-nowrap" title="수도는 별도 승인 절차가 없어 신청 접수가 곧 승인입니다">
+          {/* 폰은 자리가 좁아 띄어쓰기를 뺀다. PC는 원래 표기 유지 */}
+          <span className="sm:hidden">신청=승인</span>
+          <span className="hidden sm:inline">신청 = 승인</span>
         </div>
       )}
     </div>
@@ -222,12 +224,12 @@ export default function FunnelCard() {
       </div>
 
       {/* 단계 헤더 */}
-      <div className="grid grid-cols-[52px_repeat(4,1fr)] gap-3 pt-2.5 pb-0.5">
+      <div className="grid grid-cols-[44px_repeat(4,1fr)] gap-1.5 sm:grid-cols-[52px_repeat(4,1fr)] sm:gap-3 pt-2.5 pb-0.5">
         <span />
-        <span className="text-[11px] text-txt-tertiary">문의 (콜)</span>
-        <span className="text-[11px] text-txt-tertiary">실측 (미팅)</span>
-        <span className="text-[11px] text-txt-tertiary">신청 (접수)</span>
-        <span className="text-[11px] text-txt-tertiary">승인</span>
+        <span className="text-[11px] text-txt-tertiary whitespace-nowrap">문의<span className="hidden sm:inline"> (콜)</span></span>
+        <span className="text-[11px] text-txt-tertiary whitespace-nowrap">실측<span className="hidden sm:inline"> (미팅)</span></span>
+        <span className="text-[11px] text-txt-tertiary whitespace-nowrap">신청<span className="hidden sm:inline"> (접수)</span></span>
+        <span className="text-[11px] text-txt-tertiary whitespace-nowrap">승인</span>
       </div>
 
       {/* 퍼널 2줄 */}

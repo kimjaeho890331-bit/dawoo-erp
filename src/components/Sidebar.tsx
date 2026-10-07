@@ -6,85 +6,42 @@ import { supabase } from '@/lib/supabase'
 import { HIDDEN_MENU_PATHS, UI_HIDDEN } from '@/lib/uiHidden'
 import { canSeeLedger } from '@/lib/ledgerAccess'
 import { isKimJaehoStaffId } from '@/lib/mySitesAccess'
-import {
-  canSeePrivateIds,
-  PRIVATE_IDS_MENU,
-  PRIVATE_IDS_PATH,
-  SHARED_IDS_MENU,
-  SHARED_IDS_PATH,
-} from '@/lib/credentialAccess'
+import { canSeePrivateIds, PRIVATE_IDS_PATH } from '@/lib/credentialAccess'
+import { MENU_GROUPS, BOTTOM_ITEMS } from '@/lib/menu/menuItems'
+import SvgIcon from '@/components/common/SvgIcon'
+import { readFavorites, toggleFavorite, subscribeFavorites, MAX_FAVORITES } from '@/lib/menu/favorites'
+import { toast } from '@/lib/toast'
 
-const menuGroups: {
+
+/**
+ * 메뉴 오른쪽 끝 별. 채워져 있으면 즐겨찾기다.
+ * 링크 안이 아니라 옆에 두어, 눌러도 페이지가 바뀌지 않는다.
+ */
+function FavoriteStar({ path, name, on, onToggle }: {
+  path: string
   name: string
-  hideHeading?: boolean
-  items: { name: string; path: string; icon: string }[]
-}[] = [
-  {
-    name: '지원사업',
-    items: [
-      { name: '소규모 접수대장', path: '/register/small', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-      { name: '수도공사 접수대장', path: '/register/water', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-      { name: '건축물대장 발급', path: '/register/building-ledger', icon: 'M3 21h18M9 8h1m-1 4h1m-1 4h1m4-8h1m-1 4h1m-1 4h1M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16' }, // UI_HIDDEN.buildingLedger===false 이면 이 메뉴가 보인다
-    ]
-  },
-  {
-    name: '현장',
-    items: [
-      { name: '현장관리', path: '/sites', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
-    ]
-  },
-  {
-    name: '업무',
-    items: [
-      { name: '업무 캘린더', path: '/calendar/work', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-      { name: '지출결의서', path: '/approval', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-      { name: '지출관리', path: '/expenses', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
-      { name: '일용직 근무관리', path: '/labor', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
-      { name: '연차신청', path: '/leave', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    ]
-  },
-  {
-    name: '데이터',
-    items: [
-      { name: '거래처 DB', path: '/vendors', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
-      { name: 'A/S 관리', path: '/as', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
-    ]
-  },
-  {
-    name: '세무/회계',
-    items: [
-      { name: '회계달력', path: '/accounting-cal', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
-      { name: '경리', path: '/ledger', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
-    ]
-  },
-  {
-    name: '관리',
-    items: [
-      { name: '서류함', path: '/documents', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
-      { name: '직원관리', path: '/staff', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
-      { name: SHARED_IDS_MENU, path: SHARED_IDS_PATH, icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
-      { name: PRIVATE_IDS_MENU, path: PRIVATE_IDS_PATH, icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
-    ]
-  },
-  {
-    name: '',
-    hideHeading: true,
-    items: [
-      { name: '.', path: '/my-sites', icon: '' },
-    ],
-  },
-]
-
-const bottomItems = [
-  { name: '공지사항', path: '/notice', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
-  { name: '설정', path: '/settings', icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' },
-]
-
-function SvgIcon({ d, className }: { d: string; className?: string }) {
+  on: boolean
+  onToggle: (path: string) => void
+}) {
   return (
-    <svg className={className || 'w-[18px] h-[18px]'} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
-    </svg>
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(path) }}
+      aria-pressed={on}
+      aria-label={`${name} 즐겨찾기 ${on ? '해제' : '추가'}`}
+      title={on ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+      className="shrink-0 mr-1 p-1 rounded-md transition-colors hover:bg-[rgba(255,255,255,0.08)]"
+    >
+      <svg
+        className="w-[15px] h-[15px]"
+        viewBox="0 0 24 24"
+        fill={on ? '#e2a33f' : 'none'}
+        stroke={on ? '#e2a33f' : '#87867f'}
+        strokeWidth={1.6}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.5a.56.56 0 011.04 0l2.13 4.32c.08.17.24.28.42.31l4.77.69a.56.56 0 01.31.96l-3.45 3.36a.56.56 0 00-.16.5l.81 4.75a.56.56 0 01-.81.59l-4.27-2.24a.56.56 0 00-.52 0l-4.27 2.24a.56.56 0 01-.81-.59l.81-4.75a.56.56 0 00-.16-.5L3.87 9.78a.56.56 0 01.31-.96l4.77-.69a.56.56 0 00.42-.31L11.48 3.5z" />
+      </svg>
+    </button>
   )
 }
 
@@ -122,8 +79,26 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     return () => { cancelled = true }
   }, [pathname])
 
+  // 즐겨찾기는 이 기기에만 저장된다. 서버 렌더에는 값이 없으므로
+  // 빈 배열로 시작하고, 화면이 뜬 뒤 읽어온다(다른 탭 변경도 따라간다).
+  const [favorites, setFavorites] = useState<string[]>([])
+  useEffect(() => {
+    const sync = () => setFavorites(readFavorites())
+    sync()
+    return subscribeFavorites(sync)
+  }, [])
+
+  const handleToggleFavorite = (path: string) => {
+    const result = toggleFavorite(path)
+    if (!result.ok) {
+      toast.info(`즐겨찾기는 ${MAX_FAVORITES}개까지입니다. 하나를 빼고 다시 눌러주세요.`)
+      return
+    }
+    setFavorites(result.favorites)
+  }
+
   const hiddenPaths = new Set<string>(HIDDEN_MENU_PATHS)
-  const visibleGroups = menuGroups
+  const visibleGroups = MENU_GROUPS
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
@@ -230,28 +205,39 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   const active = isActive(item.path)
                   const isDot = item.name === '.'
                   return (
-                    <Link
-                      key={item.path}
-                      href={item.path}
-                      onClick={onClose}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors relative ${
-                        active
-                          ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
-                          : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
-                      }`}
-                    >
-                      {active && (
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#c96442] rounded-l" />
+                    <div key={item.path} className="relative flex items-center">
+                      <Link
+                        href={item.path}
+                        onClick={onClose}
+                        className={`flex flex-1 min-w-0 items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
+                          active
+                            ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+                            : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
+                        }`}
+                      >
+                        {active && (
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#c96442] rounded-l" />
+                        )}
+                        {isDot ? (
+                          <span className={active ? 'font-medium' : ''}>.</span>
+                        ) : (
+                          <>
+                            <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-[#c96442]' : ''}`} />
+                            {!collapsed && <span className={`truncate ${active ? 'font-medium' : ''}`}>{item.name}</span>}
+                          </>
+                        )}
+                      </Link>
+                      {/* 별은 링크 바깥에 둔다 — 안에 넣으면 누를 때 페이지까지 이동한다.
+                          접은 사이드바와 숨은 '.' 항목에는 달지 않는다. */}
+                      {!collapsed && !isDot && (
+                        <FavoriteStar
+                          path={item.path}
+                          name={item.name}
+                          on={favorites.includes(item.path)}
+                          onToggle={handleToggleFavorite}
+                        />
                       )}
-                      {isDot ? (
-                        <span className={active ? 'font-medium' : ''}>.</span>
-                      ) : (
-                        <>
-                          <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-[#c96442]' : ''}`} />
-                          {!collapsed && <span className={active ? 'font-medium' : ''}>{item.name}</span>}
-                        </>
-                      )}
-                    </Link>
+                    </div>
                   )
                 })}
               </div>
@@ -261,20 +247,29 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* 하단 */}
         <div className="border-t border-white/[0.08] px-2 py-2 space-y-0.5">
-          {bottomItems.map(item => (
-            <Link
-              key={item.path}
-              href={item.path}
-              onClick={onClose}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
-                isActive(item.path)
-                  ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
-                  : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
-              }`}
-            >
-              <SvgIcon d={item.icon} />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
+          {BOTTOM_ITEMS.map(item => (
+            <div key={item.path} className="flex items-center">
+              <Link
+                href={item.path}
+                onClick={onClose}
+                className={`flex flex-1 min-w-0 items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
+                  isActive(item.path)
+                    ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+                    : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
+                }`}
+              >
+                <SvgIcon d={item.icon} />
+                {!collapsed && <span className="truncate">{item.name}</span>}
+              </Link>
+              {!collapsed && (
+                <FavoriteStar
+                  path={item.path}
+                  name={item.name}
+                  on={favorites.includes(item.path)}
+                  onToggle={handleToggleFavorite}
+                />
+              )}
+            </div>
           ))}
         </div>
       </aside>

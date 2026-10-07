@@ -14,6 +14,7 @@ import FirstVisitModal from './FirstVisitModal'
 import SitesTimeline from './SitesTimeline'
 import TaskDetailModal from './TaskDetailModal'
 import WeeklyIntakeCard from './WeeklyIntakeCard'
+import FavoriteShortcuts from './FavoriteShortcuts'
 import FunnelCard from './FunnelCard'
 import type { BriefingResponse, Task, WeeklyReport } from '@/types'
 
@@ -342,6 +343,10 @@ export default function DashboardPage() {
 
       {/* ===== 모바일 레이아웃 (md 미만) — 아코디언 ===== */}
       <div className="md:hidden px-4 py-4 space-y-2.5 bg-page min-h-screen">
+        {/* 즐겨찾기 바로가기 — 왼쪽 메뉴에서 별을 누른 항목(최대 4개).
+            지정한 게 없으면 아무것도 그리지 않는다. */}
+        <FavoriteShortcuts />
+
         {/* 헤더 */}
         <div className="bg-surface rounded-xl border border-border-primary px-4 py-4 border-l-4 border-l-accent">
           <h1 className="text-[18px] font-semibold tracking-[-0.3px] text-txt-primary">{todayLabel}</h1>

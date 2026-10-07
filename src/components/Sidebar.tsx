@@ -16,6 +16,9 @@ import { toast } from '@/lib/toast'
 /**
  * 메뉴 오른쪽 끝 별. 채워져 있으면 즐겨찾기다.
  * 링크 안이 아니라 옆에 두어, 눌러도 페이지가 바뀌지 않는다.
+ *
+ * 폰(md 미만)에서만 보인다. 즐겨찾기는 모바일 대시보드 맨 위에만 뜨므로
+ * PC에서는 지정해도 쓸 데가 없다 — 사이드바가 두 화면 공용이라 별도로 막는다.
  */
 function FavoriteStar({ path, name, on, onToggle }: {
   path: string
@@ -30,7 +33,7 @@ function FavoriteStar({ path, name, on, onToggle }: {
       aria-pressed={on}
       aria-label={`${name} 즐겨찾기 ${on ? '해제' : '추가'}`}
       title={on ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-      className="shrink-0 mr-1 p-1 rounded-md transition-colors hover:bg-[rgba(255,255,255,0.08)]"
+      className="md:hidden shrink-0 mr-1 p-1 rounded-md transition-colors hover:bg-[rgba(255,255,255,0.08)]"
     >
       <svg
         className="w-[15px] h-[15px]"

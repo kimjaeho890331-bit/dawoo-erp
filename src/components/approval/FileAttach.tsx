@@ -2,6 +2,7 @@
 
 import { useState, DragEvent } from 'react'
 import { Paperclip, X, Plus } from 'lucide-react'
+import { uploadToStorage } from '@/lib/storage/uploadClient'
 
 export interface AttachedFile {
   file_name: string
@@ -50,20 +51,19 @@ export default function FileAttach({ files, onChange }: Props) {
           continue
         }
 
-        const fd = new FormData()
-        fd.append('file', file)
-        fd.append('storagePath', `approval/${Date.now()}_${file.name}`)
-
-        const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
-        const json = await res.json()
-        if (!res.ok) { setError(json.error ?? '업로드 실패'); continue }
-
-        added.push({ file_name: file.name, file_url: json.url, size: file.size, source: 'manual' })
+        // 한 파일이 실패해도 나머지는 계속 올리고, 왜 실패했는지 그대로 보여 준다
+        try {
+          const { url } = await uploadToStorage(file, `approval/${Date.now()}_${file.name}`)
+          added.push({ file_name: file.name, file_url: url, size: file.size, source: 'manual' })
+        } catch (err) {
+          const reason = err instanceof TypeError
+            ? '파일을 읽거나 보내지 못했습니다. 파일을 다시 선택해 주세요'
+            : err instanceof Error ? err.message : '업로드 실패'
+          setError(`${file.name}: ${reason}`)
+        }
       }
 
       onChange([...files, ...added])
-    } catch {
-      setError('업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setBusy(false)
     }

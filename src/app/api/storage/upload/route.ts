@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser } from '@/lib/auth'
 import { uploadFile, ensureProjectFolder, findOrCreateFolder } from '@/lib/google-drive'
-import { safeStoragePath } from '@/lib/utils/storagePath'
+import { checkUpload } from '@/lib/storage/uploadRules'
 
 export const maxDuration = 30
 
@@ -11,37 +11,6 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-const ALLOWED_MIME_TYPES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif',
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',  // .xls
-  'application/msword',        // .doc
-  'application/haansofthwp',   // .hwp
-  'application/x-hwp',         // .hwp (alternative)
-  'application/vnd.ms-powerpoint',  // .ppt
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',  // .pptx
-  'application/octet-stream',  // 브라우저가 타입 모를 때 (hwp, heic 등)
-  'text/csv', 'text/plain',
-]
-/**
- * MIME 타입만으로는 막을 수 없어서 확장자 허용목록을 함께 둔다.
- * 브라우저가 알려주는 file.type은 PC의 확장자 연결에 따라 달라진다 —
- * xlsx·docx·pptx는 실제로 zip이라, 압축 프로그램이 확장자를 잡고 있는 PC에서는
- * `application/x-zip-compressed`로 넘어와 정상 파일이 거부됐다.
- * 어느 한쪽만 통과해도 허용한다(둘 다 검사하면 같은 문제가 재발한다).
- */
-const ALLOWED_EXTENSIONS = [
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif',
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'hwp', 'hwpx',
-  'csv', 'txt',
-]
-const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
-const ALLOWED_PATH_PREFIXES = [
-  'projects/', 'templates/', 'attachments/', 'sites/', 'approval/',
-  'card-statements/', 'staff/', 'vendors/',
-]
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
@@ -58,25 +27,12 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: '파일과 경로가 필요합니다' }, { status: 400 })
     }
 
-    // 파일 크기 검증
-    if (file.size > MAX_FILE_SIZE) {
-      return Response.json({ error: '파일 크기는 20MB 이하만 가능합니다' }, { status: 400 })
+    // 크기·형식·경로 검증 (큰 파일용 /api/storage/sign-upload 와 같은 규칙)
+    const check = checkUpload(file, storagePath)
+    if (!check.ok) {
+      return Response.json({ error: check.error }, { status: check.status })
     }
-
-    // 파일 타입 검증 — MIME 또는 확장자 중 하나만 맞아도 통과시킨다
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-    if (!ALLOWED_MIME_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(ext)) {
-      return Response.json(
-        { error: `허용되지 않는 파일 형식입니다 (${ext || '확장자 없음'})` },
-        { status: 400 },
-      )
-    }
-
-    // 경로 검증 (Path Traversal 방지 + Storage가 거부하는 문자 치환)
-    const safePath = safeStoragePath(storagePath)
-    if (!ALLOWED_PATH_PREFIXES.some(prefix => safePath.startsWith(prefix))) {
-      return Response.json({ error: '허용되지 않는 저장 경로입니다' }, { status: 403 })
-    }
+    const safePath = check.safePath
 
     const buffer = Buffer.from(await file.arrayBuffer())
 

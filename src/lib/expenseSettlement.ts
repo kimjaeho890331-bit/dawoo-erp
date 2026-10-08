@@ -1,6 +1,7 @@
 import { completionMargin } from './expenseCategory'
 import {
   isSiteCompleted,
+  isSiteInSettlement,
   projectLabel,
   siteContractSource,
   workSourceLabel,
@@ -35,6 +36,8 @@ export type SettlementGroup = {
   source: SettlementSource
   sourceLabel: string
   completed: boolean
+  /** 아직 공사 중인 현장. 정산 화면에 올리지 않는다 — 현장관리에서 본다. */
+  inProgress: boolean
   total: number
   count: number
 }
@@ -83,6 +86,7 @@ export function buildSettlementGroups(opts: {
         source,
         sourceLabel: workSourceLabel(source),
         completed: isSiteCompleted(site?.status),
+        inProgress: !isSiteInSettlement(site?.status),
         total: amount,
         count: 1,
       })
@@ -97,6 +101,7 @@ export function buildSettlementGroups(opts: {
         source: 'project',
         sourceLabel: workSourceLabel('project'),
         completed: false,
+        inProgress: false,
         total: amount,
         count: 1,
       })
@@ -109,6 +114,7 @@ export function buildSettlementGroups(opts: {
       source: 'none',
       sourceLabel: '현장 없음',
       completed: false,
+      inProgress: false,
       total: amount,
       count: 1,
     })
@@ -126,6 +132,7 @@ export function filterSettlementGroups(
   const includeCompleted = opts.includeCompleted ?? false
 
   return groups.filter(g => {
+    if (g.inProgress) return false
     if (g.completed && !includeCompleted) return false
     if (source === 'bid' && g.source !== 'bid') return false
     if (source === 'private' && g.source !== 'private') return false

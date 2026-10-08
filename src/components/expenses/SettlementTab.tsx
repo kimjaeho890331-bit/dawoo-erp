@@ -54,7 +54,7 @@ export default function SettlementTab({
   return (
     <div className="space-y-3">
       <p className="text-[12px] text-txt-tertiary">
-        지출결의서에 등록된 금액만 현장·지원사업별로 합산합니다. 준공 가정산의 노무는 「{LABOR_CATEGORY}」만 뺍니다.
+        공사가 끝나 준공서류로 넘어온 현장의 정산을 검토합니다. 공사 중인 현장의 지출은 현장관리에서 봅니다. 준공 가정산의 노무는 「{LABOR_CATEGORY}」만 뺍니다.
       </p>
 
       {review.length > 0 && (

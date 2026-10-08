@@ -37,6 +37,12 @@ export type WorkTargetHit = {
 /** sites.status 완료류. 최소 정산완료 — 그 외 완료 값은 여기만 늘린다. */
 export const SITE_COMPLETED_STATUSES = ['정산완료'] as const
 
+/**
+ * 정산 화면에 올라오는 단계. 공사가 끝나 준공서류로 넘어온 현장부터 정산을 검토한다 (2026-10-08 대표).
+ * 진행 중(계약·착공·공사중) 현장의 지출은 현장관리 「지출」 탭에서 본다.
+ */
+export const SITE_SETTLEMENT_STATUSES = ['준공서류'] as const
+
 export const WORK_SOURCE_FILTERS: { key: WorkSourceFilter; label: string }[] = [
   { key: 'all', label: '전체' },
   { key: 'bid', label: CONTRACT_TYPE_BID },
@@ -75,6 +81,12 @@ export function workTargetLabel(opts: {
 
 export function isSiteCompleted(status?: string | null): boolean {
   return SITE_COMPLETED_STATUSES.includes((status ?? '').trim() as (typeof SITE_COMPLETED_STATUSES)[number])
+}
+
+/** 정산 검토 대상(준공서류) 또는 정산완료. 그 외는 진행 중이라 정산에 올리지 않는다. */
+export function isSiteInSettlement(status?: string | null): boolean {
+  const v = (status ?? '').trim()
+  return isSiteCompleted(v) || SITE_SETTLEMENT_STATUSES.includes(v as (typeof SITE_SETTLEMENT_STATUSES)[number])
 }
 
 export function siteContractSource(contractType?: string | null): WorkSiteSource {

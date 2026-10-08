@@ -452,7 +452,7 @@ export default function ReportsPage() {
       const paras: string[] = []
       paras.push(`활성 현장 ${activeSites.length}곳, 이번 주 현장일지 ${weekLogs.length}건 작성되었습니다.`)
       if (activeSites.length > 0 && weekLogs.length === 0) {
-        paras.push('※ 공사 중인 현장이 있으나 이번 주 현장일지가 하나도 없습니다. 현장 소장에게 일지 작성을 독려해주세요.')
+        paras.push('※ 공사 중인 현장이 있으나 이번 주 현장일지가 하나도 없습니다. 현장대리인에게 일지 작성을 독려해주세요.')
       }
       if (openAs.length > 0) {
         paras.push(`A/S 미완료 ${openAs.length}건이 누적 중입니다.${openAs.length >= 3 ? ' 3건 이상 누적되어 하자 처리 속도 개선이 필요합니다.' : ''}`)

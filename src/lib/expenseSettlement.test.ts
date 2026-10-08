@@ -10,8 +10,9 @@ import {
 } from './expenseSettlement'
 
 const sites = [
-  { id: 's-bid', name: '잠원초', contract_type: '입찰', status: '공사중' },
-  { id: 's-priv', name: '화서동 단독', contract_type: '수의계약', status: '착공' },
+  { id: 's-bid', name: '잠원초', contract_type: '입찰', status: '준공서류' },
+  { id: 's-priv', name: '화서동 단독', contract_type: '수의계약', status: '준공서류' },
+  { id: 's-run', name: '공사 중 현장', contract_type: '입찰', status: '공사중' },
   { id: 's-done', name: '정산된 학교', contract_type: '입찰', status: '정산완료' },
   { id: 's-null', name: '미분류 현장', contract_type: null, status: '공사중' },
 ]
@@ -27,6 +28,7 @@ const expenses = [
   { id: 'e4', site_id: 's-done', project_id: null, amount: 900, title: '완료분', expense_date: '2026-07-01' },
   { id: 'e5', site_id: null, project_id: null, amount: 50, title: '미지정', expense_date: '2026-09-03' },
   { id: 'e6', site_id: 's-priv', project_id: null, amount: 300, title: '수의', expense_date: '2026-09-04' },
+  { id: 'e7', site_id: 's-run', project_id: null, amount: 700, title: '진행 중', expense_date: '2026-09-05' },
 ]
 
 describe('expenseSettlement', () => {
@@ -68,6 +70,14 @@ describe('expenseSettlement', () => {
     expect(filterSettlementGroups(groups, { source: 'private' }).map(g => g.id)).toEqual(['s-priv'])
     expect(filterSettlementGroups(groups, { source: 'project' }).map(g => g.id)).toEqual(['p1'])
     expect(filterSettlementGroups(groups, { query: '잠원' }).map(g => g.id)).toEqual(['s-bid'])
+  })
+
+  it('공사 중인 현장은 정산에 올리지 않는다 — 완료 포함이어도', () => {
+    const groups = buildSettlementGroups({ expenses, sites, projects })
+    expect(groups.find(g => g.key === 'site:s-run')?.inProgress).toBe(true)
+    expect(filterSettlementGroups(groups, {}).map(g => g.key)).not.toContain('site:s-run')
+    expect(filterSettlementGroups(groups, { includeCompleted: true }).map(g => g.key)).not.toContain('site:s-run')
+    expect(filterSettlementGroups(groups, {}).map(g => g.key)).toContain('site:s-bid')
   })
 
   it('펼친 내역은 그 그룹의 지출만, 날짜 최신이 위', () => {

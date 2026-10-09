@@ -939,7 +939,7 @@ function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () =
   const handleCopy = () => {
     if (!generatedCode) return
     // 예전 메시지의 /invite/코드 링크는 없는 화면이었다. 실제로는 텔레그램 봇에 /start 코드를 보내야 연결된다.
-    const msg = `[다우건설 ERP 텔레그램 연결]\n${name ? `${name}님, ` : ''}텔레그램에서 회사 ERP 봇을 열고 아래 한 줄을 그대로 보내 주세요.\n\n/start ${generatedCode}\n\n연결되면 텔레그램으로 ERP 알림을 받고 AI 비서와 대화할 수 있습니다. (${daysValid}일 안에 한 번만 쓸 수 있습니다)`
+    const msg = `[다우건설 ERP 텔레그램 연결]\n${name ? `${name}님, ` : ''}텔레그램에서 회사 ERP 봇을 열고 아래 한 줄을 그대로 보내 주세요.\n\n/start ${generatedCode}\n\n연결되면 텔레그램으로 입금 내용을 보내 수금 처리하거나, 현장 사진을 접수건에 올릴 수 있습니다. (${daysValid}일 안에 한 번만 쓸 수 있습니다)`
     navigator.clipboard.writeText(msg)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -963,7 +963,8 @@ function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () =
           <div className="p-5 space-y-4">
             {/* 예전 문구(받은 직원이 본인 정보를 직접 등록)는 사실이 아니었다 — 이 코드는 텔레그램 연결에만 쓰인다 */}
             <div className="space-y-1.5 text-[12px] text-txt-secondary leading-relaxed">
-              <p>직원의 텔레그램을 회사 ERP 봇과 연결하는 코드입니다. 연결되면 직원이 텔레그램으로 ERP 알림을 받고 AI 비서와 대화할 수 있습니다.</p>
+              {/* 봇이 먼저 알림을 보내는 기능은 없다(결재 알림은 웹푸시). 실제로 되는 일만 적는다 */}
+              <p>직원의 텔레그램을 회사 ERP 봇과 연결하는 코드입니다. 연결되면 직원이 텔레그램으로 입금 내용을 보내 수금 처리하거나, 현장 사진을 접수건에 올릴 수 있습니다.</p>
               <p className="text-txt-tertiary">직원 정보를 새로 등록하는 기능은 아닙니다. 아래 목록에 있는 직원만 연결할 수 있습니다.</p>
             </div>
             <div>

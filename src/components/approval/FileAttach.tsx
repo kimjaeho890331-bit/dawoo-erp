@@ -29,8 +29,8 @@ export default function FileAttach({ files, onChange }: Props) {
   const [over, setOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const upload = async (list: FileList | null) => {
-    if (!list?.length) return
+  const upload = async (list: File[]) => {
+    if (!list.length) return
     setError(null)
 
     if (files.length + list.length > MAX_FILES) {
@@ -42,7 +42,7 @@ export default function FileAttach({ files, onChange }: Props) {
     const added: AttachedFile[] = []
 
     try {
-      for (const file of Array.from(list)) {
+      for (const file of list) {
         const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
         if (!ALLOWED_EXT.includes(ext)) {
           setError(`${file.name}: 허용되지 않는 형식입니다`)
@@ -74,7 +74,7 @@ export default function FileAttach({ files, onChange }: Props) {
   const onDrop = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
     setOver(false)
-    upload(e.dataTransfer.files)
+    upload(Array.from(e.dataTransfer.files))
   }
 
   return (
@@ -98,7 +98,13 @@ export default function FileAttach({ files, onChange }: Props) {
         <span className="text-[12px] text-txt-tertiary">
           사진(jpg·png·gif) 또는 문서(pdf·hwp·엑셀·워드·파워포인트) · 20MB 미만 · 최대 {MAX_FILES}개
         </span>
-        <input type="file" multiple className="hidden" onChange={e => { upload(e.target.files); e.target.value = '' }} />
+        <input type="file" multiple className="hidden" onChange={e => {
+          // 고른 파일을 먼저 배열로 옮긴 뒤 칸을 비운다. 칸을 비워야 같은 파일을 다시 고를 수 있고,
+          // 먼저 옮겨 두지 않으면 브라우저에 따라 고른 목록까지 같이 비워진다.
+          const picked = Array.from(e.target.files ?? [])
+          e.target.value = ''
+          upload(picked)
+        }} />
       </label>
 
       {files.length > 0 && (

@@ -378,12 +378,13 @@ export default function ApprovalPage() {
                 <tbody>
                   {visibleRows.map(r => (
                     // 줄 어디를 눌러도 열린다. 예전에는 제목 글자만 눌렸다.
-                    <tr key={r.id} onClick={() => router.push(`/approval/${r.id}`)}
+                    <tr key={r.id} onClick={e => { if (!e.metaKey && !e.ctrlKey) router.push(`/approval/${r.id}`) }}
                       className="cursor-pointer border-t border-border-primary hover:bg-surface-secondary">
                       <td className="px-4 py-3 whitespace-nowrap text-txt-tertiary">{r.doc_no ?? '-'}</td>
                       <td className="px-4 py-3">
                         {/* 제목은 길어도 두 줄까지만. 그 이상은 줄 높이가 들쭉날쭉해 표가 읽기 어렵다. */}
-                        <Link href={`/approval/${r.id}`} className="line-clamp-2 text-txt-primary hover:underline">{r.title}</Link>
+                        <Link href={`/approval/${r.id}`} onClick={e => e.stopPropagation()}
+                          className="line-clamp-2 text-txt-primary hover:underline">{r.title}</Link>
                       </td>
                       <td className={`px-4 py-3 ${targetOf(r).missing ? 'font-medium text-danger' : 'text-txt-primary'}`}>
                         <span className="line-clamp-2">{targetOf(r).text}</span>

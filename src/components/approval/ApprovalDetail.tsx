@@ -335,7 +335,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
 
         {report.status === 'approved' && (
           <Link href={`/approval/${reportId}/reissue`} className={`${ACTION_BTN} ${BTN_SECONDARY}`}>
-            다시 올리기
+            복사해서 새로 작성
           </Link>
         )}
         {actor && canEdit(report, actor.id) && (

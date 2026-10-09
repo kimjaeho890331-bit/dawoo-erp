@@ -67,6 +67,27 @@ const FIELD_STEP: Record<ErrorField, number> = { basic: 0, payments: 1, files: 2
 
 interface FormError { msg: string; field?: ErrorField }
 
+/** 저장 안 한 내용이 있는지 비교할 때 쓰는 입력값 묶음. */
+interface FormSnapshot {
+  title: string
+  bodyHtml: string
+  siteId: string
+  projectId: string
+  payments: PaymentRow[]
+  lineChoice: LineDraft[] | null
+  files: AttachedFile[]
+}
+const INITIAL_FORM: FormSnapshot = {
+  title: '', bodyHtml: '', siteId: '', projectId: '',
+  payments: [{ ...EMPTY_PAYMENT }], lineChoice: null, files: [],
+}
+const snapshotOf = (f: FormSnapshot) => JSON.stringify(f)
+
+const LEAVE_MSG = '저장하지 않은 내용이 있습니다. 목록으로 나가면 적은 내용이 사라집니다. 나갈까요?'
+
+/** 폰 화면(단계별 입력)인지. Tailwind md 경계(768px)와 같다. */
+const isPhone = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+
 /** 노무비 검사 문구가 어느 칸 이야기인지 고른다. */
 const laborErrorField = (msg: string): ErrorField =>
   msg.includes('현장') || msg.includes('적요') ? 'basic' : 'payments'
@@ -98,6 +119,16 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const [projects, setProjects] = useState<WorkProjectOption[]>([])
   /** 폰 단계. PC에서는 이 값이 바뀌지 않고, 화면도 이 값을 보지 않는다. */
   const [step, setStep] = useState(0)
+  /**
+   * 수정·복사 화면은 저장된 문서를 다 읽기 전까지 저장 버튼을 잠근다.
+   * 예전에는 제목이 먼저 채워지고 지급정보·결재선은 조금 뒤에 채워졌는데, 그 사이에
+   * 저장을 누르면 빈 지급정보와 빈 결재선으로 문서를 덮어쓸 수 있었다.
+   */
+  const [ready, setReady] = useState(!reportId && !copyFromId)
+  /** 읽어 온(또는 처음) 내용. 지금 내용과 다르면 "저장 안 한 내용이 있다"고 본다. */
+  const [baseline, setBaseline] = useState(() => snapshotOf(INITIAL_FORM))
+  /** 오류가 난 구역으로 화면을 옮겨야 할 때 그 구역 이름. 화면을 다시 그린 뒤에 옮긴다. */
+  const [scrollTarget, setScrollTarget] = useState<ErrorField | null>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
   const sectionRefs = {
     basic: useRef<HTMLElement>(null),
@@ -117,18 +148,27 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
    * 오류는 맨 아래 한 줄로만 띄우지 않는다. 어느 칸 문제인지 그 구역을 빨갛게 두르고
    * 화면을 그리로 옮긴다 — 예전에는 위쪽 칸 문제도 맨 아래 버튼 옆에만 나와 찾아다녀야 했다.
    */
+  /** 고치라고 한 구역을 손대면 그 오류는 바로 내린다 — 고쳤는데도 빨간 글씨가 남아 있으면 안 된 줄 안다. */
+  const clearErrorFor = (field: ErrorField) => {
+    if (error?.field === field) setErrorState(null)
+  }
+
   const setError = useCallback((e: FormError | null) => {
     setErrorState(e)
     if (!e?.field) return
-    const field = e.field
-    setStep(FIELD_STEP[field])
-    // 폰은 단계가 바뀐 뒤에야 그 구역이 보이므로 한 박자 늦게 옮긴다.
-    requestAnimationFrame(() => {
-      sectionRefs[field].current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
+    // 폰은 그 구역이 있는 단계로 넘어가야 보인다. PC는 단계와 상관없이 다 보인다.
+    if (isPhone()) setStep(FIELD_STEP[e.field])
+    setScrollTarget(e.field)
+  }, [])
+
+  // 단계가 바뀐 화면이 그려진 다음에 옮겨야 그 구역이 실제로 보인다.
+  useEffect(() => {
+    if (!scrollTarget) return
+    sectionRefs[scrollTarget].current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setScrollTarget(null)
     // sectionRefs는 렌더마다 새 객체지만 안의 ref는 같다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [scrollTarget])
 
   useEffect(() => {
     supabase.from('sites').select('id, name, contract_type, status').order('name').then(({ data }) => {
@@ -144,13 +184,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     if (!sourceId) return
     const load = async () => {
       const { data: r } = await supabase.from('expense_reports').select('*').eq('id', sourceId).maybeSingle()
-      if (!r) return
-      if (reportId) setExistingStatus(r.status as ApprovalStatus)
-      setTitle(r.title)
-      setBodyHtml(r.body_html ?? '')
-      setSiteId((r.site_id as string) || '')
-      setProjectId((r.project_id as string) || '')
-      setWorkKind(workKindFromIds(r.site_id as string | null, r.project_id as string | null))
+      if (!r) { setErrorState({ msg: '문서를 불러오지 못했습니다. 목록에서 다시 열어 주세요.' }); return }
 
       const [{ data: p }, { data: l }, { data: f }] = await Promise.all([
         supabase.from('expense_report_payments').select('*').eq('report_id', sourceId).order('seq'),
@@ -158,24 +192,40 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         supabase.from('expense_report_files').select('*').eq('report_id', sourceId).order('uploaded_at'),
       ])
 
-      const loaded = (p ?? []).map(x => ({
+      const loadedPayments = (p ?? []).map(x => ({
         vendor_name: x.vendor_name, amount: x.amount,
         pay_request_date: x.pay_request_date, bank: x.bank,
         account_no: x.account_no, business_no: x.business_no ?? '',
       })) as PaymentRow[]
-      setPayments(loaded.length > 0 ? loaded : [{ ...EMPTY_PAYMENT }])
+      const loadedLines = (l ?? []).map((x: Record<string, unknown>) => ({
+        staff_id: x.staff_id as string,
+        name: (x.staff as { name: string })?.name ?? '',
+        role: x.role as LineDraft['role'],
+      }))
 
-      // 다시 올리기(복사)는 결재선과 첨부를 새로 정한다 — 결재선은 기본값이 다시 깔린다.
-      if (copyFromId) {
-        setFiles([])
-      } else {
-        setLineChoice((l ?? []).map((x: Record<string, unknown>) => ({
-          staff_id: x.staff_id as string,
-          name: (x.staff as { name: string })?.name ?? '',
-          role: x.role as LineDraft['role'],
-        })))
-        setFiles((f ?? []) as AttachedFile[])
+      // 다 읽은 뒤 한꺼번에 채운다 — 일부만 채워진 상태로 저장되는 틈을 없앤다.
+      const next: FormSnapshot = {
+        title: r.title as string,
+        bodyHtml: (r.body_html as string | null) ?? '',
+        siteId: (r.site_id as string) || '',
+        projectId: (r.project_id as string) || '',
+        payments: loadedPayments.length > 0 ? loadedPayments : [{ ...EMPTY_PAYMENT }],
+        // 복사해서 새로 쓸 때는 결재선·첨부를 새로 정한다 — 결재선은 기본값이 다시 깔린다.
+        // 결재선 없이 임시저장해 둔 문서도 기본값을 깐다.
+        lineChoice: copyFromId || loadedLines.length === 0 ? null : loadedLines,
+        files: copyFromId ? [] : ((f ?? []) as AttachedFile[]),
       }
+      if (reportId) setExistingStatus(r.status as ApprovalStatus)
+      setTitle(next.title)
+      setBodyHtml(next.bodyHtml)
+      setSiteId(next.siteId)
+      setProjectId(next.projectId)
+      setWorkKind(workKindFromIds(next.siteId || null, next.projectId || null))
+      setPayments(next.payments)
+      setLineChoice(next.lineChoice)
+      setFiles(next.files)
+      setBaseline(snapshotOf(next))
+      setReady(true)
     }
     load()
   }, [reportId, copyFromId])
@@ -298,11 +348,12 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     })
   }, [sites, projects])
 
-  // 단계 이동 시 위로 올려준다. 긴 단계를 지나온 뒤 다음 단계의 중간부터 보이면
-  // 무엇을 입력해야 하는지 알 수 없다.
-  useEffect(() => {
+  // 단계를 넘기면 위로 올려준다. 긴 단계를 지나온 뒤 다음 단계의 중간부터 보이면
+  // 무엇을 입력해야 하는지 알 수 없다. (오류로 단계를 옮길 때는 그 구역으로 간다.)
+  const moveStep = (n: number) => {
+    setStep(Math.max(0, Math.min(n, LAST_STEP)))
     window.scrollTo({ top: 0 })
-  }, [step])
+  }
 
   const goNext = () => {
     // 그 단계에서 확인할 수 있는 것만 본다. 전체 검증은 올릴 때 서버가 다시 한다.
@@ -314,7 +365,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     // 지급 정보는 비워둔 채로도 다음 단계·올리기가 가능하다 — 계좌가 아직 안 나온
     // 상태에서 결재를 먼저 올리는 실무가 있어서 막지 않는다.
     setError(null)
-    setStep(s => Math.min(s + 1, LAST_STEP))
+    moveStep(step + 1)
   }
 
   const onPickVendor = (v: VendorOption) => {
@@ -336,8 +387,17 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
   const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0)
   const filledPayments = payments.filter(p => !isBlankPayment(p)).length
   const laborDraft = Boolean(suggestedLaborCategory(title))
-  const disabled = busy || excelBusy || !actor
-  const pageTitle = reportId ? '지출결의서 수정' : copyFromId ? '지출결의서 다시 올리기' : '새 지출결의서'
+  const disabled = busy || excelBusy || !actor || !ready
+  const dirty = ready && !busy && snapshotOf({ title, bodyHtml, siteId, projectId, payments, lineChoice, files }) !== baseline
+
+  // 새로고침·창 닫기로 적던 내용을 잃지 않게 브라우저가 한 번 묻게 한다.
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
+  const pageTitle = reportId ? '지출결의서 수정' : copyFromId ? '새 지출결의서 (복사)' : '새 지출결의서'
   const submitLabel = reportId && existingStatus === 'pending' ? '고친 내용 저장' : '결재 올리기'
 
   /** 폰에서 이 단계가 아니면 숨긴다. PC는 언제나 보인다. */
@@ -370,7 +430,11 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     <div className="mx-auto max-w-4xl pb-36 md:pb-6">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link href="/approval" className="mb-1 inline-flex items-center gap-0.5 text-[13px] text-txt-tertiary hover:text-txt-primary">
+          <Link
+            href="/approval"
+            onClick={e => { if (dirty && !window.confirm(LEAVE_MSG)) e.preventDefault() }}
+            className="mb-1 inline-flex min-h-9 items-center gap-0.5 text-[13px] text-txt-tertiary hover:text-txt-primary"
+          >
             <ChevronLeft size={15} /> 목록
           </Link>
           <h1>{pageTitle}</h1>
@@ -402,7 +466,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         <Field label="작성자" required>
           <select
             value={actorId ?? ''}
-            onChange={e => setActorId(e.target.value)}
+            onChange={e => { setActorId(e.target.value); clearErrorFor('basic') }}
             aria-label="작성자"
             className="h-11 w-full rounded-lg border border-border-primary bg-surface px-3 text-base text-txt-primary md:h-9 md:w-48 md:text-[13px]"
           >
@@ -427,7 +491,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           <div className="flex flex-col gap-1">
             <input
               value={title}
-              onChange={e => setTitle(e.target.value.slice(0, TITLE_MAX))}
+              onChange={e => { setTitle(e.target.value.slice(0, TITLE_MAX)); clearErrorFor('basic') }}
               maxLength={TITLE_MAX}
               className="h-11 w-full rounded-lg border border-border-primary bg-surface px-3 text-base md:h-9 md:text-[13px]"
               placeholder="현장을 고르면 자동으로 채워집니다"
@@ -443,7 +507,12 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
       <section ref={sectionRefs.payments} className={`mb-8 scroll-mt-6 ${onStep(1)}`}>
         <SectionTitle n={2} title="누구에게 얼마를 주나요" />
         <div className={`rounded-lg ${error?.field === 'payments' ? 'ring-1 ring-danger' : ''}`}>
-          <PaymentTable actions={excelActions} rows={payments} onChange={setPayments} onPickVendor={onPickVendor} />
+          <PaymentTable
+            actions={excelActions}
+            rows={payments}
+            onChange={rows => { setPayments(rows); clearErrorFor('payments') }}
+            onPickVendor={onPickVendor}
+          />
         </div>
       </section>
 
@@ -455,7 +524,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         visibility={onStep(2)}
         invalid={error?.field === 'files'}
       >
-        <FileAttach files={files} onChange={setFiles} />
+        <FileAttach files={files} onChange={f => { setFiles(f); clearErrorFor('files') }} />
         <div className="mt-5">
           <label htmlFor="draft-memo" className="mb-1.5 block text-label">메모 (선택)</label>
           <textarea
@@ -507,7 +576,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
           <div key={item.label} className="flex items-start justify-between gap-4 border-b border-border-primary py-4">
             <span className="w-16 shrink-0 text-label">{item.label}</span>
             <span className="flex-1 break-all text-[13px] text-txt-primary">{item.value}</span>
-            <button onClick={() => { setError(null); setStep(item.to) }} className="min-h-9 shrink-0 px-1 text-[13px] text-accent-text">
+            <button onClick={() => { setError(null); moveStep(item.to) }} className="min-h-9 shrink-0 px-1 text-[13px] text-accent-text">
               수정
             </button>
           </div>
@@ -543,7 +612,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         {error && <p className="mb-2 text-[13px] text-danger">{error.msg}</p>}
         <div className="flex gap-2">
           <button
-            onClick={() => { setError(null); setStep(s => Math.max(s - 1, 0)) }}
+            onClick={() => { setError(null); moveStep(step - 1) }}
             disabled={step === 0}
             className={`${BTN_SECONDARY} w-24`}
           >

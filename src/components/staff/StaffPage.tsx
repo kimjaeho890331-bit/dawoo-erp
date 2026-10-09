@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { formatPhone, formatMoney } from '@/lib/utils/format'
 import { generateInviteCode } from '@/lib/staff/inviteCode'
 import { RESIGN_CONFIRM_MESSAGE } from '@/lib/staff/selectable'
 import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex, getContrastText } from '@/lib/staff-colors'
+import { canSeeLedger } from '@/lib/ledgerAccess'
+import { STAFF_STORAGE_KEY } from '@/lib/activityLog'
+import { toast } from '@/lib/toast'
 
 interface Staff {
   id: string
@@ -78,6 +80,9 @@ export default function StaffPage() {
   // 직원별 연결된 로그인 계정 이메일 목록 ("내 계정 연결" 현황). 조회 실패해도
   // 빈 맵으로 두면 화면은 "미연결"로만 보이고 나머지 기능은 그대로 동작한다.
   const [linkedEmails, setLinkedEmails] = useState<Record<string, string[]>>({})
+  // 지금 쓰는 직원(다른 화면과 같은 값). 화면은 불러오는 중에 그려지지 않으므로 서버 렌더와 어긋나지 않는다.
+  const [myId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(STAFF_STORAGE_KEY))
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -99,11 +104,21 @@ export default function StaffPage() {
   useEffect(() => { loadData() }, [loadData])
 
   const handleDelete = async (staff: Staff) => {
-    if (!confirm(`"${staff.name}" 직원을 삭제하시겠습니까?\n관련된 지출결의서, 연차 등 데이터에 영향을 줄 수 있습니다.`)) return
-    await supabase.from('staff').delete().eq('id', staff.id)
+    if (!confirm(`"${staff.name}" 직원을 삭제하시겠습니까?\n그만둔 직원이면 삭제 대신 '수정'에서 퇴사일을 넣어 주세요. 삭제하면 지난 연차·결재 기록에서 이름이 사라질 수 있습니다.`)) return
+    const { error } = await supabase.from('staff').delete().eq('id', staff.id)
+    if (error) { toast.error(`삭제하지 못했습니다: ${error.message}`); return }
     if (detailItem?.id === staff.id) setDetailItem(null)
     loadData()
   }
+
+  /**
+   * 연봉·급여계좌·연봉계약서·통장·신분증 사본은 대표·관리자·경리만 본다(경리 메뉴와 같은 기준).
+   * 본인 것은 본인이 볼 수 있다. 예전에는 「연봉/고정비」 탭에서 전 직원 연봉과 급여계좌가
+   * 누구에게나 보였다.
+   */
+  const myRole = staffList.find(s => s.id === myId)?.role ?? null
+  const canSeeAllPay = canSeeLedger(myRole)
+  const canSeePayOf = (staffId: string) => canSeeAllPay || staffId === myId
 
   const activeStaff = staffList.filter(s => !s.resign_date)
   const resignedStaff = staffList.filter(s => !!s.resign_date)
@@ -122,10 +137,12 @@ export default function StaffPage() {
               className={`px-4 py-1.5 text-sm rounded-md transition ${tab === 'info' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-tertiary'}`}>
               직원정보
             </button>
-            <button onClick={() => setTab('salary')}
-              className={`px-4 py-1.5 text-sm rounded-md transition ${tab === 'salary' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-tertiary'}`}>
-              연봉/고정비
-            </button>
+            {canSeeAllPay && (
+              <button onClick={() => setTab('salary')}
+                className={`px-4 py-1.5 text-sm rounded-md transition ${tab === 'salary' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-tertiary'}`}>
+                연봉/고정비
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -220,14 +237,14 @@ export default function StaffPage() {
 
           {/* 상세 패널 */}
           {detailItem && (
-            <DetailPanel staff={detailItem} linkedEmails={linkedEmails[detailItem.id] ?? []} onClose={() => setDetailItem(null)}
+            <DetailPanel staff={detailItem} showPay={canSeePayOf(detailItem.id)} linkedEmails={linkedEmails[detailItem.id] ?? []} onClose={() => setDetailItem(null)}
               onEdit={() => { setEditItem(detailItem); setShowModal(true) }} />
           )}
         </>
       )}
 
       {/* === 연봉/고정비 탭 === */}
-      {tab === 'salary' && (
+      {tab === 'salary' && canSeeAllPay && (
         <>
           {/* 요약 */}
           <div className="grid grid-cols-3 gap-4">
@@ -295,18 +312,6 @@ export default function StaffPage() {
             </table>
           </div>
 
-          {/* 고정비 바로가기 */}
-          <Link href="/expenses"
-            className="block bg-surface rounded-[10px] border border-border-primary p-4 hover:bg-surface-tertiary transition-colors">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary">고정지출 관리</p>
-                <p className="text-[11px] text-txt-tertiary mt-0.5">임대료, 보험료, 통신비 등 매월 고정 지출 관리</p>
-              </div>
-              <span className="text-txt-tertiary text-sm">&rarr;</span>
-            </div>
-          </Link>
-
           {/* 퇴사자 */}
           {resignedStaff.length > 0 && (
             <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
@@ -339,6 +344,8 @@ export default function StaffPage() {
       {showModal && (
         <StaffModal
           item={editItem}
+          // 새 직원 등록은 급여 칸도 연다 — 급여를 볼 수 없는 사람이 등록하면 비워 두면 된다
+          showPay={editItem ? canSeePayOf(editItem.id) : canSeeAllPay}
           onClose={() => { setShowModal(false); setEditItem(null) }}
           onSaved={() => { setShowModal(false); setEditItem(null); loadData() }}
         />
@@ -353,7 +360,7 @@ export default function StaffPage() {
 }
 
 // ===== 상세 패널 =====
-function DetailPanel({ staff, linkedEmails, onClose, onEdit }: { staff: Staff; linkedEmails: string[]; onClose: () => void; onEdit: () => void }) {
+function DetailPanel({ staff, showPay, linkedEmails, onClose, onEdit }: { staff: Staff; showPay: boolean; linkedEmails: string[]; onClose: () => void; onEdit: () => void }) {
   const totalLeave = calcTotalLeave(staff.join_date)
   const Row = ({ label, value }: { label: string; value: string | null | undefined }) => (
     <div className="flex py-2 border-b border-surface-secondary">
@@ -419,8 +426,8 @@ function DetailPanel({ staff, linkedEmails, onClose, onEdit }: { staff: Staff; l
           <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">근무/급여 정보</p>
           <Row label="입사일" value={staff.join_date} />
           <Row label="퇴사일" value={staff.resign_date} />
-          <Row label="연봉" value={staff.salary ? `${staff.salary.toLocaleString()}원` : null} />
-          <Row label="급여계좌" value={staff.bank_name && staff.bank_account ? `${staff.bank_name} ${staff.bank_account}` : null} />
+          {showPay && <Row label="연봉" value={staff.salary ? `${staff.salary.toLocaleString()}원` : null} />}
+          {showPay && <Row label="급여계좌" value={staff.bank_name && staff.bank_account ? `${staff.bank_name} ${staff.bank_account}` : null} />}
           <Row label="비상연락처" value={staff.emergency_contact ? `${staff.emergency_contact} ${staff.emergency_phone || ''}` : null} />
           <div className="flex py-2 border-b border-surface-secondary">
             <span className="w-24 shrink-0 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">4대보험</span>
@@ -438,7 +445,7 @@ function DetailPanel({ staff, linkedEmails, onClose, onEdit }: { staff: Staff; l
       </div>
 
       {/* 첨부 파일 섹션 */}
-      <StaffAttachmentsSection staffId={staff.id} />
+      {showPay && <StaffAttachmentsSection staffId={staff.id} />}
 
       {staff.memo && (
         <div className="mt-3 pt-3 border-t border-border-tertiary">
@@ -569,7 +576,7 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
 }
 
 // ===== 직원 수정 모달 =====
-function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: () => void; onSaved: () => void }) {
+function StaffModal({ item, showPay, onClose, onSaved }: { item: Staff | null; showPay: boolean; onClose: () => void; onSaved: () => void }) {
   const isEdit = !!item
   const [name, setName] = useState(item?.name || '')
   const [employeeNo, setEmployeeNo] = useState(item?.employee_no || '')
@@ -832,30 +839,32 @@ function StaffModal({ item, onClose, onSaved }: { item: Staff | null; onClose: (
             </div>
           </div>
 
-          {/* 급여정보 */}
-          <div>
-            <p className="text-[11px] font-semibold text-txt-secondary mb-3 pb-1 border-b border-border-tertiary">급여정보</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>연봉 (원)</label>
-                <input value={salary ? formatSalary(salary) : ''} onChange={e => setSalary(e.target.value.replace(/,/g, ''))}
-                  placeholder="30,000,000" className={inputCls} />
-                {salary && (
-                  <p className="mt-1 text-[11px] text-txt-tertiary tabular-nums">
-                    월 {Math.round(parseInt(salary.replace(/,/g, '')) / 12).toLocaleString()}원 (세전)
-                  </p>
-                )}
+          {/* 급여정보 — 볼 수 없는 사람에게는 칸을 숨긴다. 숨겨도 저장할 때는 원래 값이 그대로 간다. */}
+          {showPay && (
+            <div>
+              <p className="text-[11px] font-semibold text-txt-secondary mb-3 pb-1 border-b border-border-tertiary">급여정보</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>연봉 (원)</label>
+                  <input value={salary ? formatSalary(salary) : ''} onChange={e => setSalary(e.target.value.replace(/,/g, ''))}
+                    placeholder="30,000,000" className={inputCls} />
+                  {salary && (
+                    <p className="mt-1 text-[11px] text-txt-tertiary tabular-nums">
+                      월 {Math.round(parseInt(salary.replace(/,/g, '')) / 12).toLocaleString()}원 (세전)
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelCls}>급여은행</label>
+                  <input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="국민은행" className={inputCls} />
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>급여은행</label>
-                <input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="국민은행" className={inputCls} />
+              <div className="mt-3">
+                <label className={labelCls}>급여계좌</label>
+                <input value={bankAccount} onChange={e => setBankAccount(e.target.value)} placeholder="000-000000-00-000" className={inputCls} />
               </div>
             </div>
-            <div className="mt-3">
-              <label className={labelCls}>급여계좌</label>
-              <input value={bankAccount} onChange={e => setBankAccount(e.target.value)} placeholder="000-000000-00-000" className={inputCls} />
-            </div>
-          </div>
+          )}
 
           {/* 기타 */}
           <div>

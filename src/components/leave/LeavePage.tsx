@@ -8,6 +8,7 @@ import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
 import { toast } from '@/lib/toast'
+import { canDecideLeave, canChangeLeave } from '@/lib/leave/permissions'
 
 interface LeaveRequest {
   id: string
@@ -134,6 +135,9 @@ export default function LeavePage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // 승인·수정 권한은 현재 직원의 직책으로 판단한다 (src/lib/leave/permissions.ts)
+  const me = { id: myStaffId, role: staffList.find(s => s.id === myStaffId)?.role ?? null }
+
   const getName = (id: string) => staffList.find(s => s.id === id)?.name || ''
   const getUsed = (id: string) => requests.filter(r => r.staff_id === id && r.status === '승인').reduce((s, r) => s + r.days, 0)
 
@@ -237,6 +241,7 @@ export default function LeavePage() {
   const handleApprove = async (id: string) => {
     const req = requests.find(r => r.id === id)
     if (!req) return
+    if (!canDecideLeave(me, req.staff_id)) { toast.error('연차 승인은 대표·관리자만 할 수 있습니다'); return }
     const { error } = await supabase.from('leave_requests').update({
       status: '승인', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
@@ -258,17 +263,25 @@ export default function LeavePage() {
   const handleReject = async (id: string) => {
     const req = requests.find(r => r.id === id)
     if (!req) return
+    if (!canDecideLeave(me, req.staff_id)) { toast.error('연차 반려는 대표·관리자만 할 수 있습니다'); return }
     const { error } = await supabase.from('leave_requests').update({
       status: '반려', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
-    if (!error) { await removeFromCalendar(req); loadData() }
+    if (error) { toast.error(`반려 처리에 실패했습니다: ${error.message}`); return }
+    await removeFromCalendar(req)
+    toast.success(`${getName(req.staff_id)} 연차를 반려했습니다`)
+    loadData()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('삭제하시겠습니까?')) return
     const req = requests.find(r => r.id === id)
-    if (req) await removeFromCalendar(req)
-    await supabase.from('leave_requests').delete().eq('id', id)
+    if (!req) return
+    if (!canChangeLeave(me, req)) { toast.error('이 신청은 지울 수 없습니다'); return }
+    if (!confirm('삭제하시겠습니까?')) return
+    // 신청부터 지우고, 지워졌을 때만 캘린더도 지운다 — 반대로 하면 신청은 남고 일정만 사라질 수 있다
+    const { error } = await supabase.from('leave_requests').delete().eq('id', id)
+    if (error) { toast.error(`삭제하지 못했습니다: ${error.message}`); return }
+    await removeFromCalendar(req)
     loadData()
   }
 
@@ -296,11 +309,21 @@ export default function LeavePage() {
       start_date: formStartDate, end_date: formEndDate, days, reason: formReason,
     }
     if (editingId) {
+      const original = requests.find(r => r.id === editingId)
+      if (!original || !canChangeLeave(me, original)) { toast.error('이 신청은 고칠 수 없습니다'); return }
       const { error } = await supabase.from('leave_requests').update(payload).eq('id', editingId)
-      if (!error) { setShowModal(false); loadData() }
+      if (error) { toast.error(`저장하지 못했습니다: ${error.message}`); return }
+      // 승인된 연차의 날짜·종류를 바꾸면 업무 캘린더도 옮긴다. 예전에는 캘린더에 옛 날짜가 남았다.
+      if (original.status === '승인') {
+        await removeFromCalendar(original)
+        const sync = await syncToCalendar({ ...original, ...payload })
+        if (sync?.error) toast.error(`저장됨 · 업무 캘린더 반영 실패: ${sync.error.message}`)
+      }
+      setShowModal(false); loadData()
     } else {
       const { error } = await supabase.from('leave_requests').insert({ ...payload, status: '대기' })
-      if (!error) { setShowModal(false); loadData() }
+      if (error) { toast.error(`신청하지 못했습니다: ${error.message}`); return }
+      setShowModal(false); loadData()
     }
   }
 
@@ -425,7 +448,10 @@ export default function LeavePage() {
                   <span className="text-sm text-txt-secondary flex-1 truncate">{r.reason || '-'}</span>
                   {r.status === '승인' && <span className="shrink-0" title="캘린더 등록"><Calendar size={14} className="text-green-600" /></span>}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {r.status === '대기' && (
+                    {r.status === '대기' && !canDecideLeave(me, r.staff_id) && (
+                      <span className="text-[11px] text-txt-tertiary">승인 대기</span>
+                    )}
+                    {r.status === '대기' && canDecideLeave(me, r.staff_id) && (
                       <>
                         <button onClick={() => handleApprove(r.id)}
                           className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors">승인</button>
@@ -433,7 +459,7 @@ export default function LeavePage() {
                           className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-red-300 text-red-600 bg-surface hover:bg-red-50 transition-colors">반려</button>
                       </>
                     )}
-                    <div className="relative">
+                    {canChangeLeave(me, r) && <div className="relative">
                       <button onClick={() => setOpenMenuId(openMenuId === r.id ? null : r.id)}
                         aria-haspopup="menu" aria-expanded={openMenuId === r.id} title="수정 · 삭제"
                         className="flex items-center gap-0.5 text-[11px] px-2 py-1 rounded-md border border-border-primary text-txt-secondary hover:bg-surface-secondary transition-colors">
@@ -450,7 +476,7 @@ export default function LeavePage() {
                           </div>
                         </>
                       )}
-                    </div>
+                    </div>}
                   </div>
                 </div>
               )

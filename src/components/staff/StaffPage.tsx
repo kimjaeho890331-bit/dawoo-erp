@@ -444,10 +444,10 @@ function DetailPanel({ staff, showPay, linkedEmails, onClose, onEdit }: { staff:
           <div className="flex py-2 border-b border-surface-secondary">
             <span className="w-24 shrink-0 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">4대보험</span>
             <div className="text-[12px] text-txt-secondary flex gap-2 flex-wrap">
-              {staff.ins_pension && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">국민</span>}
-              {staff.ins_health && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">건강</span>}
-              {staff.ins_employment && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">고용</span>}
-              {staff.ins_industrial && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">산재</span>}
+              {staff.ins_pension && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">국민</span>}
+              {staff.ins_health && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">건강</span>}
+              {staff.ins_employment && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">고용</span>}
+              {staff.ins_industrial && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">산재</span>}
               {!staff.ins_pension && !staff.ins_health && !staff.ins_employment && !staff.ins_industrial && (
                 <span className="text-txt-quaternary">미가입</span>
               )}
@@ -559,7 +559,7 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
                   </div>
                   <div className="flex gap-1">
                     <a href={existing.file_url} target="_blank" rel="noreferrer"
-                      className="text-[10px] px-2 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded hover:bg-[#dbeafe]">열기</a>
+                      className="text-[10px] px-2 py-0.5 bg-surface-secondary text-txt-secondary rounded hover:bg-surface-tertiary">열기</a>
                     <label className="text-[10px] px-2 py-0.5 bg-surface-tertiary text-txt-secondary rounded hover:bg-surface-secondary cursor-pointer">
                       교체
                       <input type="file" className="hidden" onChange={e => {
@@ -1012,10 +1012,10 @@ function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () =
               {name}님에게 아래 메시지를 카톡/문자로 보내 주세요. {name}님이 텔레그램에서 회사 ERP 봇을 열고
               <span className="font-medium text-txt-primary"> /start {generatedCode}</span> 를 보내면 연결됩니다.
             </p>
-            <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-lg p-4 text-center">
-              <div className="text-[11px] text-[#1e40af] mb-1">연결 코드</div>
-              <div className="text-[32px] font-bold text-[#1e40af] tabular-nums tracking-wider">{generatedCode}</div>
-              <div className="text-[11px] text-[#1e40af]/70 mt-1">{daysValid}일간 유효</div>
+            <div className="bg-accent-light border border-accent/30 rounded-lg p-4 text-center">
+              <div className="text-[11px] text-accent-text mb-1">연결 코드</div>
+              <div className="text-[32px] font-bold text-accent-text tabular-nums tracking-wider">{generatedCode}</div>
+              <div className="text-[11px] text-accent-text/70 mt-1">{daysValid}일간 유효</div>
             </div>
             <button onClick={handleCopy}
               className="w-full py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">

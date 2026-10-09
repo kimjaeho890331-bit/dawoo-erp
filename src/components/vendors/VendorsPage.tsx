@@ -73,15 +73,17 @@ function StarRating({ value, onChange, size = 'md' }: { value: number; onChange?
 }
 
 // --- 드래그앤드롭 파일 업로드 ---
-function FileDropZone({ label, fileUrl, onUpload, onRemove }: {
-  label: string; fileUrl: string | null; onUpload: (file: File) => void; onRemove: () => void
+// 올리는 중 여부는 부모가 준다. 예전에는 여기 상태가 한 번도 true가 되지 않아 올리는 동안
+// 아무 표시가 없었고, 그 사이 저장을 누르면 첨부가 빠진 채 저장됐다.
+function FileDropZone({ label, fileUrl, uploading, onUpload, onRemove }: {
+  label: string; fileUrl: string | null; uploading: boolean; onUpload: (file: File) => void; onRemove: () => void
 }) {
   const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleDrop = (e: DragEvent) => {
     e.preventDefault(); setDragging(false)
+    if (uploading) return
     const file = e.dataTransfer.files?.[0]
     if (file) onUpload(file)
   }
@@ -108,12 +110,14 @@ function FileDropZone({ label, fileUrl, onUpload, onRemove }: {
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`flex flex-col items-center justify-center border-[1.5px] border-dashed rounded-[10px] px-6 py-6 cursor-pointer transition-colors ${
-            dragging ? 'border-accent bg-accent-light text-accent-text' : 'border-border-secondary hover:border-accent hover:bg-accent-light hover:text-accent-text'
+          onClick={() => { if (!uploading) inputRef.current?.click() }}
+          aria-busy={uploading}
+          className={`flex flex-col items-center justify-center border-[1.5px] border-dashed rounded-[10px] px-6 py-6 transition-colors ${
+            uploading ? 'cursor-wait border-border-secondary bg-surface-secondary'
+              : dragging ? 'cursor-pointer border-accent bg-accent-light text-accent-text' : 'cursor-pointer border-border-secondary hover:border-accent hover:bg-accent-light hover:text-accent-text'
           }`}>
           {uploading ? (
-            <span className="text-sm text-txt-tertiary">업로드 중...</span>
+            <span className="text-sm text-txt-tertiary">올리는 중…</span>
           ) : (
             <>
               <Paperclip size={20} className="text-txt-tertiary mb-1" />
@@ -144,6 +148,10 @@ export default function VendorsPage() {
   const [chipDeleteConfirm, setChipDeleteConfirm] = useState<string | null>(null)
   const [chipPanelOpen, setChipPanelOpen] = useState(false)
   const [directInput, setDirectInput] = useState('')
+  // 공종칩을 누르면 그 공종만 본다(다시 누르면 해제). 예전 칩은 관리용이라 눌러도 거르지 않았다.
+  const [filterChip, setFilterChip] = useState<string | null>(null)
+  // 올리고 있는 첨부 칸들. 다 올라가기 전에는 저장을 막는다.
+  const [uploadingFields, setUploadingFields] = useState<string[]>([])
 
   const fetchVendors = useCallback(async () => {
     setLoading(true)
@@ -180,6 +188,7 @@ export default function VendorsPage() {
     const { error } = await supabase.from('vendor_categories').delete().eq('id', chip.id)
     if (error) { toast.error(`공종 삭제 실패: ${error.message}`); return }
     setChipDeleteConfirm(null)
+    if (filterChip === chip.name) setFilterChip(null)
     fetchChips()
   }
 
@@ -208,6 +217,7 @@ export default function VendorsPage() {
   // 필터링
   const filtered = vendors.filter(v => {
     if (v.vendor_type !== activeTab) return false
+    if (filterChip && !splitCats(v.category).includes(filterChip)) return false
     if (search) {
       const q = search.toLowerCase()
       return v.name.toLowerCase().includes(q) || v.category.toLowerCase().includes(q) || v.contact_person?.toLowerCase().includes(q)
@@ -220,7 +230,8 @@ export default function VendorsPage() {
     const map = new Map<string, Vendor[]>()
     filtered.forEach(v => {
       const cats = splitCats(v.category)
-      const keys = cats.length ? cats : [UNCATEGORIZED]
+      // 공종을 골랐으면 그 묶음 하나만 — 다른 공종 묶음에 같은 업체가 또 나오면 안 걸러진 것처럼 보인다
+      const keys = filterChip ? [filterChip] : cats.length ? cats : [UNCATEGORIZED]
       keys.forEach(k => {
         if (!map.has(k)) map.set(k, [])
         map.get(k)!.push(v)
@@ -232,7 +243,7 @@ export default function VendorsPage() {
       name,
       vendors: map.get(name)!.slice().sort((a, b) => koCompare(a.name, b.name)),
     }))
-  }, [filtered])
+  }, [filtered, filterChip])
 
   const openCreateModal = () => {
     setEditingVendor(null)
@@ -266,16 +277,24 @@ export default function VendorsPage() {
     fd.append('file', file)
     fd.append('storagePath', `vendors/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`)
 
-    const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
-    const json = await res.json()
-    if (!res.ok) { toast.error(`파일 업로드 실패: ${json.error ?? `HTTP ${res.status}`}`); return }
-    setForm(prev => ({ ...prev, [field]: json.url }))
+    setUploadingFields(prev => [...prev, field])
+    try {
+      const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(`파일 업로드 실패: ${json.error ?? `HTTP ${res.status}`}`); return }
+      setForm(prev => ({ ...prev, [field]: json.url }))
+    } catch (err) {
+      toast.error(`파일 업로드 실패: ${err instanceof Error ? err.message : '다시 시도해 주세요'}`)
+    } finally {
+      setUploadingFields(prev => prev.filter(f => f !== field))
+    }
   }
+  const isUploading = (field: string) => uploadingFields.includes(field)
 
   const removeFile = (field: string) => setForm(prev => ({ ...prev, [field]: null }))
 
   const handleSave = async () => {
-    if (!form.name.trim()) return
+    if (!form.name.trim() || uploadingFields.length > 0) return
     setSaving(true)
     try {
       const payload = { ...form }
@@ -331,7 +350,7 @@ export default function VendorsPage() {
         {TABS.map(tab => {
           const count = vendors.filter(v => v.vendor_type === tab.key).length
           return (
-            <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearch('') }}
+            <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearch(''); setFilterChip(null) }}
               className={`tab-item ${activeTab === tab.key ? 'tab-active' : ''}`}>
               {tab.label}
               <span className={`ml-2 text-xs px-[10px] py-[2px] rounded-full font-medium ${
@@ -354,9 +373,19 @@ export default function VendorsPage() {
               <button onClick={() => setChipDeleteConfirm(null)} className="px-1.5 py-0.5 rounded-full bg-surface-secondary text-txt-secondary text-[11px]">취소</button>
             </span>
           ) : (
-            <span key={chip.id} className="group/chip inline-flex items-center gap-1 pl-3 pr-2 py-1 rounded-full text-[12px] font-medium bg-surface-secondary text-txt-secondary border border-border-primary">
+            <span key={chip.id} role="button" tabIndex={0} aria-pressed={filterChip === chip.name}
+              onClick={() => setFilterChip(prev => prev === chip.name ? null : chip.name)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFilterChip(prev => prev === chip.name ? null : chip.name) }
+              }}
+              className={`group/chip inline-flex cursor-pointer items-center gap-1 pl-3 pr-2 py-1 rounded-full text-[12px] font-medium border transition-colors ${
+                filterChip === chip.name ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface-secondary text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+              }`}>
               {chip.name}
-              <button onClick={() => setChipDeleteConfirm(chip.id)}
+              {/* 지우기는 거르기와 따로 — 칩 누르기로 번지지 않게 막는다 */}
+              <button onClick={e => { e.stopPropagation(); setChipDeleteConfirm(chip.id) }}
+                onKeyDown={e => e.stopPropagation()}
+                aria-label={`${chip.name} 공종 지우기`}
                 className="pointer-fine:opacity-0 pointer-fine:group-hover/chip:opacity-100 transition-opacity text-txt-quaternary hover:text-red-500">
                 <X size={12} />
               </button>
@@ -403,8 +432,17 @@ export default function VendorsPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-txt-tertiary">
           <div className="flex justify-center mb-3">{activeTab === '일용직' ? <HardHat size={36} className="text-txt-tertiary" /> : <Building2 size={36} className="text-txt-tertiary" />}</div>
-          <p className="text-lg font-medium text-txt-quaternary">등록된 {activeTab}가 없습니다</p>
-          <p className="text-sm mt-1">등록 버튼을 눌러 추가해 주세요</p>
+          {search || filterChip ? (
+            <>
+              <p className="text-lg font-medium text-txt-quaternary">조건에 맞는 {activeTab}가 없습니다</p>
+              <p className="text-sm mt-1">검색어나 고른 공종을 풀어 보세요</p>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-medium text-txt-quaternary">등록된 {activeTab}가 없습니다</p>
+              <p className="text-sm mt-1">등록 버튼을 눌러 추가해 주세요</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-7">
@@ -636,18 +674,18 @@ export default function VendorsPage() {
                 <div className="space-y-3">
                   {!isWorker ? (
                     <>
-                      <FileDropZone label="사업자등록증" fileUrl={form.biz_license_url}
+                      <FileDropZone label="사업자등록증" fileUrl={form.biz_license_url} uploading={isUploading('biz_license_url')}
                         onUpload={f => uploadFile(f, 'biz_license_url')} onRemove={() => removeFile('biz_license_url')} />
-                      <FileDropZone label="통장사본" fileUrl={form.bankbook_url}
+                      <FileDropZone label="통장사본" fileUrl={form.bankbook_url} uploading={isUploading('bankbook_url')}
                         onUpload={f => uploadFile(f, 'bankbook_url')} onRemove={() => removeFile('bankbook_url')} />
                     </>
                   ) : (
                     <>
-                      <FileDropZone label="통장사본" fileUrl={form.bankbook_url}
+                      <FileDropZone label="통장사본" fileUrl={form.bankbook_url} uploading={isUploading('bankbook_url')}
                         onUpload={f => uploadFile(f, 'bankbook_url')} onRemove={() => removeFile('bankbook_url')} />
-                      <FileDropZone label="신분증" fileUrl={form.id_card_url}
+                      <FileDropZone label="신분증" fileUrl={form.id_card_url} uploading={isUploading('id_card_url')}
                         onUpload={f => uploadFile(f, 'id_card_url')} onRemove={() => removeFile('id_card_url')} />
-                      <FileDropZone label="안전교육증" fileUrl={form.safety_cert_url}
+                      <FileDropZone label="안전교육증" fileUrl={form.safety_cert_url} uploading={isUploading('safety_cert_url')}
                         onUpload={f => uploadFile(f, 'safety_cert_url')} onRemove={() => removeFile('safety_cert_url')} />
                     </>
                   )}
@@ -688,9 +726,9 @@ export default function VendorsPage() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setModalOpen(false)} className="btn-secondary">취소</button>
-                <button onClick={handleSave} disabled={!form.name.trim() || saving}
+                <button onClick={handleSave} disabled={!form.name.trim() || saving || uploadingFields.length > 0}
                   className="btn-primary disabled:opacity-50">
-                  {saving ? '저장 중...' : editingVendor ? '수정' : '등록'}
+                  {uploadingFields.length > 0 ? '올리는 중…' : saving ? '저장 중...' : editingVendor ? '수정' : '등록'}
                 </button>
               </div>
             </div>

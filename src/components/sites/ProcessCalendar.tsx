@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { toast } from '@/lib/toast'
+import { isTouchOnly } from '@/lib/touch'
 import { supabase } from '@/lib/supabase'
 import { logActivity } from '@/lib/activityLog/client'
 
@@ -312,7 +314,9 @@ export default function ProcessCalendar({
   // 스케줄 삭제
   const handleDeleteSchedule = async (id: string) => {
     const title = schedules.find(s => s.id === id)?.title
-    await supabase.from('schedules').delete().eq('id', id)
+    if (!confirm(`공정 "${title ?? ''}"을(를) 삭제할까요?`)) return
+    const { error } = await supabase.from('schedules').delete().eq('id', id)
+    if (error) { toast.error(`삭제하지 못했습니다: ${error.message}`); return }
     await logActivity({
       action: 'schedule_delete',
       target_type: 'site',
@@ -328,40 +332,40 @@ export default function ProcessCalendar({
   const TAG_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#10B981', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#1F2937', '#06B6D4']
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-surface rounded-lg border border-border-primary p-4">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <button onClick={prevMonth} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700 text-lg transition-colors">&lsaquo;</button>
-          <h3 className="text-base font-bold text-gray-900 min-w-[140px] text-center">{monthLabel} 공정 일정</h3>
-          <button onClick={nextMonth} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700 text-lg transition-colors">&rsaquo;</button>
+          <button onClick={prevMonth} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-tertiary text-txt-tertiary hover:text-txt-secondary text-lg transition-colors">&lsaquo;</button>
+          <h3 className="text-base font-bold text-txt-primary min-w-[140px] text-center">{monthLabel} 공정 일정</h3>
+          <button onClick={nextMonth} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-tertiary text-txt-tertiary hover:text-txt-secondary text-lg transition-colors">&rsaquo;</button>
         </div>
-        <p className="text-[11px] text-gray-400">공종 드래그 추가 · 바 끝 잡아 늘리기/줄이기 · 더블클릭 수정</p>
+        <p className="text-[11px] text-txt-tertiary">공종 드래그 추가 · 바 끝 잡아 늘리기/줄이기 · 더블클릭 수정</p>
       </div>
 
       <div className="flex gap-3">
         {/* 왼쪽: 공종 태그 목록 (2열) */}
         <div className="w-40 shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-600">공종</span>
-            <button onClick={() => setShowAddTag(!showAddTag)} className="text-[11px] text-blue-600 hover:text-blue-800 font-medium">+ 추가</button>
+            <span className="text-xs font-semibold text-txt-secondary">공종</span>
+            <button onClick={() => setShowAddTag(!showAddTag)} className="text-[11px] text-accent-text hover:text-accent-text font-medium">+ 추가</button>
           </div>
 
           {showAddTag && (
-            <div className="mb-2 p-2 border border-gray-200 rounded-lg bg-gray-50 space-y-2">
+            <div className="mb-2 p-2 border border-border-primary rounded-lg bg-surface-secondary space-y-2">
               <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="공종명"
-                className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="w-full border border-border-secondary rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
                 onKeyDown={e => e.key === 'Enter' && handleAddTag()} />
               <div className="flex gap-1 flex-wrap">
                 {TAG_COLORS.map(c => (
                   <button key={c} onClick={() => setNewTagColor(c)}
-                    className={`w-4 h-4 rounded-full border-2 transition-all ${newTagColor === c ? 'border-gray-800 scale-125' : 'border-transparent'}`}
+                    className={`w-4 h-4 rounded-full border-2 transition-all ${newTagColor === c ? 'border-txt-primary scale-125' : 'border-transparent'}`}
                     style={{ backgroundColor: c }} />
                 ))}
               </div>
               <div className="flex gap-1">
-                <button onClick={handleAddTag} className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">추가</button>
-                <button onClick={() => setShowAddTag(false)} className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">취소</button>
+                <button onClick={handleAddTag} className="flex-1 px-2 py-1 text-xs bg-accent text-white rounded hover:bg-accent-hover">추가</button>
+                <button onClick={() => setShowAddTag(false)} className="px-2 py-1 text-xs border border-border-secondary rounded hover:bg-surface-secondary">취소</button>
               </div>
             </div>
           )}
@@ -372,10 +376,10 @@ export default function ProcessCalendar({
                 key={tag.name}
                 draggable
                 onDragStart={() => handleTagDragStart(tag)}
-                className="flex items-center gap-1 px-1.5 py-1 border border-gray-200 rounded cursor-grab active:cursor-grabbing hover:bg-gray-50 hover:border-gray-300 group transition-colors"
+                className="flex items-center gap-1 px-1.5 py-1 border border-border-primary rounded cursor-grab active:cursor-grabbing hover:bg-surface-secondary hover:border-border-secondary group transition-colors"
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-                <span className="text-[11px] text-gray-700 truncate flex-1">{tag.name}</span>
+                <span className="text-[11px] text-txt-secondary truncate flex-1">{tag.name}</span>
               </div>
             ))}
           </div>
@@ -384,9 +388,9 @@ export default function ProcessCalendar({
         {/* 오른쪽: 캘린더 그리드 */}
         <div className="flex-1 min-w-0" ref={calendarRef}>
           {/* 요일 헤더 */}
-          <div className="grid grid-cols-7 text-center text-[11px] font-semibold mb-0.5 border-b border-gray-200 pb-1">
+          <div className="grid grid-cols-7 text-center text-[11px] font-semibold mb-0.5 border-b border-border-primary pb-1">
             {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
-              <div key={d} className={`py-0.5 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>{d}</div>
+              <div key={d} className={`py-0.5 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-accent-text' : 'text-txt-tertiary'}`}>{d}</div>
             ))}
           </div>
 
@@ -407,14 +411,14 @@ export default function ProcessCalendar({
             const barsAreaHeight = Math.max(rows.length * (barHeight + barGap), 0)
 
             return (
-              <div key={wi} className="border-b border-gray-100">
+              <div key={wi} className="border-b border-border-tertiary">
                 {/* 날짜 숫자 */}
                 <div className="grid grid-cols-7">
                   {week.map((day, di) => (
                     <div
                       key={di}
                       data-day={day || undefined}
-                      className={`px-1 py-0.5 text-[11px] border-r border-gray-50 last:border-r-0 ${!day ? 'bg-gray-50/50' : ''} ${stretching ? 'cursor-ew-resize' : ''}`}
+                      className={`px-1 py-0.5 text-[11px] border-r border-border-tertiary last:border-r-0 ${!day ? 'bg-surface-secondary/50' : ''} ${stretching ? 'cursor-ew-resize' : ''}`}
                       onDragOver={day ? e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
                       onDrop={day ? e => {
                         e.preventDefault()
@@ -424,8 +428,8 @@ export default function ProcessCalendar({
                     >
                       {day && (
                         <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px]
-                          ${dateStr(month.year, month.month, day) === today ? 'bg-blue-600 text-white font-bold' : ''}
-                          ${di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-gray-500'}
+                          ${dateStr(month.year, month.month, day) === today ? 'bg-accent text-white font-bold' : ''}
+                          ${di === 0 ? 'text-red-400' : di === 6 ? 'text-accent-text' : 'text-txt-tertiary'}
                         `}>
                           {day}
                         </span>
@@ -443,7 +447,7 @@ export default function ProcessCalendar({
                   {week.map((day, di) => (
                     <div key={di}
                       data-day={day || undefined}
-                      className={`border-r border-gray-50 last:border-r-0 ${stretching ? 'cursor-ew-resize' : ''}`}
+                      className={`border-r border-border-tertiary last:border-r-0 ${stretching ? 'cursor-ew-resize' : ''}`}
                       onDragOver={day ? e => { e.preventDefault() } : undefined}
                       onDrop={day ? e => {
                         e.preventDefault()
@@ -464,8 +468,10 @@ export default function ProcessCalendar({
                           draggable={!stretching}
                           onDragStart={e => handleBarDragStart(e, s)}
                           onDoubleClick={() => { setEditSchedule(s); setShowScheduleModal(true) }}
+                          // 폰은 끌어놓기·더블클릭이 안 되므로 한 번 누르면 수정 창을 연다
+                          onClick={() => { if (isTouchOnly()) { setEditSchedule(s); setShowScheduleModal(true) } }}
                           className={`absolute flex items-center rounded-md cursor-move group/bar overflow-hidden transition-[width,left] ${isStretching ? 'duration-75' : 'duration-0'} ${
-                            s.confirmed ? 'text-white shadow-sm' : 'bg-white shadow-sm'
+                            s.confirmed ? 'text-white shadow-sm' : 'bg-surface shadow-sm'
                           }`}
                           style={{
                             left: `${bar.left}%`,
@@ -484,7 +490,7 @@ export default function ProcessCalendar({
                               className="absolute left-0 top-0 bottom-0 w-4 cursor-col-resize z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/20"
                               onMouseDown={e => handleStretchMouseDown(e, s.id, 'start')}
                             >
-                              <div className="flex gap-px"><div className="w-[2px] h-3 rounded-full bg-white/70" /><div className="w-[2px] h-3 rounded-full bg-white/70" /></div>
+                              <div className="flex gap-px"><div className="w-[2px] h-3 rounded-full bg-surface/70" /><div className="w-[2px] h-3 rounded-full bg-surface/70" /></div>
                             </div>
                           )}
 
@@ -500,7 +506,7 @@ export default function ProcessCalendar({
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/20"
                               onMouseDown={e => handleStretchMouseDown(e, s.id, 'end')}
                             >
-                              <div className="flex gap-px"><div className="w-[2px] h-3 rounded-full bg-white/70" /><div className="w-[2px] h-3 rounded-full bg-white/70" /></div>
+                              <div className="flex gap-px"><div className="w-[2px] h-3 rounded-full bg-surface/70" /><div className="w-[2px] h-3 rounded-full bg-surface/70" /></div>
                             </div>
                           )}
                         </div>
@@ -515,9 +521,9 @@ export default function ProcessCalendar({
       </div>
 
       {/* 범례 */}
-      <div className="flex items-center gap-4 mt-3 pt-2.5 border-t border-gray-100 text-[11px] text-gray-400">
+      <div className="flex items-center gap-4 mt-3 pt-2.5 border-t border-border-tertiary text-[11px] text-txt-tertiary">
         <span className="flex items-center gap-1.5">
-          <span className="w-6 h-2.5 rounded bg-blue-500 inline-block" /> 확정
+          <span className="w-6 h-2.5 rounded bg-accent inline-block" /> 확정
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-6 h-2.5 rounded border-[1.5px] border-dashed border-red-400 inline-block" /> 미확정
@@ -597,38 +603,38 @@ function ScheduleModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-[460px] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900 text-sm">공종 수정</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+      <div className="bg-surface rounded-xl shadow-2xl w-[460px] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
+          <h3 className="font-semibold text-txt-primary text-sm">공종 수정</h3>
+          <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg leading-none">&times;</button>
         </div>
         <div className="p-5 space-y-3.5">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">공종명 *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition" />
+            <label className="block text-xs font-medium text-txt-secondary mb-1">공종명 *</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent focus:outline-none transition" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">시작일 *</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+              <label className="block text-xs font-medium text-txt-secondary mb-1">시작일 *</label>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">종료일 *</label>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+              <label className="block text-xs font-medium text-txt-secondary mb-1">종료일 *</label>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="relative" ref={contractorRef}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">시공업체</label>
+              <label className="block text-xs font-medium text-txt-secondary mb-1">시공업체</label>
               <input
                 value={contractorSearch}
                 onChange={e => { setContractorSearch(e.target.value); setContractor(e.target.value) }}
                 onFocus={() => setShowContractorDropdown(true)}
                 placeholder="업체명 검색..."
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none"
               />
               {showContractorDropdown && contractorSearch && (
-                <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-40 overflow-y-auto">
                   {vendorList
                     .filter(v => v.vendor_type === '협력업체' && v.name.includes(contractorSearch))
                     .slice(0, 5)
@@ -637,29 +643,29 @@ function ScheduleModal({
                         key={v.id}
                         type="button"
                         onClick={() => { setContractor(v.name); setContractorSearch(v.name); setShowContractorDropdown(false) }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent-light flex items-center justify-between"
                       >
-                        <span className="font-medium text-gray-800">{v.name}</span>
-                        {v.phone && <span className="text-xs text-gray-400 ml-2">{v.phone}</span>}
+                        <span className="font-medium text-txt-primary">{v.name}</span>
+                        {v.phone && <span className="text-xs text-txt-tertiary ml-2">{v.phone}</span>}
                       </button>
                     ))}
                   {vendorList.filter(v => v.vendor_type === '협력업체' && v.name.includes(contractorSearch)).length === 0 && (
-                    <div className="px-3 py-2 text-xs text-gray-400">검색 결과 없음</div>
+                    <div className="px-3 py-2 text-xs text-txt-tertiary">검색 결과 없음</div>
                   )}
                 </div>
               )}
             </div>
             <div className="relative" ref={workerRef}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">투입 작업자</label>
+              <label className="block text-xs font-medium text-txt-secondary mb-1">투입 작업자</label>
               <input
                 value={workerSearch}
                 onChange={e => { setWorkerSearch(e.target.value); setWorkers(e.target.value) }}
                 onFocus={() => setShowWorkerDropdown(true)}
                 placeholder="작업자 검색..."
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none"
               />
               {showWorkerDropdown && workerSearch && (
-                <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-40 overflow-y-auto">
                   {vendorList
                     .filter(v => v.vendor_type === '일용직' && v.name.includes(workerSearch))
                     .slice(0, 5)
@@ -668,45 +674,45 @@ function ScheduleModal({
                         key={v.id}
                         type="button"
                         onClick={() => { setWorkers(v.name); setWorkerSearch(v.name); setShowWorkerDropdown(false) }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent-light flex items-center justify-between"
                       >
-                        <span className="font-medium text-gray-800">{v.name}</span>
-                        {v.phone && <span className="text-xs text-gray-400 ml-2">{v.phone}</span>}
+                        <span className="font-medium text-txt-primary">{v.name}</span>
+                        {v.phone && <span className="text-xs text-txt-tertiary ml-2">{v.phone}</span>}
                       </button>
                     ))}
                   {vendorList.filter(v => v.vendor_type === '일용직' && v.name.includes(workerSearch)).length === 0 && (
-                    <div className="px-3 py-2 text-xs text-gray-400">검색 결과 없음</div>
+                    <div className="px-3 py-2 text-xs text-txt-tertiary">검색 결과 없음</div>
                   )}
                 </div>
               )}
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">메모</label>
-            <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none resize-none" />
+            <label className="block text-xs font-medium text-txt-secondary mb-1">메모</label>
+            <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2} className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none resize-none" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">색상</label>
+            <label className="block text-xs font-medium text-txt-secondary mb-1">색상</label>
             <div className="flex gap-1.5">
               {MODAL_COLORS.map(c => (
                 <button key={c} onClick={() => setColor(c)}
-                  className={`w-6 h-6 rounded-full border-2 transition-all ${color === c ? 'border-gray-800 scale-110 ring-2 ring-gray-200' : 'border-gray-100 hover:border-gray-300'}`}
+                  className={`w-6 h-6 rounded-full border-2 transition-all ${color === c ? 'border-txt-primary scale-110 ring-2 ring-border-primary' : 'border-border-tertiary hover:border-border-secondary'}`}
                   style={{ backgroundColor: c }} />
               ))}
             </div>
           </div>
           <label className="flex items-center gap-2 cursor-pointer py-1">
             <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-            <span className="text-sm text-gray-700">확정 (업체/작업자 배정 완료)</span>
+              className="w-4 h-4 rounded border-border-secondary text-accent-text focus:ring-accent" />
+            <span className="text-sm text-txt-secondary">확정 (업체/작업자 배정 완료)</span>
           </label>
         </div>
-        <div className="px-5 py-3.5 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-b-xl">
+        <div className="px-5 py-3.5 border-t border-border-tertiary flex items-center justify-between bg-surface-secondary/50 rounded-b-xl">
           <button onClick={onDelete} className="px-3 py-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors">삭제</button>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">취소</button>
+            <button onClick={onClose} className="px-4 py-2 text-sm border border-border-primary rounded-lg hover:bg-surface-secondary transition-colors">취소</button>
             <button onClick={handleSubmit} disabled={saving || !title || !startDate || !endDate}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 transition-colors">
               {saving ? '저장 중...' : '수정'}
             </button>
           </div>

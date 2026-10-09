@@ -9,6 +9,7 @@ import { formatPhone, formatMoney, parseMoney } from '@/lib/utils/format'
 import FileDropZone from '@/components/common/FileDropZone'
 import type { TabProps } from './panelHelpers'
 import { FormInput, DateTimeInput, StaffSelect, useCurrentStaff } from './panelHelpers'
+import { toast } from '@/lib/toast'
 
 // 수도공사 기본 단가
 const DEFAULT_WATER_PRICES = {
@@ -38,7 +39,7 @@ export default function TabReception({ project, category, getVal, onChange, onRe
   const handleConsentReceive = async () => {
     if (consentProcessing) return
     if (!currentStaff.name) {
-      alert('로그인 직원 정보를 확인할 수 없습니다. 다시 로그인 해주세요.')
+      toast.error('로그인 직원 정보를 확인할 수 없습니다. 다시 로그인 해주세요.')
       return
     }
     if (!confirm(`동의서 회수를 "${currentStaff.name}"님이 확인한 것으로 처리할까요?`)) return
@@ -64,7 +65,7 @@ export default function TabReception({ project, category, getVal, onChange, onRe
           note: `동의서 회수 버튼 (${currentStaff.name})`,
         })
         if (!logged.ok) {
-          alert(logged.error)
+          toast.error(logged.error)
           return
         }
         updateData.status = '동의서'
@@ -75,7 +76,7 @@ export default function TabReception({ project, category, getVal, onChange, onRe
       onRefresh?.()
     } catch (err) {
       console.error('동의서 회수 처리 실패:', err)
-      alert('처리 실패: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('처리 실패: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setConsentProcessing(false)
     }
@@ -92,7 +93,7 @@ export default function TabReception({ project, category, getVal, onChange, onRe
       onRefresh?.()
     } catch (err) {
       console.error('취소 실패:', err)
-      alert('취소 실패')
+      toast.error('취소 실패')
     } finally {
       setConsentProcessing(false)
     }
@@ -122,7 +123,7 @@ export default function TabReception({ project, category, getVal, onChange, onRe
   // 수동 재산출
   const handleRecalculate = () => {
     if (!area) {
-      alert('전유면적 정보가 필요합니다.')
+      toast.info('전유면적 정보가 필요합니다.')
       return
     }
     const isPublic = workTypeName === '공용수도' || workTypeName === '아파트공용'
@@ -146,11 +147,11 @@ export default function TabReception({ project, category, getVal, onChange, onRe
   const previewTotal = previewCost + previewVat
 
   const timelineSteps = [
-    { num: 1, label: '실측', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
-    { num: 2, label: '견적', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
-    { num: 3, label: '동의서', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
-    { num: 4, label: '통장', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
-    { num: 5, label: '신청서', color: 'bg-[#c96442]', textColor: 'text-[#c96442]' },
+    { num: 1, label: '실측', color: 'bg-accent', textColor: 'text-accent-text' },
+    { num: 2, label: '견적', color: 'bg-accent', textColor: 'text-accent-text' },
+    { num: 3, label: '동의서', color: 'bg-accent', textColor: 'text-accent-text' },
+    { num: 4, label: '통장', color: 'bg-accent', textColor: 'text-accent-text' },
+    { num: 5, label: '신청서', color: 'bg-accent', textColor: 'text-accent-text' },
   ]
 
   return (
@@ -194,14 +195,14 @@ export default function TabReception({ project, category, getVal, onChange, onRe
         <h3 className={`text-[13px] font-semibold ${timelineSteps[1].textColor} mb-3`}>견적</h3>
         {/* 공문 기준 견적 산출 정보 */}
         {area > 0 && (
-          <div className="mb-3 p-3 bg-[#faf0eb] rounded-lg border border-[#e8d5cc]">
+          <div className="mb-3 p-3 bg-accent-light rounded-lg border border-[#e8d5cc]">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-[#c96442]">
+              <p className="text-[11px] font-semibold text-accent-text">
                 공문 단가 기준 — {workTypeName || '수도'} [{pricingType}] ({cityName || '-'})
               </p>
               <button
                 onClick={handleRecalculate}
-                className="px-3 py-1 text-[11px] font-medium text-white bg-[#c96442] rounded-md hover:bg-[#b55a3a] transition-colors"
+                className="px-3 py-1 text-[11px] font-medium text-white bg-accent rounded-md hover:bg-accent-hover transition-colors"
               >
                 재산출
               </button>
@@ -223,14 +224,14 @@ export default function TabReception({ project, category, getVal, onChange, onRe
               </div>
               <div>
                 <span className="text-txt-tertiary">시지원 80%</span>
-                <p className="font-semibold text-[#c96442]">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
+                <p className="font-semibold text-accent-text">{Math.round(previewTotal * 0.8).toLocaleString()}원</p>
               </div>
               <div>
                 <span className="text-txt-tertiary">자부담 20%</span>
                 <p className="font-semibold text-txt-secondary">{(previewTotal - Math.round(previewTotal * 0.8)).toLocaleString()}원</p>
               </div>
             </div>
-            <p className="mt-2 text-[9px] text-[#c96442]/60">
+            <p className="mt-2 text-[9px] text-accent-text/60">
               적용 단가: {isPublic
                 ? `공용 ${pricing.공용.toLocaleString()}원/m² + ${pricing.공용_세대.toLocaleString()}원/세대`
                 : `전용 ${pricing.전용.toLocaleString()}원/m²`
@@ -267,7 +268,7 @@ export default function TabReception({ project, category, getVal, onChange, onRe
         {category === '소규모' && (
           <button
             onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
-            className="mt-3 px-4 py-2 text-[13px] font-medium bg-[#c96442] text-white rounded-lg hover:bg-[#b5573a] transition-colors"
+            className="mt-3 px-4 py-2 text-[13px] font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
           >
             견적서 열기
           </button>
@@ -302,7 +303,7 @@ export default function TabReception({ project, category, getVal, onChange, onRe
           <button
             onClick={handleConsentReceive}
             disabled={consentProcessing}
-            className="w-full h-[44px] mb-3 flex items-center justify-center gap-2 bg-[#c96442] text-white font-medium rounded-lg hover:bg-[#b5573a] transition-colors disabled:opacity-50"
+            className="w-full h-[44px] mb-3 flex items-center justify-center gap-2 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
             {consentProcessing ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> 처리 중...</>
@@ -318,8 +319,8 @@ export default function TabReception({ project, category, getVal, onChange, onRe
 
       {/* 4 통장 */}
       <div className="relative pb-8">
-        <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-[#c96442] text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
-        <h3 className="text-[13px] font-semibold text-[#c96442] mb-3">통장</h3>
+        <div className="absolute left-[-30px] w-6 h-6 rounded-full bg-accent text-white text-[11px] font-bold flex items-center justify-center z-10">{project.water_work_type === '옥내' ? 3 : 4}</div>
+        <h3 className="text-[13px] font-semibold text-accent-text mb-3">통장</h3>
         <div className="mb-3">
           <p className="text-[11px] font-medium text-txt-tertiary mb-1">통장사본</p>
           <FileDropZone projectId={project.id} fileType="통장사본" accept="image/*" compact />

@@ -9,6 +9,7 @@ import StaffColorPopover from './StaffColorPopover'
 import { UI_HIDDEN } from '@/lib/uiHidden'
 import { todayKST, todayMonthKST, todayDowKST } from '@/lib/utils/date'
 import { useTodayKST } from '@/lib/utils/useTodayKST'
+import { toast } from '@/lib/toast'
 
 // --- 타입 ---
 interface Schedule {
@@ -294,7 +295,7 @@ export default function WorkCalendarPage() {
     const { error } = await supabase.from('staff').update({ color }).eq('id', staffId)
     if (error) {
       setStaffList(prev)
-      alert('색상 저장 실패: ' + error.message)
+      toast.error('색상 저장 실패: ' + error.message)
     }
   }
 
@@ -414,7 +415,7 @@ export default function WorkCalendarPage() {
         <div className="flex items-center gap-4">
           <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary hidden md:block">업무 캘린더</h1>
           {!UI_HIDDEN.promo && (
-            <div className="flex bg-surface-secondary rounded-lg p-0.5">
+            <div className="flex bg-surface-secondary rounded-lg p-0.5 *:whitespace-nowrap">
               <button onClick={() => setActiveTab('calendar')}
                 className={`px-4 py-1.5 text-sm rounded-md transition ${activeTab === 'calendar' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>캘린더</button>
               <button onClick={() => setActiveTab('promo')}
@@ -747,7 +748,7 @@ function PromoStatusTab({ staffList }: { staffList: Staff[] }) {
     <div className="space-y-4">
       {/* 3탭 전환 */}
       <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-3 flex items-center justify-between">
-        <div className="flex bg-surface-secondary rounded-lg p-0.5">
+        <div className="flex bg-surface-secondary rounded-lg p-0.5 *:whitespace-nowrap">
           {[
             { key: 'small' as const, label: `소규모 (${CITIES_SMALL.length}시)` },
             { key: 'water' as const, label: `수도 (${CITIES_WATER.length}시)` },
@@ -1125,9 +1126,9 @@ function MobileCalendarView({
                         )}
                         {staffNames.length > 0 && <span className="text-txt-quaternary">·</span>}
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                          s.schedule_type === 'project' ? 'bg-blue-50 text-blue-600' :
-                          s.schedule_type === 'ai' ? 'bg-cyan-50 text-cyan-700' :
-                          'bg-gray-100 text-gray-600'
+                          s.schedule_type === 'project' ? 'bg-surface-secondary text-txt-secondary' :
+                          s.schedule_type === 'ai' ? 'bg-surface-secondary text-txt-secondary' :
+                          'bg-surface-secondary text-txt-secondary'
                         }`}>
                           {typeLabel}
                         </span>
@@ -1342,9 +1343,9 @@ function TodaySection({
 
                     {/* 분류 배지 */}
                     <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                      s.schedule_type === 'project' ? 'bg-blue-50 text-blue-600' :
-                      s.schedule_type === 'ai' ? 'bg-cyan-50 text-cyan-700' :
-                      'bg-gray-100 text-gray-600'
+                      s.schedule_type === 'project' ? 'bg-surface-secondary text-txt-secondary' :
+                      s.schedule_type === 'ai' ? 'bg-surface-secondary text-txt-secondary' :
+                      'bg-surface-secondary text-txt-secondary'
                     }`}>
                       {typeLabel}
                     </span>
@@ -1553,7 +1554,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(projectAddress)
-                    alert('주소가 복사되었습니다')
+                    toast.success('주소가 복사되었습니다')
                   }}
                   className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 bg-surface border border-border-primary rounded-lg text-txt-secondary text-[11px] font-medium hover:bg-surface-tertiary transition-colors"
                   title="주소 복사"
@@ -1564,7 +1565,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                   href={`https://map.kakao.com/link/to/${encodeURIComponent(projectAddress)},0,0`}
                   target="_blank"
                   rel="noreferrer"
-                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 bg-[#3B5998] rounded-lg text-white text-[11px] font-medium hover:bg-[#2d4a8a] transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 bg-surface border border-border-primary rounded-lg text-txt-primary text-[11px] font-medium hover:bg-surface-tertiary transition-colors"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
                   내비
@@ -1603,9 +1604,9 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
                 </div>
               )}
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                scheduleType === 'project' ? 'bg-blue-50 text-blue-600' :
-                scheduleType === 'ai' ? 'bg-cyan-50 text-cyan-700' :
-                'bg-gray-100 text-gray-600'
+                scheduleType === 'project' ? 'bg-surface-secondary text-txt-secondary' :
+                scheduleType === 'ai' ? 'bg-surface-secondary text-txt-secondary' :
+                'bg-surface-secondary text-txt-secondary'
               }`}>{viewTypeLabel}</span>
             </div>
 
@@ -1927,7 +1928,7 @@ function DailyLogModal({
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {
       const reason = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : ''
-      alert(`업무일지를 저장하지 못했습니다. 잠시 후 다시 눌러 주세요.${reason ? `\n(${reason})` : ''}`)
+      toast.error(`업무일지를 저장하지 못했습니다. 잠시 후 다시 눌러 주세요.${reason ? `\n(${reason})` : ''}`)
     }
     setSaving(false)
   }
@@ -1982,7 +1983,7 @@ function DailyLogModal({
                             : 'border-border-secondary hover:border-accent'
                         }`}
                       >
-                        {s.confirmed && <span className="text-[10px]">✓</span>}
+                        {s.confirmed && <span className="text-[10px]">확정</span>}
                       </button>
                       <div className="flex-1 min-w-0">
                         <div className={`text-[12px] ${s.confirmed ? 'text-txt-tertiary line-through' : 'text-txt-primary'}`}>

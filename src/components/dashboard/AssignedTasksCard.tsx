@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { isTouchOnly } from '@/lib/touch'
 import { Send, Plus, Check, X } from 'lucide-react'
 import type { Task } from '@/types'
 
@@ -76,14 +77,12 @@ export default function AssignedTasksCard({
       <div className="px-3 py-3 flex-1 overflow-y-auto">
         {tableMissing ? (
           <div className="text-center py-4 text-[11px] text-txt-quaternary leading-relaxed">
-            <div className="font-medium text-[12px] text-txt-tertiary mb-1">DB 준비 필요</div>
-            <div>Supabase SQL Editor에서</div>
-            <code className="inline-block px-1 py-0.5 bg-surface-tertiary rounded text-[10px] my-0.5">sql/migration_tasks.sql</code>
-            <div>한 번 실행해주세요.</div>
+            <div className="font-medium text-[12px] text-txt-tertiary mb-1">아직 쓸 수 없습니다</div>
+            <div>할 일 기능이 준비되지 않았습니다. 관리자에게 알려 주세요.</div>
           </div>
         ) : !staffSelected ? (
           <div className="text-center py-8 text-txt-quaternary text-[12px]">
-            상단에서 담당자를 선택하세요
+            지금 쓰는 직원을 먼저 골라 주세요
           </div>
         ) : (
           <>
@@ -132,6 +131,8 @@ export default function AssignedTasksCard({
                     <div
                       key={t.id}
                       onDoubleClick={() => onOpenDetail(t.id)}
+                      // 폰에는 더블클릭이 없으므로 한 번 누르면 연다 (완료·삭제 버튼을 누른 경우는 빼고)
+                      onClick={e => { if (isTouchOnly() && !(e.target as HTMLElement).closest('button')) onOpenDetail(t.id) }}
                       className="flex items-center gap-1.5 px-2 min-h-[34px] py-1 rounded-lg hover:bg-surface-tertiary group cursor-pointer"
                       title="더블클릭: 상세"
                     >
@@ -151,7 +152,7 @@ export default function AssignedTasksCard({
                       </div>
                       <button
                         onClick={() => onDelete(t.id)}
-                        className="opacity-0 group-hover:opacity-100 shrink-0 text-txt-quaternary hover:text-[#dc2626]"
+                        className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 shrink-0 text-txt-quaternary hover:text-[#dc2626]"
                       >
                         <X size={12} />
                       </button>

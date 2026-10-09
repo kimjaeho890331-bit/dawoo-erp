@@ -63,9 +63,9 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
     if (newest && prevStatusRef.current && prevStatusRef.current !== newest.status) {
       const buildingLabel = buildingName || '건축물대장'
       if (newest.status === 'done') {
-        toast.success(`✅ ${buildingLabel} 발급 완료`)
+        toast.success(`${buildingLabel} 발급 완료`)
       } else if (newest.status === 'failed') {
-        toast.error(`❌ ${buildingLabel} 실패: ${newest.error_message || '알 수 없는 오류'}`)
+        toast.error(`${buildingLabel} 발급 실패: ${newest.error_message || '이유를 알 수 없습니다'}`)
       }
     }
     prevStatusRef.current = newest?.status || null
@@ -162,11 +162,11 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
       <div className="flex items-center gap-1.5">
         {/* ===== 진행중 ===== */}
         {isActive && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[#c96442] bg-[#faf0eb] border border-[#e8d5cc] rounded-lg">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-accent-text bg-accent-light border border-[#e8d5cc] rounded-lg">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             {latest!.status === 'pending'
-              ? '⏳ 대기 중 (워커가 곧 처리)'
-              : '🔄 발급 중... (예상 30~60초)'}
+              ? '대기 중 (곧 시작합니다)'
+              : '발급 중… (30~60초 걸립니다)'}
           </div>
         )}
 
@@ -188,7 +188,7 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
               onClick={requestIssue}
               disabled={loading}
               title="재발급"
-              className="w-7 h-7 flex items-center justify-center rounded-lg border border-border-primary text-txt-tertiary hover:text-[#c96442] hover:border-[#c96442] transition-colors disabled:opacity-50"
+              className="w-7 h-7 flex items-center justify-center rounded-lg border border-border-primary text-txt-tertiary hover:text-accent-text hover:border-accent transition-colors disabled:opacity-50"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -208,7 +208,7 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
             <button
               onClick={requestIssue}
               disabled={loading}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-[#c96442] border border-[#c96442]/30 rounded-lg hover:bg-[#c96442]/5 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-accent-text border border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50"
             >
               <RotateCcw className="w-3 h-3" />
               재시도
@@ -221,7 +221,7 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
           <button
             onClick={requestIssue}
             disabled={loading}
-            className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium text-[#c96442] border border-[#c96442]/30 rounded-lg hover:bg-[#c96442]/5 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium text-accent-text border border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
             건축물대장 발급
@@ -237,7 +237,7 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
           >
             <History className="w-3.5 h-3.5" />
             {history.length > 1 && (
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#c96442] text-white text-[8px] rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-accent text-white text-[8px] rounded-full flex items-center justify-center">
                 {history.length}
               </span>
             )}
@@ -290,14 +290,14 @@ function CertificateHistory({ tasks, onClose }: { tasks: CoworkTask[]; onClose: 
       <div className="divide-y divide-border-tertiary">
         {tasks.map(t => {
           const statusLabel =
-            t.status === 'done' ? '✅ 완료'
-            : t.status === 'failed' ? '❌ 실패'
-            : t.status === 'processing' ? '🔄 발급 중'
-            : '⏳ 대기'
+            t.status === 'done' ? '완료'
+            : t.status === 'failed' ? '실패'
+            : t.status === 'processing' ? '발급 중'
+            : '대기'
           const statusColor =
             t.status === 'done' ? 'text-[#065f46]'
             : t.status === 'failed' ? 'text-[#b91c1c]'
-            : 'text-[#c96442]'
+            : 'text-accent-text'
           return (
             <div key={t.id} className="px-3 py-2 hover:bg-surface-secondary">
               <div className="flex items-center justify-between gap-2">
@@ -311,7 +311,7 @@ function CertificateHistory({ tasks, onClose }: { tasks: CoworkTask[]; onClose: 
                   href={t.result_drive_file_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[10px] text-[#c96442] hover:underline"
+                  className="text-[10px] text-accent-text hover:underline"
                 >
                   PDF 열기 ↗
                 </a>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_RATES, RATE_FIELDS, type LaborRates } from '@/lib/labor/rates'
+import { toast } from '@/lib/toast'
 
 // 일용직 공제 요율 설정. 한 줄 = "이 달부터 적용".
 // [저장]을 눌러야 반영된다 (근무관리 표에서 실수로 바뀌지 않도록 여기서만 고친다).
@@ -34,7 +35,7 @@ export default function LaborRatesPage() {
     setLoading(true)
     const { data, error } = await supabase.from('labor_rates').select('year, month, rates')
       .order('year').order('month')
-    if (error) { alert(`요율을 불러오지 못했습니다: ${error.message}`); setLoading(false); return }
+    if (error) { toast.error(`요율을 불러오지 못했습니다: ${error.message}`); setLoading(false); return }
     const loaded = (data ?? []).map(d => ({ id: keyOf(d), year: d.year, month: d.month, values: toValues(d.rates) }))
     setRows(loaded)
     setSavedKeys(loaded.map(keyOf))
@@ -75,14 +76,14 @@ export default function LaborRatesPage() {
 
   const handleSave = async () => {
     const keys = rows.map(keyOf)
-    if (new Set(keys).size !== keys.length) { alert('적용 시작월이 같은 줄이 있습니다. 한 달에 한 줄만 둘 수 있습니다.'); return }
+    if (new Set(keys).size !== keys.length) { toast.info('적용 시작월이 같은 줄이 있습니다. 한 달에 한 줄만 둘 수 있습니다.'); return }
     const payload: { year: number; month: number; rates: LaborRates; updated_at: string }[] = []
     for (const r of rows) {
       const rates = {} as LaborRates
       for (const f of RATE_FIELDS) {
         const v = Number(r.values[f.key])
         if (r.values[f.key].trim() === '' || !Number.isFinite(v) || v < 0 || v > 100) {
-          alert(`${r.year}년 ${r.month}월 ${f.label} 요율을 확인해 주세요. (0~100 사이 숫자)`)
+          toast.info(`${r.year}년 ${r.month}월 ${f.label} 요율을 확인해 주세요. (0~100 사이 숫자)`)
           return
         }
         rates[f.key] = v
@@ -96,15 +97,15 @@ export default function LaborRatesPage() {
     for (const k of removed) {
       const [y, m] = k.split('-').map(Number)
       const { error } = await supabase.from('labor_rates').delete().eq('year', y).eq('month', m)
-      if (error) { setSaving(false); alert(`저장 실패: ${error.message}`); return }
+      if (error) { setSaving(false); toast.error(`저장 실패: ${error.message}`); return }
     }
     if (payload.length > 0) {
       const { error } = await supabase.from('labor_rates').upsert(payload)
-      if (error) { setSaving(false); alert(`저장 실패: ${error.message}`); return }
+      if (error) { setSaving(false); toast.error(`저장 실패: ${error.message}`); return }
     }
     setSaving(false)
     await load()
-    alert('요율을 저장했습니다.')
+    toast.success('요율을 저장했습니다.')
   }
 
   const sorted = [...rows].sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month))
@@ -115,7 +116,7 @@ export default function LaborRatesPage() {
   const selectCls = 'border border-border-primary rounded-lg px-2 h-[32px] text-sm outline-none focus:border-accent bg-surface'
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
+    <div className="md:p-6 space-y-5 max-w-5xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <Link href="/labor" className="inline-flex items-center gap-1 text-sm text-txt-tertiary hover:text-txt-secondary">
@@ -124,7 +125,7 @@ export default function LaborRatesPage() {
           <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary mt-1">공제 요율 설정</h1>
         </div>
         <button onClick={handleSave} disabled={saving || loading || !dirty}
-          className="px-5 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition disabled:opacity-50">
+          className="btn-primary">
           {saving ? '저장 중...' : dirty ? '저장' : '저장됨'}
         </button>
       </div>

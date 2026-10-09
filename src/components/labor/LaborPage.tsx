@@ -12,6 +12,7 @@ import LaborImportModal from './LaborImportModal'
 import { maskResidentId } from '@/lib/labor/mask'
 import { laborApprovalDraft } from '@/lib/labor/approvalDraft'
 import { STAFF_STORAGE_KEY } from '@/lib/activityLog'
+import { toast } from '@/lib/toast'
 
 export { DEFAULT_RATES, type LaborRates }
 
@@ -214,7 +215,7 @@ export default function LaborPage() {
       pendingPatch.current.delete(id)
       if (!body || Object.keys(body).length === 0) return
       const { error } = await supabase.from('labor_records').update(body).eq('id', id)
-      if (error) alert(`저장 실패: ${error.message}`)
+      if (error) toast.error(`저장 실패: ${error.message}`)
     }
 
     const timer = saveTimers.current.get(id)
@@ -251,7 +252,7 @@ export default function LaborPage() {
     const { data, error } = await supabase.from('labor_records')
       .insert({ year, month, worker_name: '', day_values: {}, sort_order: records.length })
       .select().single()
-    if (error) { alert(`행 추가 실패: ${error.message}`); return }
+    if (error) { toast.error(`행 추가 실패: ${error.message}`); return }
     setRecords(prev => [...prev, data as LaborRecord])
   }
 
@@ -263,7 +264,7 @@ export default function LaborPage() {
     saveTimers.current.delete(id)
     pendingPatch.current.delete(id)
     const { error } = await supabase.from('labor_records').delete().eq('id', id)
-    if (error) { alert(`삭제 실패: ${error.message}`); return }
+    if (error) { toast.error(`삭제 실패: ${error.message}`); return }
     setRecords(prev => prev.filter(r => r.id !== id))
   }
 
@@ -316,12 +317,12 @@ export default function LaborPage() {
     if (y === year && m === month) { fetchRecords(); fetchRates() }
     else { setYear(y); setMonth(m) }
     fetchWorkers()
-    alert(`${y}년 ${m}월에 ${count}줄을 불러왔습니다.`)
+    toast.success(`${y}년 ${m}월에 ${count}줄을 불러왔습니다.`)
   }
 
   // --- 엑셀 저장 (체크된 근무자) ---
   const handleExport = async () => {
-    if (checkedRecords.length === 0) { alert('엑셀로 저장할 근무자를 체크해주세요.'); return }
+    if (checkedRecords.length === 0) { toast.info('엑셀로 저장할 근무자를 체크해주세요.'); return }
     setExporting(true)
     try {
       const res = await fetch('/api/labor/export', {
@@ -338,7 +339,7 @@ export default function LaborPage() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      alert(`엑셀 저장 실패: ${err instanceof Error ? err.message : err}`)
+      toast.error(`엑셀 저장 실패: ${err instanceof Error ? err.message : err}`)
     } finally { setExporting(false) }
   }
 
@@ -348,8 +349,8 @@ export default function LaborPage() {
   // 확인하고 "결재 올리기"를 눌러야 결재가 시작되고, 결재가 끝나야 지출에 들어간다.
   const handleSubmitApproval = async () => {
     const actorId = typeof window !== 'undefined' ? localStorage.getItem(STAFF_STORAGE_KEY) : null
-    if (!actorId) { alert('지금 쓰는 직원이 정해져 있지 않습니다. 지출결의서 화면 위쪽에서 직원을 먼저 골라 주세요.'); return }
-    if (!siteId && !projectId) { alert('위쪽에서 현장(또는 지원사업)을 먼저 골라 주세요. 노무비는 현장 연결이 필요합니다.'); return }
+    if (!actorId) { toast.info('지금 쓰는 직원이 정해져 있지 않습니다. 지출결의서 화면 위쪽에서 직원을 먼저 골라 주세요.'); return }
+    if (!siteId && !projectId) { toast.info('위쪽에서 현장(또는 지원사업)을 먼저 골라 주세요. 노무비는 현장 연결이 필요합니다.'); return }
 
     flushPending()
     const today = new Date().toISOString().slice(0, 10)
@@ -367,7 +368,7 @@ export default function LaborPage() {
         }
       }),
     })
-    if (!built.ok) { alert(built.error); return }
+    if (!built.ok) { toast.error(built.error); return }
     const { title, payments, body_html } = built.draft
     const totalNet = payments.reduce((s, p) => s + p.amount, 0)
 
@@ -390,7 +391,7 @@ export default function LaborPage() {
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { alert(`결의서를 만들지 못했습니다: ${json.error || res.statusText}`); return }
+      if (!res.ok) { toast.error(`결의서를 만들지 못했습니다: ${json.error || res.statusText}`); return }
       router.push(`/approval/${json.id}/edit`)
     } finally {
       setSubmitting(false)
@@ -413,7 +414,7 @@ export default function LaborPage() {
   const tdCls = 'border border-border-tertiary px-0.5 py-0.5 text-[12px]'
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="md:p-6 space-y-5">
       {importFile && (
         <LaborImportModal file={importFile} onClose={() => setImportFile(null)} onImported={handleImported} />
       )}
@@ -455,7 +456,7 @@ export default function LaborPage() {
             {exporting ? '생성 중...' : '엑셀 저장'}
           </button>
           <button onClick={handleSubmitApproval} disabled={submitting}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition disabled:opacity-50">
+            className="btn-primary flex items-center gap-1.5 whitespace-nowrap">
             <FileCheck size={15} />
             {submitting ? '만드는 중...' : '노무비 결재 올리기'}
           </button>

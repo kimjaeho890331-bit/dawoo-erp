@@ -360,7 +360,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ===== 모바일 레이아웃 (md 미만) — 아코디언 ===== */}
-      <div className="md:hidden px-4 py-4 space-y-2.5 bg-page min-h-screen">
+      <div className="md:hidden space-y-2.5 bg-page min-h-screen">
         {/* 즐겨찾기 바로가기 — 왼쪽 메뉴에서 별을 누른 항목(최대 4개).
             지정한 게 없으면 아무것도 그리지 않는다. */}
         <FavoriteShortcuts />

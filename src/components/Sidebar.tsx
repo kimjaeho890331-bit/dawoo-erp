@@ -51,11 +51,15 @@ function FavoriteStar({ path, name, on, onToggle }: {
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
+  /** PC에서 좁게 접었는가. 상태는 레이아웃이 들고 있다 — 본문 왼쪽 여백도 같이 바뀌어야 해서다. */
+  collapsed: boolean
+  onToggleCollapsed: () => void
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, collapsed: collapsedPc, onToggleCollapsed }: SidebarProps) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  // 폰에서 메뉴를 열었을 때는 접힌 상태여도 이름까지 다 보여준다
+  const collapsed = collapsedPc && !isOpen
   const [ledgerOk, setLedgerOk] = useState(false)
   const [mySitesOk, setMySitesOk] = useState(false)
   const [privateIdsOk, setPrivateIdsOk] = useState(false)
@@ -145,19 +149,20 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="h-14 px-4 flex items-center justify-between border-b border-white/[0.08]">
           {!collapsed && (
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-[#c96442] flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center">
                 <span className="text-white text-[12px] font-bold">D</span>
               </div>
               <span className="text-[15px] font-semibold tracking-[-0.3px] text-[#e8e6dc]">DAWOO ERP</span>
             </div>
           )}
           {collapsed && (
-            <div className="w-7 h-7 rounded-lg bg-[#c96442] flex items-center justify-center mx-auto">
+            <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center mx-auto">
               <span className="text-white text-[12px] font-bold">D</span>
             </div>
           )}
           <button
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? '메뉴 펼치기' : '메뉴 접기'}
             className="hidden md:flex w-7 h-7 items-center justify-center rounded-md text-[#87867f] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)] transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -175,7 +180,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           onClick={onClose}
           className={`flex items-center gap-3 mx-2 mt-2 px-3 py-2 rounded-lg text-[13px] transition-colors ${
             isActive('/dashboard')
-              ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+              ? 'bg-[rgba(201,100,66,0.12)] text-accent-text'
               : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
           }`}
         >
@@ -214,18 +219,18 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         onClick={onClose}
                         className={`flex flex-1 min-w-0 items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
                           active
-                            ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+                            ? 'bg-[rgba(201,100,66,0.12)] text-accent-text'
                             : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
                         }`}
                       >
                         {active && (
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#c96442] rounded-l" />
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-accent rounded-l" />
                         )}
                         {isDot ? (
                           <span className={active ? 'font-medium' : ''}>.</span>
                         ) : (
                           <>
-                            <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-[#c96442]' : ''}`} />
+                            <SvgIcon d={item.icon} className={`w-[18px] h-[18px] shrink-0 ${active ? 'text-accent-text' : ''}`} />
                             {!collapsed && <span className={`truncate ${active ? 'font-medium' : ''}`}>{item.name}</span>}
                           </>
                         )}
@@ -257,7 +262,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 onClick={onClose}
                 className={`flex flex-1 min-w-0 items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
                   isActive(item.path)
-                    ? 'bg-[rgba(201,100,66,0.12)] text-[#c96442]'
+                    ? 'bg-[rgba(201,100,66,0.12)] text-accent-text'
                     : 'text-[#b0aea5] hover:text-[#e8e6dc] hover:bg-[rgba(255,255,255,0.06)]'
                 }`}
               >

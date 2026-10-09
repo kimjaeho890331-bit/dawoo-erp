@@ -33,6 +33,7 @@ import {
   revealPasswordCache,
   type RevealState,
 } from '@/lib/credentials/revealUi'
+import { toast } from '@/lib/toast'
 
 const STAFF_KEY = 'dawoo_current_staff_id'
 const SKELETON_ROWS = 5
@@ -291,7 +292,7 @@ export default function CredentialsPage({
     setSaving(false)
     if (!res.ok) {
       const data = await res.json().catch(() => null)
-      alert(data?.error || '저장에 실패했습니다')
+      toast.error(data?.error || '저장에 실패했습니다')
       return
     }
     setShowForm(false)
@@ -303,7 +304,7 @@ export default function CredentialsPage({
     const res = await credFetch(`${apiBase(kind)}/${row.id}`, { method: 'DELETE' })
     if (!res.ok) {
       const data = await res.json().catch(() => null)
-      alert(data?.error || '삭제에 실패했습니다')
+      toast.error(data?.error || '삭제에 실패했습니다')
       return
     }
     if (revealed?.id === row.id) clearReveal()
@@ -360,7 +361,7 @@ export default function CredentialsPage({
     return (
       <div className="max-w-[960px] mx-auto space-y-3">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">{title}</h1>
-        <p className="text-[13px] text-txt-quaternary">권한없음</p>
+        <p className="text-[13px] text-txt-tertiary">볼 수 있는 권한이 없습니다. 필요하면 관리자에게 요청해 주세요.</p>
       </div>
     )
   }
@@ -384,9 +385,10 @@ export default function CredentialsPage({
         <button
           type="button"
           onClick={openNew}
-          className="self-start inline-flex items-center gap-1 h-8 px-2 text-[13px] text-txt-secondary rounded-md hover:bg-surface-tertiary hover:text-txt-primary transition"
+          // 화면의 주 동작인데 회색 글자 버튼이라 찾기 어려웠다 — 다른 화면의 등록 버튼과 같은 모양으로
+          className="btn-primary self-start inline-flex items-center gap-1.5 whitespace-nowrap"
         >
-          <Plus size={14} className="text-txt-tertiary" /> 등록
+          <Plus size={14} /> 등록
         </button>
       </div>
 

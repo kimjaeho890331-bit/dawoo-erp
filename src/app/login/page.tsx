@@ -5,6 +5,16 @@ import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { Loader2, Building2, ChevronDown, ChevronUp } from 'lucide-react'
 
+/** 로그인 오류를 직원이 알아들을 말로. 예전에는 "Invalid login credentials" 같은 영어 원문이 그대로 나왔다. */
+function loginErrorMessage(raw: string): string {
+  const m = raw.toLowerCase()
+  if (m.includes('invalid login credentials')) return '이메일 또는 비밀번호가 맞지 않습니다.'
+  if (m.includes('email not confirmed')) return '이메일 인증이 아직 끝나지 않았습니다. 받은 메일함을 확인해 주세요.'
+  if (m.includes('rate limit') || m.includes('too many')) return '잠시 후 다시 시도해 주세요. (시도가 너무 많았습니다)'
+  if (m.includes('network') || m.includes('fetch')) return '인터넷 연결을 확인하고 다시 시도해 주세요.'
+  return `로그인하지 못했습니다. 잠시 후 다시 시도해 주세요. (${raw})`
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -31,7 +41,7 @@ export default function LoginPage() {
     })
 
     if (authError) {
-      setError(authError.message)
+      setError(loginErrorMessage(authError.message))
       setKakaoLoading(false)
     }
   }
@@ -47,7 +57,7 @@ export default function LoginPage() {
     })
 
     if (authError) {
-      setError(authError.message)
+      setError(loginErrorMessage(authError.message))
       setLoading(false)
       return
     }
@@ -74,7 +84,7 @@ export default function LoginPage() {
         <div className="bg-surface border border-border-primary rounded-2xl shadow-sm p-10">
           {/* 로고 영역 */}
           <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[#111827] mb-5">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-sidebar mb-5">
               <Building2 className="w-7 h-7 text-white" />
             </div>
             <h1 className="text-[22px] font-semibold text-txt-primary tracking-tight leading-tight">

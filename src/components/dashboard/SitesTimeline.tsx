@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { isTouchOnly } from '@/lib/touch'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -238,6 +239,7 @@ export default function SitesTimeline() {
                         <div
                           key={s.id + '-' + wi}
                           onDoubleClick={() => site && openSite(site.id)}
+                          onClick={() => { if (isTouchOnly() && site) openSite(site.id) }}
                           className={`absolute flex items-center rounded-md cursor-pointer group overflow-hidden transition-opacity hover:opacity-90 ${
                             s.confirmed ? 'text-white shadow-sm' : 'bg-surface shadow-sm'
                           }`}

@@ -4,6 +4,7 @@
 // 카드 내역 업로드(PDF·CSV), 카드별 담당, 이상 탐지, 카드 내역 목록을 한 화면에서 본다.
 
 import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 'react'
+import { toast } from '@/lib/toast'
 import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle, Upload, Table } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -39,13 +40,14 @@ interface Anomaly {
 
 const CARD_CATS = ['식대', '주유', '자재', '사무용품', '접대', '교통', '편의점', '기타'] as const
 
+// 종류(상태가 아님)는 회색 한 가지로 — 색은 진행 상태에만 쓴다 (대표 원칙)
 const CAT_COLOR: Record<string, string> = {
-  '식대': 'bg-orange-100 text-orange-700', '주유': 'bg-amber-100 text-amber-700', '자재': 'bg-green-100 text-green-700',
-  '사무용품': 'bg-yellow-100 text-yellow-700', '접대': 'bg-pink-100 text-pink-700', '교통': 'bg-blue-100 text-blue-700',
-  '편의점': 'bg-lime-100 text-lime-700', '기타': 'bg-surface-secondary text-txt-secondary',
+  '식대': 'bg-surface-secondary text-txt-secondary', '주유': 'bg-surface-secondary text-txt-secondary', '자재': 'bg-surface-secondary text-txt-secondary',
+  '사무용품': 'bg-surface-secondary text-txt-secondary', '접대': 'bg-surface-secondary text-txt-secondary', '교통': 'bg-surface-secondary text-txt-secondary',
+  '편의점': 'bg-surface-secondary text-txt-secondary', '기타': 'bg-surface-secondary text-txt-secondary',
 }
 
-const SEVERITY_COLOR = { high: 'bg-red-50 border-red-200 text-red-700', medium: 'bg-yellow-50 border-yellow-200 text-yellow-700', low: 'bg-blue-50 border-blue-200 text-blue-700' }
+const SEVERITY_COLOR = { high: 'bg-red-50 border-red-200 text-red-700', medium: 'bg-yellow-50 border-yellow-200 text-yellow-700', low: 'bg-accent-light border-accent/30 text-accent-text' }
 const SEVERITY_LABEL = { high: '주의', medium: '확인', low: '참고' }
 
 // ===== 이상 탐지 엔진 =====
@@ -337,7 +339,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
   const [newCardStaff, setNewCardStaff] = useState('')
 
   const handlePdfUpload = async (file: File) => {
-    if (!file.name.endsWith('.pdf')) { alert('PDF 파일만 업로드 가능합니다'); return }
+    if (!file.name.endsWith('.pdf')) { toast.info('PDF 파일만 업로드 가능합니다'); return }
     setUploading(true); setUploadResult(null)
     try {
       // 업로드는 /api/storage/upload(service_role)로만 한다 — 프론트 anon 키에는
@@ -376,7 +378,9 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
   }
 
   const deleteMapping = async (id: string) => {
-    await supabase.from('card_mappings').delete().eq('id', id)
+    if (!confirm('이 카드의 담당자 연결을 지울까요?')) return
+    const { error } = await supabase.from('card_mappings').delete().eq('id', id)
+    if (error) { toast.error(`지우지 못했습니다: ${error.message}`); return }
     onReload()
   }
 
@@ -458,7 +462,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
   return (
     <div className="space-y-4">
       {/* 파일 업로드 영역 (PDF + CSV) */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* PDF 업로드 */}
         <div
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -466,7 +470,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
           className={`rounded-[10px] border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
-            dragging ? 'border-accent bg-blue-50' : 'border-border-primary hover:border-border-secondary hover:bg-surface-secondary'
+            dragging ? 'border-accent bg-accent-light' : 'border-border-primary hover:border-border-secondary hover:bg-surface-secondary'
           }`}>
           {uploading ? (
             <div className="text-sm text-txt-secondary">업로드 중...</div>
@@ -487,7 +491,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
           onDrop={handleCsvDrop}
           onClick={() => csvFileRef.current?.click()}
           className={`rounded-[10px] border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
-            dragging ? 'border-accent bg-blue-50' : 'border-border-primary hover:border-border-secondary hover:bg-surface-secondary'
+            dragging ? 'border-accent bg-accent-light' : 'border-border-primary hover:border-border-secondary hover:bg-surface-secondary'
           }`}>
           <div className="flex justify-center mb-2"><Table size={24} className="text-txt-tertiary" /></div>
           <div className="text-sm font-medium text-txt-secondary">CSV 업로드</div>
@@ -512,7 +516,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
       {/* CSV 미리보기 */}
       {csvPreview && (
         <div className="bg-surface rounded-[10px] border border-accent overflow-hidden">
-          <div className="px-4 py-3 border-b border-border-tertiary flex items-center justify-between bg-blue-50">
+          <div className="px-4 py-3 border-b border-border-tertiary flex items-center justify-between bg-accent-light">
             <h3 className="text-[14px] font-semibold text-txt-primary flex items-center gap-1.5">
               <Upload size={16} className="text-txt-tertiary" /> CSV 미리보기 ({csvPreview.length}건)
             </h3>
@@ -558,7 +562,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
       )}
 
       {/* 카드 매핑 + 이상탐지 */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* 카드-직원 매핑 */}
         <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
           <div className="px-4 py-3 border-b border-border-tertiary flex items-center justify-between">
@@ -624,7 +628,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
                 {anomalies.map((a: Anomaly, i: number) => (
                   <div key={i} className={`rounded-lg border px-3 py-2 ${SEVERITY_COLOR[a.severity]}`}>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-semibold flex items-center gap-1"><Circle size={8} className={a.severity === 'high' ? 'fill-red-500 text-red-500' : a.severity === 'medium' ? 'fill-yellow-500 text-yellow-500' : 'fill-blue-500 text-blue-500'} />{SEVERITY_LABEL[a.severity]}</span>
+                      <span className="text-[11px] font-semibold flex items-center gap-1"><Circle size={8} className={a.severity === 'high' ? 'fill-red-500 text-red-500' : a.severity === 'medium' ? 'fill-yellow-500 text-yellow-500' : 'fill-blue-500 text-accent-text'} />{SEVERITY_LABEL[a.severity]}</span>
                       <span className="text-[12px] flex-1">{a.message}</span>
                     </div>
                   </div>
@@ -647,10 +651,10 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
                 <div key={card} className="flex items-center gap-3">
                   <div className="w-28 shrink-0">
                     <span className="text-sm font-medium text-txt-secondary">{card}</span>
-                    {owner && <span className="text-[10px] text-blue-500 ml-1">({owner})</span>}
+                    {owner && <span className="text-[10px] text-accent-text ml-1">({owner})</span>}
                   </div>
                   <div className="flex-1 h-2 bg-surface-secondary rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-accent rounded-full" style={{ width: `${pct}%` }} />
                   </div>
                   <span className="text-sm font-medium text-txt-primary w-28 text-right tabular-nums">{info.total.toLocaleString()}원</span>
                   <span className="text-xs text-txt-tertiary w-10 tabular-nums">{info.count}건</span>
@@ -665,7 +669,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
       <div className="flex gap-2 flex-wrap">
         {['전체', ...CARD_CATS].map(c => (
           <button key={c} onClick={() => setFilterCat(c)}
-            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${filterCat === c ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
+            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${filterCat === c ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
         ))}
       </div>
 
@@ -688,7 +692,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
                     <td className="px-4 py-2.5 text-txt-secondary text-[13px]">{c.transaction_date}</td>
                     <td className="px-4 py-2.5 text-[13px]">
                       <span className="font-medium text-txt-secondary">{c.card_name}</span>
-                      {owner && <span className="text-[10px] text-blue-500 ml-1">({owner})</span>}
+                      {owner && <span className="text-[10px] text-accent-text ml-1">({owner})</span>}
                     </td>
                     <td className="px-4 py-2.5 text-txt-primary text-[13px]">{c.merchant}</td>
                     <td className="px-4 py-2.5"><span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[c.category] || CAT_COLOR['기타']}`}>{c.category}</span></td>

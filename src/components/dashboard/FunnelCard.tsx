@@ -183,7 +183,7 @@ export default function FunnelCard() {
             <button
               key={t.key}
               onClick={() => setPeriod(t.key)}
-              className={`text-[11px] px-2.5 py-1 rounded-md transition-colors ${period === t.key ? 'bg-accent text-white' : 'text-txt-secondary border border-border-primary hover:bg-surface-tertiary'}`}
+              className={`text-[11px] px-2.5 py-1 rounded-md transition-colors ${period === t.key ? 'bg-accent-light text-accent-text' : 'text-txt-secondary border border-border-primary hover:bg-surface-tertiary'}`}
             >
               {t.label}
             </button>

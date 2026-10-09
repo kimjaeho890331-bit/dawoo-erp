@@ -37,7 +37,7 @@ export default function LedgerPage() {
   }
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-4">
+    <div className="md:p-6 max-w-[1200px] mx-auto space-y-4">
       <div>
         <h1 className="text-[22px] font-semibold text-txt-primary">경리</h1>
         <p className="text-[13px] text-txt-tertiary mt-1">법인카드 사용내역과 담당, 이상 결제를 봅니다. 직원 화면에는 올리지 않습니다.</p>

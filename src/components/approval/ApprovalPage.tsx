@@ -251,10 +251,10 @@ export default function ApprovalPage() {
               role="tab"
               aria-selected={active}
               onClick={() => setBox(t.items[0].key)}
-              className={`-mb-px flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-3 text-[13px] md:min-h-10 ${
+              className={`-mb-px flex min-h-11 shrink-0 items-center gap-1.5 border-b-[1.5px] px-3 text-[13px] md:min-h-10 ${
                 active
-                  ? 'border-accent font-semibold text-txt-primary'
-                  : 'border-transparent text-txt-secondary hover:text-txt-primary'
+                  ? 'border-accent font-medium text-accent'
+                  : 'border-transparent text-txt-tertiary hover:text-txt-secondary'
               }`}
             >
               {t.label}
@@ -280,7 +280,7 @@ export default function ApprovalPage() {
                 aria-pressed={active}
                 className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] md:min-h-8 ${
                   active
-                    ? 'border-txt-primary bg-txt-primary text-txt-inverse'
+                    ? 'border-accent bg-accent-light font-medium text-accent-text'
                     : 'border-border-primary bg-surface text-txt-secondary hover:text-txt-primary'
                 }`}
               >

@@ -493,12 +493,15 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         toast.error(logged.error)
         return
       }
-      await supabase.from('projects').update({ status: showStatusModal }).eq('id', project.id)
+      const { error } = await supabase.from('projects').update({ status: showStatusModal }).eq('id', project.id)
+      if (error) throw error
       setShowStatusModal(null)
       setStatusReason('')
       onRefresh?.()
     } catch (err) {
       console.error('상태 변경 실패:', err)
+      // 예전에는 콘솔에만 남아, 실패해도 창이 그대로라 된 건지 알 수 없었다
+      toast.error('단계 변경에 실패했습니다. 다시 시도해 주세요.')
     }
   }
 
@@ -517,59 +520,66 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
       <div className="fixed right-0 top-0 h-full w-full md:w-[600px] bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.12)] z-40 flex flex-col animate-slide-in overflow-hidden">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-primary">
-          <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">
-            {project.building_name || '(이름없음)'}
-          </h2>
-          <div className="flex items-center gap-2">
-            {hasChanges && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
-              >
-                {saving ? '저장 중...' : '저장'}
-              </button>
-            )}
-            {/* 건축물대장 발급 + 상태 표시 */}
-            <CertificateButton projectId={project.id} buildingName={project.building_name} />
+        {/* 버튼이 많아 좁은 화면에서는 줄을 바꿔 내려간다 — 예전에는 한 줄이라 오른쪽 버튼이 잘렸다.
+            닫기(✕)는 줄바꿈과 상관없이 항상 오른쪽 위에 둔다 */}
+        <div className="flex items-start gap-3 px-6 py-4 border-b border-border-primary">
+          <div className="flex-1 min-w-0 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <h2 className="min-w-0 text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">
+              {project.building_name || '(이름없음)'}
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              {hasChanges && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="inline-flex items-center min-h-[32px] px-3 text-[12px] font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
+                >
+                  {saving ? '저장 중...' : '저장'}
+                </button>
+              )}
+              {/* 건축물대장 발급 + 상태 표시 */}
+              <CertificateButton projectId={project.id} buildingName={project.building_name} />
 
-            <button
-              onClick={() => setShowStatusModal('취소')}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#b53333] border border-[#b53333]/30 rounded-lg hover:bg-[#b53333]/5 transition-colors"
-            >
-              취소
-            </button>
-            <button
-              onClick={() => setShowStatusModal('문의(예약)')}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#d97706] border border-[#fef3c7] rounded-lg hover:bg-amber-50 transition-colors"
-            >
-              예약
-            </button>
-            {(project as unknown as Record<string, string>).drive_folder_url ? (
-              <a
-                href={(project as unknown as Record<string, string>).drive_folder_url}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 text-[11px] font-medium text-white bg-[#0F9D58] rounded-lg hover:bg-[#0b8043] transition-colors inline-flex items-center gap-1"
+              {/* 예전 이름 "취소"는 창 닫기처럼 읽히고 삭제와 같은 빨간색이라 헷갈렸다.
+                  실제로는 접수를 '취소' 단계로 옮기는 것(되돌릴 수 있음)이라 이름을 바꾸고 회색으로 둔다 */}
+              <button
+                onClick={() => setShowStatusModal('취소')}
+                className="inline-flex items-center min-h-[32px] px-3 text-[12px] font-medium text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary transition-colors"
               >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M7.71 3.5L1.15 15l3.43 5.97L11 9.47 7.71 3.5zm8.58 0H8.29l6.56 11.5h8L16.29 3.5zM5.57 21h12.86l-3.43-6H2.14l3.43 6z"/></svg>
-                드라이브
-              </a>
-            ) : null}
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="px-3 py-1.5 text-[11px] font-medium text-[#b53333] border border-[#b53333]/30 rounded-lg hover:bg-[#b53333]/5 transition-colors"
-            >
-              삭제
-            </button>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-tertiary text-txt-tertiary hover:text-txt-secondary transition-colors"
-            >
-              &#x2715;
-            </button>
+                접수 취소
+              </button>
+              <button
+                onClick={() => setShowStatusModal('문의(예약)')}
+                className="inline-flex items-center min-h-[32px] px-3 text-[12px] font-medium text-[#d97706] border border-[#fef3c7] rounded-lg hover:bg-amber-50 transition-colors"
+              >
+                예약
+              </button>
+              {(project as unknown as Record<string, string>).drive_folder_url ? (
+                <a
+                  href={(project as unknown as Record<string, string>).drive_folder_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-h-[32px] px-3 text-[12px] font-medium text-white bg-[#0F9D58] rounded-lg hover:bg-[#0b8043] transition-colors inline-flex items-center gap-1"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M7.71 3.5L1.15 15l3.43 5.97L11 9.47 7.71 3.5zm8.58 0H8.29l6.56 11.5h8L16.29 3.5zM5.57 21h12.86l-3.43-6H2.14l3.43 6z"/></svg>
+                  드라이브
+                </a>
+              ) : null}
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center min-h-[32px] px-3 text-[12px] font-medium text-[#b53333] border border-[#b53333]/30 rounded-lg hover:bg-[#b53333]/5 transition-colors"
+              >
+                삭제
+              </button>
+            </div>
           </div>
+          <button
+            onClick={onClose}
+            title="닫기"
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-tertiary text-txt-tertiary hover:text-txt-secondary transition-colors"
+          >
+            &#x2715;
+          </button>
         </div>
 
         {/* 저장 실패 배너 */}
@@ -784,7 +794,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
         {/* 탭 콘텐츠 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} />}
+          {activeTab === '기본정보' && <TabBasicInfo project={project} getVal={getVal} onChange={updateField} apiFieldsLocked={apiFieldsLocked} onUnlockApiFields={() => setApiFieldsLocked(false)} />}
           {activeTab === '접수' && <TabReception project={project} category={category} getVal={getVal} onChange={updateField} onRefresh={onRefresh} />}
           {activeTab === '승인(시공)' && <TabConstruction project={project} category={category} getVal={getVal} onChange={updateField} currentStepIdx={currentStepIdx} onRefresh={onRefresh} />}
           {activeTab === '완료' && <TabCompletion project={project} getVal={getVal} onChange={updateField} />}
@@ -804,13 +814,19 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         <>
           <div className="fixed inset-0 bg-black/40 z-50" onClick={() => setShowStatusModal(null)} />
           <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-xl shadow-xl z-50 p-6 w-[360px]">
-            <h3 className="text-[15px] font-semibold text-txt-primary mb-3">
-              {showStatusModal === '취소' ? '취소 처리' : '예약으로 전환'}
+            <h3 className="text-[15px] font-semibold text-txt-primary mb-2">
+              {showStatusModal === '취소' ? '접수 취소' : '예약으로 전환'}
             </h3>
+            {/* 무엇이 바뀌는지 먼저 알려 준다 — 예전에는 제목과 사유 칸뿐이라 삭제되는 줄 알았다 */}
+            <p className="text-[12px] text-txt-secondary leading-relaxed mb-3">
+              {showStatusModal === '취소'
+                ? <>이 접수를 &apos;취소&apos; 단계로 옮깁니다. 삭제되지 않으며, 목록의 &apos;취소&apos; 탭에서 볼 수 있고 나중에 단계를 다시 바꿀 수 있습니다.</>
+                : <>이 접수를 &apos;문의(예약)&apos;로 옮깁니다. 목록의 &apos;문의(예약)&apos; 탭에서 볼 수 있습니다.</>}
+            </p>
             <textarea
               autoFocus
               rows={3}
-              placeholder="사유를 입력하세요"
+              placeholder="사유 (선택)"
               value={statusReason}
               onChange={e => setStatusReason(e.target.value)}
               className="w-full px-3 py-2 border border-border-primary rounded-lg text-[13px] resize-none focus:outline-none focus:border-accent focus:ring-2 focus:ring-[#c96442]/10"
@@ -819,8 +835,9 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               <button onClick={() => setShowStatusModal(null)} className="flex-1 px-4 py-2 text-[13px] text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">
                 닫기
               </button>
-              <button onClick={handleStatusChange} className={`flex-1 px-4 py-2 text-[13px] font-medium text-white rounded-lg ${showStatusModal === '취소' ? 'bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#d97706] hover:bg-[#b45309]'}`}>
-                {showStatusModal === '취소' ? '취소 처리' : '예약 전환'}
+              {/* 접수 취소는 되돌릴 수 있어 빨간색(삭제용)을 쓰지 않는다 */}
+              <button onClick={handleStatusChange} className={`flex-1 px-4 py-2 text-[13px] font-medium text-white rounded-lg ${showStatusModal === '취소' ? 'bg-accent hover:bg-accent-hover' : 'bg-[#d97706] hover:bg-[#b45309]'}`}>
+                {showStatusModal === '취소' ? '접수 취소하기' : '예약 전환'}
               </button>
             </div>
           </div>

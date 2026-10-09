@@ -7,54 +7,8 @@ import { insertStatusLog } from '@/lib/statusLog/client'
 import { validateProjectData } from '@/lib/utils/validate'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 import { toast } from '@/lib/toast'
-
-const PROGRESS_STEPS: ProjectStep[] = [
-  '문의', '실측', '견적전달', '동의서', '신청서제출',
-  '승인', '착공계', '공사', '완료서류제출', '입금',
-]
-
-interface ValidationRule {
-  field: string
-  label: string
-  check: (project: DBProject) => boolean
-}
-
-// 단계 전환 시 필수 입력 검증 규칙
-const TRANSITION_RULES: Record<string, ValidationRule[]> = {
-  '문의->실측': [
-    { field: 'building_name', label: '빌라명', check: p => !!p.building_name },
-    { field: 'road_address', label: '주소', check: p => !!p.road_address },
-    { field: 'owner_name', label: '소유주', check: p => !!p.owner_name },
-    { field: 'owner_phone', label: '연락처', check: p => !!p.owner_phone },
-    { field: 'note', label: '상담내역', check: p => !!p.note },
-  ],
-  '실측->견적전달': [
-    { field: 'survey_date', label: '실측일', check: p => !!p.survey_date },
-    { field: 'survey_staff', label: '실측 담당자', check: p => !!p.survey_staff },
-  ],
-  '견적전달->동의서': [
-    { field: 'total_cost', label: '총공사비', check: p => p.total_cost > 0 },
-  ],
-  '동의서->신청서제출': [
-    { field: 'consent_date', label: '동의서 수령일', check: p => !!p.consent_date },
-  ],
-  '신청서제출->승인': [
-    { field: 'application_date', label: '신청서 제출일', check: p => !!p.application_date },
-    { field: 'application_submitter', label: '제출자', check: p => !!p.application_submitter },
-  ],
-  '승인->착공계': [
-    { field: 'approval_received_date', label: '승인일', check: p => !!p.approval_received_date },
-    { field: 'construction_date', label: '시공일', check: p => !!p.construction_date },
-  ],
-  '착공계->공사': [],
-  '공사->완료서류제출': [
-    { field: 'construction_end_date', label: '공사완료일', check: p => !!p.construction_end_date },
-  ],
-  '완료서류제출->입금': [
-    { field: 'completion_doc_date', label: '완료서류 제출일', check: p => !!p.completion_doc_date },
-    { field: 'completion_submitter', label: '제출자', check: p => !!p.completion_submitter },
-  ],
-}
+// 필수항목 규칙은 목록 드롭다운과 같이 쓰려고 lib으로 옮겼다
+import { PROGRESS_STEPS, missingFieldsForMove } from '@/lib/register/stepRules'
 
 interface Props {
   project: DBProject
@@ -109,14 +63,12 @@ export default function StepTransition({ project, pendingEdits, onStepChange }: 
     if (!canGoNext) return
 
     const nextStep = PROGRESS_STEPS[currentIdx + 1]
-    const ruleKey = `${project.status}->${nextStep}`
-    const rules = TRANSITION_RULES[ruleKey] || []
 
     // 저장될 때와 같은 검사(validateProjectData)를 거친 값만 본다 — 쓰다 만 날짜는 빈 값으로 본다
     const view = { ...project, ...validateProjectData({ ...(pendingEdits ?? {}) }) } as DBProject
-    const failed = rules.filter(r => !r.check(view))
-    if (failed.length > 0) {
-      setErrors(failed.map(r => r.label))
+    const missing = missingFieldsForMove(view, project.status, nextStep)
+    if (missing.length > 0) {
+      setErrors(missing)
       return
     }
 

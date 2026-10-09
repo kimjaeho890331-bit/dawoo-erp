@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { insertStatusLog } from '@/lib/statusLog/client'
+import { validateProjectData } from '@/lib/utils/validate'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
 
 const PROGRESS_STEPS: ProjectStep[] = [
@@ -56,10 +57,16 @@ const TRANSITION_RULES: Record<string, ValidationRule[]> = {
 
 interface Props {
   project: DBProject
+  /**
+   * 화면에 입력했지만 아직 자동저장(3초 뒤)되지 않은 값. 필수항목 확인에 함께 본다.
+   * 예전에는 저장된 값만 봐서, 실측일을 넣자마자 "다음 단계"를 누르면
+   * "실측일을 입력해주세요"가 떴다. 입력값은 자동저장이 그대로 이어서 저장한다.
+   */
+  pendingEdits?: Record<string, string | number | null>
   onStepChange: () => void
 }
 
-export default function StepTransition({ project, onStepChange }: Props) {
+export default function StepTransition({ project, pendingEdits, onStepChange }: Props) {
   const [errors, setErrors] = useState<string[]>([])
   const [changing, setChanging] = useState(false)
 
@@ -104,14 +111,16 @@ export default function StepTransition({ project, onStepChange }: Props) {
     const ruleKey = `${project.status}->${nextStep}`
     const rules = TRANSITION_RULES[ruleKey] || []
 
-    const failed = rules.filter(r => !r.check(project))
+    // 저장될 때와 같은 검사(validateProjectData)를 거친 값만 본다 — 쓰다 만 날짜는 빈 값으로 본다
+    const view = { ...project, ...validateProjectData({ ...(pendingEdits ?? {}) }) } as DBProject
+    const failed = rules.filter(r => !r.check(view))
     if (failed.length > 0) {
       setErrors(failed.map(r => r.label))
       return
     }
 
     changeStep(nextStep)
-  }, [canGoNext, currentIdx, project, changeStep])
+  }, [canGoNext, currentIdx, project, pendingEdits, changeStep])
 
   const handlePrev = useCallback(() => {
     if (!canGoPrev) return
@@ -139,7 +148,7 @@ export default function StepTransition({ project, onStepChange }: Props) {
               disabled={changing}
               className="flex items-center gap-0.5 px-3 py-1 text-[11px] font-medium text-white bg-[#c96442] rounded-md hover:bg-[#b5573a] transition-colors disabled:opacity-50"
             >
-              {changing ? '변경중...' : `${PROGRESS_STEPS[currentIdx + 1]}으로`} <ChevronRight size={12} />
+              {changing ? '변경중...' : `다음: ${PROGRESS_STEPS[currentIdx + 1]}`} <ChevronRight size={12} />
             </button>
           )}
           {project.status === '입금' && (

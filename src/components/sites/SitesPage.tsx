@@ -25,6 +25,7 @@ import type { ActivityLogWithStaff } from '@/lib/activityLog'
 import { SITE_INFLOW_PATHS, SITE_INFLOW_UNCONFIRMED } from '@/lib/siteInflow'
 import { SITE_WORK_KINDS, SITE_WORK_KIND_UNCONFIRMED } from '@/lib/siteWorkKind'
 import { createSite } from '@/lib/sites/client'
+import { toast } from '@/lib/toast'
 
 // --- 타입 ---
 interface Site {
@@ -165,13 +166,16 @@ export default function SitesPage() {
 
   const handleDelete = async (site: Site) => {
     if (!confirm(`"${site.name}" 현장을 삭제하시겠습니까?`)) return
+    // 지운 다음에 기록한다 — 예전에는 기록부터 남기고 지우기 실패는 확인하지 않아,
+    // 실패해도 "삭제" 기록만 남고 아무 일도 없는 것처럼 보였다.
+    const { error } = await supabase.from('sites').delete().eq('id', site.id)
+    if (error) { toast.error(`현장을 삭제하지 못했습니다: ${error.message}`); return }
     await logActivity({
       action: 'site_delete',
       target_type: 'site',
       target_id: site.id,
       detail: site.name,
     })
-    await supabase.from('sites').delete().eq('id', site.id)
     loadSites()
   }
 
@@ -348,8 +352,14 @@ function SiteRegisterModal({
       data = retry.data
       error = retry.error
     }
+    // 고치기가 실패하면 창을 닫지 않고 이유를 보여준다 (예전에는 실패해도 그냥 닫혔다)
+    if (error) {
+      setSaveError(`저장하지 못했습니다: ${error.message}`)
+      setSaving(false)
+      return
+    }
     const siteId = (data as { id?: string } | null)?.id || site?.id
-    if (!error && siteId) {
+    if (siteId) {
       await logActivity({
         action: 'site_update',
         target_type: 'site',
@@ -656,6 +666,7 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
   const [staffList, setStaffList] = useState<{ id: string; name: string; resign_date?: string | null }[]>([])
   const [expenseTotal, setExpenseTotal] = useState(0)
   const [savedAt, setSavedAt] = useState<string>('')
+  const [autoSaveError, setAutoSaveError] = useState<string>('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef(form)
 
@@ -724,7 +735,7 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
       budget: parseInt(next.budget) || 0,
       memo: next.memo || null,
     }
-    const { error } = await supabase.from('sites').update(payload).eq('id', site.id)
+    let { error } = await supabase.from('sites').update(payload).eq('id', site.id)
     if (error && /contract_type|quote_date|construction_start_date|inflow_path|work_kind/.test(error.message)) {
       if (/contract_type/.test(error.message)) delete payload.contract_type
       if (/quote_date|construction_start_date/.test(error.message)) {
@@ -735,8 +746,15 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
         delete payload.inflow_path
         delete payload.work_kind
       }
-      await supabase.from('sites').update(payload).eq('id', site.id)
+      ;({ error } = await supabase.from('sites').update(payload).eq('id', site.id))
     }
+    // 실패했는데 "저장됨"을 띄우면 안 된다. lastSavedRef도 그대로 두어 다음 입력 때 다시 저장을 시도한다.
+    if (error) {
+      setSavedAt('')
+      setAutoSaveError(`저장 실패 — 다시 입력하면 다시 저장합니다 (${error.message})`)
+      return
+    }
+    setAutoSaveError('')
     lastSavedRef.current = next
     const t = new Date()
     setSavedAt(`${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`)
@@ -766,7 +784,9 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
     <div className="space-y-3">
       {/* 자동저장 상태 표시 */}
       <div className="flex justify-end h-4">
-        {savedAt && <span className="text-[10px] text-money-positive">✓ 저장됨 ({savedAt})</span>}
+        {autoSaveError
+          ? <span className="text-[11px] text-danger">{autoSaveError}</span>
+          : savedAt && <span className="text-[10px] text-money-positive">✓ 저장됨 ({savedAt})</span>}
       </div>
 
       {/* 1행: 현장명 | 진행 상황 | 계약 종류 */}

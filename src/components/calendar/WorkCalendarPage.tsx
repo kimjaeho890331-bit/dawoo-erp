@@ -1916,17 +1916,18 @@ function DailyLogModal({
         .eq('log_date', logDate)
         .maybeSingle()
 
-      if (existing) {
-        await supabase.from('daily_logs').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', existing.id)
-      } else {
-        await supabase.from('daily_logs').insert(payload)
-      }
+      // supabase는 실패해도 예외를 던지지 않고 error로 돌려준다. 예전에는 그걸 보지 않아
+      // 저장이 실패해도 "저장됨"이 떴다.
+      const { error } = existing
+        ? await supabase.from('daily_logs').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', existing.id)
+        : await supabase.from('daily_logs').insert(payload)
+      if (error) throw error
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
-    } catch {
-      // daily_logs table may not exist yet — fail gracefully
-      alert('업무일지 테이블이 아직 생성되지 않았습니다.')
+    } catch (err) {
+      const reason = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : ''
+      alert(`업무일지를 저장하지 못했습니다. 잠시 후 다시 눌러 주세요.${reason ? `\n(${reason})` : ''}`)
     }
     setSaving(false)
   }

@@ -262,12 +262,16 @@ export default function TabReception({ project, category, getVal, onChange, onRe
             </p>
           </div>
         </div>
-        <button
-          onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
-          className="mt-3 px-4 py-2 text-[13px] font-medium bg-[#c96442] text-white rounded-lg hover:bg-[#b5573a] transition-colors"
-        >
-          견적서 열기
-        </button>
+        {/* 견적서(웹 스프레드시트)는 소규모 공종(방수·기와·도장 등)으로만 만들어져 있다.
+            수도 건에서 열면 소규모용 견적서가 떠서 헷갈렸다 — 수도는 위의 공문 단가로 계산한다. */}
+        {category === '소규모' && (
+          <button
+            onClick={() => router.push(`/register/${urlCategory}/estimate?projectId=${project.id}`)}
+            className="mt-3 px-4 py-2 text-[13px] font-medium bg-[#c96442] text-white rounded-lg hover:bg-[#b5573a] transition-colors"
+          >
+            견적서 열기
+          </button>
+        )}
       </div>
 
       {/* 3 동의서 */}

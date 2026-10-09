@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
+import { toast } from '@/lib/toast'
 import { supabase } from '@/lib/supabase'
 import { isDashboardAiGated } from '@/lib/uiHidden'
 import { ChevronDown, ListTodo, ClipboardList, Brain, Building2, FileCheck2 } from 'lucide-react'
@@ -252,38 +253,55 @@ export default function DashboardPage() {
     })
     if (!error) loadMyWork()
   }
+  // 할 일 저장·삭제·완료가 실패하면 알린다. 예전에는 결과를 보지 않아, 실패해도
+  // 목록만 새로고침되고 바뀐 줄 알았다.
+  const failed = (what: string, error: { message: string } | null) => {
+    if (!error) return false
+    toast.error(`${what}하지 못했습니다: ${error.message}`)
+    return true
+  }
+
   // 내 할 일 직접 등록 (assigned_to = assigned_by = 본인)
   const addMyTask = async (content: string, deadline: string | null) => {
     if (!currentStaffId) return
     const { error } = await supabase.from('tasks').insert({
       content, assigned_to: currentStaffId, assigned_by: currentStaffId, deadline, done: false,
     })
-    if (!error) loadMyWork()
+    if (failed('할 일을 등록', error)) return
+    loadMyWork()
   }
   // 모달용 저장/삭제/완료
   const saveTask = async (id: string, patch: Partial<Task>) => {
-    await supabase.from('tasks').update(patch).eq('id', id)
+    const { error } = await supabase.from('tasks').update(patch).eq('id', id)
+    failed('할 일을 저장', error)
     loadMyWork()
   }
   const deleteTask = async (id: string) => {
-    await supabase.from('tasks').delete().eq('id', id)
+    const { error } = await supabase.from('tasks').delete().eq('id', id)
+    failed('할 일을 삭제', error)
     loadMyWork()
   }
   const completeTask = async (id: string) => {
-    await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', id)
+    const { error } = await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', id)
+    failed('완료 처리', error)
     loadMyWork()
   }
   const toggleAssignedDone = async (taskId: string, done: boolean) => {
-    await supabase.from('tasks').update({ done, done_at: done ? new Date().toISOString() : null }).eq('id', taskId)
+    const { error } = await supabase.from('tasks').update({ done, done_at: done ? new Date().toISOString() : null }).eq('id', taskId)
+    failed('완료 표시를 바꾸', error)
     loadMyWork()
   }
   const deleteAssignedTask = async (taskId: string) => {
-    await supabase.from('tasks').delete().eq('id', taskId)
+    // 시킨 일 X는 한 번 누르면 바로 지워졌다. 되돌릴 수 없으니 한 번 묻는다.
+    if (!confirm('이 일을 삭제할까요? 받은 사람의 할 일에서도 사라집니다.')) return
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    failed('삭제', error)
     loadMyWork()
   }
   // 내가 받은 task 완료 처리 (내 할 일 카드에서)
   const completeReceivedTask = async (taskId: string) => {
-    await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', taskId)
+    const { error } = await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', taskId)
+    failed('완료 처리', error)
     loadMyWork()
   }
 

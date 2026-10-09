@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
-import { supabase as dataClient } from '@/lib/supabase'
+import { supabase as dataClient, setDataClientSession } from '@/lib/supabase'
 import { isAutoCreatedStaff } from '@/lib/staff/ghost'
 
 interface StaffInfo {
@@ -136,6 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // onAuthStateChange가 이미 세션을 채워뒀을 수 있는데 여기서 null을 쓰면
         // 로그인이 풀린 것처럼 보인다. "아직 모른다"와 "로그아웃"은 다르다.
         if (result && 'data' in result) {
+          // 화면용 데이터 클라이언트에도 로그인 토큰을 넘긴다 — 직원 조회보다 먼저
+          setDataClientSession(result.data.session)
           const currentUser = result.data.session?.user ?? null
           setUser(currentUser)
 
@@ -165,6 +167,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 이 콜백은 Supabase가 세션 잠금을 쥔 채로 부른다. 여기서 조회를 기다리면(await)
       // 잠금이 풀리지 않아 다른 탭·새로고침이 5초씩 멈췄다(Supabase 문서의 경고 사례).
       // 콜백은 바로 끝내고, 직원 조회는 다음 틱으로 미룬다.
+      // 토큰 갱신(TOKEN_REFRESHED)·로그인·로그아웃마다 화면용 클라이언트의 토큰도 바꾼다(기다리지 않는 동기 호출)
+      setDataClientSession(session)
       const currentUser = session?.user ?? null
       setUser(currentUser)
 
@@ -187,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
+    setDataClientSession(null)
     setUser(null)
     setStaff(null)
     localStorage.removeItem('dawoo_current_staff_id')

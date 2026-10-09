@@ -58,14 +58,15 @@ export default function PaymentTable({ rows, onChange, onPickVendor, actions }: 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border-primary px-4 py-3 md:px-5">
         <span className="text-label">합계</span>
         <span className="text-money text-[15px]">{formatMoney(total)}원</span>
-        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:ml-auto md:w-auto">
           {actions}
-          <button
-            onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
-            className={`${BTN_SECONDARY} hidden md:inline-flex`}
-          >
-            <Plus size={14} className="text-txt-tertiary" /> 줄 추가
-          </button>
+          {/* 폰은 카드 목록 아래에 "지급 건 추가"가 따로 있다. 버튼 모양 클래스에 inline-flex가
+              들어 있어 hidden과 한 요소에 같이 쓰면 숨겨지지 않으므로 감싸서 숨긴다. */}
+          <div className="hidden md:block">
+            <button onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])} className={BTN_SECONDARY}>
+              <Plus size={14} className="text-txt-tertiary" /> 줄 추가
+            </button>
+          </div>
         </div>
       </div>
 

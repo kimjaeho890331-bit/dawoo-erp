@@ -774,7 +774,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       {/* 상태 필터 탭 + 진행 프로세스 가이드 */}
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-4 border-b border-border-primary">
         {/* 폰에서는 탭이 옆으로 밀린다 — 예전에는 글자가 세로로 한 자씩 접혔다 */}
-        <div className="flex w-full gap-1 overflow-x-auto md:w-auto">
+        {/* PC에서는 탭이 줄지 않는다 — 단계 안내 글씨를 키운 뒤 안내 칸이 탭을 밀어 '전체' 탭이 가려졌다 */}
+        <div className="flex w-full gap-1 overflow-x-auto md:w-auto md:shrink-0">
           {STATUS_TABS.map(tab => (
             <button
               key={tab.key}
@@ -794,8 +795,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             </button>
           ))}
         </div>
-        {/* 단계 안내 — 예전에는 8~9px라 읽기 힘들었다. 평소엔 한 줄 그대로, 안내 칸보다 화면이 좁을 때만 접힌다 */}
-        <div className="hidden md:block shrink-0 max-w-full">
+        {/* 단계 안내 — 예전에는 8~9px라 읽기 힘들었다. 넓은 화면은 한 줄, 탭 옆 자리가 모자라면 두 줄로 접힌다 */}
+        <div className="hidden md:block min-w-0 md:ml-4">
           <div className="bg-surface rounded-lg border border-border-primary p-2 mb-3" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
             <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-2 py-1.5">
               {PROGRESS_STEPS.map((step, i) => {

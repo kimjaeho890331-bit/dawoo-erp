@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { Loader2, Building2, ChevronDown, ChevronUp } from 'lucide-react'
@@ -23,6 +23,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [kakaoLoading, setKakaoLoading] = useState(false)
   const [showEmailLogin, setShowEmailLogin] = useState(false)
+
+  // 카카오 로그인에서 돌아오다 실패하면 콜백이 ?error=…를 붙여 보낸다. 예전에는 아무 말 없이
+  // 로그인 화면만 다시 떠서 왜 안 되는지 알 수 없었다. (서버 렌더에서는 주소를 모르므로 빈 값)
+  const callbackError = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get('error') ?? '',
+    () => '',
+  )
+  const callbackMessage =
+    callbackError === 'no_email' ? '카카오 계정의 이메일 제공에 동의해야 로그인할 수 있습니다. 다시 로그인하면서 이메일 항목에 동의해 주세요.'
+    : callbackError === 'auth' ? '카카오 로그인을 마치지 못했습니다. 다시 시도해 주세요.'
+    : ''
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -176,9 +188,9 @@ export default function LoginPage() {
           </div>
 
           {/* 에러 메시지 */}
-          {error && (
-            <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">
-              {error}
+          {(error || callbackMessage) && (
+            <div className="mt-4 p-3 rounded-lg bg-danger-bg border border-danger/30 text-[12px] text-danger">
+              {error || callbackMessage}
             </div>
           )}
         </div>

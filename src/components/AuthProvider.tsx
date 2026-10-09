@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
 import { supabase as dataClient } from '@/lib/supabase'
+import { isAutoCreatedStaff } from '@/lib/staff/ghost'
 
 interface StaffInfo {
   id: string
@@ -79,28 +80,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 조회했는데, 그 클라이언트의 조회는 매번 세션 잠금을 잡는다. 로그인 이벤트 처리
         // 도중(잠금을 쥔 채)에 조회하면 서로를 기다려 멈췄고, 5초 시간 초과가 지나서야
         // 화면이 떴다. 두 표 모두 화면들이 이미 같은 클라이언트로 읽는 표라 권한은 같다.
-        const { data: mapped } = await dataClient
+        const { data: mapped, error: mapError } = await dataClient
           .from('staff_emails')
           .select('staff:staff_id(id, name, role, phone)')
           .eq('email', email)
           .maybeSingle()
+        if (mapError) return  // 조회 실패는 "연결 안 됨"이 아니다 — 아무것도 바꾸지 않는다
 
         const mappedStaff = mapped?.staff as unknown as StaffInfo | null
 
-        const data =
-          mappedStaff ??
-          (
-            await dataClient
-              .from('staff')
-              .select('id, name, role, phone')
-              .eq('email', email)
-              .maybeSingle()
-          ).data
+        let data = mappedStaff
+        if (!data) {
+          const { data: byEmail, error: byEmailError } = await dataClient
+            .from('staff')
+            .select('id, name, role, phone')
+            .eq('email', email)
+            .maybeSingle()
+          if (byEmailError) return
+          // 예전 카카오 로그인이 자동으로 만든 행(직책 '사원')은 본인으로 보지 않는다
+          data = byEmail && !isAutoCreatedStaff(byEmail) ? (byEmail as StaffInfo) : null
+        }
 
         if (data) {
           setStaff(data as StaffInfo)
           // staff ID를 localStorage에 저장 (다른 컴포넌트에서 사용)
           localStorage.setItem('dawoo_current_staff_id', data.id)
+        } else if (!['/link-account', '/login'].includes(window.location.pathname)) {
+          // 직원 정보와 연결되지 않은 계정 — 본인 이름을 고르는 화면으로 보낸다.
+          // 예전에는 그대로 들어와 엉뚱한 이름(또는 자동 생성된 직원)으로 기록이 남았다.
+          window.location.replace('/link-account')
         }
       } catch {
         // staff 조회 실패해도 로그인은 유지

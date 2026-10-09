@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { generateInviteCode } from '@/lib/staff/inviteCode'
+import { isAutoCreatedStaff } from '@/lib/staff/ghost'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -45,79 +45,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=no_email', request.url))
   }
 
-  // 2. 카카오 닉네임 추출
-  const kakaoName =
-    user.user_metadata?.full_name ||
-    user.user_metadata?.name ||
-    user.user_metadata?.preferred_username ||
-    email.split('@')[0] ||
-    '새 직원'
-
-  // 3. service_role 클라이언트 (RLS 우회)
+  // 2. service_role 클라이언트 (RLS 우회)
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // 4. staff 조회
-  const { data: existingStaff } = await admin
-    .from('staff')
-    .select('id, name, is_verified')
+  // 3. 이 로그인 계정이 어느 직원인지 — 「내 계정 연결」(staff_emails)을 먼저, 없으면 직원 정보의 이메일.
+  //    예전에는 직원 정보의 이메일만 보고, 없으면 카카오 닉네임으로 직원 행을 새로 만들었다(직책 '사원').
+  //    그래서 직원 목록에 같은 사람이 한 명 더 생기고 그 사람의 기록이 새 행 이름으로 쌓였다.
+  //    이제는 새로 만들지 않고, 연결이 안 된 계정은 본인 이름을 고르는 화면으로 보낸다.
+  //    (텔레그램 코드 자동 생성도 뺐다 — 텔레그램은 쓰지 않는다)
+  const { data: mapped } = await admin
+    .from('staff_emails')
+    .select('staff_id')
     .eq('email', email)
     .maybeSingle()
 
-  let staffId: string
-  let staffName: string
-  let isNewUser = false
-
-  if (existingStaff) {
-    // 기존 직원
-    staffId = existingStaff.id
-    staffName = existingStaff.name
-  } else {
-    // 신규 직원 자동 생성
-    const { data: newStaff, error: insertError } = await admin
+  let linked = !!mapped?.staff_id
+  if (!linked) {
+    const { data: byEmail } = await admin
       .from('staff')
-      .insert({
-        name: kakaoName,
-        email,
-        role: '사원',
-        is_verified: false,
-      })
-      .select('id, name')
-      .single()
-
-    if (insertError || !newStaff) {
-      console.error('[auth/callback] staff insert error:', insertError)
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
-
-    staffId = newStaff.id
-    staffName = newStaff.name
-    isNewUser = true
+      .select('id, role')
+      .eq('email', email)
+      .maybeSingle()
+    // 예전에 자동으로 생긴 행(직책 '사원')은 연결된 것으로 보지 않는다 — 실제 이름을 고르게 한다
+    linked = !!byEmail && !isAutoCreatedStaff(byEmail)
   }
 
-  // 5. 텔레그램 초대코드 없으면 자동 생성
-  const { data: existingInvite } = await admin
-    .from('staff_invitations')
-    .select('id')
-    .eq('used_by_staff_id', staffId)
-    .is('used_at', null)
-    .maybeSingle()
-
-  if (!existingInvite) {
-    await admin.from('staff_invitations').insert({
-      code: generateInviteCode(),
-      name: staffName,
-      used_by_staff_id: staffId,
-    })
-  }
-
-  // 6. 리다이렉트
-  const redirectUrl = new URL('/dashboard', request.url)
-  if (isNewUser) {
-    redirectUrl.searchParams.set('welcome', 'true')
-  }
-
-  return NextResponse.redirect(redirectUrl)
+  return NextResponse.redirect(new URL(linked ? '/dashboard' : '/link-account', request.url))
 }

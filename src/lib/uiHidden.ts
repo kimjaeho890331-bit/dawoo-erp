@@ -11,6 +11,7 @@ export const UI_HIDDEN = {
   promo: true,
   buildingLedger: false, // false면 사이드바 지원사업「건축물대장 발급」+ /register/building-ledger
   labor: false,
+  telegram: true, // 텔레그램 봇은 쓰지 않는다 — 직원관리의 연결 버튼·칸을 숨긴다(봇 API는 그대로 둠)
 } as const
 
 export const HIDDEN_MENU_PATHS: readonly string[] = [

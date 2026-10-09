@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { isDashboardAiGated } from '@/lib/uiHidden'
 import { ChevronDown, ListTodo, ClipboardList, Brain, Building2, FileCheck2 } from 'lucide-react'
 import { currentTurnLine } from '@/lib/approval/status'
+import { notifyTask } from '@/lib/notify/client'
 import type { LineRole, LineState } from '@/types/approval'
 import AIBriefingCard from './AIBriefingCard'
 import MyTodoCard, { type TodoItem } from './MyTodoCard'
@@ -252,10 +253,15 @@ export default function DashboardPage() {
   // 시킨 일 CRUD
   const addAssignedTask = async (content: string, assigneeId: string, deadline: string | null) => {
     if (!currentStaffId) return
-    const { error } = await supabase.from('tasks').insert({
+    const { data, error } = await supabase.from('tasks').insert({
       content, assigned_to: assigneeId, assigned_by: currentStaffId, deadline, done: false,
-    })
-    if (!error) loadMyWork()
+    }).select('id')
+    // 예전에는 실패해도 아무 말 없이 입력칸만 비워졌다
+    if (error) { toast.error(`지시를 등록하지 못했습니다: ${error.message}`); return }
+    // 받은 사람에게 알림 (기다리지 않는다 — 알림이 안 가도 지시는 이미 저장됐다)
+    const newId = (data as { id: string }[] | null)?.[0]?.id
+    if (newId && assigneeId !== currentStaffId) notifyTask(newId, 'assigned')
+    loadMyWork()
   }
   // 할 일 저장·삭제·완료가 실패하면 알린다. 예전에는 결과를 보지 않아, 실패해도
   // 목록만 새로고침되고 바뀐 줄 알았다.
@@ -276,8 +282,13 @@ export default function DashboardPage() {
   }
   // 모달용 저장/삭제/완료
   const saveTask = async (id: string, patch: Partial<Task>) => {
+    const before = myTasksAssigned.find(t => t.id === id)
     const { error } = await supabase.from('tasks').update(patch).eq('id', id)
     failed('할 일을 저장', error)
+    // 시킨 일의 받는 사람을 바꾸면 새로 받은 사람도 알아야 한다
+    if (!error && before && patch.assigned_to && patch.assigned_to !== before.assigned_to && patch.assigned_to !== currentStaffId) {
+      notifyTask(id, 'assigned')
+    }
     loadMyWork()
   }
   const deleteTask = async (id: string) => {
@@ -285,9 +296,11 @@ export default function DashboardPage() {
     failed('할 일을 삭제', error)
     loadMyWork()
   }
-  const completeTask = async (id: string) => {
+  // tellAssigner: 받은 일을 끝냈을 때만 시킨 사람에게 알린다(시킨 사람이 직접 완료 표시한 경우는 알릴 필요 없다)
+  const completeTask = async (id: string, tellAssigner = false) => {
     const { error } = await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', id)
     failed('완료 처리', error)
+    if (!error && tellAssigner) notifyTask(id, 'done')
     loadMyWork()
   }
   const toggleAssignedDone = async (taskId: string, done: boolean) => {
@@ -304,8 +317,11 @@ export default function DashboardPage() {
   }
   // 내가 받은 task 완료 처리 (내 할 일 카드에서)
   const completeReceivedTask = async (taskId: string) => {
+    const task = myTasksReceived.find(t => t.id === taskId)
     const { error } = await supabase.from('tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', taskId)
     failed('완료 처리', error)
+    // 남이 시킨 일이면 시킨 사람에게 완료 알림. 내가 나에게 적은 할 일은 알릴 상대가 없다.
+    if (!error && task?.assigned_by && task.assigned_by !== currentStaffId) notifyTask(taskId, 'done')
     loadMyWork()
   }
 
@@ -458,7 +474,7 @@ export default function DashboardPage() {
             onClose={() => setDetailTaskId(null)}
             onSave={(patch) => saveTask(detailTask.id, patch)}
             onDelete={() => deleteTask(detailTask.id)}
-            onComplete={() => completeTask(detailTask.id)}
+            onComplete={() => completeTask(detailTask.id, mode === 'received')}
           />
         )
       })()}

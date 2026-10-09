@@ -1,6 +1,6 @@
 /**
  * 입금 처리 공통 라이브러리
- * - 텔레그램, AI 비서, 수동 등록 모두 이 모듈을 사용
+ * - AI 비서, 수동 등록 모두 이 모듈을 사용
  * - payment_type 자동 분류 + status 자동 전환
  */
 import { createClient } from '@supabase/supabase-js'
@@ -91,7 +91,7 @@ export async function applyDepositAndAdvanceStatus(params: {
   payerName?: string | null
   confirmerName: string
   paymentDate?: string | null
-  source: 'telegram' | 'ai' | 'manual'
+  source: 'ai' | 'manual'
   staffId?: string | null
 }): Promise<
   | { ok: false; error: string }
@@ -152,7 +152,7 @@ export async function applyDepositAndAdvanceStatus(params: {
   })
 
   // payments INSERT
-  const sourceLabel = source === 'telegram' ? '텔레그램' : source === 'ai' ? 'AI비서' : '수동'
+  const sourceLabel = source === 'ai' ? 'AI비서' : '수동'
   const noteText = `자동분류: ${reason} / 확인: ${confirmerName} (${sourceLabel})`
   const { error: insErr } = await supabaseAdmin.from('payments').insert({
     project_id: projectId,
@@ -226,7 +226,7 @@ export async function applyDepositAndAdvanceStatus(params: {
   }
 }
 
-/** 입금 완료 메시지 포맷 (텔레그램/AI 공통) */
+/** 입금 완료 메시지 포맷 (AI 비서용) */
 export function formatDepositMessage(result: Extract<
   Awaited<ReturnType<typeof applyDepositAndAdvanceStatus>>,
   { ok: true }

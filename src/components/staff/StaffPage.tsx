@@ -4,11 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { formatPhone, formatMoney } from '@/lib/utils/format'
-import { generateInviteCode } from '@/lib/staff/inviteCode'
 import { RESIGN_CONFIRM_MESSAGE } from '@/lib/staff/selectable'
 import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex, getContrastText } from '@/lib/staff-colors'
 import { canSeeLedger } from '@/lib/ledgerAccess'
-import { UI_HIDDEN } from '@/lib/uiHidden'
 import { isAutoCreatedStaff } from '@/lib/staff/ghost'
 import { STAFF_STORAGE_KEY } from '@/lib/activityLog'
 import { toast } from '@/lib/toast'
@@ -35,9 +33,6 @@ interface Staff {
   ins_health: boolean | null
   ins_employment: boolean | null
   ins_industrial: boolean | null
-  // 텔레그램 연결
-  telegram_chat_id: string | null
-  telegram_linked_at: string | null
   join_date: string | null
   resign_date: string | null
   memo: string | null
@@ -75,7 +70,6 @@ export default function StaffPage() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [showInviteModal, setShowInviteModal] = useState(false)
   const [editItem, setEditItem] = useState<Staff | null>(null)
   const [detailItem, setDetailItem] = useState<Staff | null>(null)
   const [tab, setTab] = useState<Tab>('info')
@@ -158,15 +152,11 @@ export default function StaffPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* 이 코드는 텔레그램 봇 연결용이다(api/telegram/webhook의 /start 코드). 텔레그램은 지금 쓰지 않아 숨긴다 */}
-          {!UI_HIDDEN.telegram && (
-            <button onClick={() => setShowInviteModal(true)}
-              className="btn-primary whitespace-nowrap">
-              + 텔레그램 연결
-            </button>
-          )}
-        </div>
+        {/* 새 직원은 여기서 등록한다. 예전에는 버튼이 없어 카카오 첫 로그인 때 자동으로 생긴 행에 기대야 했다
+            (그게 직원 목록 중복의 원인이었다). 등록한 뒤 그 직원이 로그인해 본인 이름을 고르면 연결된다. */}
+        <button onClick={() => { setEditItem(null); setShowModal(true) }} className="btn-primary whitespace-nowrap">
+          + 직원 등록
+        </button>
       </div>
 
       {/* === 직원정보 탭 === */}
@@ -196,7 +186,6 @@ export default function StaffPage() {
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직책</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직급</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연락처</th>
-                    {!UI_HIDDEN.telegram && <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">텔레그램</th>}
                     <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">계정연결</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">입사일</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">근속</th>
@@ -223,15 +212,6 @@ export default function StaffPage() {
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.role}</td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.position || '-'}</td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.work_phone || s.phone || '-'}</td>
-                        {!UI_HIDDEN.telegram && <td className="px-4 py-3 text-center">
-                          {s.telegram_chat_id ? (
-                            <span className="inline-flex items-center gap-0.5 text-[11px] text-[#059669]" title={`연결됨 ${s.telegram_linked_at ? '· ' + s.telegram_linked_at.slice(0,10) : ''}`}>
-                              연결
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-txt-quaternary" title="미연결">—</span>
-                          )}
-                        </td>}
                         <td className="px-4 py-3 text-center text-[12px]">
                           {(linkedEmails[s.id]?.length ?? 0) > 0 ? (
                             <span className="text-accent-text font-medium">{linkedEmails[s.id].length}개</span>
@@ -373,10 +353,6 @@ export default function StaffPage() {
         />
       )}
 
-      {/* 텔레그램 연결 코드 모달 (staff_invitations) */}
-      {showInviteModal && (
-        <InviteModal staffList={activeStaff} onClose={() => setShowInviteModal(false)} />
-      )}
     </div>
   )
 }
@@ -904,142 +880,6 @@ function StaffModal({ item, showPay, onClose, onSaved }: { item: Staff | null; s
             {saving ? '저장 중...' : isEdit ? '수정' : '등록'}
           </button>
         </div>
-      </div>
-    </div>
-  )
-}
-
-// ===== 텔레그램 연결 코드 모달 (예전 이름: 직원 초대) =====
-const INVITE_ROLES = ['관리자', '경리', '직원', '현장소장']
-
-// 봇은 코드에 적힌 이름과 똑같은 직원을 찾아 텔레그램을 붙인다. 예전처럼 이름을 비우거나 오타가 나면
-// 코드를 받아도 "매칭되는 직원 정보가 없습니다"로 끝나서, 직원관리에 있는 사람 중에서 고르게 한다.
-function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () => void }) {
-  const [staffId, setStaffId] = useState('')
-  const name = staffList.find(s => s.id === staffId)?.name ?? ''
-  const [role, setRole] = useState('직원')
-  const [daysValid, setDaysValid] = useState(7)
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [tableMissing, setTableMissing] = useState(false)
-
-  const handleGenerate = async () => {
-    if (!name) return
-    setSaving(true)
-    const code = generateInviteCode(6)
-    const expires_at = new Date(Date.now() + daysValid * 24 * 60 * 60 * 1000).toISOString()
-    const { error } = await supabase.from('staff_invitations').insert({
-      // 봇이 이름을 글자 그대로 비교하므로 직원관리의 이름을 손대지 않고 넣는다
-      code, name, role, expires_at,
-    })
-    if (error) {
-      if (/does not exist|relation/.test(error.message)) {
-        setTableMissing(true)
-      } else {
-        toast.error('연결 코드를 만들지 못했습니다: ' + error.message)
-      }
-      setSaving(false)
-      return
-    }
-    setGeneratedCode(code)
-    setSaving(false)
-  }
-
-  const handleCopy = () => {
-    if (!generatedCode) return
-    // 예전 메시지의 /invite/코드 링크는 없는 화면이었다. 실제로는 텔레그램 봇에 /start 코드를 보내야 연결된다.
-    const msg = `[다우건설 ERP 텔레그램 연결]\n${name ? `${name}님, ` : ''}텔레그램에서 회사 ERP 봇을 열고 아래 한 줄을 그대로 보내 주세요.\n\n/start ${generatedCode}\n\n연결되면 텔레그램으로 입금 내용을 보내 수금 처리하거나, 현장 사진을 접수건에 올릴 수 있습니다. (${daysValid}일 안에 한 번만 쓸 수 있습니다)`
-    navigator.clipboard.writeText(msg)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-border-tertiary flex items-center justify-between">
-          <h3 className="font-semibold text-txt-primary">텔레그램 연결 코드</h3>
-          <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
-        </div>
-
-        {tableMissing ? (
-          <div className="p-5">
-            <p className="text-[13px] text-txt-secondary leading-relaxed">
-              연결 코드 기능을 아직 쓸 수 없습니다. 관리자에게 알려 주세요.
-            </p>
-          </div>
-        ) : !generatedCode ? (
-          <div className="p-5 space-y-4">
-            {/* 예전 문구(받은 직원이 본인 정보를 직접 등록)는 사실이 아니었다 — 이 코드는 텔레그램 연결에만 쓰인다 */}
-            <div className="space-y-1.5 text-[12px] text-txt-secondary leading-relaxed">
-              {/* 봇이 먼저 알림을 보내는 기능은 없다(결재 알림은 웹푸시). 실제로 되는 일만 적는다 */}
-              <p>직원의 텔레그램을 회사 ERP 봇과 연결하는 코드입니다. 연결되면 직원이 텔레그램으로 입금 내용을 보내 수금 처리하거나, 현장 사진을 접수건에 올릴 수 있습니다.</p>
-              <p className="text-txt-tertiary">직원 정보를 새로 등록하는 기능은 아닙니다. 아래 목록에 있는 직원만 연결할 수 있습니다.</p>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">연결할 직원</label>
-              <select value={staffId}
-                onChange={e => {
-                  setStaffId(e.target.value)
-                  const picked = staffList.find(s => s.id === e.target.value)
-                  if (picked && INVITE_ROLES.includes(picked.role)) setRole(picked.role)
-                }}
-                className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
-                <option value="">직원 선택</option>
-                {staffList.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}{s.telegram_chat_id ? ' (이미 연결됨)' : ''}</option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-medium text-txt-tertiary mb-1">직책</label>
-                <select value={role} onChange={e => setRole(e.target.value)} className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
-                  {INVITE_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-txt-tertiary mb-1">유효기간</label>
-                <select value={daysValid} onChange={e => setDaysValid(parseInt(e.target.value))} className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
-                  <option value={1}>1일</option>
-                  <option value={3}>3일</option>
-                  <option value={7}>7일</option>
-                  <option value={30}>30일</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
-              <button onClick={handleGenerate} disabled={saving || !name}
-                className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium">
-                {saving ? '생성 중...' : '연결 코드 만들기'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="p-5 space-y-4">
-            <p className="text-[12px] text-txt-secondary leading-relaxed">
-              {name}님에게 아래 메시지를 카톡/문자로 보내 주세요. {name}님이 텔레그램에서 회사 ERP 봇을 열고
-              <span className="font-medium text-txt-primary"> /start {generatedCode}</span> 를 보내면 연결됩니다.
-            </p>
-            <div className="bg-accent-light border border-accent/30 rounded-lg p-4 text-center">
-              <div className="text-[11px] text-accent-text mb-1">연결 코드</div>
-              <div className="text-[32px] font-bold text-accent-text tabular-nums tracking-wider">{generatedCode}</div>
-              <div className="text-[11px] text-accent-text/70 mt-1">{daysValid}일간 유효</div>
-            </div>
-            <button onClick={handleCopy}
-              className="w-full py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
-              {copied ? '복사됨' : '전체 메시지 복사 (카톡으로 보내기용)'}
-            </button>
-            <div className="text-[11px] text-txt-tertiary leading-relaxed bg-surface-tertiary/40 p-3 rounded-lg">
-              복사한 메시지를 카톡으로 직접 보내 주세요. 연결되면 직원 목록의 텔레그램 칸에 &lsquo;연결&rsquo;로 표시됩니다.
-            </div>
-            <div className="flex justify-end">
-              <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">닫기</button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

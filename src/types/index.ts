@@ -39,7 +39,6 @@ export interface Staff {
   name: string;
   phone: string | null;
   role: string;
-  telegram_id?: string | null;
   created_at?: string;
 }
 

@@ -8,7 +8,7 @@ const supabaseAdmin = createClient(
 )
 
 // GET /api/chat/history?staff_id=xxx&limit=20
-// 웹 + 텔레그램 통합 대화 히스토리 (최근 N개)
+// AI 비서 대화 히스토리 (최근 N개)
 export async function GET(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) {

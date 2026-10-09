@@ -49,7 +49,7 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
     loadPayments()
   }, [loadPayments])
 
-  // Realtime: 텔레그램/AI에서 입금 추가되면 즉시 반영
+  // Realtime: AI 비서 등 다른 곳에서 입금이 추가되면 즉시 반영
   useEffect(() => {
     const ch = supabase
       .channel(`payments-${projectId}`)

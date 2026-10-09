@@ -47,12 +47,9 @@ export async function middleware(request: NextRequest) {
   }
 
   // 외부 시스템이 호출하는 엔드포인트는 인증 스킵 (자체 시크릿으로 검증)
-  // - 텔레그램 웹훅: X-Telegram-Bot-Api-Secret-Token 헤더
-  // - 텔레그램 setup: 최초 1회 수동 호출
   // - Vercel Cron: CRON_SECRET 헤더
   // - Cowork polling: Authorization Bearer COWORK_API_TOKEN
   if (
-    pathname.startsWith('/api/telegram/') ||
     pathname.startsWith('/api/notifications/cron/') ||
     pathname.startsWith('/api/cowork/')
   ) {

@@ -33,7 +33,7 @@
   - `matchDeposit` → candidates에 `self_pay`, `city_support`, `additional_cost` 포함
   - `recordDeposit` → 공통 라이브러리 호출 + formatted_message 반환
   - SYSTEM_PROMPT 입금 섹션: confirmer_name 서버 자동주입 안내
-- `src/app/api/telegram/webhook/route.ts`
+- `src/app/api/telegram/webhook/route.ts` (2026-10 텔레그램 삭제로 이 경로는 없어짐)
   - `applyDepositAndAdvanceStatus`, `formatDepositMessage` import
   - 입금 확인 callback 핸들러 → 공통 라이브러리 호출로 치환
 - `src/components/AISidebar.tsx`

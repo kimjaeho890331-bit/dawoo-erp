@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Download, Upload, FileCheck, ChevronDown, Percent } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
-import { LABOR_CATEGORY, validateLaborExpense } from '@/lib/expenseCategory'
 import { DEFAULT_RATES, pickRates, type LaborRates, type LaborRateRow } from '@/lib/labor/rates'
 import LaborImportModal from './LaborImportModal'
 import { maskResidentId } from '@/lib/labor/mask'
+import { laborApprovalDraft } from '@/lib/labor/approvalDraft'
+import { STAFF_STORAGE_KEY } from '@/lib/activityLog'
 
 export { DEFAULT_RATES, type LaborRates }
 
@@ -125,6 +127,7 @@ function CellInput({ value, onSave, onReset, className = '', align = 'left', pla
 
 // --- 메인 ---
 export default function LaborPage() {
+  const router = useRouter()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
@@ -339,59 +342,59 @@ export default function LaborPage() {
     } finally { setExporting(false) }
   }
 
-  // --- 노무비를 지출로 등록 (체크된 근무자) ---
-  // 결재(지출결의서)를 거치지 않고 지출관리에 바로 들어간다. 예전 버튼 이름은 "노무비 결재",
-  // 확인창은 "지출결의서를 생성합니다"였는데 실제로는 결재 없이 지출로 바로 저장돼 헷갈렸다.
+  // --- 노무비 결재 올리기 (체크된 근무자 → 지출결의서 초안) ---
+  // 대표 결정(2026-10-09): 노무비도 지출결의서 결재를 거친다. 예전에는 결재 없이 지출에
+  // 바로 저장했다. 여기서는 작성중 결의서를 만들고 수정 화면을 연다 — 작성자가 결재선을
+  // 확인하고 "결재 올리기"를 눌러야 결재가 시작되고, 결재가 끝나야 지출에 들어간다.
   const handleSubmitApproval = async () => {
-    if (checkedRecords.length === 0) { alert('지출로 등록할 근무자를 체크해주세요.'); return }
-    const totalNet = checkedRecords.reduce((s, r) => s + calcRow(r, rates).netPay, 0)
-    const names = checkedRecords.map(r => r.worker_name || '(이름없음)')
-    const title = `${month}월 일용직 노무비 (${names[0]}${names.length > 1 ? ` 외 ${names.length - 1}명` : ''})`
-    if (!confirm(`지출관리에 노무비로 바로 등록합니다 (결재를 거치지 않습니다).\n\n${title}\n금액: ${totalNet.toLocaleString()}원\n\n진행할까요?`)) return
-    setSubmitting(true)
+    const actorId = typeof window !== 'undefined' ? localStorage.getItem(STAFF_STORAGE_KEY) : null
+    if (!actorId) { alert('지금 쓰는 직원이 정해져 있지 않습니다. 지출결의서 화면 위쪽에서 직원을 먼저 골라 주세요.'); return }
+    if (!siteId && !projectId) { alert('위쪽에서 현장(또는 지원사업)을 먼저 골라 주세요. 노무비는 현장 연결이 필요합니다.'); return }
 
-    // 같은 달 같은 근무자 묶음을 두 번 누르면 노무비가 두 번 잡힌다. 이미 있으면 한 번 더 묻는다.
-    const { data: dup } = await supabase.from('expenses').select('id, amount, expense_date')
-      .eq('category', LABOR_CATEGORY).eq('title', title)
-      .gte('expense_date', `${year}-${String(month).padStart(2, '0')}-01`)
-      .limit(1)
-    if (dup && dup.length > 0) {
-      const d = dup[0] as { amount: number; expense_date: string }
-      if (!confirm(`같은 이름의 노무비가 이미 지출에 있습니다 (${d.expense_date}, ${d.amount.toLocaleString()}원).\n그래도 한 번 더 등록할까요?`)) {
-        setSubmitting(false)
-        return
-      }
-    }
-    const memo = checkedRecords.map(r => {
-      const c = calcRow(r, rates)
-      return `${r.worker_name}: ${c.workDays}일 × ${fmt(r.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`
-    }).join('\n')
-    const expenseDate = new Date().toISOString().slice(0, 10)
-    const laborErr = validateLaborExpense({
-      category: LABOR_CATEGORY,
-      title,
-      amount: totalNet,
-      expense_date: expenseDate,
-      site_id: siteId || null,
-      project_id: projectId || null,
-      payee: names.join(', '),
-      requirePayee: true,
-    })
-    if (laborErr) { alert(laborErr); setSubmitting(false); return }
-    const res = await fetch('/api/expenses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        category: LABOR_CATEGORY, title, amount: totalNet,
-        expense_date: expenseDate, memo,
-        site_id: siteId || null, project_id: projectId || null,
-        staff_id: null, receipt_url: null, payee: names.join(', '),
+    flushPending()
+    const today = new Date().toISOString().slice(0, 10)
+    const built = laborApprovalDraft({
+      year, month, today,
+      lines: checkedRecords.map(r => {
+        const c = calcRow(r, rates)
+        return {
+          worker_name: r.worker_name || '',
+          netPay: c.netPay,
+          bank_name: r.bank_name,
+          account_number: r.account_number,
+          payment_date: r.payment_date,
+          detail: `${r.worker_name}: ${c.workDays}일 × ${fmt(r.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`,
+        }
       }),
     })
-    const json = await res.json().catch(() => ({}))
-    setSubmitting(false)
-    if (!res.ok) { alert(`지출 등록 실패: ${json.error || res.statusText}`); return }
-    alert('노무비가 지출에 등록되었습니다. 왼쪽 메뉴 「지출관리」에서 확인하세요.')
+    if (!built.ok) { alert(built.error); return }
+    const { title, payments, body_html } = built.draft
+    const totalNet = payments.reduce((s, p) => s + p.amount, 0)
+
+    // 같은 달 같은 묶음을 두 번 누르면 결의서가 두 장 생긴다. 이미 있으면 한 번 더 묻는다.
+    const { data: dup } = await supabase.from('expense_reports').select('id, status').eq('title', title).limit(1)
+    if (dup && dup.length > 0
+      && !confirm(`같은 제목의 지출결의서가 이미 있습니다.\n${title}\n\n그래도 새로 만들까요?`)) return
+
+    if (!confirm(`노무비 지출결의서를 만듭니다.\n\n${title}\n실지급 합계: ${totalNet.toLocaleString()}원 (${payments.length}명)\n\n다음 화면에서 내용과 결재선을 확인하고 「결재 올리기」를 눌러 주세요.\n결재가 끝나면 지출관리에 자동으로 들어갑니다.`)) return
+
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/approval/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_staff_id: actorId, title, body_html,
+          site_id: siteId || null, project_id: projectId || null,
+          payments, lines: [], files: [],
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { alert(`결의서를 만들지 못했습니다: ${json.error || res.statusText}`); return }
+      router.push(`/approval/${json.id}/edit`)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   // --- 합계 ---
@@ -454,7 +457,7 @@ export default function LaborPage() {
           <button onClick={handleSubmitApproval} disabled={submitting}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition disabled:opacity-50">
             <FileCheck size={15} />
-            {submitting ? '등록 중...' : '노무비 지출 등록'}
+            {submitting ? '만드는 중...' : '노무비 결재 올리기'}
           </button>
         </div>
       </div>

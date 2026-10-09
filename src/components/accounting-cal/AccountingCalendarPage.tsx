@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { getHolidays, nextBusinessDay } from '@/lib/holidays/kr'
 import { ChevronLeft, ChevronRight, Calendar, AlertTriangle, Clock, FileText, Building2, CreditCard, Landmark, Receipt, CircleDot, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 // ========================================
@@ -153,49 +154,6 @@ function getDayOfWeek(year: number, month: number, day: number) {
   return new Date(year, month - 1, day).getDay()
 }
 
-// 주말→다음 영업일 보정
-function adjustForWeekend(year: number, month: number, day: number): number {
-  const dow = getDayOfWeek(year, month, day)
-  if (dow === 6) return day + 2 // 토→월
-  if (dow === 0) return day + 1 // 일→월
-  return day
-}
-
-// 공휴일 (2026년 한국)
-function getHolidays(year: number): Map<string, string> {
-  const h = new Map<string, string>()
-  // 고정 공휴일
-  h.set(`${year}-01-01`, '신정')
-  h.set(`${year}-03-01`, '삼일절')
-  h.set(`${year}-05-05`, '어린이날')
-  h.set(`${year}-06-06`, '현충일')
-  h.set(`${year}-08-15`, '광복절')
-  h.set(`${year}-10-03`, '개천절')
-  h.set(`${year}-10-09`, '한글날')
-  h.set(`${year}-12-25`, '크리스마스')
-  // 2026 음력 공휴일 (고정)
-  if (year === 2026) {
-    h.set('2026-02-16', '설날 전날')
-    h.set('2026-02-17', '설날')
-    h.set('2026-02-18', '설날 다음날')
-    h.set('2026-05-24', '부처님오신날')
-    h.set('2026-10-04', '추석 전날')
-    h.set('2026-10-05', '추석')
-    h.set('2026-10-06', '추석 다음날')
-    h.set('2026-10-05', '대체공휴일')
-  }
-  if (year === 2027) {
-    h.set('2027-02-06', '설날 전날')
-    h.set('2027-02-07', '설날')
-    h.set('2027-02-08', '설날 다음날')
-    h.set('2027-05-13', '부처님오신날')
-    h.set('2027-09-24', '추석 전날')
-    h.set('2027-09-25', '추석')
-    h.set('2027-09-26', '추석 다음날')
-  }
-  return h
-}
-
 interface CalEvent {
   day: number
   adjustedDay: number
@@ -209,6 +167,7 @@ interface CalEvent {
 
 function generateEventsForMonth(year: number, month: number, customEvents: CustomEvent[] = []): CalEvent[] {
   const lastDay = getLastDay(year, month)
+  const holidays = getHolidays(year)
   const events: CalEvent[] = []
 
   ALL_RECURRING.forEach(ev => {
@@ -216,7 +175,8 @@ function generateEventsForMonth(year: number, month: number, customEvents: Custo
     if (ev.months.length > 0 && !ev.months.includes(month)) return
 
     const rawDay = ev.day === 0 ? lastDay : Math.min(ev.day, lastDay)
-    const adjDay = (ev.weekdayAdjust !== false) ? adjustForWeekend(year, month, rawDay) : rawDay
+    // 토·일요일과 공휴일이면 다음 영업일로 (예전에는 공휴일을 보지 않고 주말만 미뤘다)
+    const adjDay = (ev.weekdayAdjust !== false) ? nextBusinessDay(year, month, rawDay, holidays) : rawDay
     const finalDay = Math.min(adjDay, getLastDay(year, month) + 2) // 다음달로 넘어갈 수 있음
 
     events.push({

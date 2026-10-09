@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Pin, ChevronDown, ChevronUp, Plus, X } from 'lucide-react'
+import { toast } from '@/lib/toast'
 
 interface Notice {
   id: string
@@ -33,6 +34,7 @@ export default function NoticePage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [catFilter, setCatFilter] = useState<string>('전체')
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const [formTitle, setFormTitle] = useState('')
   const [formContent, setFormContent] = useState('')
@@ -53,6 +55,7 @@ export default function NoticePage() {
   useEffect(() => { loadData() }, [loadData])
 
   const openNew = () => {
+    setFormError(null)
     setEditId(null)
     setFormTitle('')
     setFormContent('')
@@ -62,6 +65,7 @@ export default function NoticePage() {
   }
 
   const openEdit = (n: Notice) => {
+    setFormError(null)
     setEditId(n.id)
     setFormTitle(n.title)
     setFormContent(n.content)
@@ -71,7 +75,12 @@ export default function NoticePage() {
   }
 
   const handleSave = async () => {
-    if (!formTitle.trim() || !formContent.trim()) return
+    // 예전에는 비어 있으면 아무 반응 없이 끝났다
+    if (!formTitle.trim() || !formContent.trim()) {
+      setFormError(!formTitle.trim() ? '제목을 적어 주세요' : '내용을 적어 주세요')
+      return
+    }
+    setFormError(null)
     setSaving(true)
 
     const payload = {
@@ -81,23 +90,24 @@ export default function NoticePage() {
       pinned: formPinned,
     }
 
-    if (editId) {
-      await supabase.from('notices').update({
-        ...payload,
-        updated_at: new Date().toISOString(),
-      }).eq('id', editId)
-    } else {
-      await supabase.from('notices').insert(payload)
-    }
+    const { error } = editId
+      ? await supabase.from('notices').update({
+          ...payload,
+          updated_at: new Date().toISOString(),
+        }).eq('id', editId)
+      : await supabase.from('notices').insert(payload)
 
     setSaving(false)
+    // 실패하면 창을 닫지 않는다 — 예전에는 실패해도 창이 닫혀 쓴 글이 사라졌다
+    if (error) { setFormError(`저장하지 못했습니다. 다시 눌러 주세요. (${error.message})`); return }
     setShowForm(false)
     loadData()
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return
-    await supabase.from('notices').delete().eq('id', id)
+    const { error } = await supabase.from('notices').delete().eq('id', id)
+    if (error) { toast.error(`삭제하지 못했습니다: ${error.message}`); return }
     if (expandedId === id) setExpandedId(null)
     loadData()
   }
@@ -105,7 +115,8 @@ export default function NoticePage() {
   const togglePin = async (id: string) => {
     const notice = notices.find(n => n.id === id)
     if (!notice) return
-    await supabase.from('notices').update({ pinned: !notice.pinned }).eq('id', id)
+    const { error } = await supabase.from('notices').update({ pinned: !notice.pinned }).eq('id', id)
+    if (error) { toast.error(`고정을 바꾸지 못했습니다: ${error.message}`); return }
     loadData()
   }
 
@@ -239,7 +250,8 @@ export default function NoticePage() {
                 <span className="text-[13px] text-txt-secondary">상단 고정</span>
               </label>
             </div>
-            <div className="px-6 py-4 border-t border-border-tertiary flex justify-end gap-2">
+            <div className="px-6 py-4 border-t border-border-tertiary flex items-center justify-end gap-2">
+              {formError && <p className="mr-auto text-[13px] text-danger">{formError}</p>}
               <button onClick={() => setShowForm(false)}
                 className="h-[36px] px-4 border border-border-primary rounded-lg text-[13px] text-txt-secondary hover:bg-surface-tertiary transition">
                 취소

@@ -28,7 +28,7 @@ interface CardMapping {
   staff_id: string | null
 }
 
-interface Staff { id: string; name: string }
+interface Staff { id: string; name: string; resign_date?: string | null }
 
 interface Anomaly {
   type: 'daily_repeat' | 'over_limit' | 'unidentified' | 'weekend' | 'late_night' | 'round_amount'
@@ -56,8 +56,10 @@ function detectAnomalies(txns: CardTransaction[], staffList: Staff[]): Anomaly[]
 
   // 1) 식대 1인 15,000원 초과 (월 기준)
   const mealTxns = thisMonth.filter(t => t.category === '식대')
-  const staffIds = [...new Set(txns.map(t => t.staff_id).filter(Boolean))]
-  const staffCount = Math.max(staffIds.length, 1)
+  // 1인당은 재직 직원 수로 나눈다. 예전에는 카드내역의 staff_id 개수로 나눴는데,
+  // CSV로 올린 내역은 staff_id가 늘 비어 있어 인원이 1명으로 잡히고 한 달 식대 전체가
+  // 한 사람 몫으로 계산돼 거의 매달 경고가 떴다.
+  const staffCount = Math.max(staffList.filter(s => !s.resign_date).length, 1)
   const mealTotal = mealTxns.reduce((s, t) => s + t.amount, 0)
   const workDays = 22
   const mealPerPerson = mealTotal / staffCount
@@ -163,7 +165,7 @@ export default function CardAnalysis() {
     const [cardR, mapR, stfR] = await Promise.all([
       supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
       supabase.from('card_mappings').select('*').order('card_last4'),
-      supabase.from('staff').select('id, name').order('name'),
+      supabase.from('staff').select('id, name, resign_date').order('name'),
     ])
     if (!cardR.error) setCardTxns(cardR.data || [])
     if (!mapR.error) setCardMappings(mapR.data || [])
@@ -347,9 +349,9 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
       const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
-      // TODO: AI 파싱 → card_transactions 자동 등록
-      // 현재는 파일 저장만 하고 수동 등록 안내
-      setUploadResult(`"${file.name}" 업로드 완료. AI 분석 후 카드내역이 자동 등록됩니다.`)
+      // PDF를 읽어 카드내역으로 등록하는 기능은 아직 없다 — 파일만 보관한다.
+      // 예전 안내("AI 분석 후 자동 등록됩니다")는 사실이 아니어서, 기다려도 내역이 생기지 않았다.
+      setUploadResult(`"${file.name}" 보관 완료. PDF는 내역으로 등록되지 않습니다 — 카드내역은 카드사 CSV로 올려 주세요.`)
     } catch (err) {
       // 실패 이유를 삼키면 이번처럼 원인을 못 찾는다 — 서버가 준 메시지를 그대로 보여준다
       setUploadResult(`업로드 실패: ${err instanceof Error ? err.message : '다시 시도해 주세요'}`)
@@ -472,7 +474,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
             <>
               <div className="flex justify-center mb-2"><FileText size={24} className="text-txt-tertiary" /></div>
               <div className="text-sm font-medium text-txt-secondary">PDF 업로드</div>
-              <div className="text-xs text-txt-tertiary mt-1">카드사 월별 이용내역 PDF</div>
+              <div className="text-xs text-txt-tertiary mt-1">보관만 됩니다 · 내역 등록은 CSV로</div>
             </>
           )}
           <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfUpload(f) }} />

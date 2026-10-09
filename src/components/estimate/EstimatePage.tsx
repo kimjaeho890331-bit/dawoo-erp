@@ -201,6 +201,7 @@ export default function EstimatePage({ category, projectId }: Props) {
           if (d.detailRows) setDetailRows(d.detailRows)
           if (d.priceYear) setPriceYear(d.priceYear)
           if (d.unitPriceSnapshot) setUnitPrices(d.unitPriceSnapshot)
+          if (typeof d.additionalCost === 'number') setAdditionalCost(d.additionalCost)
         }
       }
       setLoaded(true)
@@ -238,6 +239,8 @@ export default function EstimatePage({ category, projectId }: Props) {
         costSummary,
         priceYear,
         unitPriceSnapshot: unitPrices,
+        // 예전에는 빠져 있어 다시 열면 추가공사비가 0으로 돌아갔다
+        additionalCost,
       }
 
       if (estimateId) {
@@ -275,7 +278,7 @@ export default function EstimatePage({ category, projectId }: Props) {
     }
   }, [
     projectId, customerInfo, checkedWorks, measurements, areas,
-    costRates, detailRows, costSummary, priceYear, unitPrices, estimateId,
+    costRates, detailRows, costSummary, priceYear, unitPrices, estimateId, additionalCost,
   ])
 
   // ── 탭 콘텐츠 렌더 ──

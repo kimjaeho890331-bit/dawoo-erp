@@ -164,6 +164,8 @@ export interface EstimateData {
   costSummary: CostSummary
   priceYear: number
   unitPriceSnapshot: UnitPrice[]  // 생성 시점 단가 스냅샷
+  /** 고객정보 탭에서 손으로 넣는 추가공사비. 예전 견적서에는 없다(저장이 빠져 있었다). */
+  additionalCost?: number
 }
 
 // 회사 정보 (표지용 고정)

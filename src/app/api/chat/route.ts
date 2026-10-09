@@ -1466,13 +1466,13 @@ async function loadMemoryBlock(): Promise<string> {
   } catch { return '' }
 }
 
-// --- Non-streaming handler (텔레그램 및 기타 용도) ---
+// --- Non-streaming handler (스트리밍이 필요 없는 호출용) ---
 async function handleNonStreaming(
   apiKey: string,
   claudeMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
   systemPrompt: string,
   staffId?: string,
-  channel?: 'web' | 'telegram',
+  channel?: 'web',
 ): Promise<Response> {
   const MAX_ITERATIONS = 8
   let finalText = ''
@@ -1560,7 +1560,7 @@ export async function POST(request: NextRequest) {
     const { messages, staffId, channel, nonStreaming } = body as {
       messages: Array<{ role: string; content: string; images?: string[]; files?: { data: string; media_type: string; name?: string }[] }>
       staffId?: string
-      channel?: 'web' | 'telegram'
+      channel?: 'web'
       nonStreaming?: boolean
       pendingPhotos?: string[] // 고품질 원본 (드라이브 저장용)
     }
@@ -1609,7 +1609,7 @@ export async function POST(request: NextRequest) {
     if (staffId && recentMessages.length > 0) {
       const lastMsg = recentMessages[recentMessages.length - 1]
       if (lastMsg.role === 'user') {
-        // 웹에서 새 대화면 세션 생성 (텔레그램은 세션 미사용)
+        // 웹에서 새 대화면 세션 생성
         if (channel === 'web' && !activeSessionId) {
           try {
             const title = (lastMsg.content || '새 대화').slice(0, 40) || '새 대화'
@@ -1669,7 +1669,7 @@ export async function POST(request: NextRequest) {
     const memoryBlock = await loadMemoryBlock()
     const systemPrompt = `${SYSTEM_PROMPT}\n\n## 현재 사용자\n이름: ${currentStaffName}\n- 입금 관련 도구 호출 시 confirmer_name은 생략해도 서버가 자동으로 '${currentStaffName}'으로 처리합니다.${pageBlock}${memoryBlock}`
 
-    // non-streaming 모드 (텔레그램용): JSON 한 번에 반환
+    // non-streaming 모드: JSON 한 번에 반환
     if (nonStreaming) {
       return handleNonStreaming(apiKey, claudeMessages, systemPrompt, staffId, channel)
     }

@@ -102,7 +102,6 @@
 | `/api/certificate/request` | `projects`, `staff` |
 | `/api/weather` | `sites` |
 | `/api/pricing` | 단가 |
-| `/api/telegram/webhook` | `projects` 등 (`src/lib/payments.ts`) |
 | `/api/push/subscribe` | `push_subscriptions` |
 | `src/app/auth/callback` | `staff` |
 

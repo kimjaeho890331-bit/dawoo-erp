@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 4) 로그인 콜백이 같이 만들어 둔 미사용 텔레그램 코드는 지운다(행 삭제를 막지 않게)
+  // 4) 예전 로그인 콜백이 같이 만들어 둔 미사용 초대 코드(staff_invitations)는 지운다(행 삭제를 막지 않게)
   await admin.from('staff_invitations').delete().eq('used_by_staff_id', ghostId).is('used_at', null)
 
   const { error: deleteError } = await admin.from('staff').delete().eq('id', ghostId)

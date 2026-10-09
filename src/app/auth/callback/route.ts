@@ -55,7 +55,6 @@ export async function GET(request: NextRequest) {
   //    예전에는 직원 정보의 이메일만 보고, 없으면 카카오 닉네임으로 직원 행을 새로 만들었다(직책 '사원').
   //    그래서 직원 목록에 같은 사람이 한 명 더 생기고 그 사람의 기록이 새 행 이름으로 쌓였다.
   //    이제는 새로 만들지 않고, 연결이 안 된 계정은 본인 이름을 고르는 화면으로 보낸다.
-  //    (텔레그램 코드 자동 생성도 뺐다 — 텔레그램은 쓰지 않는다)
   const { data: mapped } = await admin
     .from('staff_emails')
     .select('staff_id')

@@ -12,14 +12,17 @@ import AccountLink from '@/components/settings/AccountLink'
  * 예전에는 회사 정보, 알림 스위치 8개, 기본 연도·페이지당 건수·보고서 시각 칸과
  * "저장" 버튼이 있었다. 하지만 그 값은 이 브라우저에만 저장되고 어디서도 읽지 않아서,
  * 바꿔도 아무 일도 일어나지 않았다. 직원이 켜고 끈 줄 알고 기다리게 되므로 뺐다.
- * 남은 셋(내 계정 연결·결재 알림·앱 설치)은 각자 누르는 즉시 저장된다.
+ * 남은 셋(내 계정 연결·알림·앱 설치)은 각자 누르는 즉시 저장된다.
+ *
+ * 「알림」 탭은 예전 이름이 「결재 알림」이었다. 연차·대시보드 지시 알림도 같은 구독으로
+ * 오게 되면서 이름을 넓혔다.
  *
  * 「내 계정 연결」을 맨 앞에 둔다. 직원관리 화면이 "설정 > 내 계정 연결"로 안내하는데
  * 예전에는 「시스템」 탭 안쪽에 숨어 있었다.
  */
 const TABS = [
   { key: 'account', label: '내 계정 연결', icon: UserRound },
-  { key: 'notification', label: '결재 알림', icon: Bell },
+  { key: 'notification', label: '알림', icon: Bell },
   { key: 'app', label: '앱 설치', icon: Smartphone },
 ] as const
 
@@ -60,7 +63,7 @@ export default function SettingsPage() {
           )}
           {tab === 'notification' && (
             <section>
-              <h2 className="text-sm font-medium mb-2 text-txt-primary">결재 휴대폰 알림</h2>
+              <h2 className="text-sm font-medium mb-2 text-txt-primary">휴대폰 알림</h2>
               <PushToggle />
             </section>
           )}

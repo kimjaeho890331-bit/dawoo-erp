@@ -46,7 +46,8 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     return next
   })
 
-  if (pathname === '/login') return <>{children}</>
+  // 로그인·계정 연결 화면은 메뉴 없이 그 화면만 보인다
+  if (pathname === '/login' || pathname === '/link-account') return <>{children}</>
 
   if (loading) {
     return (

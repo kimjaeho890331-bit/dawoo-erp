@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
 import { toast } from '@/lib/toast'
 import { canDecideLeave, canChangeLeave } from '@/lib/leave/permissions'
+import { notifyLeave } from '@/lib/notify/client'
 
 interface LeaveRequest {
   id: string
@@ -248,6 +249,8 @@ export default function LeavePage() {
       status: '승인', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
     if (error) { toast.error(`승인 처리에 실패했습니다: ${error.message}`); return }
+    // 신청자에게 승인 알림 (기다리지 않는다 — 알림이 안 가도 승인은 이미 저장됐다)
+    notifyLeave(id, 'decided')
 
     // 업무 캘린더 자동 등록 + 결과 안내
     const sync = await syncToCalendar({ ...req, status: '승인' })
@@ -270,6 +273,7 @@ export default function LeavePage() {
       status: '반려', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
     if (error) { toast.error(`반려 처리에 실패했습니다: ${error.message}`); return }
+    notifyLeave(id, 'decided')
     await removeFromCalendar(req)
     toast.success(`${getName(req.staff_id)} 연차를 반려했습니다`)
     loadData()
@@ -323,8 +327,12 @@ export default function LeavePage() {
       }
       setShowModal(false); loadData()
     } else {
-      const { error } = await supabase.from('leave_requests').insert({ ...payload, status: '대기' })
+      // id를 돌려받아 승인자 알림에 쓴다. single()은 쓰지 않는다 — 행이 안 돌아오면
+      // 저장은 됐는데 "신청하지 못했습니다"로 보이게 된다.
+      const { data, error } = await supabase.from('leave_requests').insert({ ...payload, status: '대기' }).select('id')
       if (error) { toast.error(`신청하지 못했습니다: ${error.message}`); return }
+      const newId = (data as { id: string }[] | null)?.[0]?.id
+      if (newId) notifyLeave(newId, 'requested')
       setShowModal(false); loadData()
     }
   }

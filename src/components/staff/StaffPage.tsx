@@ -8,6 +8,8 @@ import { generateInviteCode } from '@/lib/staff/inviteCode'
 import { RESIGN_CONFIRM_MESSAGE } from '@/lib/staff/selectable'
 import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex, getContrastText } from '@/lib/staff-colors'
 import { canSeeLedger } from '@/lib/ledgerAccess'
+import { UI_HIDDEN } from '@/lib/uiHidden'
+import { isAutoCreatedStaff } from '@/lib/staff/ghost'
 import { STAFF_STORAGE_KEY } from '@/lib/activityLog'
 import { toast } from '@/lib/toast'
 
@@ -128,8 +130,11 @@ export default function StaffPage() {
   const canSeeAllPay = canSeeLedger(myRole)
   const canSeePayOf = (staffId: string) => canSeeAllPay || staffId === myId
 
-  const activeStaff = staffList.filter(s => !s.resign_date)
-  const resignedStaff = staffList.filter(s => !!s.resign_date)
+  // 카카오 첫 로그인 때 자동으로 생긴 행은 표에서 빼고 위쪽 정리 칸에 따로 보인다
+  const ghostStaff = staffList.filter(s => isAutoCreatedStaff(s))
+  const realStaff = staffList.filter(s => !isAutoCreatedStaff(s))
+  const activeStaff = realStaff.filter(s => !s.resign_date)
+  const resignedStaff = realStaff.filter(s => !!s.resign_date)
   const totalSalary = activeStaff.reduce((s, st) => s + (st.salary || 0), 0)
 
   if (loading) return <div className="md:p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
@@ -154,18 +159,23 @@ export default function StaffPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* 이 코드는 텔레그램 봇 연결용이다(api/telegram/webhook의 /start 코드).
-              '직원 초대'라고 써 있어 직원을 새로 등록하는 버튼으로 오해했다. */}
-          <button onClick={() => setShowInviteModal(true)}
-            className="btn-primary whitespace-nowrap">
-            + 텔레그램 연결
-          </button>
+          {/* 이 코드는 텔레그램 봇 연결용이다(api/telegram/webhook의 /start 코드). 텔레그램은 지금 쓰지 않아 숨긴다 */}
+          {!UI_HIDDEN.telegram && (
+            <button onClick={() => setShowInviteModal(true)}
+              className="btn-primary whitespace-nowrap">
+              + 텔레그램 연결
+            </button>
+          )}
         </div>
       </div>
 
       {/* === 직원정보 탭 === */}
       {tab === 'info' && (
         <>
+          {ghostStaff.length > 0 && (
+            <GhostStaffPanel ghosts={ghostStaff} realStaff={activeStaff} canManage={canSeeAllPay} actorId={myId} onDone={loadData} />
+          )}
+
           {/* 상세 패널 — 표 위 */}
           {detailItem && (
             <div ref={detailRef} className="scroll-mt-4">
@@ -176,7 +186,7 @@ export default function StaffPage() {
 
           {/* 테이블 */}
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-x-auto">
-            {staffList.length === 0 ? (
+            {realStaff.length === 0 ? (
               <div className="text-center py-16 text-txt-quaternary text-sm">등록된 직원이 없습니다</div>
             ) : (
               <table className="w-full min-w-[760px] text-[13px]">
@@ -186,7 +196,7 @@ export default function StaffPage() {
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직책</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직급</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연락처</th>
-                    <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">텔레그램</th>
+                    {!UI_HIDDEN.telegram && <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">텔레그램</th>}
                     <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">계정연결</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">입사일</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">근속</th>
@@ -196,7 +206,7 @@ export default function StaffPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-secondary">
-                  {staffList.map(s => {
+                  {realStaff.map(s => {
                     const isResigned = !!s.resign_date
                     return (
                       <tr key={s.id} className={`hover:bg-surface-tertiary cursor-pointer ${isResigned ? 'opacity-50' : ''}`}
@@ -213,7 +223,7 @@ export default function StaffPage() {
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.role}</td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.position || '-'}</td>
                         <td className="px-4 py-3 text-[13px] text-txt-secondary">{s.work_phone || s.phone || '-'}</td>
-                        <td className="px-4 py-3 text-center">
+                        {!UI_HIDDEN.telegram && <td className="px-4 py-3 text-center">
                           {s.telegram_chat_id ? (
                             <span className="inline-flex items-center gap-0.5 text-[11px] text-[#059669]" title={`연결됨 ${s.telegram_linked_at ? '· ' + s.telegram_linked_at.slice(0,10) : ''}`}>
                               연결
@@ -221,7 +231,7 @@ export default function StaffPage() {
                           ) : (
                             <span className="text-[11px] text-txt-quaternary" title="미연결">—</span>
                           )}
-                        </td>
+                        </td>}
                         <td className="px-4 py-3 text-center text-[12px]">
                           {(linkedEmails[s.id]?.length ?? 0) > 0 ? (
                             <span className="text-accent-text font-medium">{linkedEmails[s.id].length}개</span>
@@ -939,7 +949,7 @@ function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () =
   const handleCopy = () => {
     if (!generatedCode) return
     // 예전 메시지의 /invite/코드 링크는 없는 화면이었다. 실제로는 텔레그램 봇에 /start 코드를 보내야 연결된다.
-    const msg = `[다우건설 ERP 텔레그램 연결]\n${name ? `${name}님, ` : ''}텔레그램에서 회사 ERP 봇을 열고 아래 한 줄을 그대로 보내 주세요.\n\n/start ${generatedCode}\n\n연결되면 텔레그램으로 ERP 알림을 받고 AI 비서와 대화할 수 있습니다. (${daysValid}일 안에 한 번만 쓸 수 있습니다)`
+    const msg = `[다우건설 ERP 텔레그램 연결]\n${name ? `${name}님, ` : ''}텔레그램에서 회사 ERP 봇을 열고 아래 한 줄을 그대로 보내 주세요.\n\n/start ${generatedCode}\n\n연결되면 텔레그램으로 입금 내용을 보내 수금 처리하거나, 현장 사진을 접수건에 올릴 수 있습니다. (${daysValid}일 안에 한 번만 쓸 수 있습니다)`
     navigator.clipboard.writeText(msg)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -963,7 +973,8 @@ function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () =
           <div className="p-5 space-y-4">
             {/* 예전 문구(받은 직원이 본인 정보를 직접 등록)는 사실이 아니었다 — 이 코드는 텔레그램 연결에만 쓰인다 */}
             <div className="space-y-1.5 text-[12px] text-txt-secondary leading-relaxed">
-              <p>직원의 텔레그램을 회사 ERP 봇과 연결하는 코드입니다. 연결되면 직원이 텔레그램으로 ERP 알림을 받고 AI 비서와 대화할 수 있습니다.</p>
+              {/* 봇이 먼저 알림을 보내는 기능은 없다(결재 알림은 웹푸시). 실제로 되는 일만 적는다 */}
+              <p>직원의 텔레그램을 회사 ERP 봇과 연결하는 코드입니다. 연결되면 직원이 텔레그램으로 입금 내용을 보내 수금 처리하거나, 현장 사진을 접수건에 올릴 수 있습니다.</p>
               <p className="text-txt-tertiary">직원 정보를 새로 등록하는 기능은 아닙니다. 아래 목록에 있는 직원만 연결할 수 있습니다.</p>
             </div>
             <div>
@@ -1029,6 +1040,89 @@ function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () =
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ===== 자동 생성 직원 정리 =====
+// 예전 카카오 로그인은 직원 정보와 연결되지 않은 계정마다 닉네임으로 직원을 새로 만들었다(직책 '사원').
+// 같은 사람이 목록에 둘이 되고 그 사람의 기록이 새 이름으로 쌓였다. 실제 직원과 합치면
+// 기록을 옮기고 로그인 계정을 실제 직원에 연결한 뒤 자동 생성 행을 지운다(/api/staff/merge-ghost).
+function GhostStaffPanel({ ghosts, realStaff, canManage, actorId, onDone }: {
+  ghosts: Staff[]; realStaff: Staff[]; canManage: boolean; actorId: string | null; onDone: () => void
+}) {
+  const [targets, setTargets] = useState<Record<string, string>>({})
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const run = async (ghost: Staff, targetId: string | null) => {
+    const target = realStaff.find(s => s.id === targetId)
+    const ok = target
+      ? confirm(`"${ghost.name}"${ghost.email ? `(${ghost.email})` : ''}을 "${target.name}"님과 합칩니다.\n이 이름으로 남은 기록이 모두 ${target.name}님 기록으로 옮겨지고, 이 로그인 계정은 다음부터 ${target.name}님으로 들어옵니다.`)
+      : confirm(`"${ghost.name}"을 지웁니다. 이 이름으로 남은 기록이 있으면 지워지지 않습니다.`)
+    if (!ok) return
+    setBusyId(ghost.id)
+    try {
+      const res = await fetch('/api/staff/merge-ghost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ghost_id: ghost.id, target_id: targetId, actor_staff_id: actorId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(json.error || '정리하지 못했습니다'); return }
+      toast.success(target ? `${target.name}님과 합쳤습니다` : '지웠습니다')
+      onDone()
+    } catch {
+      toast.error('인터넷 연결을 확인하고 다시 시도해 주세요')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-[10px] border border-border-primary bg-surface p-4">
+      <div className="text-[14px] font-semibold text-txt-primary">정리가 필요한 직원 {ghosts.length}명</div>
+      <p className="mt-1 text-[12px] text-txt-tertiary leading-relaxed">
+        카카오로 처음 로그인할 때 자동으로 생긴 이름입니다. 실제 직원을 골라 합치면 그 사람이 남긴 기록이 실제 직원 이름으로 옮겨지고,
+        다음 로그인부터 실제 직원으로 들어옵니다.
+        {!canManage && ' 정리는 대표·관리자·경리가 할 수 있습니다.'}
+      </p>
+      <div className="mt-3 divide-y divide-border-tertiary">
+        {ghosts.map(g => (
+          <div key={g.id} className="flex flex-wrap items-center gap-2 py-2.5">
+            <div className="min-w-0 flex-1 basis-[180px]">
+              <div className="text-[13px] font-medium text-txt-primary">{g.name}</div>
+              <div className="text-[11px] text-txt-tertiary truncate">{g.email || '이메일 없음'} · {g.created_at?.slice(0, 10)}</div>
+            </div>
+            {canManage && (
+              <>
+                <select
+                  value={targets[g.id] ?? ''}
+                  onChange={e => setTargets(prev => ({ ...prev, [g.id]: e.target.value }))}
+                  aria-label={`${g.name}과 합칠 실제 직원`}
+                  className="input-field h-9 min-w-[140px]"
+                >
+                  <option value="">실제 직원 선택</option>
+                  {realStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <button
+                  onClick={() => run(g, targets[g.id])}
+                  disabled={!targets[g.id] || busyId === g.id}
+                  className="btn-primary h-9"
+                >
+                  {busyId === g.id ? '정리 중…' : '합치기'}
+                </button>
+                <button
+                  onClick={() => run(g, null)}
+                  disabled={busyId === g.id}
+                  className="btn-secondary h-9"
+                >
+                  지우기
+                </button>
+              </>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )

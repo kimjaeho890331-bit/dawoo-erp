@@ -4,11 +4,13 @@ import { canDecideLeave, canChangeLeave, isLeaveApprover } from './permissions'
 const 대표 = { id: 'ceo', role: '대표' }
 const 관리자 = { id: 'mgr', role: '관리자' }
 const 직원 = { id: 'emp', role: '직원' }
+const 경리 = { id: 'acc', role: '경리' }
 
 describe('isLeaveApprover', () => {
-  it('대표·관리자만 승인자다', () => {
+  it('대표·관리자·경리만 승인자다', () => {
     expect(isLeaveApprover('대표')).toBe(true)
     expect(isLeaveApprover(' 관리자 ')).toBe(true)
+    expect(isLeaveApprover('경리')).toBe(true)
     expect(isLeaveApprover('직원')).toBe(false)
     expect(isLeaveApprover('현장소장')).toBe(false)
     expect(isLeaveApprover(null)).toBe(false)
@@ -23,6 +25,10 @@ describe('canDecideLeave', () => {
   it('관리자는 남의 연차만 승인한다', () => {
     expect(canDecideLeave(관리자, 'emp')).toBe(true)
     expect(canDecideLeave(관리자, 'mgr')).toBe(false)
+  })
+  it('경리는 남의 연차만 승인한다', () => {
+    expect(canDecideLeave(경리, 'emp')).toBe(true)
+    expect(canDecideLeave(경리, 'acc')).toBe(false)
   })
   it('대표는 본인 연차도 승인한다', () => {
     expect(canDecideLeave(대표, 'ceo')).toBe(true)

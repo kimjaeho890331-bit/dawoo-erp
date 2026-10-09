@@ -241,7 +241,7 @@ export default function LeavePage() {
   const handleApprove = async (id: string) => {
     const req = requests.find(r => r.id === id)
     if (!req) return
-    if (!canDecideLeave(me, req.staff_id)) { toast.error('연차 승인은 대표·관리자만 할 수 있습니다'); return }
+    if (!canDecideLeave(me, req.staff_id)) { toast.error('연차 승인은 대표·관리자·경리만 할 수 있습니다 (본인 연차 제외)'); return }
     const { error } = await supabase.from('leave_requests').update({
       status: '승인', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)
@@ -263,7 +263,7 @@ export default function LeavePage() {
   const handleReject = async (id: string) => {
     const req = requests.find(r => r.id === id)
     if (!req) return
-    if (!canDecideLeave(me, req.staff_id)) { toast.error('연차 반려는 대표·관리자만 할 수 있습니다'); return }
+    if (!canDecideLeave(me, req.staff_id)) { toast.error('연차 반려는 대표·관리자·경리만 할 수 있습니다 (본인 연차 제외)'); return }
     const { error } = await supabase.from('leave_requests').update({
       status: '반려', approved_at: new Date().toISOString(), approved_by: myStaffId,
     }).eq('id', id)

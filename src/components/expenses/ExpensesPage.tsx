@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, parseMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
@@ -12,6 +13,9 @@ import {
   suggestedLaborCategory,
   validateLaborExpense,
 } from '@/lib/expenseCategory'
+import { canSeeLedger } from '@/lib/ledgerAccess'
+import { STAFF_STORAGE_KEY } from '@/lib/activityLog'
+import { toast } from '@/lib/toast'
 
 // --- 타입 ---
 interface Expense {
@@ -26,9 +30,11 @@ interface Expense {
   receipt_url: string | null
   memo: string | null
   created_at: string
+  /** 지출결의서 결재가 끝나 자동으로 만들어진 지출이면 원본 지급정보 행 id */
+  expense_report_payment_id?: string | null
 }
 
-interface Staff { id: string; name: string }
+interface Staff { id: string; name: string; role?: string | null }
 interface Site { id: string; name: string; contract_type?: string | null; status?: string | null; budget?: number | null }
 interface Project { id: string; building_name: string | null; ho: string | null; dong: string | null; total_cost?: number | null }
 
@@ -55,19 +61,31 @@ export default function ExpensesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editItem, setEditItem] = useState<any>(null)
   const [filterCat, setFilterCat] = useState('전체')
+  /** 결재로 들어온 지출 id → 그 지출결의서 id. "결재 문서" 링크에 쓴다. */
+  const [reportOf, setReportOf] = useState<Record<string, string>>({})
+  // 지금 쓰는 직원. 화면은 불러오는 중에 그려지지 않으므로 서버 렌더와 어긋나지 않는다.
+  const [myId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(STAFF_STORAGE_KEY))
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [expR, stfR, sitR, projR] = await Promise.all([
+    const [expR, stfR, sitR, projR, linkR] = await Promise.all([
       supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
-      supabase.from('staff').select('id, name'),
+      supabase.from('staff').select('id, name, role'),
       supabase.from('sites').select('id, name, contract_type, status, budget'),
       supabase.from('projects').select('id, building_name, ho, dong, total_cost').order('created_at', { ascending: false }),
+      // 결재로 만들어진 지출이 어느 결의서에서 왔는지. 못 읽어도 목록은 그대로 보인다(링크만 빠진다).
+      supabase.from('expense_report_payments').select('report_id, expense_id').not('expense_id', 'is', null),
     ])
     if (!expR.error) setExpenses(expR.data || [])
     if (!stfR.error) setStaffList(stfR.data || [])
     if (!sitR.error) setSiteList(sitR.data || [])
     if (!projR.error) setProjectList((projR.data || []) as Project[])
+    if (!linkR.error) {
+      const m: Record<string, string> = {}
+      for (const r of (linkR.data || []) as { report_id: string; expense_id: string }[]) m[r.expense_id] = r.report_id
+      setReportOf(m)
+    }
     setLoading(false)
   }, [])
 
@@ -89,9 +107,19 @@ export default function ExpensesPage() {
 
   const handleDelete = async (table: string, id: string, label: string) => {
     if (!confirm(`"${label}" 삭제하시겠습니까?`)) return
-    await supabase.from(table).delete().eq('id', id)
+    const { error } = await supabase.from(table).delete().eq('id', id)
+    if (error) { toast.error(`삭제하지 못했습니다: ${error.message}`); return }
     loadData()
   }
+
+  /**
+   * 결재가 끝나 자동으로 들어온 지출은 결의서와 짝이 맞아야 한다.
+   * - 고치기는 대표·관리자·경리만 (경리 메뉴와 같은 기준). 영수증 링크는 그대로 둔다.
+   * - 지우기는 막는다. 결의서 지급정보가 이 지출을 가리키고 있어 DB가 지우기를 거부한다
+   *   (예전에는 눌러도 아무 일도 안 일어나는 것처럼 보였다).
+   */
+  const myRole = staffList.find(s => s.id === myId)?.role ?? null
+  const canEditApproved = canSeeLedger(myRole)
 
   const openCreate = () => { setEditItem(null); setShowModal(true) }
   const openEdit = (item: any) => { setEditItem(item); setShowModal(true) }
@@ -172,15 +200,29 @@ export default function ExpensesPage() {
                       <td className="px-3 py-2.5"><span className={`inline-block whitespace-nowrap text-[11px] px-[10px] py-[2px] rounded-full font-medium ${CAT_COLOR[e.category] || CAT_COLOR['기타']}`}>{e.category}</span></td>
                       {/* 제목과 문서번호·계좌를 한 줄에 이어 붙이면 어디까지가 제목인지 읽히지 않는다. 줄을 나눈다. */}
                       <td className="px-4 py-2.5 text-txt-primary text-[13px]">
-                        <div className="line-clamp-2">{e.title}</div>
+                        <div className="line-clamp-2">
+                          {e.expense_report_payment_id && (
+                            <span className="mr-1.5 inline-block rounded bg-surface-secondary px-1.5 align-[1px] text-[11px] text-txt-secondary">결재</span>
+                          )}
+                          {e.title}
+                        </div>
                         {e.memo && <div className="mt-0.5 text-txt-tertiary text-[11px] line-clamp-2">{e.memo}</div>}
                       </td>
                       <td className="px-4 py-2.5 text-right font-medium text-txt-primary text-[13px] tabular-nums whitespace-nowrap">{e.amount.toLocaleString()}원</td>
                       <td className={`px-4 py-2.5 text-[13px] ${targetOf(e).missing ? 'text-[#b53333] font-medium' : 'text-txt-secondary'}`}><div className="line-clamp-2">{targetOf(e).text}</div></td>
                       <td className="px-2 py-2.5 text-txt-secondary text-[13px] whitespace-nowrap">{staffName(e.staff_id)}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap text-center">
-                        <button onClick={() => openEdit(e)} className="btn-inline">수정</button>
-                        <button onClick={() => handleDelete('expenses', e.id, e.title)} className="btn-inline-danger">삭제</button>
+                        {e.expense_report_payment_id ? (
+                          <>
+                            {reportOf[e.id] && <Link href={`/approval/${reportOf[e.id]}`} className="btn-inline">문서</Link>}
+                            {canEditApproved && <button onClick={() => openEdit(e)} className="btn-inline">수정</button>}
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => openEdit(e)} className="btn-inline">수정</button>
+                            <button onClick={() => handleDelete('expenses', e.id, e.title)} className="btn-inline-danger">삭제</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -259,7 +301,8 @@ function UnifiedModal({ item, staffList, siteList, projectList, onClose, onSaved
         expense_date: expDate,
         site_id: siteId || null,
         staff_id: staffId || null,
-        receipt_url: null,
+        // 결재로 들어온 지출에는 결의서 첨부(영수증) 링크가 있다. 고칠 때 지우면 안 된다.
+        receipt_url: item?.receipt_url ?? null,
         memo: memo || null,
         project_id: projectId || null,
       }),

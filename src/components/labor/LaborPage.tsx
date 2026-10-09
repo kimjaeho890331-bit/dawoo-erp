@@ -9,6 +9,7 @@ import { workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOp
 import { LABOR_CATEGORY, validateLaborExpense } from '@/lib/expenseCategory'
 import { DEFAULT_RATES, pickRates, type LaborRates, type LaborRateRow } from '@/lib/labor/rates'
 import LaborImportModal from './LaborImportModal'
+import { maskResidentId } from '@/lib/labor/mask'
 
 export { DEFAULT_RATES, type LaborRates }
 
@@ -93,20 +94,25 @@ function RateLabel({ value }: { value: number }) {
 // 올려서, 숫자를 치고 합계만 쳐다보거나 다른 창으로 넘어가면 입력이 조용히 사라졌다.
 // 편집 중에는 사용자가 친 원문(draft)을 그대로 두고, 칸을 벗어나면 정규화된
 // 표시값("-5,000")으로 돌아간다. 타이핑 도중 표시값이 끼어들면 커서가 튀기 때문.
-function CellInput({ value, onSave, onReset, className = '', align = 'left', placeholder = '' }: {
+function CellInput({ value, onSave, onReset, className = '', align = 'left', placeholder = '', mask }: {
   value: string
   onSave: (v: string, flush?: boolean) => void
   onReset?: () => void   // Esc — 수기값을 버리고 요율 자동계산으로 되돌린다
   className?: string
   align?: 'left' | 'center' | 'right'
   placeholder?: string
+  /** 칸을 누르지 않았을 때 보여줄 모양(주민번호 가리기 등). 저장 값은 바꾸지 않는다. */
+  mask?: (v: string) => string
 }) {
   const [draft, setDraft] = useState<string | null>(null)
+  const [focused, setFocused] = useState(false)
+  const shown = draft ?? (mask && !focused ? mask(value) : value)
   return (
     <input
-      type="text" value={draft ?? value} placeholder={placeholder}
+      type="text" value={shown} placeholder={placeholder}
+      onFocus={() => setFocused(true)}
       onChange={e => { setDraft(e.target.value); onSave(e.target.value) }}
-      onBlur={e => { const typed = draft !== null; setDraft(null); if (typed) onSave(e.target.value, true) }}
+      onBlur={e => { setFocused(false); const typed = draft !== null; setDraft(null); if (typed) onSave(e.target.value, true) }}
       onKeyDown={e => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
         // draft를 비워 두면 이후 blur가 저장을 건너뛰므로 되돌린 값이 그대로 남는다
@@ -333,14 +339,29 @@ export default function LaborPage() {
     } finally { setExporting(false) }
   }
 
-  // --- 노무비 결재 (체크된 근무자 → 지출결의서 생성) ---
+  // --- 노무비를 지출로 등록 (체크된 근무자) ---
+  // 결재(지출결의서)를 거치지 않고 지출관리에 바로 들어간다. 예전 버튼 이름은 "노무비 결재",
+  // 확인창은 "지출결의서를 생성합니다"였는데 실제로는 결재 없이 지출로 바로 저장돼 헷갈렸다.
   const handleSubmitApproval = async () => {
-    if (checkedRecords.length === 0) { alert('결재 올릴 근무자를 체크해주세요.'); return }
+    if (checkedRecords.length === 0) { alert('지출로 등록할 근무자를 체크해주세요.'); return }
     const totalNet = checkedRecords.reduce((s, r) => s + calcRow(r, rates).netPay, 0)
     const names = checkedRecords.map(r => r.worker_name || '(이름없음)')
     const title = `${month}월 일용직 노무비 (${names[0]}${names.length > 1 ? ` 외 ${names.length - 1}명` : ''})`
-    if (!confirm(`지출결의서를 생성합니다.\n\n${title}\n금액: ${totalNet.toLocaleString()}원\n\n진행할까요?`)) return
+    if (!confirm(`지출관리에 노무비로 바로 등록합니다 (결재를 거치지 않습니다).\n\n${title}\n금액: ${totalNet.toLocaleString()}원\n\n진행할까요?`)) return
     setSubmitting(true)
+
+    // 같은 달 같은 근무자 묶음을 두 번 누르면 노무비가 두 번 잡힌다. 이미 있으면 한 번 더 묻는다.
+    const { data: dup } = await supabase.from('expenses').select('id, amount, expense_date')
+      .eq('category', LABOR_CATEGORY).eq('title', title)
+      .gte('expense_date', `${year}-${String(month).padStart(2, '0')}-01`)
+      .limit(1)
+    if (dup && dup.length > 0) {
+      const d = dup[0] as { amount: number; expense_date: string }
+      if (!confirm(`같은 이름의 노무비가 이미 지출에 있습니다 (${d.expense_date}, ${d.amount.toLocaleString()}원).\n그래도 한 번 더 등록할까요?`)) {
+        setSubmitting(false)
+        return
+      }
+    }
     const memo = checkedRecords.map(r => {
       const c = calcRow(r, rates)
       return `${r.worker_name}: ${c.workDays}일 × ${fmt(r.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`
@@ -369,8 +390,8 @@ export default function LaborPage() {
     })
     const json = await res.json().catch(() => ({}))
     setSubmitting(false)
-    if (!res.ok) { alert(`결재 생성 실패: ${json.error || res.statusText}`); return }
-    alert('노무비가 지출에 등록되었습니다. [업무 > 지출]에서 확인하세요.')
+    if (!res.ok) { alert(`지출 등록 실패: ${json.error || res.statusText}`); return }
+    alert('노무비가 지출에 등록되었습니다. 왼쪽 메뉴 「지출관리」에서 확인하세요.')
   }
 
   // --- 합계 ---
@@ -433,7 +454,7 @@ export default function LaborPage() {
           <button onClick={handleSubmitApproval} disabled={submitting}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:bg-accent-hover transition disabled:opacity-50">
             <FileCheck size={15} />
-            {submitting ? '생성 중...' : '노무비 결재'}
+            {submitting ? '등록 중...' : '노무비 지출 등록'}
           </button>
         </div>
       </div>
@@ -616,7 +637,7 @@ function FragmentRow({ r, c, daysInMonth, days1, days2, tdCls, checked, toggleCh
           )}
         </td>
         <td className={tdCls}>
-          <CellInput value={r.resident_id || ''} placeholder="000000-0000000" align="center"
+          <CellInput value={r.resident_id || ''} placeholder="000000-0000000" align="center" mask={maskResidentId}
             onSave={(v, f) => patchRecord(r.id, { resident_id: v || null }, f)} />
         </td>
         <td className={tdCls}>

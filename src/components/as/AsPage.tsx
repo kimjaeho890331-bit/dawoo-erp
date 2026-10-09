@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from '@/lib/toast'
 import { supabase } from '@/lib/supabase'
 
 // --- 타입 ---
@@ -187,14 +188,16 @@ export default function AsPage() {
   const handleStatusChange = async (id: string, newStatus: AsStatus) => {
     const update: Record<string, unknown> = { status: newStatus }
     if (newStatus === '완료') update.resolved_date = new Date().toISOString().slice(0, 10)
-    await supabase.from('as_records').update(update).eq('id', id)
+    const { error } = await supabase.from('as_records').update(update).eq('id', id)
+    if (error) toast.error(`상태를 바꾸지 못했습니다: ${error.message}`)
     fetchRecords()
   }
 
   // --- 삭제 ---
   const handleDelete = async (id: string) => {
     if (!confirm('이 A/S 기록을 삭제하시겠습니까?')) return
-    await supabase.from('as_records').delete().eq('id', id)
+    const { error } = await supabase.from('as_records').delete().eq('id', id)
+    if (error) { toast.error(`삭제하지 못했습니다: ${error.message}`); return }
     fetchRecords()
   }
 

@@ -88,7 +88,9 @@ async function upsert(request: NextRequest, mode: 'create' | 'update') {
     project_id: row.project_id,
     staff_id: row.staff_id,
     memo: row.memo,
-    receipt_url: row.receipt_url,
+    // 고칠 때 receipt_url을 보내지 않았으면 기존 영수증 링크를 그대로 둔다.
+    // 예전에는 화면이 늘 null을 보내 결재로 들어온 지출의 영수증 링크가 지워졌다.
+    ...(mode === 'create' || body.receipt_url !== undefined ? { receipt_url: row.receipt_url } : {}),
   }
 
   if (mode === 'update') {

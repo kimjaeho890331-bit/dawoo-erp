@@ -1,166 +1,45 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Building2, Users, Bell, Shield, Database, Save, Check, Loader2, Smartphone } from 'lucide-react'
+import { useState } from 'react'
+import { Bell, Smartphone, UserRound } from 'lucide-react'
 import InstallPanel from '@/components/pwa/InstallPanel'
 import PushToggle from '@/components/settings/PushToggle'
 import AccountLink from '@/components/settings/AccountLink'
 
-// --- 타입 ---
-interface CompanyInfo {
-  name: string
-  ceo: string
-  bizNumber: string
-  address: string
-  phone: string
-  fax: string
-  email: string
-  constructionTypes: string
-}
+/**
+ * 설정 — 실제로 동작하는 것만 둔다.
+ *
+ * 예전에는 회사 정보, 알림 스위치 8개, 기본 연도·페이지당 건수·보고서 시각 칸과
+ * "저장" 버튼이 있었다. 하지만 그 값은 이 브라우저에만 저장되고 어디서도 읽지 않아서,
+ * 바꿔도 아무 일도 일어나지 않았다. 직원이 켜고 끈 줄 알고 기다리게 되므로 뺐다.
+ * 남은 셋(내 계정 연결·결재 알림·앱 설치)은 각자 누르는 즉시 저장된다.
+ *
+ * 「내 계정 연결」을 맨 앞에 둔다. 직원관리 화면이 "설정 > 내 계정 연결"로 안내하는데
+ * 예전에는 「시스템」 탭 안쪽에 숨어 있었다.
+ */
+const TABS = [
+  { key: 'account', label: '내 계정 연결', icon: UserRound },
+  { key: 'notification', label: '결재 알림', icon: Bell },
+  { key: 'app', label: '앱 설치', icon: Smartphone },
+] as const
 
-interface NotificationSetting {
-  key: string
-  label: string
-  description: string
-  enabled: boolean
-}
-
-interface SystemSettings {
-  defaultYear: number
-  itemsPerPage: number
-  autoSaveInterval: number
-  reportTime: string
-}
-
-interface AllSettings {
-  company: CompanyInfo
-  notifications: NotificationSetting[]
-  system: SystemSettings
-}
-
-const STORAGE_KEY = 'dawoo_erp_settings'
-
-const DEFAULT_COMPANY: CompanyInfo = {
-  name: '다우건설',
-  ceo: '김재호',
-  bizNumber: '',
-  address: '경기도 수원시',
-  phone: '',
-  fax: '',
-  email: '',
-  constructionTypes: '실내건축공사업, 수도시설공사업',
-}
-
-const DEFAULT_NOTIFICATIONS: NotificationSetting[] = [
-  { key: 'deadline', label: '마감 알림', description: '서류 제출 D-3일 전 알림', enabled: true },
-  { key: 'payment', label: '미수금 알림', description: '완료 후 30일 경과 미수금 알림', enabled: true },
-  { key: 'stale', label: '정체 알림', description: '30일 이상 진행 없는 건 알림', enabled: true },
-  { key: 'schedule', label: '일정 알림', description: '캘린더 일정 당일 알림', enabled: true },
-  { key: 'report', label: '보고서 생성', description: '일일/주간/월간 보고서 자동 생성', enabled: true },
-  { key: 'tax', label: '세무 알림', description: '회계달력 세무 일정 D-3일 전 알림', enabled: true },
-  { key: 'as', label: 'A/S 알림', description: 'A/S 미완료 3건 이상 누적 시 알림', enabled: false },
-  { key: 'expense', label: '이상지출 알림', description: '기준 초과 지출 감지 시 알림', enabled: true },
-]
-
-const DEFAULT_SYSTEM: SystemSettings = {
-  defaultYear: new Date().getFullYear(),
-  itemsPerPage: 50,
-  autoSaveInterval: 30,
-  reportTime: '08:00',
-}
-
-function loadSettingsFromStorage(): AllSettings {
-  if (typeof window === 'undefined') {
-    return { company: DEFAULT_COMPANY, notifications: DEFAULT_NOTIFICATIONS, system: DEFAULT_SYSTEM }
-  }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return { company: DEFAULT_COMPANY, notifications: DEFAULT_NOTIFICATIONS, system: DEFAULT_SYSTEM }
-    }
-    const parsed = JSON.parse(raw) as Partial<AllSettings>
-    // 기존 알림 키 기준으로 머지 (새 알림 항목이 추가되면 기본값 사용)
-    const mergedNotifications = DEFAULT_NOTIFICATIONS.map(def => {
-      const saved = parsed.notifications?.find(n => n.key === def.key)
-      return saved ? { ...def, enabled: saved.enabled } : def
-    })
-    return {
-      company: { ...DEFAULT_COMPANY, ...parsed.company },
-      notifications: mergedNotifications,
-      system: { ...DEFAULT_SYSTEM, ...parsed.system },
-    }
-  } catch {
-    return { company: DEFAULT_COMPANY, notifications: DEFAULT_NOTIFICATIONS, system: DEFAULT_SYSTEM }
-  }
-}
+type TabKey = (typeof TABS)[number]['key']
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'company' | 'notification' | 'app' | 'system'>('company')
-  const [saved, setSaved] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const [company, setCompany] = useState<CompanyInfo>(DEFAULT_COMPANY)
-  const [notifications, setNotifications] = useState<NotificationSetting[]>(DEFAULT_NOTIFICATIONS)
-  const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM)
-
-  // 마운트 시 localStorage에서 설정 로드
-  useEffect(() => {
-    const loaded = loadSettingsFromStorage()
-    setCompany(loaded.company)
-    setNotifications(loaded.notifications)
-    setSystemSettings(loaded.system)
-  }, [])
-
-  const toggleNotif = (key: string) => {
-    setNotifications(prev => prev.map(n => n.key === key ? { ...n, enabled: !n.enabled } : n))
-  }
-
-  const handleSave = useCallback(async () => {
-    setSaving(true)
-    // localStorage 저장 (약간의 지연으로 로딩 피드백)
-    await new Promise(resolve => setTimeout(resolve, 300))
-    try {
-      const data: AllSettings = { company, notifications, system: systemSettings }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-      setSaving(false)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch {
-      setSaving(false)
-      alert('설정 저장에 실패했습니다.')
-    }
-  }, [company, notifications, systemSettings])
-
-  const updateCompany = (field: keyof CompanyInfo, value: string) => {
-    setCompany(prev => ({ ...prev, [field]: value }))
-  }
-
-  const tabs = [
-    { key: 'company' as const, label: '회사 정보', icon: Building2 },
-    { key: 'notification' as const, label: '알림 설정', icon: Bell },
-    { key: 'app' as const, label: '앱 설치', icon: Smartphone },
-    { key: 'system' as const, label: '시스템', icon: Database },
-  ]
+  const [tab, setTab] = useState<TabKey>('account')
 
   return (
     <div className="max-w-[900px] mx-auto space-y-5">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">설정</h1>
-        <button onClick={handleSave} disabled={saving}
-          className="h-[36px] px-5 bg-accent hover:bg-accent-hover disabled:opacity-60 text-white rounded-lg text-[13px] font-medium transition flex items-center gap-1.5">
-          {saving ? <><Loader2 size={14} className="animate-spin" /> 저장 중...</> : saved ? <><Check size={14} /> 저장됨</> : <><Save size={14} /> 저장</>}
-        </button>
-      </div>
+      <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">설정</h1>
 
-      <div className="flex gap-5">
-        {/* 사이드 탭 */}
-        <div className="w-[200px] space-y-1">
-          {tabs.map(t => {
+      {/* 폰에서는 탭이 위로 가로로 놓인다. 예전에는 왼쪽 탭이 200px 고정이라 폰에서 내용 폭이 100px 남짓이었다. */}
+      <div className="flex flex-col gap-4 md:flex-row md:gap-5">
+        <div className="flex gap-1 overflow-x-auto md:w-[200px] md:shrink-0 md:flex-col md:space-y-1 md:gap-0">
+          {TABS.map(t => {
             const Icon = t.icon
             return (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-[13px] transition text-left ${
+                className={`flex min-h-11 shrink-0 items-center gap-3 rounded-lg px-4 text-[13px] transition text-left md:min-h-10 md:w-full ${
                   tab === t.key
                     ? 'bg-accent-light text-accent-text font-semibold'
                     : 'text-txt-secondary hover:bg-surface-tertiary'
@@ -172,142 +51,21 @@ export default function SettingsPage() {
           })}
         </div>
 
-        {/* 콘텐츠 */}
-        <div className="flex-1">
-          {/* 회사 정보 */}
-          {tab === 'company' && (
-            <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-              <div className="px-6 py-4 border-b border-border-tertiary">
-                <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">회사 정보</h2>
-                <p className="text-[12px] text-txt-tertiary mt-0.5">서류 자동 생성 시 사용됩니다</p>
-              </div>
-              <div className="px-6 py-5 space-y-4">
-                {([
-                  { key: 'name', label: '상호명', placeholder: '다우건설' },
-                  { key: 'ceo', label: '대표자', placeholder: '김재호' },
-                  { key: 'bizNumber', label: '사업자등록번호', placeholder: '000-00-00000' },
-                  { key: 'address', label: '주소', placeholder: '경기도 수원시...' },
-                  { key: 'phone', label: '전화', placeholder: '031-000-0000' },
-                  { key: 'fax', label: '팩스', placeholder: '031-000-0000' },
-                  { key: 'email', label: '이메일', placeholder: 'dawoo@example.com' },
-                  { key: 'constructionTypes', label: '업종', placeholder: '실내건축공사업, 수도시설공사업' },
-                ] as const).map(field => (
-                  <div key={field.key} className="flex items-center gap-4">
-                    <label className="w-[120px] text-[13px] text-txt-secondary shrink-0">{field.label}</label>
-                    <input
-                      value={company[field.key]}
-                      onChange={e => updateCompany(field.key, e.target.value)}
-                      placeholder={field.placeholder}
-                      className="flex-1 h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-txt-primary bg-surface focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div className="min-w-0 flex-1">
+          {tab === 'account' && (
+            <section>
+              <h2 className="text-sm font-medium mb-2 text-txt-primary">내 계정 연결</h2>
+              <AccountLink />
+            </section>
           )}
-
-          {/* 알림 설정 */}
           {tab === 'notification' && (
-            <div className="space-y-4">
-              <section>
-                <h2 className="text-sm font-medium mb-2 text-txt-primary">결재 휴대폰 알림</h2>
-                <PushToggle />
-              </section>
-
-              <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-                <div className="px-6 py-4 border-b border-border-tertiary">
-                  <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">알림 설정</h2>
-                  <p className="text-[12px] text-txt-tertiary mt-0.5">AI 보고서 및 자동 알림 기준</p>
-                </div>
-                <div className="divide-y divide-border-tertiary">
-                  {notifications.map(n => (
-                    <div key={n.key} className="flex items-center justify-between px-6 py-4">
-                      <div>
-                        <p className="text-[13px] font-medium text-txt-primary">{n.label}</p>
-                        <p className="text-[12px] text-txt-tertiary mt-0.5">{n.description}</p>
-                      </div>
-                      <button
-                        onClick={() => toggleNotif(n.key)}
-                        className={`w-11 h-6 rounded-full transition-colors relative ${n.enabled ? 'bg-accent' : 'bg-surface-tertiary'}`}
-                      >
-                        <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm ${n.enabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <section>
+              <h2 className="text-sm font-medium mb-2 text-txt-primary">결재 휴대폰 알림</h2>
+              <PushToggle />
+            </section>
           )}
-
-          {/* 시스템 설정 */}
           {/* 앱 설치 — 배너를 닫았더라도 여기서는 항상 설치할 수 있다 */}
           {tab === 'app' && <InstallPanel />}
-
-          {tab === 'system' && (
-            <div className="space-y-4">
-              <section>
-                <h2 className="text-sm font-medium mb-2 text-txt-primary">내 계정 연결</h2>
-                <AccountLink />
-              </section>
-
-              <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-                <div className="px-6 py-4 border-b border-border-tertiary">
-                  <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary">시스템 설정</h2>
-                </div>
-                <div className="px-6 py-5 space-y-4">
-                  <div className="flex items-center gap-4">
-                    <label className="w-[160px] text-[13px] text-txt-secondary shrink-0">기본 연도</label>
-                    <select value={systemSettings.defaultYear}
-                      onChange={e => setSystemSettings(prev => ({ ...prev, defaultYear: Number(e.target.value) }))}
-                      className="h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-txt-primary bg-surface focus:border-accent outline-none">
-                      {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}년</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <label className="w-[160px] text-[13px] text-txt-secondary shrink-0">페이지당 표시 건수</label>
-                    <select value={systemSettings.itemsPerPage}
-                      onChange={e => setSystemSettings(prev => ({ ...prev, itemsPerPage: Number(e.target.value) }))}
-                      className="h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-txt-primary bg-surface focus:border-accent outline-none">
-                      {[20, 30, 50, 100].map(n => <option key={n} value={n}>{n}건</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <label className="w-[160px] text-[13px] text-txt-secondary shrink-0">보고서 생성 시각</label>
-                    <input type="time" value={systemSettings.reportTime}
-                      onChange={e => setSystemSettings(prev => ({ ...prev, reportTime: e.target.value }))}
-                      className="h-[36px] border border-border-primary rounded-lg px-3 text-[13px] text-txt-primary bg-surface focus:border-accent outline-none" />
-                  </div>
-                </div>
-              </div>
-
-              {/* DB 정보 */}
-              <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-                <div className="px-6 py-4 border-b border-border-tertiary">
-                  <h2 className="text-[16px] font-semibold tracking-[-0.2px] text-txt-primary flex items-center gap-2">
-                    <Shield size={16} className="text-txt-tertiary" /> 연결 정보
-                  </h2>
-                </div>
-                <div className="px-6 py-4 space-y-2">
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-[13px] text-txt-secondary">Supabase</span>
-                    <span className="text-[12px] text-txt-tertiary">etwpcaedbuubjzbfrjli.supabase.co</span>
-                  </div>
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-[13px] text-txt-secondary">AI 모델</span>
-                    <span className="text-[12px] text-txt-tertiary">claude-sonnet-4-6</span>
-                  </div>
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-[13px] text-txt-secondary">배포</span>
-                    <span className="text-[12px] text-txt-tertiary">Vercel</span>
-                  </div>
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-[13px] text-txt-secondary">버전</span>
-                    <span className="text-[12px] text-txt-tertiary">DAWOO ERP v1.0.0</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

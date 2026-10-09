@@ -632,7 +632,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
         </div>
 
         {/* 단계 전환 */}
-        <StepTransition project={project} onStepChange={() => onRefresh?.()} />
+        <StepTransition project={project} pendingEdits={editData} onStepChange={() => onRefresh?.()} />
 
         {/* 상시 표시 영역 (항상 전체 표시) */}
         <div className="px-6 py-3 border-b border-border-tertiary bg-[#f0eee6]">

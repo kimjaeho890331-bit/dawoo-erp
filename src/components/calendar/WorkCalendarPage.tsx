@@ -1433,6 +1433,26 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
     onClose()
   }
 
+  // 수정 중 '취소' — 예전에는 고친 값을 그대로 둔 채 상세 보기로 돌아가 저장된 것처럼 보였다.
+  // 저장된 원래 값으로 되돌린 뒤 상세 보기로 간다.
+  const cancelEdit = () => {
+    if (!schedule) return
+    setTitle(schedule.title || '')
+    setStartDateRaw(schedule.start_date || defaultDate)
+    setEndDate(schedule.end_date || defaultDate)
+    setHasEndDate(schedule.start_date !== schedule.end_date)
+    setSelectedStaffIds(schedule.staff_ids && schedule.staff_ids.length > 0
+      ? schedule.staff_ids
+      : schedule.staff_id ? [schedule.staff_id] : [])
+    setScheduleType(schedule.schedule_type || 'personal')
+    setUserTouchedType(false)
+    setMemo(schedule.memo || '')
+    setConfirmed(schedule.confirmed ?? false)
+    setStartHour(schedule.start_time?.split(':')[0] || '')
+    setStartMinute(schedule.start_time?.split(':')[1] || '')
+    setIsEditing(false)
+  }
+
   // project_id가 있으면 프로젝트 주소 가져오기 (내비 버튼용)
   const [projectAddress, setProjectAddress] = useState<string | null>(null)
   useEffect(() => {
@@ -1815,7 +1835,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
         <div className="px-5 py-3.5 border-t border-border-tertiary flex items-center justify-between bg-surface-secondary/50 rounded-b-[10px]">
           <div>{onDelete && <button onClick={onDelete} className="px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded">삭제</button>}</div>
           <div className="flex gap-2">
-            <button onClick={isEdit ? () => setIsEditing(false) : onClose}
+            <button onClick={isEdit ? cancelEdit : onClose}
               className="px-4 py-2 text-sm border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
             <button onClick={handleSubmit} disabled={saving || !title || !startDate || !endDate}
               className="px-5 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium shadow-sm">{saving ? '저장 중...' : '저장'}</button>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { calcTotalLeave } from '@/lib/utils/leave'
 import { formatPhone, formatMoney } from '@/lib/utils/format'
@@ -103,6 +103,14 @@ export default function StaffPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // 상세는 표 위에 연다. 예전에는 표 맨 아래에 열려, 긴 목록에서 누르면 열린 줄도 몰랐다.
+  // 아래쪽 직원을 눌러도 보이도록 열릴 때 그 자리로 올려 준다.
+  const detailRef = useRef<HTMLDivElement>(null)
+  const detailId = detailItem?.id
+  useEffect(() => {
+    if (detailId) detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [detailId])
+
   const handleDelete = async (staff: Staff) => {
     if (!confirm(`"${staff.name}" 직원을 삭제하시겠습니까?\n그만둔 직원이면 삭제 대신 '수정'에서 퇴사일을 넣어 주세요. 삭제하면 지난 연차·결재 기록에서 이름이 사라질 수 있습니다.`)) return
     const { error } = await supabase.from('staff').delete().eq('id', staff.id)
@@ -146,9 +154,11 @@ export default function StaffPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* 이 코드는 텔레그램 봇 연결용이다(api/telegram/webhook의 /start 코드).
+              '직원 초대'라고 써 있어 직원을 새로 등록하는 버튼으로 오해했다. */}
           <button onClick={() => setShowInviteModal(true)}
             className="btn-primary whitespace-nowrap">
-            + 직원 초대
+            + 텔레그램 연결
           </button>
         </div>
       </div>
@@ -156,6 +166,14 @@ export default function StaffPage() {
       {/* === 직원정보 탭 === */}
       {tab === 'info' && (
         <>
+          {/* 상세 패널 — 표 위 */}
+          {detailItem && (
+            <div ref={detailRef} className="scroll-mt-4">
+              <DetailPanel staff={detailItem} showPay={canSeePayOf(detailItem.id)} linkedEmails={linkedEmails[detailItem.id] ?? []} onClose={() => setDetailItem(null)}
+                onEdit={() => { setEditItem(detailItem); setShowModal(true) }} />
+            </div>
+          )}
+
           {/* 테이블 */}
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-x-auto">
             {staffList.length === 0 ? (
@@ -234,12 +252,6 @@ export default function StaffPage() {
               </table>
             )}
           </div>
-
-          {/* 상세 패널 */}
-          {detailItem && (
-            <DetailPanel staff={detailItem} showPay={canSeePayOf(detailItem.id)} linkedEmails={linkedEmails[detailItem.id] ?? []} onClose={() => setDetailItem(null)}
-              onEdit={() => { setEditItem(detailItem); setShowModal(true) }} />
-          )}
         </>
       )}
 
@@ -351,9 +363,9 @@ export default function StaffPage() {
         />
       )}
 
-      {/* 초대 모달 */}
+      {/* 텔레그램 연결 코드 모달 (staff_invitations) */}
       {showInviteModal && (
-        <InviteModal onClose={() => setShowInviteModal(false)} />
+        <InviteModal staffList={activeStaff} onClose={() => setShowInviteModal(false)} />
       )}
     </div>
   )
@@ -432,10 +444,10 @@ function DetailPanel({ staff, showPay, linkedEmails, onClose, onEdit }: { staff:
           <div className="flex py-2 border-b border-surface-secondary">
             <span className="w-24 shrink-0 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">4대보험</span>
             <div className="text-[12px] text-txt-secondary flex gap-2 flex-wrap">
-              {staff.ins_pension && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">국민</span>}
-              {staff.ins_health && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">건강</span>}
-              {staff.ins_employment && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">고용</span>}
-              {staff.ins_industrial && <span className="px-1.5 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded">산재</span>}
+              {staff.ins_pension && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">국민</span>}
+              {staff.ins_health && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">건강</span>}
+              {staff.ins_employment && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">고용</span>}
+              {staff.ins_industrial && <span className="px-1.5 py-0.5 bg-surface-secondary text-txt-secondary rounded">산재</span>}
               {!staff.ins_pension && !staff.ins_health && !staff.ins_employment && !staff.ins_industrial && (
                 <span className="text-txt-quaternary">미가입</span>
               )}
@@ -547,7 +559,7 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
                   </div>
                   <div className="flex gap-1">
                     <a href={existing.file_url} target="_blank" rel="noreferrer"
-                      className="text-[10px] px-2 py-0.5 bg-[#eff6ff] text-[#1e40af] rounded hover:bg-[#dbeafe]">열기</a>
+                      className="text-[10px] px-2 py-0.5 bg-surface-secondary text-txt-secondary rounded hover:bg-surface-tertiary">열기</a>
                     <label className="text-[10px] px-2 py-0.5 bg-surface-tertiary text-txt-secondary rounded hover:bg-surface-secondary cursor-pointer">
                       교체
                       <input type="file" className="hidden" onChange={e => {
@@ -887,9 +899,14 @@ function StaffModal({ item, showPay, onClose, onSaved }: { item: Staff | null; s
   )
 }
 
-// ===== 직원 초대 모달 =====
-function InviteModal({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState('')
+// ===== 텔레그램 연결 코드 모달 (예전 이름: 직원 초대) =====
+const INVITE_ROLES = ['관리자', '경리', '직원', '현장소장']
+
+// 봇은 코드에 적힌 이름과 똑같은 직원을 찾아 텔레그램을 붙인다. 예전처럼 이름을 비우거나 오타가 나면
+// 코드를 받아도 "매칭되는 직원 정보가 없습니다"로 끝나서, 직원관리에 있는 사람 중에서 고르게 한다.
+function InviteModal({ staffList, onClose }: { staffList: Staff[]; onClose: () => void }) {
+  const [staffId, setStaffId] = useState('')
+  const name = staffList.find(s => s.id === staffId)?.name ?? ''
   const [role, setRole] = useState('직원')
   const [daysValid, setDaysValid] = useState(7)
   const [generatedCode, setGeneratedCode] = useState<string | null>(null)
@@ -898,17 +915,19 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const [tableMissing, setTableMissing] = useState(false)
 
   const handleGenerate = async () => {
+    if (!name) return
     setSaving(true)
     const code = generateInviteCode(6)
     const expires_at = new Date(Date.now() + daysValid * 24 * 60 * 60 * 1000).toISOString()
     const { error } = await supabase.from('staff_invitations').insert({
-      code, name: name.trim() || null, role, expires_at,
+      // 봇이 이름을 글자 그대로 비교하므로 직원관리의 이름을 손대지 않고 넣는다
+      code, name, role, expires_at,
     })
     if (error) {
       if (/does not exist|relation/.test(error.message)) {
         setTableMissing(true)
       } else {
-        toast.error('초대 코드 생성 실패: ' + error.message)
+        toast.error('연결 코드를 만들지 못했습니다: ' + error.message)
       }
       setSaving(false)
       return
@@ -919,8 +938,8 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
   const handleCopy = () => {
     if (!generatedCode) return
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://dawoo-erp-web.vercel.app'
-    const msg = `[다우건설 ERP 초대]\n${name ? `${name}님, ` : ''}다우건설 ERP 직원 초대 코드입니다.\n\n초대 코드: ${generatedCode}\n\n아래 링크로 접속 후 코드를 입력해주세요.\n${baseUrl}/invite/${generatedCode}`
+    // 예전 메시지의 /invite/코드 링크는 없는 화면이었다. 실제로는 텔레그램 봇에 /start 코드를 보내야 연결된다.
+    const msg = `[다우건설 ERP 텔레그램 연결]\n${name ? `${name}님, ` : ''}텔레그램에서 회사 ERP 봇을 열고 아래 한 줄을 그대로 보내 주세요.\n\n/start ${generatedCode}\n\n연결되면 텔레그램으로 ERP 알림을 받고 AI 비서와 대화할 수 있습니다. (${daysValid}일 안에 한 번만 쓸 수 있습니다)`
     navigator.clipboard.writeText(msg)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -930,33 +949,43 @@ function InviteModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-border-tertiary flex items-center justify-between">
-          <h3 className="font-semibold text-txt-primary">직원 초대</h3>
+          <h3 className="font-semibold text-txt-primary">텔레그램 연결 코드</h3>
           <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
         </div>
 
         {tableMissing ? (
           <div className="p-5">
             <p className="text-[13px] text-txt-secondary leading-relaxed">
-              초대 코드 기능을 아직 쓸 수 없습니다. 관리자에게 알려 주세요.
+              연결 코드 기능을 아직 쓸 수 없습니다. 관리자에게 알려 주세요.
             </p>
           </div>
         ) : !generatedCode ? (
           <div className="p-5 space-y-4">
-            <p className="text-[12px] text-txt-secondary leading-relaxed">
-              초대 코드를 생성해서 카톡/문자로 전달하면, 받은 직원이 본인 정보를 직접 등록합니다.
-            </p>
+            {/* 예전 문구(받은 직원이 본인 정보를 직접 등록)는 사실이 아니었다 — 이 코드는 텔레그램 연결에만 쓰인다 */}
+            <div className="space-y-1.5 text-[12px] text-txt-secondary leading-relaxed">
+              <p>직원의 텔레그램을 회사 ERP 봇과 연결하는 코드입니다. 연결되면 직원이 텔레그램으로 ERP 알림을 받고 AI 비서와 대화할 수 있습니다.</p>
+              <p className="text-txt-tertiary">직원 정보를 새로 등록하는 기능은 아닙니다. 아래 목록에 있는 직원만 연결할 수 있습니다.</p>
+            </div>
             <div>
-              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">이름 (선택)</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="홍길동" className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px] focus:border-accent focus:ring-2 focus:ring-accent-light focus:outline-none" />
+              <label className="block text-[11px] font-medium text-txt-tertiary mb-1">연결할 직원</label>
+              <select value={staffId}
+                onChange={e => {
+                  setStaffId(e.target.value)
+                  const picked = staffList.find(s => s.id === e.target.value)
+                  if (picked && INVITE_ROLES.includes(picked.role)) setRole(picked.role)
+                }}
+                className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
+                <option value="">직원 선택</option>
+                {staffList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}{s.telegram_chat_id ? ' (이미 연결됨)' : ''}</option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-medium text-txt-tertiary mb-1">직책</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className="w-full h-[36px] border border-border-primary rounded-lg px-3 text-[13px]">
-                  <option value="관리자">관리자</option>
-                  <option value="경리">경리</option>
-                  <option value="직원">직원</option>
-                  <option value="현장소장">현장소장</option>
+                  {INVITE_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
@@ -971,28 +1000,29 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
-              <button onClick={handleGenerate} disabled={saving}
+              <button onClick={handleGenerate} disabled={saving || !name}
                 className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium">
-                {saving ? '생성 중...' : '초대 코드 생성'}
+                {saving ? '생성 중...' : '연결 코드 만들기'}
               </button>
             </div>
           </div>
         ) : (
           <div className="p-5 space-y-4">
-            <p className="text-[12px] text-txt-secondary">
-              초대 코드가 생성되었습니다. 아래 코드를 카톡/문자로 전달해주세요.
+            <p className="text-[12px] text-txt-secondary leading-relaxed">
+              {name}님에게 아래 메시지를 카톡/문자로 보내 주세요. {name}님이 텔레그램에서 회사 ERP 봇을 열고
+              <span className="font-medium text-txt-primary"> /start {generatedCode}</span> 를 보내면 연결됩니다.
             </p>
-            <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-lg p-4 text-center">
-              <div className="text-[11px] text-[#1e40af] mb-1">초대 코드</div>
-              <div className="text-[32px] font-bold text-[#1e40af] tabular-nums tracking-wider">{generatedCode}</div>
-              <div className="text-[11px] text-[#1e40af]/70 mt-1">{daysValid}일간 유효</div>
+            <div className="bg-accent-light border border-accent/30 rounded-lg p-4 text-center">
+              <div className="text-[11px] text-accent-text mb-1">연결 코드</div>
+              <div className="text-[32px] font-bold text-accent-text tabular-nums tracking-wider">{generatedCode}</div>
+              <div className="text-[11px] text-accent-text/70 mt-1">{daysValid}일간 유효</div>
             </div>
             <button onClick={handleCopy}
               className="w-full py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
               {copied ? '복사됨' : '전체 메시지 복사 (카톡으로 보내기용)'}
             </button>
             <div className="text-[11px] text-txt-tertiary leading-relaxed bg-surface-tertiary/40 p-3 rounded-lg">
-              복사한 메시지를 카톡으로 직접 보내 주세요.
+              복사한 메시지를 카톡으로 직접 보내 주세요. 연결되면 직원 목록의 텔레그램 칸에 &lsquo;연결&rsquo;로 표시됩니다.
             </div>
             <div className="flex justify-end">
               <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">닫기</button>

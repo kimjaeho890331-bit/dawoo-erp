@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Search, X } from 'lucide-react'
+import { Palette, Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
 import { staffBadgeLabel } from '@/lib/staff/badge'
@@ -285,13 +285,22 @@ export default function WorkCalendarPage() {
   // staff.color 우선, 미지정 시 id 해시로 fallback 팔레트 매핑
   const staffColorMap = useMemo(() => buildStaffColorMap(staffList), [staffList])
 
-  // 직원 색상 팝오버 (칩 우클릭)
+  // 직원 색상 팝오버 (칩 우클릭, 또는 '색 변경' 누른 뒤 칩 누르기)
   const [colorPicker, setColorPicker] = useState<{ staffId: string; x: number; y: number } | null>(null)
+  // 예전에는 우클릭으로만 열려 태블릿·폰에서는 색을 바꿀 방법이 없었다.
+  // '색 변경'을 누르면 그동안은 칩을 눌렀을 때 필터 대신 색 고르기가 열린다.
+  const [colorMode, setColorMode] = useState(false)
+
+  const openColorPicker = (staffId: string, chip: HTMLElement) => {
+    const r = chip.getBoundingClientRect()
+    setColorPicker({ staffId, x: r.left, y: r.bottom + 4 })
+  }
 
   const handleStaffColorSave = async (staffId: string, color: string) => {
     const prev = staffList
     setStaffList(list => list.map(s => s.id === staffId ? { ...s, color } : s))
     setColorPicker(null)
+    setColorMode(false)  // 한 명 바꾸면 끝 — 계속 켜 두면 다음 칩 누르기가 필터로 안 먹어 헷갈린다
     const { error } = await supabase.from('staff').update({ color }).eq('id', staffId)
     if (error) {
       setStaffList(prev)
@@ -465,11 +474,10 @@ export default function WorkCalendarPage() {
                 const c = staffColorMap[s.id] || '#94a3b8'
                 const on = activeStaff.size === 0 || activeStaff.has(s.id)
                 return (
-                  <button key={s.id} onClick={() => toggleStaff(s.id)}
+                  <button key={s.id} onClick={(e) => colorMode ? openColorPicker(s.id, e.currentTarget) : toggleStaff(s.id)}
                     onContextMenu={(e) => {
                       e.preventDefault()
-                      const r = e.currentTarget.getBoundingClientRect()
-                      setColorPicker({ staffId: s.id, x: r.left, y: r.bottom + 4 })
+                      openColorPicker(s.id, e.currentTarget)
                     }}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition ${on ? 'border-transparent shadow-sm' : 'border-border-primary opacity-40'}`}
                     style={on ? { backgroundColor: c + '18', color: ensureReadableOnLight(c) } : {}}>
@@ -478,8 +486,20 @@ export default function WorkCalendarPage() {
                 )
               })}
               <span className="mx-2 w-px h-4 bg-border-primary" />
-              <span className="text-[10px] text-txt-tertiary">담당자별 색상 표시 · 칩 우클릭으로 색상 변경</span>
+              {/* 안내 글자는 10px이라 읽기 어려웠다. 11px로 올리고, 우클릭 안내는 마우스가 있을 때만 */}
+              {colorMode ? (
+                <span className="text-[11px] font-medium text-accent-text">색을 바꿀 직원을 누르세요</span>
+              ) : (
+                <span className="text-[11px] text-txt-tertiary">
+                  담당자별 색상 표시<span className="hidden pointer-fine:inline"> · 칩 우클릭으로도 색상 변경</span>
+                </span>
+              )}
             </div>
+            <button type="button" aria-pressed={colorMode}
+              onClick={() => { setColorMode(v => !v); setColorPicker(null) }}
+              className={`ml-3 shrink-0 inline-flex items-center gap-1 h-7 pointer-coarse:h-9 px-2.5 rounded-lg text-[12px] font-medium transition-colors ${colorMode ? 'bg-accent-light text-accent-text' : 'text-txt-tertiary hover:bg-surface-secondary hover:text-txt-secondary'}`}>
+              <Palette size={14} />{colorMode ? '취소' : '색 변경'}
+            </button>
           </div>
 
           {/* 직원 색상 팝오버 */}
@@ -983,15 +1003,15 @@ function MobileCalendarView({
 
       {searchResults}
 
-      {/* Month navigation */}
+      {/* Month navigation — 예전 32px 버튼은 손가락으로 누르기에 작아 자주 빗나갔다. 터치 기기에서는 40px. */}
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5">
-          <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&lsaquo;</button>
+          <button onClick={prevMonth} aria-label="이전달" className="w-8 h-8 pointer-coarse:w-10 pointer-coarse:h-10 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&lsaquo;</button>
           <div className="flex items-center gap-2">
             <h2 className="text-[15px] font-semibold text-txt-primary">{monthLabel}</h2>
             <button onClick={goToday} className="px-2 py-1 text-[11px] border border-border-primary rounded-md hover:bg-surface-tertiary text-txt-secondary font-medium">오늘</button>
           </div>
-          <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&rsaquo;</button>
+          <button onClick={nextMonth} aria-label="다음달" className="w-8 h-8 pointer-coarse:w-10 pointer-coarse:h-10 flex items-center justify-center rounded-lg hover:bg-surface-secondary text-txt-secondary text-lg">&rsaquo;</button>
         </div>
 
         {loading ? (
@@ -1046,16 +1066,16 @@ function MobileCalendarView({
               ))}
             </div>
 
-            {/* 아래쪽 달 이동 — 다 내려온 자리에서 바로 넘길 수 있게 */}
+            {/* 아래쪽 달 이동 — 다 내려온 자리에서 바로 넘길 수 있게. 위 버튼과 같은 이유로 터치에서는 40px 높이 */}
             <div className="flex items-center justify-center gap-1 border-t border-border-tertiary px-4 py-2.5">
               <button onClick={prevMonth}
-                className="flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] text-txt-secondary hover:bg-surface-secondary">
+                className="flex h-8 pointer-coarse:h-10 items-center gap-1 rounded-lg px-3 text-[13px] text-txt-secondary hover:bg-surface-secondary">
                 <span className="text-base leading-none">&lsaquo;</span> 이전달
               </button>
               <button onClick={goToday}
                 className="rounded-md border border-border-primary px-2 py-1 text-[11px] font-medium text-txt-secondary hover:bg-surface-tertiary">오늘</button>
               <button onClick={nextMonth}
-                className="flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] text-txt-secondary hover:bg-surface-secondary">
+                className="flex h-8 pointer-coarse:h-10 items-center gap-1 rounded-lg px-3 text-[13px] text-txt-secondary hover:bg-surface-secondary">
                 다음달 <span className="text-base leading-none">&rsaquo;</span>
               </button>
             </div>
@@ -1402,6 +1422,37 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
   const [startHour, setStartHour] = useState(schedule?.start_time?.split(':')[0] || '')
   const [startMinute, setStartMinute] = useState(schedule?.start_time?.split(':')[1] || '')
 
+  // 저장되는 값만 모아 비교한다. 처음 열었을 때 값은 useState가 첫 렌더 것만 기억하는 걸 이용.
+  const formKey = JSON.stringify([title, startDate, endDate, selectedStaffIds, startHour, startMinute, memo, confirmed])
+  const [initialFormKey] = useState(formKey)
+
+  // 예전에는 입력 중 바깥(어두운 부분)을 잘못 누르면 묻지 않고 닫혀 쓴 내용이 사라졌다.
+  // 바뀐 게 있을 때만 한 번 묻고, 그대로면 지금처럼 바로 닫는다.
+  const handleBackdropClose = () => {
+    if (formKey !== initialFormKey && !confirm('수정한 내용이 저장되지 않습니다. 닫을까요?')) return
+    onClose()
+  }
+
+  // 수정 중 '취소' — 예전에는 고친 값을 그대로 둔 채 상세 보기로 돌아가 저장된 것처럼 보였다.
+  // 저장된 원래 값으로 되돌린 뒤 상세 보기로 간다.
+  const cancelEdit = () => {
+    if (!schedule) return
+    setTitle(schedule.title || '')
+    setStartDateRaw(schedule.start_date || defaultDate)
+    setEndDate(schedule.end_date || defaultDate)
+    setHasEndDate(schedule.start_date !== schedule.end_date)
+    setSelectedStaffIds(schedule.staff_ids && schedule.staff_ids.length > 0
+      ? schedule.staff_ids
+      : schedule.staff_id ? [schedule.staff_id] : [])
+    setScheduleType(schedule.schedule_type || 'personal')
+    setUserTouchedType(false)
+    setMemo(schedule.memo || '')
+    setConfirmed(schedule.confirmed ?? false)
+    setStartHour(schedule.start_time?.split(':')[0] || '')
+    setStartMinute(schedule.start_time?.split(':')[1] || '')
+    setIsEditing(false)
+  }
+
   // project_id가 있으면 프로젝트 주소 가져오기 (내비 버튼용)
   const [projectAddress, setProjectAddress] = useState<string | null>(null)
   useEffect(() => {
@@ -1513,9 +1564,11 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
 
   // === View Mode ===
   if (!isEditing && isEdit && schedule) {
+    // 예전에는 폭이 480px로 고정이라 폰(375px)에서 양옆이 잘렸다.
+    // 이제 화면이 좁으면 좌우 여백(p-4)만 남기고 줄어든다. 데스크톱은 그대로 480px.
     return (
-      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-        <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-[480px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-[480px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           {/* Header */}
           <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
             <h3 className="font-semibold text-txt-primary text-sm">일정 상세</h3>
@@ -1591,8 +1644,8 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
               )}
             </div>
 
-            {/* 날짜 + 시간 + 분류 */}
-            <div className="flex items-center gap-4 text-[13px] text-txt-secondary">
+            {/* 날짜 + 시간 + 분류 — 기간 일정은 폰 폭을 넘으므로 넘치면 다음 줄로 */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-txt-secondary">
               <div className="flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 text-txt-tertiary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                 <span>{viewDateLabel}</span>
@@ -1674,9 +1727,10 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
   }
 
   // === Edit Mode ===
+  // 폭: 보기 모드와 같은 이유로 폰에서는 화면에 맞춰 줄어든다.
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-[480px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={handleBackdropClose}>
+      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-[480px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
           <h3 className="font-semibold text-txt-primary text-sm">{isEdit ? '일정 수정' : '일정 추가'}</h3>
           <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
@@ -1781,7 +1835,7 @@ function ScheduleModal({ schedule, staffList, defaultDate, staffColorMap, onClos
         <div className="px-5 py-3.5 border-t border-border-tertiary flex items-center justify-between bg-surface-secondary/50 rounded-b-[10px]">
           <div>{onDelete && <button onClick={onDelete} className="px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded">삭제</button>}</div>
           <div className="flex gap-2">
-            <button onClick={isEdit ? () => setIsEditing(false) : onClose}
+            <button onClick={isEdit ? cancelEdit : onClose}
               className="px-4 py-2 text-sm border border-border-primary rounded-lg hover:bg-surface-tertiary">취소</button>
             <button onClick={handleSubmit} disabled={saving || !title || !startDate || !endDate}
               className="px-5 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium shadow-sm">{saving ? '저장 중...' : '저장'}</button>
@@ -1933,21 +1987,24 @@ function DailyLogModal({
     setSaving(false)
   }
 
+  // 예전에는 폭이 640px로 고정이라 폰에서 오른쪽(닫기·내일 할 일)이 잘렸다.
+  // 화면이 좁으면 좌우 여백만 남기고 줄어든다. 데스크톱은 그대로 640px.
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-[640px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        {/* Header with date navigation */}
-        <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-[14px] font-semibold text-txt-primary">업무일지</span>
-            {staffName && <span className="text-[12px] text-txt-tertiary">({staffName})</span>}
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-surface rounded-[10px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-[640px] max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {/* Header with date navigation — 아주 좁은 폰(320px)에서는 이름이 줄어들고 날짜 이동·닫기는 그대로 남는다 */}
+        <div className="px-5 py-3.5 border-b border-border-tertiary flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[14px] font-semibold text-txt-primary shrink-0">업무일지</span>
+            {staffName && <span className="text-[12px] text-txt-tertiary truncate">({staffName})</span>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button onClick={prevDay} className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-tertiary text-txt-secondary">&lsaquo;</button>
-            <span className="text-[13px] font-medium text-txt-primary min-w-[120px] text-center">{dateLabel}</span>
+            {/* 날짜 글자는 90px 남짓이라 폰에서는 칸을 줄여야 머리줄이 한 줄에 들어간다 */}
+            <span className="text-[13px] font-medium text-txt-primary min-w-[96px] sm:min-w-[120px] text-center">{dateLabel}</span>
             <button onClick={nextDay} className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-tertiary text-txt-secondary">&rsaquo;</button>
           </div>
-          <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
+          <button onClick={onClose} className="shrink-0 text-txt-tertiary hover:text-txt-secondary text-lg">&times;</button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -1960,8 +2017,8 @@ function DailyLogModal({
             </div>
           </div>
 
-          {/* Today / Tomorrow side by side */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Today / Tomorrow side by side — 폰에서는 한 칸이 너무 좁아 위아래로 쌓는다 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Left: 오늘 한 일 — 시간순 나열 + 완료/미완료 표시 */}
             <div>
               <h4 className="text-[12px] font-semibold text-txt-primary mb-2">오늘 한 일 ({todaySchedules.length}건)</h4>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { STAFF_COLOR_PALETTE, isValidHex, normalizeHex } from '@/lib/staff-colors'
 
 /**
- * 직원 색상 변경 팝오버 — 캘린더 직원 칩 우클릭 시 표시.
+ * 직원 색상 변경 팝오버 — 캘린더 직원 칩 우클릭, 또는 '색 변경'을 누른 뒤 칩을 누르면 표시.
  * 프리셋 48색(직원관리 모달과 동일 팔레트) + 자유 색상 피커 + hex 입력.
  * 스와치 클릭 즉시 onSelect 호출(저장), 자유 색상은 적용 버튼으로 확정.
  */
@@ -48,7 +48,9 @@ export default function StaffColorPopover({ staffName, color, anchor, onSelect, 
       style={{ left, top: anchor.y, width }}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-[12px] font-semibold text-txt-primary">{staffName} 색상</span>
-        <button onClick={onClose} className="text-txt-tertiary hover:text-txt-secondary text-sm leading-none">&times;</button>
+        {/* 이제 손가락으로도 열리므로 닫기도 손가락으로 누를 만한 크기여야 한다. 마우스 화면은 그대로. */}
+        <button onClick={onClose} aria-label="닫기"
+          className="text-txt-tertiary hover:text-txt-secondary text-sm leading-none pointer-coarse:flex pointer-coarse:items-center pointer-coarse:justify-center pointer-coarse:w-8 pointer-coarse:h-8 pointer-coarse:-my-2 pointer-coarse:-mr-2 pointer-coarse:text-lg">&times;</button>
       </div>
 
       {/* 프리셋 48색 그리드 */}

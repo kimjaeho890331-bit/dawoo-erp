@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ListChecks } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 import { useRouter } from 'next/navigation'
 
 import type {
@@ -115,6 +117,7 @@ export default function EstimatePage({ category, projectId }: Props) {
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [projectLoaded, setProjectLoaded] = useState(false)
 
   // ── 자동 계산 ──
 
@@ -157,6 +160,7 @@ export default function EstimatePage({ category, projectId }: Props) {
           constructionDesc: `${data.building_name ?? ''} 소규모 주택개보수`,
         }))
       }
+      setProjectLoaded(true)
     })()
   }, [projectId])
 
@@ -208,6 +212,32 @@ export default function EstimatePage({ category, projectId }: Props) {
     })()
   }, [projectId, loaded])
 
+  // ── 저장 안 한 변경 ──
+  // 예전에는 저장하지 않고 "돌아가기"·창 닫기를 해도 아무 경고 없이 적은 견적이 사라졌다.
+  // 사람이 고치는 값만 JSON으로 비교한다 (면적·합계는 계산값, 단가는 불러올 때 바뀌는 값이라 뺀다).
+  const editSnapshot = useMemo(
+    () => JSON.stringify({ customerInfo, checkedWorks, measurements, costRates, detailRows, additionalCost }),
+    [customerInfo, checkedWorks, measurements, costRates, detailRows, additionalCost],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
+  // 기준은 불러오기가 다 끝난 화면 — 접수 정보·저장된 견적을 채우는 건 사람이 고친 게 아니다
+  const initialReady = !projectId || (projectLoaded && loaded)
+  if (initialReady && savedSnapshot === null) setSavedSnapshot(editSnapshot)
+  const dirty = savedSnapshot !== null && savedSnapshot !== editSnapshot
+
+  // 새로고침·창 닫기 때 브라우저가 한 번 묻게 한다
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
+
+  const handleBack = () => {
+    if (dirty && !confirm('저장하지 않은 내용이 있습니다. 저장하지 않고 나갈까요?')) return
+    router.back()
+  }
+
   // ── 공종 토글 ──
 
   const toggleWork = useCallback((wt: WorkType) => {
@@ -224,9 +254,15 @@ export default function EstimatePage({ category, projectId }: Props) {
   // ── 저장 ──
 
   const handleSave = useCallback(async () => {
-    if (!projectId) return
+    // 예전에는 접수 건 없이 열면 저장 버튼이 아무 반응 없이 끝났다
+    if (!projectId) {
+      toast.info('접수 건에서 견적서를 열어야 저장할 수 있습니다')
+      return
+    }
     setSaving(true)
     setSaveMessage(null)
+    // 저장을 누른 순간의 화면 — 저장 중에 또 고치면 그 부분은 여전히 "저장 안 함"으로 남는다
+    const snapshotAtSave = editSnapshot
 
     try {
       const payload: EstimateData = {
@@ -267,6 +303,7 @@ export default function EstimatePage({ category, projectId }: Props) {
         if (data) setEstimateId(data.id)
       }
 
+      setSavedSnapshot(snapshotAtSave)
       setSaveMessage('저장됨')
       setTimeout(() => setSaveMessage(null), 2000)
     } catch (err) {
@@ -278,7 +315,7 @@ export default function EstimatePage({ category, projectId }: Props) {
     }
   }, [
     projectId, customerInfo, checkedWorks, measurements, areas,
-    costRates, detailRows, costSummary, priceYear, unitPrices, estimateId, additionalCost,
+    costRates, detailRows, costSummary, priceYear, unitPrices, estimateId, additionalCost, editSnapshot,
   ])
 
   // ── 탭 콘텐츠 렌더 ──
@@ -318,7 +355,7 @@ export default function EstimatePage({ category, projectId }: Props) {
         )
       case 'detail':
         if (checkedWorks.length === 0) {
-          return <PlaceholderTab label="내역서" extra="공사종류를 먼저 선택해 주세요." />
+          return <NeedWorkTypeNotice label="내역서" />
         }
         return (
           <div className="space-y-6">
@@ -346,7 +383,7 @@ export default function EstimatePage({ category, projectId }: Props) {
         )
       case 'unitPrice':
         if (checkedWorks.length === 0) {
-          return <PlaceholderTab label="일위대가" extra="공사종류를 먼저 선택해 주세요." />
+          return <NeedWorkTypeNotice label="일위대가" />
         }
         return (
           <div className="space-y-6">
@@ -370,7 +407,7 @@ export default function EstimatePage({ category, projectId }: Props) {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={handleBack}
             className="px-3 py-1.5 text-[13px] border border-border-secondary rounded-lg hover:bg-surface-tertiary transition-colors"
           >
             &larr; 돌아가기
@@ -383,6 +420,9 @@ export default function EstimatePage({ category, projectId }: Props) {
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          {!saveMessage && dirty && (
+            <span className="hidden sm:inline text-[12px] text-txt-tertiary">저장 안 한 변경 있음</span>
+          )}
           {saveMessage && (
             <span
               className={`text-[13px] font-medium ${
@@ -452,31 +492,19 @@ export default function EstimatePage({ category, projectId }: Props) {
 
 // (하단 고정바 제거됨 — 원가요약은 CustomerInfoTab에서 표시)
 
-// ── 구현 예정 탭 플레이스홀더 ──
+// ── 공종을 아직 안 고른 탭 안내 ──
+// 예전에는 큰 글씨로 "구현 예정"이 떠서 만들다 만 기능처럼 보였다 — 실제로는 공종만 고르면 나온다.
 
-function PlaceholderTab({ label, extra }: { label: string; extra?: string }) {
+function NeedWorkTypeNotice({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-3">
       <div className="w-12 h-12 rounded-full bg-surface-secondary border border-border-primary flex items-center justify-center">
-        <svg
-          className="w-5 h-5 text-txt-quaternary"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-          />
-        </svg>
+        <ListChecks size={20} className="text-txt-tertiary" />
       </div>
-      <p className="text-[14px] font-medium text-txt-secondary">{label} 탭</p>
-      <p className="text-[13px] text-txt-tertiary">구현 예정</p>
-      {extra && (
-        <p className="text-[12px] text-txt-quaternary mt-1">{extra}</p>
-      )}
+      <p className="text-[14px] font-medium text-txt-secondary">공종을 먼저 선택해 주세요</p>
+      <p className="text-[13px] text-txt-tertiary text-center">
+        위 「공사종류」에서 체크하면 그 공종의 {label}를 보여 줍니다.
+      </p>
     </div>
   )
 }

@@ -52,7 +52,8 @@ export default function RootLayout({
 })();`,
           }}
         />
-        {/* Pretendard Variable (Korean) */}
+        {/* Pretendard Variable (Korean) — 글꼴 서버에 미리 연결해 첫 화면 글자가 늦게 뜨는 시간을 줄인다 */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
           as="style"

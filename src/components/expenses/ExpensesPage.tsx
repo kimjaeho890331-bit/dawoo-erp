@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
+import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllPagesResult } from '@/lib/fetchAllPages'
 import { formatMoney, parseMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import SettlementTab from '@/components/expenses/SettlementTab'
@@ -16,6 +18,8 @@ import {
 import { canSeeLedger } from '@/lib/ledgerAccess'
 import { STAFF_STORAGE_KEY } from '@/lib/activityLog'
 import { toast } from '@/lib/toast'
+import { ALL_MONTHS, inMonth, matchesQuery, monthLabel, monthOptions } from '@/lib/monthFilter'
+import { todayKST } from '@/lib/utils/date'
 
 // --- 타입 ---
 interface Expense {
@@ -62,6 +66,10 @@ export default function ExpensesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editItem, setEditItem] = useState<any>(null)
   const [filterCat, setFilterCat] = useState('전체')
+  // 예전에는 모든 달 결의서가 한 목록에 쌓여 지난달 것을 찾으려면 끝없이 내려야 했다.
+  // 기본은 '전체' — 들어오자마자 안 보이는 결의서가 생기면 안 된다.
+  const [filterMonth, setFilterMonth] = useState(ALL_MONTHS)
+  const [query, setQuery] = useState('')
   /** 결재로 들어온 지출 id → 그 지출결의서 id. "결재 문서" 링크에 쓴다. */
   const [reportOf, setReportOf] = useState<Record<string, string>>({})
   // 지금 쓰는 직원. 화면은 불러오는 중에 그려지지 않으므로 서버 렌더와 어긋나지 않는다.
@@ -70,13 +78,18 @@ export default function ExpensesPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    // 지출·접수·결재 연결은 해마다 쌓여 1000건을 넘는다. 넘으면 뒤가 말없이 잘려
+    // 오래된 지출이 안 보이고 현장 이름이 비었다 — 1000건씩 끝까지 읽는다.
     const [expR, stfR, sitR, projR, linkR] = await Promise.all([
-      supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
+      fetchAllPagesResult<Expense>((from, to) =>
+        supabase.from('expenses').select('*').order('expense_date', { ascending: false }).order('id').range(from, to)),
       supabase.from('staff').select('id, name, role'),
       supabase.from('sites').select('id, name, contract_type, status, budget'),
-      supabase.from('projects').select('id, building_name, ho, dong, total_cost').order('created_at', { ascending: false }),
+      fetchAllPagesResult<Project>((from, to) =>
+        supabase.from('projects').select('id, building_name, ho, dong, total_cost').order('created_at', { ascending: false }).order('id').range(from, to)),
       // 결재로 만들어진 지출이 어느 결의서에서 왔는지. 못 읽어도 목록은 그대로 보인다(링크만 빠진다).
-      supabase.from('expense_report_payments').select('report_id, expense_id').not('expense_id', 'is', null),
+      fetchAllPagesResult<{ report_id: string; expense_id: string }>((from, to) =>
+        supabase.from('expense_report_payments').select('report_id, expense_id').not('expense_id', 'is', null).order('report_id').order('expense_id').range(from, to)),
     ])
     if (!expR.error) setExpenses(expR.data || [])
     if (!stfR.error) setStaffList(stfR.data || [])
@@ -100,11 +113,14 @@ export default function ExpensesPage() {
     projectName: e.project_id ? projectLabel(projectList.find(p => p.id === e.project_id) || {}) : null,
   })
 
+  const months = useMemo(() => monthOptions(expenses.map(e => e.expense_date)), [expenses])
+
+  // 요약 카드는 고른 달을 따른다. '전체'일 때는 예전처럼 이번 달(한국 시각 기준).
   const monthStats = useMemo(() => {
-    const ym = new Date().toISOString().slice(0, 7)
-    const mExp = expenses.filter(e => e.expense_date?.startsWith(ym))
+    const ym = filterMonth === ALL_MONTHS ? todayKST().slice(0, 7) : filterMonth
+    const mExp = expenses.filter(e => inMonth(e.expense_date, ym))
     return { expTotal: mExp.reduce((s, e) => s + (e.amount || 0), 0), expCount: mExp.length }
-  }, [expenses])
+  }, [expenses, filterMonth])
 
   const handleDelete = async (table: string, id: string, label: string) => {
     if (!confirm(`"${label}" 삭제하시겠습니까?`)) return
@@ -125,7 +141,11 @@ export default function ExpensesPage() {
   const openCreate = () => { setEditItem(null); setShowModal(true) }
   const openEdit = (item: any) => { setEditItem(item); setShowModal(true) }
 
-  const filteredExpenses = filterCat === '전체' ? expenses : expenses.filter(e => e.category === filterCat)
+  const filtering = filterCat !== '전체' || filterMonth !== ALL_MONTHS || query.trim() !== ''
+  const filteredExpenses = expenses.filter(e =>
+    (filterCat === '전체' || e.category === filterCat)
+    && inMonth(e.expense_date, filterMonth)
+    && (!query.trim() || matchesQuery([e.title, e.memo, targetOf(e).text], query)))
 
   if (loading) return <div className="md:p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
 
@@ -140,7 +160,7 @@ export default function ExpensesPage() {
               { key: 'expense' as Tab, label: '지출결의서' },
               { key: 'settle' as Tab, label: '정산' },
             ].map(t => (
-              <button key={t.key} onClick={() => { setTab(t.key); setFilterCat('전체') }}
+              <button key={t.key} onClick={() => { setTab(t.key); setFilterCat('전체'); setFilterMonth(ALL_MONTHS); setQuery('') }}
                 className={`px-4 py-1.5 text-sm rounded-md transition ${tab === t.key ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>
                 {t.label}
               </button>
@@ -158,7 +178,7 @@ export default function ExpensesPage() {
       {/* 요약 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className={`stat-card ${tab === 'expense' ? 'stat-card-active' : ''}`}>
-          <p className="text-xs text-txt-secondary">이번 달 지출결의</p>
+          <p className="text-xs text-txt-secondary">{filterMonth === ALL_MONTHS ? '이번 달' : monthLabel(filterMonth)} 지출결의</p>
           <p className="text-xl font-semibold text-txt-primary tabular-nums">{monthStats.expTotal.toLocaleString()}원</p>
           <p className="text-xs text-txt-tertiary tabular-nums">{monthStats.expCount}건</p>
         </div>
@@ -167,6 +187,19 @@ export default function ExpensesPage() {
       {/* === 지출결의서 === */}
       {tab === 'expense' && (
         <>
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+              aria-label="월 선택" className="input-field shrink-0">
+              <option value={ALL_MONTHS}>전체 기간</option>
+              {months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+            <div className="relative min-w-[200px] flex-1 sm:max-w-[320px]">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-txt-tertiary" />
+              <input value={query} onChange={e => setQuery(e.target.value)}
+                placeholder="내용·메모·현장 검색" aria-label="지출 검색"
+                className="input-field w-full pl-9" />
+            </div>
+          </div>
           <div className="flex gap-2 flex-wrap">
             {['전체', ...EXPENSE_CATS].map(c => (
               <button key={c} onClick={() => setFilterCat(c)}
@@ -180,7 +213,7 @@ export default function ExpensesPage() {
                 줄고, 한 줄로 고정한 값들은 접히지도 못해 잘려 나간다. 1024px 노트북에서
                 날짜·카테고리·관리가 실제로 잘렸다. 남는 폭은 제목이 받고, 그래도 모자라면
                 잘리는 대신 표가 가로로 밀린다. */}
-            {filteredExpenses.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">등록된 결의서가 없습니다</div> : (
+            {filteredExpenses.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">{filtering ? '조건에 맞는 결의서가 없습니다' : '등록된 결의서가 없습니다'}</div> : (
               <div className="overflow-x-auto">
               <table className="w-full min-w-[1080px] table-fixed text-sm">
                 <thead><tr className="bg-surface-secondary border-b border-border-primary">

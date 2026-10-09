@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import ProcessCalendar from '@/components/sites/ProcessCalendar'
 import {
   CONTRACT_TYPE_BID,
@@ -136,7 +137,6 @@ export default function SitesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showRegister, setShowRegister] = useState(false)
-  const [editSite, setEditSite] = useState<Site | null>(null)
 
   const initialLoadedRef = useRef(false)
   const loadSites = useCallback(async () => {
@@ -145,13 +145,16 @@ export default function SitesPage() {
     // 스크롤이 위(캘린더)로 튀고 입력 포커스가 사라지는 버그가 발생함.
     if (!initialLoadedRef.current) setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('sites')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (!error) setSites((data as Site[]) || [])
-      const exp = await supabase.from('expenses').select('site_id, amount')
-      if (!exp.error) setSpentBySite(sumExpensesBySite(exp.data || []))
+      // 현장 목록과 지출 합계는 동시에 읽는다 (예전에는 차례로 기다렸다).
+      // 지출은 1000건이 넘으면 뒤가 잘려 현장별 지출이 적게 나왔다 — 현장이 붙은 지출만 끝까지 읽는다.
+      const [sitesRes, expRows] = await Promise.all([
+        supabase.from('sites').select('*').order('created_at', { ascending: false }),
+        fetchAllPages<{ site_id: string | null; amount: number }>((from, to) =>
+          supabase.from('expenses').select('site_id, amount').not('site_id', 'is', null).order('id').range(from, to),
+        ).catch(() => null),
+      ])
+      if (!sitesRes.error) setSites((sitesRes.data as Site[]) || [])
+      if (expRows) setSpentBySite(sumExpensesBySite(expRows))
     } catch { /* 테이블 미생성 시 무시 */ }
     initialLoadedRef.current = true
     setLoading(false)
@@ -202,7 +205,7 @@ export default function SitesPage() {
           </div>
         </div>
         <button
-          onClick={() => { setEditSite(null); setShowRegister(true) }}
+          onClick={() => setShowRegister(true)}
           className="btn-primary"
         >
           + 현장 등록
@@ -223,10 +226,10 @@ export default function SitesPage() {
           )}
         </div>
       ) : (
-        // 폰에서는 목록을 옆으로 밀어서 본다 — 고정 폭 칸이 많아 현장명 칸이 사라졌다
-        <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0"><div className="min-w-[760px]">
-          {/* 헤더 라인 */}
-          <div className="flex items-center gap-4 px-5 py-2.5 bg-surface-secondary rounded-t-[10px] border border-border-primary text-[11px] font-medium text-txt-tertiary uppercase tracking-wider">
+        // 폰에서는 줄마다 카드로 보여 준다 — 예전에는 고정 폭 칸이 많아 목록 전체를 옆으로 밀어서 봐야 했다
+        <div>
+          {/* 헤더 라인 (PC만 — 폰 카드에는 칸 제목이 필요 없다) */}
+          <div className="hidden md:flex items-center gap-4 px-5 py-2.5 bg-surface-secondary rounded-t-[10px] border border-border-primary text-[11px] font-medium text-txt-tertiary uppercase tracking-wider">
             <span className="w-4" />
             <span className="flex-1 min-w-0">현장명 / 주소</span>
             <span className="w-16 text-center">계약</span>
@@ -244,20 +247,19 @@ export default function SitesPage() {
               spent={spentBySite[s.id] ?? 0}
               expanded={expandedId === s.id}
               onToggle={() => setExpandedId(prev => prev === s.id ? null : s.id)}
-              onEdit={() => { setEditSite(s); setShowRegister(true) }}
               onDelete={() => handleDelete(s)}
               onRefresh={loadSites}
             />
           ))}
           </div>
-        </div></div>
+        </div>
       )}
 
+      {/* 모달은 신규 등록 전용 — 고치기는 펼친 현장의 기본정보 탭에서 바로 한다 */}
       {showRegister && (
         <SiteRegisterModal
-          site={editSite}
-          onClose={() => { setShowRegister(false); setEditSite(null) }}
-          onSaved={() => { setShowRegister(false); setEditSite(null); loadSites() }}
+          onClose={() => setShowRegister(false)}
+          onSaved={() => { setShowRegister(false); loadSites() }}
         />
       )}
     </div>
@@ -265,34 +267,33 @@ export default function SitesPage() {
 }
 
 // ===========================
-//   현장 등록/수정 모달
+//   현장 등록 모달 (신규 전용)
+//   예전에는 고치기도 이 창(16칸)으로 했는데, 바로 아래 기본정보 탭과 같은 칸을 두 군데서 고쳐 헷갈렸다.
+//   이제 고치기는 기본정보 탭(자동 저장) 한 곳에서만 한다.
 // ===========================
 function SiteRegisterModal({
-  site,
   onClose,
   onSaved,
 }: {
-  site: Site | null
   onClose: () => void
   onSaved: () => void
 }) {
-  const isEdit = !!site
-  const [name, setName] = useState(site?.name || '')
-  const [address, setAddress] = useState(site?.address || '')
-  const [siteManager, setSiteManager] = useState(site?.site_manager || '')
-  const [siteAssistant, setSiteAssistant] = useState(site?.site_assistant || '')
-  const [clientManager, setClientManager] = useState(site?.client_manager || '')
-  const [clientPhone, setClientPhone] = useState(site?.client_phone || '')
-  const [startDate, setStartDate] = useState(site?.start_date || '')
-  const [endDate, setEndDate] = useState(site?.end_date || '')
-  const [quoteDate, setQuoteDate] = useState(site?.quote_date || '')
-  const [constructionStartDate, setConstructionStartDate] = useState(site?.construction_start_date || '')
-  const [inflowPath, setInflowPath] = useState(site?.inflow_path || (site ? '' : SITE_INFLOW_UNCONFIRMED))
-  const [workKind, setWorkKind] = useState(site?.work_kind || (site ? '' : SITE_WORK_KIND_UNCONFIRMED))
-  const [status, setStatus] = useState(site?.status || '계약')
-  const [contractType, setContractType] = useState(site?.contract_type || '')
-  const [budget, setBudget] = useState(site?.budget?.toString() || '0')
-  const [memo, setMemo] = useState(site?.memo || '')
+  const [name, setName] = useState('')
+  const [address, setAddress] = useState('')
+  const [siteManager, setSiteManager] = useState('')
+  const [siteAssistant, setSiteAssistant] = useState('')
+  const [clientManager, setClientManager] = useState('')
+  const [clientPhone, setClientPhone] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [quoteDate, setQuoteDate] = useState('')
+  const [constructionStartDate, setConstructionStartDate] = useState('')
+  const [inflowPath, setInflowPath] = useState<string>(SITE_INFLOW_UNCONFIRMED)
+  const [workKind, setWorkKind] = useState<string>(SITE_WORK_KIND_UNCONFIRMED)
+  const [status, setStatus] = useState('계약')
+  const [contractType, setContractType] = useState('')
+  const [budget, setBudget] = useState('0')
+  const [memo, setMemo] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const canSave = name.trim().length > 0 && isContractTypeChosen(contractType)
@@ -320,55 +321,18 @@ function SiteRegisterModal({
       memo: memo || null,
     }
 
-    if (!isEdit) {
-      const created = await createSite(payload)
-      if (!created.ok) {
-        setSaveError(created.error)
-        setSaving(false)
-        return
-      }
-      await logActivity({
-        action: 'site_create',
-        target_type: 'site',
-        target_id: created.id,
-        detail: payload.name,
-      })
-      setSaving(false)
-      onSaved()
-      return
-    }
-
-    let { data, error } = await supabase.from('sites').update(payload).eq('id', site!.id).select('id').maybeSingle()
-    if (error && /contract_type|quote_date|construction_start_date|inflow_path|work_kind/.test(error.message)) {
-      const fallback = { ...payload } as Record<string, unknown>
-      if (/contract_type/.test(error.message)) delete fallback.contract_type
-      if (/quote_date|construction_start_date/.test(error.message)) {
-        delete fallback.quote_date
-        delete fallback.construction_start_date
-      }
-      if (/inflow_path|work_kind/.test(error.message)) {
-        delete fallback.inflow_path
-        delete fallback.work_kind
-      }
-      const retry = await supabase.from('sites').update(fallback).eq('id', site!.id).select('id').maybeSingle()
-      data = retry.data
-      error = retry.error
-    }
-    // 고치기가 실패하면 창을 닫지 않고 이유를 보여준다 (예전에는 실패해도 그냥 닫혔다)
-    if (error) {
-      setSaveError(`저장하지 못했습니다: ${error.message}`)
+    const created = await createSite(payload)
+    if (!created.ok) {
+      setSaveError(created.error)
       setSaving(false)
       return
     }
-    const siteId = (data as { id?: string } | null)?.id || site?.id
-    if (siteId) {
-      await logActivity({
-        action: 'site_update',
-        target_type: 'site',
-        target_id: siteId,
-        detail: payload.name,
-      })
-    }
+    await logActivity({
+      action: 'site_create',
+      target_type: 'site',
+      target_id: created.id,
+      detail: payload.name,
+    })
     setSaving(false)
     onSaved()
   }
@@ -377,7 +341,7 @@ function SiteRegisterModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-container w-[560px]" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3 className="modal-title text-[16px]">{isEdit ? '현장 수정' : '현장 등록'}</h3>
+          <h3 className="modal-title text-[16px]">현장 등록</h3>
           <button onClick={onClose} className="text-txt-quaternary hover:text-txt-secondary text-xl">&times;</button>
         </div>
         <div className="p-6 space-y-4">
@@ -391,11 +355,13 @@ function SiteRegisterModal({
             <Field label="발주처 담당자" value={clientManager} onChange={setClientManager} />
             <Field label="발주처 연락처" value={clientPhone} onChange={setClientPhone} type="tel" />
           </div>
+          {/* 실제 착공일 = construction_start_date(실제로 시작한 날), 착공·준공 예정일 = start_date·end_date(계획).
+              예전에는 "착공일"·"착공예정일"이 나란히 있어 같은 날짜를 두 번 적는 칸처럼 보였다 */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="견적일" value={quoteDate} onChange={setQuoteDate} type="date" />
-            <Field label="착공일" value={constructionStartDate} onChange={setConstructionStartDate} type="date" />
-            <Field label="착공예정일" value={startDate} onChange={setStartDate} type="date" />
-            <Field label="준공예정일" value={endDate} onChange={setEndDate} type="date" />
+            <Field label="실제 착공일" value={constructionStartDate} onChange={setConstructionStartDate} type="date" />
+            <Field label="착공 예정일" value={startDate} onChange={setStartDate} type="date" />
+            <Field label="준공 예정일" value={endDate} onChange={setEndDate} type="date" />
           </div>
           <div>
             <label className="block text-[11px] font-medium text-txt-tertiary mb-1">계약 종류 *</label>
@@ -405,14 +371,12 @@ function SiteRegisterModal({
             <div>
               <label className="block text-[11px] font-medium text-txt-tertiary mb-1">유입경로</label>
               <select value={inflowPath} onChange={e => setInflowPath(e.target.value)} className="input-field w-full">
-                {isEdit && <option value="">미지정</option>}
                 {SITE_INFLOW_PATHS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-[11px] font-medium text-txt-tertiary mb-1">공종</label>
               <select value={workKind} onChange={e => setWorkKind(e.target.value)} className="input-field w-full">
-                {isEdit && <option value="">미지정</option>}
                 {SITE_WORK_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
               </select>
             </div>
@@ -424,7 +388,8 @@ function SiteRegisterModal({
                 {SITE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <Field label="예산 (원)" value={budget} onChange={setBudget} type="number" />
+            {/* 같은 금액(budget)이 "예산"·"공사금액"·"계약금액" 세 이름으로 보였다 — 계약금액으로 통일 */}
+            <Field label="계약금액 (원)" value={budget} onChange={setBudget} type="number" />
           </div>
           <div>
             <label className="block text-[11px] font-medium text-txt-tertiary mb-1">메모</label>
@@ -435,7 +400,7 @@ function SiteRegisterModal({
           {saveError && <p className="mr-auto text-[12px] text-money-negative">{saveError}</p>}
           <button onClick={onClose} className="btn-secondary">취소</button>
           <button onClick={handleSubmit} disabled={saving || !canSave} className="btn-primary disabled:opacity-50">
-            {saving ? '저장 중...' : isEdit ? '수정' : '등록'}
+            {saving ? '저장 중...' : '등록'}
           </button>
         </div>
       </div>
@@ -459,50 +424,84 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
 //   아코디언 항목
 // ===========================
 function SiteAccordion({
-  site, spent, expanded, onToggle, onEdit, onDelete, onRefresh,
+  site, spent, expanded, onToggle, onDelete, onRefresh,
 }: {
   site: Site; spent: number; expanded: boolean; onToggle: () => void
-  onEdit: () => void; onDelete: () => void; onRefresh: () => void
+  onDelete: () => void; onRefresh: () => void
 }) {
+  const statusCls = STATUS_COLOR[site.status] || 'bg-surface-secondary text-txt-secondary'
   return (
     <div className={`border border-border-primary border-t-0 first:border-t first:rounded-t-[10px] last:rounded-b-[10px] overflow-hidden ${expanded ? '' : ''}`}>
-      <button onClick={onToggle} className="w-full flex items-center gap-4 px-5 py-3.5 bg-surface hover:bg-surface-tertiary transition-colors text-left">
-        <span className={`transform transition-transform text-txt-tertiary w-4 text-[11px] ${expanded ? 'rotate-90' : ''}`}>&#9654;</span>
-        <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-semibold text-txt-primary truncate">{site.name}</div>
-          <div className="text-[12px] text-txt-secondary truncate">{site.address || '-'}</div>
-          {(site.work_kind || site.inflow_path) && (
-            <div className="text-[11px] text-txt-tertiary truncate">
-              {[site.work_kind, site.inflow_path].filter(Boolean).join(' · ')}
+      <button onClick={onToggle} className="block w-full bg-surface hover:bg-surface-tertiary transition-colors text-left">
+        {/* 폰: 한 현장 = 카드 한 장. 예전에는 PC용 고정 폭 칸 8개를 그대로 써서 옆으로 밀어야 보였다 */}
+        <div className="md:hidden px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className={`mt-1 w-2.5 shrink-0 transform transition-transform text-txt-tertiary text-[10px] ${expanded ? 'rotate-90' : ''}`}>&#9654;</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px] font-semibold text-txt-primary truncate">{site.name}</div>
+              <div className="text-[12px] text-txt-secondary truncate">{site.address || '-'}</div>
             </div>
-          )}
-        </div>
-        <span className="w-16 shrink-0 flex justify-center">
-          <ContractTypeBadge value={site.contract_type} />
-        </span>
-        <span className={`w-20 text-center px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_COLOR[site.status] || 'bg-surface-secondary text-txt-secondary'}`}>
-          {site.status}
-        </span>
-        <span className="w-20 text-center text-[12px] text-txt-secondary truncate">{site.site_manager || '-'}</span>
-        <div className="w-24 shrink-0">
-          <div className="flex items-center justify-between text-[11px] text-txt-tertiary mb-0.5">
-            <span>{site.progress}%</span>
+            <span className={`shrink-0 px-2 py-0.5 text-[11px] rounded-full font-medium ${statusCls}`}>{site.status}</span>
           </div>
-          <div className="w-full h-[3px] bg-border-tertiary rounded overflow-hidden">
-            <div className="h-full bg-accent rounded transition-all" style={{ width: `${site.progress}%` }} />
+          <div className="pl-[18px]">
+            <div className="mt-2 flex items-center gap-2 text-[12px] text-txt-secondary">
+              <ContractTypeBadge value={site.contract_type} />
+              <span className="min-w-0 truncate">
+                <span className="text-txt-tertiary">현장대리인</span> {site.site_manager || '-'}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 h-[3px] bg-border-tertiary rounded overflow-hidden">
+                <div className="h-full bg-accent rounded transition-all" style={{ width: `${site.progress}%` }} />
+              </div>
+              <span className="shrink-0 text-[11px] text-txt-tertiary tabular-nums">공정 {site.progress}%</span>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between gap-3 text-[12px] text-txt-tertiary">
+              <span>계약금액 <span className="font-semibold text-txt-primary tabular-nums">{formatMoney(site.budget)}원</span></span>
+              <span>지출 <span className="font-semibold text-txt-primary tabular-nums">{formatMoney(spent)}원</span></span>
+            </div>
           </div>
         </div>
-        <div className="w-28 text-right shrink-0">
-          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(site.budget)}원</div>
-        </div>
-        <div className="w-28 text-right shrink-0">
-          <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(spent)}원</div>
+
+        {/* PC: 기존 한 줄 그대로 */}
+        <div className="hidden md:flex items-center gap-4 px-5 py-3.5">
+          <span className={`transform transition-transform text-txt-tertiary w-4 text-[11px] ${expanded ? 'rotate-90' : ''}`}>&#9654;</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[14px] font-semibold text-txt-primary truncate">{site.name}</div>
+            <div className="text-[12px] text-txt-secondary truncate">{site.address || '-'}</div>
+            {(site.work_kind || site.inflow_path) && (
+              <div className="text-[11px] text-txt-tertiary truncate">
+                {[site.work_kind, site.inflow_path].filter(Boolean).join(' · ')}
+              </div>
+            )}
+          </div>
+          <span className="w-16 shrink-0 flex justify-center">
+            <ContractTypeBadge value={site.contract_type} />
+          </span>
+          <span className={`w-20 text-center px-2 py-0.5 text-[11px] rounded-full font-medium ${statusCls}`}>
+            {site.status}
+          </span>
+          <span className="w-20 text-center text-[12px] text-txt-secondary truncate">{site.site_manager || '-'}</span>
+          <div className="w-24 shrink-0">
+            <div className="flex items-center justify-between text-[11px] text-txt-tertiary mb-0.5">
+              <span>{site.progress}%</span>
+            </div>
+            <div className="w-full h-[3px] bg-border-tertiary rounded overflow-hidden">
+              <div className="h-full bg-accent rounded transition-all" style={{ width: `${site.progress}%` }} />
+            </div>
+          </div>
+          <div className="w-28 text-right shrink-0">
+            <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(site.budget)}원</div>
+          </div>
+          <div className="w-28 text-right shrink-0">
+            <div className="text-[13px] font-semibold text-txt-primary tabular-nums">{formatMoney(spent)}원</div>
+          </div>
         </div>
       </button>
 
       {expanded && (
         <div className="border-t border-border-tertiary">
-          <SiteDetail site={site} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} />
+          <SiteDetail site={site} onDelete={onDelete} onRefresh={onRefresh} />
         </div>
       )}
     </div>
@@ -512,13 +511,20 @@ function SiteAccordion({
 // ===========================
 //   현장 상세 (공정캘린더 + 2탭)
 // ===========================
-function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
-  site: Site; onEdit: () => void; onDelete: () => void; onRefresh: () => void
+function SiteDetail({ site, onDelete, onRefresh }: {
+  site: Site; onDelete: () => void; onRefresh: () => void
 }) {
   const [activeTab, setActiveTab] = useState<SiteTabKey>('기본정보')
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [activityTick, setActivityTick] = useState(0)
   const bumpActivity = useCallback(() => setActivityTick(n => n + 1), [])
+  const tabsRef = useRef<HTMLDivElement>(null)
+
+  // "수정" = 아래 기본정보 탭으로 이동. 예전에는 같은 16칸을 고치는 창이 따로 떠서 고치는 곳이 두 군데였다.
+  const goToBasicInfo = () => {
+    setActiveTab('기본정보')
+    requestAnimationFrame(() => tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 
   const loadSchedules = useCallback(async () => {
     try {
@@ -534,21 +540,25 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
   useEffect(() => { loadSchedules() }, [loadSchedules])
 
   return (
-    <div className="bg-surface-secondary p-5">
+    <div className="bg-surface-secondary p-3 md:p-5">
       {/* 수정/삭제 버튼 */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <ContractTypeBadge value={site.contract_type} />
         <div className="flex gap-2">
-          <button onClick={onEdit} className="btn-inline">수정</button>
+          <button onClick={goToBasicInfo} className="btn-inline">수정</button>
           <button onClick={onDelete} className="btn-inline-danger">삭제</button>
         </div>
       </div>
 
-      {/* 공정 캘린더 */}
-      <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} onActivity={bumpActivity} />
+      {/* 공정 캘린더 — 폰 폭에서는 달력 칸이 손톱만 해져 이 부분만 옆으로 밀어서 본다 (PC는 그대로) */}
+      <div className="overflow-x-auto md:overflow-visible">
+        <div className="min-w-[640px] md:min-w-0">
+          <ProcessCalendar siteId={site.id} schedules={schedules} onReload={loadSchedules} onActivity={bumpActivity} />
+        </div>
+      </div>
 
-      {/* 탭 */}
-      <div className="flex border-b border-border-primary mt-5 mb-4">
+      {/* 탭 — scroll-mt: 폰 상단바(고정)에 탭 제목이 가려지지 않게 */}
+      <div ref={tabsRef} className="flex border-b border-border-primary mt-5 mb-4 scroll-mt-16">
         {SITE_TABS.map(tab => (
           <button
             key={tab}
@@ -637,9 +647,9 @@ function SiteActivityLogs({ siteId, reloadToken }: { siteId: string; reloadToken
 // 박스 형태 인라인 필드 — 클릭 즉시 편집 가능, 1초 debounce 자동저장
 // ⚠️ Box는 반드시 모듈 최상위에 정의 — TabBasicInfo 내부에 두면 리렌더마다 새 함수가 되어
 //    input이 언마운트/재마운트 → 입력 포커스 상실 + 스크롤 튐 버그 발생 (실시간 동기화로 리렌더 잦아 특히 심함)
-function Box({ label, children }: { label: string; children: React.ReactNode }) {
+function Box({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="border border-border-primary rounded-[10px] px-3 py-2 bg-surface hover:border-accent/40 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/10 transition-colors">
+    <div className={`border border-border-primary rounded-[10px] px-3 py-2 bg-surface hover:border-accent/40 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/10 transition-colors ${className}`}>
       <div className="text-[10px] font-medium text-txt-tertiary mb-0.5">{label}</div>
       <div className="text-[13px] text-txt-primary">{children}</div>
     </div>
@@ -671,6 +681,8 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
   const [autoSaveError, setAutoSaveError] = useState<string>('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef(form)
+  // 고치기 창을 없애면서 "현장 수정" 작업 이력이 끊기지 않게 — 펼친 동안 첫 저장 때 한 번만 남긴다 (1초마다 쌓이지 않게)
+  const updateLoggedRef = useRef(false)
 
   // 사이트 변경(다른 아코디언 펼침) 시 form 리셋
   useEffect(() => {
@@ -758,6 +770,10 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
     }
     setAutoSaveError('')
     lastSavedRef.current = next
+    if (!updateLoggedRef.current) {
+      updateLoggedRef.current = true
+      void logActivity({ action: 'site_update', target_type: 'site', target_id: site.id, detail: next.name })
+    }
     const t = new Date()
     setSavedAt(`${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`)
     setTimeout(() => setSavedAt(''), 2000)
@@ -784,16 +800,17 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
 
   return (
     <div className="space-y-3">
-      {/* 자동저장 상태 표시 */}
-      <div className="flex justify-end h-4">
+      {/* 자동저장 상태 표시 + 고치는 법 안내 ("수정"을 누르면 이 탭으로 온다 — 저장 버튼이 없어 헷갈리지 않게) */}
+      <div className="flex items-start justify-between gap-3 min-h-4">
+        <span className="text-[11px] text-txt-tertiary">칸을 눌러 바로 고치면 자동 저장됩니다</span>
         {autoSaveError
-          ? <span className="text-[11px] text-danger">{autoSaveError}</span>
+          ? <span className="text-[11px] text-danger text-right">{autoSaveError}</span>
           : savedAt && <span className="text-[10px] text-money-positive">저장됨 ({savedAt})</span>}
       </div>
 
-      {/* 1행: 현장명 | 진행 상황 | 계약 종류 */}
-      <div className="grid grid-cols-3 gap-3">
-        <Box label="현장명">
+      {/* 1행: 현장명 | 진행 상황 | 계약 종류 — 폰에서는 현장명을 한 줄 통째로 (3칸이면 글자가 잘렸다) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <Box label="현장명" className="col-span-2 sm:col-span-1">
           <input className={inputCls} value={form.name} onChange={e => u('name', e.target.value)} />
         </Box>
         <Box label="진행 상황">
@@ -856,25 +873,26 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
         </Box>
       </div>
 
-      {/* 5행: 견적일 | 착공일 | 착공예정일 | 준공예정일 */}
+      {/* 5행: 견적일 | 실제 착공일 | 착공 예정일 | 준공 예정일
+          실제 착공일=construction_start_date, 예정일=start_date·end_date(계획). 예전 "착공일"·"착공예정일"은 같은 칸처럼 보였다 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Box label="견적일">
           <input type="date" className={inputCls} value={form.quote_date} onChange={e => u('quote_date', e.target.value)} />
         </Box>
-        <Box label="착공일">
+        <Box label="실제 착공일">
           <input type="date" className={inputCls} value={form.construction_start_date} onChange={e => u('construction_start_date', e.target.value)} />
         </Box>
-        <Box label="착공예정일">
+        <Box label="착공 예정일">
           <input type="date" className={inputCls} value={form.start_date} onChange={e => u('start_date', e.target.value)} />
         </Box>
-        <Box label="준공예정일">
+        <Box label="준공 예정일">
           <input type="date" className={inputCls} value={form.end_date} onChange={e => u('end_date', e.target.value)} />
         </Box>
       </div>
 
-      {/* 6행: 공사금액 | 지출 (자동) */}
+      {/* 6행: 계약금액 | 지출 (자동) — 예전 이름 "공사금액"은 목록·지출 탭의 "계약금액"과 같은 값이었다 */}
       <div className="grid grid-cols-2 gap-3">
-        <Box label="공사금액 (원)">
+        <Box label="계약금액 (원)">
           <input className={`${inputCls} tabular-nums`} value={formatMoney(form.budget)} onChange={e => u('budget', parseMoney(e.target.value))} placeholder="0" />
         </Box>
         <div className="border border-border-primary rounded-[10px] px-3 py-2 bg-page">

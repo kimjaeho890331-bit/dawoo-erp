@@ -11,6 +11,7 @@ import { resolveCityId } from '@/lib/api/cities'
 import { useAuth } from '@/components/AuthProvider'
 import type { DBProject } from '@/components/register/RegisterPage'
 import { toast } from '@/lib/toast'
+import { hasUnsavedInput } from '@/lib/register/formDirty'
 
 // --- 주소 검색 결과 타입 ---
 interface AddressResult {
@@ -116,6 +117,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
 
   const [errors, setErrors] = useState<Record<string, boolean>>({})
 
+  // 창을 열 때 채워진 값 (기본 담당자·기존 값) — 바깥을 눌러 닫을 때 입력이 있었는지 견줄 기준
+  const baselineRef = useRef<Record<string, string>>({ ...form, ho_input: '' })
+
   // 초기 데이터 로드
   useEffect(() => {
     async function load() {
@@ -142,8 +146,9 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
       if (editProject) {
         const dong = editProject.dong || ''
         const ho = editProject.ho || ''
-        setHoInput(dong ? `${dong} ${ho}` : ho)
-        setForm({
+        const hoLabel = dong ? `${dong} ${ho}` : ho
+        setHoInput(hoLabel)
+        const filled = {
           building_name: editProject.building_name || '',
           road_address: editProject.road_address || '',
           jibun_address: editProject.jibun_address || '',
@@ -163,18 +168,21 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           ho,
           exclusive_area: editProject.exclusive_area?.toString() || '',
           water_work_type: editProject.water_work_type || '',
-        })
+        }
+        setForm(filled)
+        baselineRef.current = { ...filled, ho_input: hoLabel }
       } else {
         // 신규등록 기본값 — 로그인 유저를 담당직원 기본값으로
         const defaultStaffId = currentStaff?.id
           ? assignable.find(s => s.id === currentStaff.id)?.id || assignable[0]?.id || ''
           : assignable[0]?.id || ''
-        setForm(prev => ({
-          ...prev,
+        const defaults = {
           staff_id: defaultStaffId,
           city_id: '',  // 주소 검색 시 자동 매칭
           work_type_id: typesData[0]?.id || '',
-        }))
+        }
+        setForm(prev => ({ ...prev, ...defaults }))
+        baselineRef.current = { ...baselineRef.current, ...defaults }
       }
     }
     load()
@@ -439,9 +447,16 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     }
   }
 
+  // 바깥(어두운 배경)을 눌러 닫기 — 예전에는 확인 없이 닫혀, 잘못 누르면 입력한 내용이 다 사라졌다
+  const handleBackdropClose = () => {
+    const current = { ...form, ho_input: hoInput, address_keyword: addressKeyword }
+    if (hasUnsavedInput(current, baselineRef.current) && !confirm('입력한 내용이 저장되지 않았습니다. 창을 닫을까요?')) return
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30" onClick={handleBackdropClose} />
 
       <div className="relative bg-surface rounded-xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         {/* 헤더 */}

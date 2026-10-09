@@ -2,7 +2,10 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Sidebar from "@/components/Sidebar"
-import AIAssistant from "@/components/AIAssistant"
+import dynamic from 'next/dynamic'
+// AI 비서는 지금 꺼져 있다(UI_HIDDEN). 예전에는 꺼져 있어도 모든 화면이 그 코드를 함께 내려받았다.
+// 켤 때만 따로 받아 오게 한다.
+const AIAssistant = dynamic(() => import("@/components/AIAssistant"), { ssr: false })
 import Toaster from "@/components/common/Toaster"
 import { UI_HIDDEN } from "@/lib/uiHidden"
 import { AuthProvider, useAuth } from "@/components/AuthProvider"

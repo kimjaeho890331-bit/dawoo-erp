@@ -156,19 +156,28 @@ export default function DashboardPage() {
       return
     }
 
-    // 1) 내 schedules (담당자=나, 아직 안 지난 일정)
-    const sRes = await supabase.from('schedules').select('*')
-      .neq('schedule_type', 'site')
-      .eq('staff_id', currentStaffId)
-      .gte('end_date', today)
-      .order('start_date')
+    // 세 조회는 서로 기다릴 필요가 없다 — 예전에는 하나씩 차례로 기다려 왕복 시간이 세 배였다
+    const [sRes, rRes, aRes] = await Promise.all([
+      // 1) 내 schedules (담당자=나, 아직 안 지난 일정)
+      supabase.from('schedules').select('*')
+        .neq('schedule_type', 'site')
+        .eq('staff_id', currentStaffId)
+        .gte('end_date', today)
+        .order('start_date'),
+      // 2) 내가 받은 tasks (assigned_to = 나, 미완료)
+      supabase.from('tasks').select('*')
+        .eq('assigned_to', currentStaffId)
+        .eq('done', false)
+        .order('deadline', { ascending: true, nullsFirst: false }),
+      // 3) 내가 시킨 tasks (assigned_by = 나, 미완료)
+      supabase.from('tasks').select('*')
+        .eq('assigned_by', currentStaffId)
+        .eq('done', false)
+        .order('deadline', { ascending: true, nullsFirst: false }),
+    ])
+
     if (!sRes.error) setMySchedules((sRes.data as Schedule[]) || [])
 
-    // 2) 내가 받은 tasks (assigned_to = 나, 미완료)
-    const rRes = await supabase.from('tasks').select('*')
-      .eq('assigned_to', currentStaffId)
-      .eq('done', false)
-      .order('deadline', { ascending: true, nullsFirst: false })
     if (rRes.error) {
       if (rRes.error.code === '42P01' || /does not exist|relation/.test(rRes.error.message)) {
         setTasksTableMissing(true)
@@ -179,11 +188,6 @@ export default function DashboardPage() {
       setMyTasksReceived((rRes.data as Task[]) || [])
     }
 
-    // 3) 내가 시킨 tasks (assigned_by = 나, 미완료)
-    const aRes = await supabase.from('tasks').select('*')
-      .eq('assigned_by', currentStaffId)
-      .eq('done', false)
-      .order('deadline', { ascending: true, nullsFirst: false })
     if (!aRes.error) setMyTasksAssigned((aRes.data as Task[]) || [])
   }, [today, currentStaffId])
 
@@ -394,7 +398,6 @@ export default function DashboardPage() {
           badge={todoItems.length}
           open={!!mobileOpen.todo}
           onToggle={() => toggleMobile('todo')}
-          accentColor="#3B82F6"
         >
           <MyTodoCard todos={todoItems} staffSelected={!!currentStaffId} tasksTableMissing={tasksTableMissing} onCompleteTask={completeReceivedTask} onAdd={addMyTask} onOpenDetail={setDetailTaskId} />
         </MobileAccordion>
@@ -406,7 +409,6 @@ export default function DashboardPage() {
           badge={myTasksAssigned.length}
           open={!!mobileOpen.assigned}
           onToggle={() => toggleMobile('assigned')}
-          accentColor="#F59E0B"
         >
           <AssignedTasksCard tasks={myTasksAssigned} staffList={staffList} currentStaffId={currentStaffId} staffSelected={!!currentStaffId} tableMissing={tasksTableMissing} onAdd={addAssignedTask} onToggleDone={toggleAssignedDone} onDelete={deleteAssignedTask} onOpenDetail={setDetailTaskId} getStaffName={getStaffName} />
         </MobileAccordion>
@@ -418,7 +420,6 @@ export default function DashboardPage() {
             icon={<Brain size={16} />}
             open={!!mobileOpen.briefing}
             onToggle={() => toggleMobile('briefing')}
-            accentColor="#8B5CF6"
           >
             <AIBriefingCard items={briefing?.items ?? []} summary={briefing?.summary ?? ''} narrative={briefing?.narrative} actions={briefing?.assistantActions} loading={briefingLoading} onRefresh={() => loadBriefing(true)} weeklyReport={weeklyReport} weeklyOpenDefault={isMonday} />
           </MobileAccordion>
@@ -430,7 +431,6 @@ export default function DashboardPage() {
           icon={<Building2 size={16} />}
           open={!!mobileOpen.sites}
           onToggle={() => toggleMobile('sites')}
-          accentColor="#06B6D4"
         >
           <SitesTimeline />
         </MobileAccordion>
@@ -467,13 +467,14 @@ export default function DashboardPage() {
 }
 
 // ===== 모바일 아코디언 컴포넌트 =====
-function MobileAccordion({ title, icon, badge, open, onToggle, accentColor, children }: {
+// 예전에는 카드마다 파랑·주황·보라·청록으로 아이콘과 숫자를 칠해 제각각이었다.
+// 아이콘은 단색(text-txt-tertiary), 숫자는 무채색으로 통일한다 — 데스크톱 카드와 같은 규칙.
+function MobileAccordion({ title, icon, badge, open, onToggle, children }: {
   title: string
   icon: React.ReactNode
   badge?: number
   open: boolean
   onToggle: () => void
-  accentColor: string
   children: React.ReactNode
 }) {
   return (
@@ -482,13 +483,10 @@ function MobileAccordion({ title, icon, badge, open, onToggle, accentColor, chil
         onClick={onToggle}
         className="w-full flex items-center gap-2.5 px-4 py-3 active:bg-surface-secondary transition-colors"
       >
-        <span className="shrink-0" style={{ color: accentColor }}>{icon}</span>
+        <span className="shrink-0 text-txt-tertiary">{icon}</span>
         <span className="text-[14px] font-semibold text-txt-primary flex-1 text-left">{title}</span>
         {badge !== undefined && badge > 0 && (
-          <span
-            className="text-[11px] font-bold text-white rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1.5"
-            style={{ backgroundColor: accentColor }}
-          >
+          <span className="text-[11px] font-bold text-txt-primary bg-surface-secondary rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1.5">
             {badge}
           </span>
         )}

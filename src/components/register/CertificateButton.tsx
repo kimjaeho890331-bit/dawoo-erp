@@ -188,7 +188,7 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
               onClick={requestIssue}
               disabled={loading}
               title="재발급"
-              className="w-7 h-7 flex items-center justify-center rounded-lg border border-border-primary text-txt-tertiary hover:text-accent-text hover:border-accent transition-colors disabled:opacity-50"
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-border-primary text-txt-tertiary hover:text-accent-text hover:border-accent transition-colors disabled:opacity-50"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -229,15 +229,17 @@ export default function CertificateButton({ projectId, buildingName }: Props) {
         )}
 
         {/* 이력 토글 */}
+        {/* 숫자 배지가 이 버튼 기준으로 붙도록 relative — 예전에는 기준이 없어 패널 오른쪽 위 구석으로 튀었다.
+            이력은 최대 20건이라 두 자리도 들어가게 폭을 늘릴 수 있게 둔다 */}
         {history.length > 0 && (
           <button
             onClick={() => setShowHistory(s => !s)}
             title="발급 이력"
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-border-primary text-txt-tertiary hover:text-txt-secondary hover:bg-surface-secondary transition-colors"
+            className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-border-primary text-txt-tertiary hover:text-txt-secondary hover:bg-surface-secondary transition-colors"
           >
             <History className="w-3.5 h-3.5" />
             {history.length > 1 && (
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-accent text-white text-[8px] rounded-full flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 bg-accent text-white text-[10px] leading-none rounded-full flex items-center justify-center tabular-nums">
                 {history.length}
               </span>
             )}

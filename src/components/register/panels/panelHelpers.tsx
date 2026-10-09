@@ -10,6 +10,8 @@ export interface TabProps {
   getVal: (field: keyof DBProject) => string | number | null | undefined | { id: string; name: string } | { name: string } | { name: string; work_categories?: { name: string } | null }
   onChange: (field: string, value: string | number | null) => void
   apiFieldsLocked?: boolean
+  /** 표제부·전유부 잠금 풀기 (이 패널을 닫을 때까지) */
+  onUnlockApiFields?: () => void
 }
 
 // --- 현재 로그인 직원 이름 훅 (localStorage + staff 조회) ---

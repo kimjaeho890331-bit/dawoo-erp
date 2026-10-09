@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
+import { supabase as dataClient } from '@/lib/supabase'
 
 interface StaffInfo {
   id: string
@@ -73,7 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // staff_emails(다중 이메일 매핑)를 먼저 본다 — 직원이 "내 계정 연결"로 등록한
         // 로그인 계정(카카오/네이버 등)은 여기에 있다. 아직 아무도 연결 안 했으면
         // staff.email(기존 단일 칼럼)로 폴백한다 — 기존 동작을 그대로 유지하기 위함.
-        const { data: mapped } = await supabase
+        //
+        // 조회는 화면용 데이터 클라이언트(dataClient)로 한다. 예전에는 로그인 클라이언트로
+        // 조회했는데, 그 클라이언트의 조회는 매번 세션 잠금을 잡는다. 로그인 이벤트 처리
+        // 도중(잠금을 쥔 채)에 조회하면 서로를 기다려 멈췄고, 5초 시간 초과가 지나서야
+        // 화면이 떴다. 두 표 모두 화면들이 이미 같은 클라이언트로 읽는 표라 권한은 같다.
+        const { data: mapped } = await dataClient
           .from('staff_emails')
           .select('staff:staff_id(id, name, role, phone)')
           .eq('email', email)
@@ -84,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data =
           mappedStaff ??
           (
-            await supabase
+            await dataClient
               .from('staff')
               .select('id, name, role, phone')
               .eq('email', email)
@@ -100,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // staff 조회 실패해도 로그인은 유지
       }
     },
-    [supabase, setStaff],
+    [setStaff],
   )
 
   useEffect(() => {
@@ -126,7 +132,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(currentUser)
 
           if (currentUser?.email) {
-            await fetchStaff(currentUser.email)
+            // 이 기기에서 이미 직원이 정해져 있으면 직원 조회를 기다리지 않고 바로 화면을 연다
+            // (조회는 뒤에서 마저 한다). 처음 쓰는 기기만 기다린다 — 화면들이 처음 뜰 때
+            // localStorage의 직원 id를 읽기 때문이다.
+            const known = (() => { try { return !!localStorage.getItem('dawoo_current_staff_id') } catch { return false } })()
+            if (known) void fetchStaff(currentUser.email)
+            else await fetchStaff(currentUser.email)
           }
         }
       } catch (e) {
@@ -142,12 +153,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // 이 콜백은 Supabase가 세션 잠금을 쥔 채로 부른다. 여기서 조회를 기다리면(await)
+      // 잠금이 풀리지 않아 다른 탭·새로고침이 5초씩 멈췄다(Supabase 문서의 경고 사례).
+      // 콜백은 바로 끝내고, 직원 조회는 다음 틱으로 미룬다.
       const currentUser = session?.user ?? null
       setUser(currentUser)
 
       if (currentUser?.email) {
-        await fetchStaff(currentUser.email)
+        const email = currentUser.email
+        setTimeout(() => { void fetchStaff(email) }, 0)
       } else {
         setStaff(null)
       }

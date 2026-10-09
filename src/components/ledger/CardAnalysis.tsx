@@ -7,6 +7,10 @@ import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 're
 import { toast } from '@/lib/toast'
 import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle, Upload, Table } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllPagesResult } from '@/lib/fetchAllPages'
+import { inMonth, monthLabel, monthOptions } from '@/lib/monthFilter'
+import { todayKST } from '@/lib/utils/date'
+import { cardDateRange, splitNewCardRows, type CardRowKeyFields } from '@/lib/cardImport'
 
 interface CardTransaction {
   id: string
@@ -51,10 +55,10 @@ const SEVERITY_COLOR = { high: 'bg-red-50 border-red-200 text-red-700', medium: 
 const SEVERITY_LABEL = { high: '주의', medium: '확인', low: '참고' }
 
 // ===== 이상 탐지 엔진 =====
-function detectAnomalies(txns: CardTransaction[], staffList: Staff[]): Anomaly[] {
+// 화면에서 고른 한 달 치만 받는다(기준이 월 단위). 예전에는 늘 이번 달만 따로 골라 봤다.
+// monthText는 문구용('이번 달' / '2026년 9월').
+function detectAnomalies(thisMonth: CardTransaction[], staffList: Staff[], monthText: string): Anomaly[] {
   const anomalies: Anomaly[] = []
-  const ym = new Date().toISOString().slice(0, 7)
-  const thisMonth = txns.filter(t => t.transaction_date?.startsWith(ym))
 
   // 1) 식대 1인 15,000원 초과 (월 기준)
   const mealTxns = thisMonth.filter(t => t.category === '식대')
@@ -69,7 +73,7 @@ function detectAnomalies(txns: CardTransaction[], staffList: Staff[]): Anomaly[]
     anomalies.push({
       type: 'over_limit',
       severity: 'high',
-      message: `이번 달 식대 1인당 ${Math.round(mealPerPerson / workDays).toLocaleString()}원/일 (기준: 15,000원)`,
+      message: `${monthText} 식대 1인당 ${Math.round(mealPerPerson / workDays).toLocaleString()}원/일 (기준: 15,000원)`,
       transactions: mealTxns,
     })
   }
@@ -162,10 +166,16 @@ export default function CardAnalysis() {
   const [filterCat, setFilterCat] = useState('전체')
   const [showMapping, setShowMapping] = useState(false)
   const [loading, setLoading] = useState(true)
+  // 예전에는 요약·이상 탐지는 이번 달, 아래 목록은 모든 달이라 합계와 목록이 맞지 않았다.
+  // 월 하나로 셋을 같이 움직인다. 기본은 이번 달(한국 시각).
+  const [thisYm] = useState(() => todayKST().slice(0, 7))
+  const [month, setMonth] = useState(thisYm)
 
   const loadData = useCallback(async () => {
     const [cardR, mapR, stfR] = await Promise.all([
-      supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
+      // 카드 내역은 달마다 수백 건씩 쌓인다 — 1000건에서 잘리지 않게 끝까지 읽는다
+      fetchAllPagesResult<CardTransaction>((from, to) =>
+        supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }).order('id').range(from, to)),
       supabase.from('card_mappings').select('*').order('card_last4'),
       supabase.from('staff').select('id, name, resign_date').order('name'),
     ])
@@ -182,8 +192,15 @@ export default function CardAnalysis() {
     const m = cardMappings.find(cm => cm.card_name === cardName)
     return m?.staff_id ? staffName(m.staff_id) : null
   }
-  const anomalies = useMemo(() => detectAnomalies(cardTxns, staffList), [cardTxns, staffList])
-  const filteredCards = filterCat === '전체' ? cardTxns : cardTxns.filter(c => c.category === filterCat)
+  // 자료가 있는 달 + 이번 달·지금 고른 달(비어 있어도 목록에서 사라지지 않게)
+  const months = useMemo(
+    () => monthOptions(cardTxns.map(c => c.transaction_date), [thisYm, month]),
+    [cardTxns, thisYm, month],
+  )
+  const monthText = month === thisYm ? '이번 달' : monthLabel(month)
+  const monthTxns = useMemo(() => cardTxns.filter(c => inMonth(c.transaction_date, month)), [cardTxns, month])
+  const anomalies = useMemo(() => detectAnomalies(monthTxns, staffList, monthText), [monthTxns, staffList, monthText])
+  const filteredCards = filterCat === '전체' ? monthTxns : monthTxns.filter(c => c.category === filterCat)
 
   const handleDelete = async (table: string, id: string, label: string) => {
     if (!confirm(`"${label}" 삭제하시겠습니까?`)) return
@@ -196,6 +213,12 @@ export default function CardAnalysis() {
   return (
     <CardAnalysisTab
       cardTxns={cardTxns}
+      monthTxns={monthTxns}
+      month={month}
+      setMonth={setMonth}
+      months={months}
+      thisYm={thisYm}
+      monthText={monthText}
       cardMappings={cardMappings}
       staffList={staffList}
       anomalies={anomalies}
@@ -323,7 +346,7 @@ function parseCsv(text: string): CsvParsedRow[] {
 }
 
 // ===== 카드분석 탭 =====
-function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filteredCards, filterCat, setFilterCat, staffName, getCardStaff, handleDelete, showMapping, setShowMapping, onReload }: any) {
+function CardAnalysisTab({ cardTxns, monthTxns, month, setMonth, months, thisYm, monthText, cardMappings, staffList, anomalies, filteredCards, filterCat, setFilterCat, staffName, getCardStaff, handleDelete, showMapping, setShowMapping, onReload }: any) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<string | null>(null)
@@ -408,7 +431,27 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
     if (!csvPreview || csvPreview.length === 0) return
     setCsvSaving(true)
     try {
-      const inserts = csvPreview.map(row => ({
+      // 같은 CSV를 두 번 올리면 내역이 두 배로 쌓였다. 파일 기간의 기존 내역을 읽어
+      // 카드·날짜·금액·가맹점이 같은 것은 빼고 넣는다 (src/lib/cardImport.ts).
+      const range = cardDateRange(csvPreview)
+      const existing: CardRowKeyFields[] = []
+      if (range) {
+        // 한 번에 1000건까지만 오므로 나눠 읽는다. 끝은 '다음 날 전'으로 — 날짜 칸이 시각을 가져도 끝날이 빠지지 않게.
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from('card_transactions')
+            .select('card_name, transaction_date, amount, merchant')
+            .gte('transaction_date', range.from)
+            .lt('transaction_date', range.before)
+            .order('id')
+            .range(from, from + 999)
+          if (error) throw error
+          existing.push(...((data || []) as CardRowKeyFields[]))
+          if (!data || data.length < 1000) break
+        }
+      }
+      const { fresh, skipped } = splitNewCardRows(csvPreview, existing)
+
+      const inserts = fresh.map(row => ({
         card_name: row.card_name,
         merchant: row.merchant,
         amount: row.amount,
@@ -425,8 +468,14 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
         const { error } = await supabase.from('card_transactions').insert(batch)
         if (error) throw error
       }
-      setUploadResult(`CSV ${csvPreview.length}건 등록 완료`)
+      setUploadResult(skipped.length > 0
+        ? `${fresh.length}건 등록, ${skipped.length}건은 이미 있어 건너뜀`
+        : `CSV ${fresh.length}건 등록 완료`)
       setCsvPreview(null)
+      // 지난달 CSV를 올리면 이번 달 화면에는 안 보여 안 올라간 줄 안다 — 새로 넣은 달로 옮겨 보여 준다
+      if (fresh.length > 0 && !fresh.some(r => inMonth(r.transaction_date, month))) {
+        setMonth(monthOptions(fresh.map(r => r.transaction_date))[0])
+      }
       onReload()
     } catch {
       setCsvError('저장 중 오류가 발생했습니다. 다시 시도해주세요.')
@@ -446,11 +495,10 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
     }
   }
 
-  // 월별 카드별 요약
-  const ym = new Date().toISOString().slice(0, 7)
-  const thisMonth = cardTxns.filter((c: CardTransaction) => c.transaction_date?.startsWith(ym))
+  // 고른 달의 카드별 요약
+  const thisMonth = monthTxns as CardTransaction[]
   const cardSummary = Object.entries(
-    (thisMonth as CardTransaction[]).reduce((acc: Record<string, { total: number; count: number }>, c: CardTransaction) => {
+    thisMonth.reduce((acc: Record<string, { total: number; count: number }>, c: CardTransaction) => {
       if (!acc[c.card_name]) acc[c.card_name] = { total: 0, count: 0 }
       acc[c.card_name].total += c.amount; acc[c.card_name].count++
       return acc
@@ -561,6 +609,16 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
         </div>
       )}
 
+      {/* 월 선택 — 사용현황·이상 탐지·내역 목록이 모두 이 달을 따른다 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={month} onChange={e => setMonth(e.target.value)} aria-label="월 선택" className="input-field shrink-0">
+          {(months as string[]).map(m => (
+            <option key={m} value={m}>{monthLabel(m)}{m === thisYm ? ' (이번 달)' : ''}</option>
+          ))}
+        </select>
+        <span className="text-[12px] text-txt-tertiary">사용현황 · 이상 탐지 · 내역이 모두 이 달 기준입니다</span>
+      </div>
+
       {/* 카드 매핑 + 이상탐지 */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* 카드-직원 매핑 */}
@@ -621,7 +679,9 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
           <div className="p-3">
             {anomalies.length === 0 ? (
               <div className="text-center py-4 text-txt-quaternary text-sm">
-                {cardTxns.length === 0 ? '카드 내역을 등록하면 자동 분석합니다' : <span className="flex items-center gap-1 justify-center"><CheckCircle size={14} className="text-[#059669]" /> 이상 항목 없음</span>}
+                {cardTxns.length === 0 ? '카드 내역을 등록하면 자동 분석합니다'
+                  : monthTxns.length === 0 ? `${monthText} 카드 내역이 없습니다`
+                  : <span className="flex items-center gap-1 justify-center"><CheckCircle size={14} className="text-[#059669]" /> 이상 항목 없음</span>}
               </div>
             ) : (
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
@@ -642,7 +702,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
       {/* 카드별 사용현황 */}
       {cardSummary.length > 0 && (
         <div className="bg-surface rounded-[10px] border border-border-primary p-4">
-          <h3 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary mb-3">이번 달 카드별 사용현황</h3>
+          <h3 className="text-[14px] font-semibold tracking-[-0.1px] text-txt-primary mb-3">{monthText} 카드별 사용현황</h3>
           <div className="space-y-2">
             {cardSummary.map(([card, info]: [string, any]) => {
               const pct = totalCard > 0 ? (info.total / totalCard * 100) : 0
@@ -674,7 +734,7 @@ function CardAnalysisTab({ cardTxns, cardMappings, staffList, anomalies, filtere
       </div>
 
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-        {filteredCards.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">카드 내역이 없습니다</div> : (
+        {filteredCards.length === 0 ? <div className="text-center py-12 text-txt-quaternary text-sm">{monthText} {filterCat !== '전체' ? `${filterCat} ` : ''}카드 내역이 없습니다</div> : (
           <table className="w-full text-sm">
             <thead><tr className="bg-surface-secondary border-b border-border-primary">
               <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">날짜</th>

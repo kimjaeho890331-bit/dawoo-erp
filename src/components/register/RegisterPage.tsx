@@ -9,6 +9,7 @@ import { useCurrentStaff } from '@/components/register/panels/panelHelpers'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
 import { toast } from '@/lib/toast'
+import { PROGRESS_STEPS, missingFieldsForMove } from '@/lib/register/stepRules'
 
 // --- 타입 ---
 export type ProjectStep =
@@ -102,11 +103,6 @@ const STATUS_TABS = [
 ] as const
 
 type StatusFilter = (typeof STATUS_TABS)[number]['key']
-
-const PROGRESS_STEPS: ProjectStep[] = [
-  '문의', '실측', '견적전달', '동의서', '신청서제출',
-  '승인', '착공계', '공사', '완료서류제출', '입금',
-]
 
 const STEP_LABELS_SHORT = ['문의','실측','견적','동의','신청','승인','착공','공사','완료','입금']
 
@@ -223,6 +219,42 @@ function KebabMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => v
   )
 }
 
+// --- 목록이 비었을 때 안내 ---
+// 예전에는 불러오기 실패·아직 없음·조건에 걸러짐이 모두 "등록된 프로젝트가 없습니다"로 보여,
+// 인터넷이 끊겨도 접수가 다 사라진 줄 알았다
+type ListEmptyKind = 'error' | 'none' | 'filtered'
+
+function ListEmptyState({ kind, canClearFilters, onRetry, onClearFilters }: {
+  kind: ListEmptyKind
+  canClearFilters: boolean
+  onRetry: () => void
+  onClearFilters: () => void
+}) {
+  if (kind === 'error') {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <p className="text-[13px] font-medium text-danger">목록을 불러오지 못했습니다</p>
+        <p className="text-[12px] text-txt-tertiary">인터넷 연결을 확인한 뒤 다시 시도해 주세요</p>
+        <button onClick={onRetry} className="btn-secondary mt-1">다시 시도</button>
+      </div>
+    )
+  }
+  if (kind === 'none') return <p>등록된 프로젝트가 없습니다</p>
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <p className="text-[13px] font-medium text-txt-secondary">조건에 맞는 접수가 없습니다</p>
+      <p className="text-[12px] text-txt-tertiary">
+        {canClearFilters
+          ? '검색어·지역·미수금만 조건을 지우거나, 다른 탭·연도를 골라 보세요'
+          : '다른 탭이나 연도를 골라 보세요'}
+      </p>
+      {canClearFilters && (
+        <button onClick={onClearFilters} className="btn-secondary mt-1">검색·필터 지우기</button>
+      )}
+    </div>
+  )
+}
+
 // --- 삭제 확인 모달 ---
 function DeleteConfirmModal({
   buildingName,
@@ -292,6 +324,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const [projects, setProjects] = useState<DBProject[]>([])
   const [cities, setCities] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
+  // 불러오기 실패 — 예전에는 콘솔에만 남아 "등록된 프로젝트가 없습니다"로 보였다
+  const [loadError, setLoadError] = useState(false)
   const [selectedYear, setSelectedYear] = useState<number | '전체'>(new Date().getFullYear())
   const [sortBy, setSortBy] = useState<SortKey>('default')
   const [outstandingOnly, setOutstandingOnly] = useState(false)
@@ -304,10 +338,12 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     setLoading(true)
     try {
       // 해당 카테고리의 work_type_id 목록 조회
-      const { data: workTypes } = await supabase
+      const { data: workTypes, error: typeError } = await supabase
         .from('work_types')
         .select('id, work_categories!inner( name )')
         .eq('work_categories.name', category)
+      // 공사종류를 못 읽으면 소규모·수도가 섞인 목록이 나오므로 실패로 본다
+      if (typeError) throw typeError
 
       const typeIds = workTypes?.map((wt: { id: string }) => wt.id) || []
 
@@ -328,8 +364,10 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       const { data, error } = await query
       if (error) throw error
       setProjects((data as DBProject[]) || [])
+      setLoadError(false)
     } catch (err) {
       console.error('프로젝트 로드 실패:', err)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -496,6 +534,16 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null
 
+  // 빈 목록이 왜 비었는지 (불러오기 실패 / 아직 없음 / 조건에 걸러짐)
+  const emptyKind: ListEmptyKind =
+    loadError && projects.length === 0 ? 'error' : projects.length === 0 ? 'none' : 'filtered'
+  const canClearFilters = !!searchQuery.trim() || selectedCities.length > 0 || outstandingOnly
+  const clearFilters = () => {
+    setSearchQuery('')
+    setSelectedCities([])
+    setOutstandingOnly(false)
+  }
+
   const toggleCity = (cityName: string) => {
     // 다중 선택 (누르면 추가, 다시 누르면 해제)
     setSelectedCities(prev =>
@@ -506,6 +554,10 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   // 목록에서 단계 바로 변경 (이력 기록 후 상태 업데이트)
   const handleStatusChange = async (project: DBProject, newStatus: string) => {
     if (newStatus === project.status) return
+    // 예전에는 여기서 필수항목 검사를 건너뛰어, 실측일 없이 견적전달로 넘어간 건이 생겼다.
+    // 목록은 빠른 정정용이라 막지는 않고, 빈 항목을 보여 주고 한 번 더 묻는다 (뒤로·취소·예약은 안 물음)
+    const missing = missingFieldsForMove(project, project.status, newStatus)
+    if (missing.length > 0 && !confirm(`필수 항목이 비어 있습니다: ${missing.join(', ')}\n그래도 단계를 바꿀까요?`)) return
     const logged = await insertStatusLog({
       projectId: project.id,
       fromStatus: project.status,
@@ -742,16 +794,17 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             </button>
           ))}
         </div>
-        <div className="hidden md:block">
+        {/* 단계 안내 — 예전에는 8~9px라 읽기 힘들었다. 평소엔 한 줄 그대로, 안내 칸보다 화면이 좁을 때만 접힌다 */}
+        <div className="hidden md:block shrink-0 max-w-full">
           <div className="bg-surface rounded-lg border border-border-primary p-2 mb-3" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
-            <div className="flex items-center gap-1 px-2 py-1.5">
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-2 py-1.5">
               {PROGRESS_STEPS.map((step, i) => {
                 const colors = ['bg-slate-400','bg-sky-500','bg-accent','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
                 return (
-                  <div key={step} className="flex items-center gap-0.5">
-                    <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold text-white ${colors[i]}`}>{i+1}</span>
-                    <span className="text-[9px] text-txt-tertiary">{STEP_LABELS_SHORT[i]}</span>
-                    {i < PROGRESS_STEPS.length - 1 && <span className="text-[8px] text-txt-quaternary mx-0.5">›</span>}
+                  <div key={step} className="flex items-center gap-0.5 whitespace-nowrap">
+                    <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white ${colors[i]}`}>{i+1}</span>
+                    <span className="text-[11px] text-txt-tertiary">{STEP_LABELS_SHORT[i]}</span>
+                    {i < PROGRESS_STEPS.length - 1 && <span className="text-[11px] text-txt-quaternary mx-0.5">›</span>}
                   </div>
                 )
               })}
@@ -793,12 +846,22 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         )
       })()}
 
+      {/* 다시 불러오기 실패 — 이미 보이는 목록은 두되 최신이 아닐 수 있음을 알린다 */}
+      {loadError && projects.length > 0 && !loading && (
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-3 py-2 rounded-lg border border-border-primary bg-surface">
+          <p className="text-[12px] text-danger">목록을 새로 불러오지 못했습니다. 보이는 내용이 최신이 아닐 수 있습니다.</p>
+          <button onClick={loadProjects} className="btn-secondary">다시 시도</button>
+        </div>
+      )}
+
       {/* Mobile card view */}
       <div className="md:hidden space-y-2">
         {loading ? (
           <div className="px-4 py-16 text-center text-txt-tertiary">불러오는 중...</div>
         ) : filteredProjects.length === 0 ? (
-          <div className="px-4 py-16 text-center text-txt-tertiary">등록된 프로젝트가 없습니다</div>
+          <div className="px-4 py-16 text-center text-txt-tertiary">
+            <ListEmptyState kind={emptyKind} canClearFilters={canClearFilters} onRetry={loadProjects} onClearFilters={clearFilters} />
+          </div>
         ) : (
           filteredProjects.map(project => (
             <div
@@ -864,7 +927,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
               ) : filteredProjects.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-16 text-center text-txt-tertiary">
-                    등록된 프로젝트가 없습니다
+                    <ListEmptyState kind={emptyKind} canClearFilters={canClearFilters} onRetry={loadProjects} onClearFilters={clearFilters} />
                   </td>
                 </tr>
               ) : (

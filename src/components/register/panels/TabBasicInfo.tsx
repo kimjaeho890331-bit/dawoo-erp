@@ -16,7 +16,7 @@ interface OwnerInfo {
   hoNm: string
 }
 
-export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked }: TabProps) {
+export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocked, onUnlockApiFields }: TabProps) {
   const [bankImage, setBankImage] = useState<string | null>(null)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [owners, setOwners] = useState<OwnerInfo[]>([])
@@ -95,6 +95,21 @@ export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocke
     reader.readAsDataURL(file)
   }
 
+  // 표제부·전유부는 건축물대장에서 불러온 값이라 잠가 두지만, 예전에는 풀 방법이 없어
+  // 대장이 틀렸거나 비어 있어도 고칠 수 없었다. 한 번 확인받고 이 패널에서만 푼다.
+  const unlockApiFields = () => {
+    if (confirm('건축물대장에서 불러온 값입니다. 직접 고칠까요?')) onUnlockApiFields?.()
+  }
+  const unlockButton = apiFieldsLocked && onUnlockApiFields ? (
+    <button
+      type="button"
+      onClick={unlockApiFields}
+      className="px-2 py-1 -my-1 text-[11px] font-medium text-accent-text rounded hover:bg-surface-tertiary transition-colors"
+    >
+      직접 고치기
+    </button>
+  ) : null
+
   return (
     <div className="space-y-5">
       {/* 소유주 · 연락처 · 담당자 */}
@@ -121,7 +136,10 @@ export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocke
       </section>
 
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">건축물대장 (표제부)</h3>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider">건축물대장 (표제부)</h3>
+          {unlockButton}
+        </div>
         <div className="space-y-3">
           <LockedFormInput label="지번주소" value={getVal('jibun_address') as string} onChange={v => onChange('jibun_address', v || null)} locked={apiFieldsLocked} />
         </div>
@@ -133,7 +151,10 @@ export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocke
       </section>
 
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">전유부</h3>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider">전유부</h3>
+          {unlockButton}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <LockedFormInput label="동" placeholder="예: 101동" value={getVal('dong') as string} onChange={v => onChange('dong', v || null)} locked={apiFieldsLocked} />
           <LockedFormInput label="호" placeholder="예: 201호" value={getVal('ho') as string} onChange={v => onChange('ho', v || null)} locked={apiFieldsLocked} />

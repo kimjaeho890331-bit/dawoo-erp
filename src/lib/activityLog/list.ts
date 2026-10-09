@@ -1,11 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
+import { admin } from '@/lib/approval/guard'
 import { attachStaffNames, type ActivityLogRow, type ActivityLogWithStaff } from '@/lib/activityLog'
 
+// 서버에서 읽으므로 서비스 키(admin)로 읽는다. 예전에는 로그인 정보 없는 anon 키로 읽어,
+// DB에 '로그인한 사람만'(RLS)을 켜면 작업 이력이 비었다. 호출하는 /api/activity-log가 로그인을 확인한다.
 function reader() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  return admin
 }
 
 export async function listActivityLogs(params: {

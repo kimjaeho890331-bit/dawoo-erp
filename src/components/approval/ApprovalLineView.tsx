@@ -57,7 +57,7 @@ export default function ApprovalLineView({ drafterName, drafterActedAt, lines, c
           <CheckCircle2 size={18} className="shrink-0 text-accent-text" />
           <span className="text-[13px] font-medium text-txt-primary">{drafterName}</span>
           <span className="ml-auto text-[12px] text-txt-secondary">
-            기안 {drafterActedAt ? `· ${shortDateTime(drafterActedAt)}` : ''}
+            작성 {drafterActedAt ? `· ${shortDateTime(drafterActedAt)}` : ''}
           </span>
         </div>
         {lines.map(l => (
@@ -75,7 +75,7 @@ export default function ApprovalLineView({ drafterName, drafterActedAt, lines, c
       <div className={`hidden flex-wrap md:flex ${compact ? 'gap-2' : 'gap-3'}`}>
       <div className={cardCls}>
         <div className={headCls}>
-          기안
+          작성
         </div>
         <div className={bodyCls}>
           <div className="text-[13px] font-medium">{drafterName}</div>

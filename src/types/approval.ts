@@ -8,10 +8,10 @@ export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number]
 
 export const APPROVAL_STATUS_LABEL: Record<ApprovalStatus, string> = {
   draft: '작성중',
-  pending: '진행중',
+  pending: '결재중',
   approved: '완료',
-  rejected: '반려된',
-  withdrawn: '회수된',
+  rejected: '반려',
+  withdrawn: '회수',
 }
 
 export const LINE_ROLES = ['approval', 'cooperation'] as const

@@ -6,6 +6,7 @@ import { formatMoney, parseMoney } from '@/lib/utils/format'
 import { supabase } from '@/lib/supabase'
 import { EMPTY_PAYMENT, type PaymentRow } from '@/types/approval'
 import VendorNameCell, { type VendorOption } from './VendorNameCell'
+import { BTN_SECONDARY } from './ui'
 
 interface Props {
   rows: PaymentRow[]
@@ -49,23 +50,23 @@ export default function PaymentTable({ rows, onChange, onPickVendor, actions }: 
 
   return (
     <div className="overflow-hidden rounded-lg border border-border-primary bg-surface">
-      {/* 폰에서는 엑셀 버튼 두 개가 총계와 한 줄에 다 들어가지 않아 잘린다. 넘치면 접는다. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border-primary px-5 py-4">
-        <span className="text-label">지급 총계(원)</span>
-        <span className="text-money text-[15px]">{formatMoney(total)}</span>
-        <span className="hidden text-[12px] text-txt-tertiary md:inline">지급 정보 합계 자동계산</span>
-        {/* 엑셀 버튼을 여기에 둔다 — 표 위쪽에 있어야 쓰려고 스크롤을 오르내리지 않는다. */}
-        {actions && <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div>}
-      </div>
-
-      <div className="flex items-center justify-between border-b border-border-primary px-5 py-3">
-        <span className="text-card-title">지급 정보</span>
-        <button
-          onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
-          className="hidden h-8 items-center gap-1 rounded-lg border border-border-primary px-3 text-[13px] md:flex"
-        >
-          <Plus size={14} className="text-txt-tertiary" /> 추가
-        </button>
+      {/*
+        머리줄 하나에 합계와 버튼을 모은다. 예전에는 "지급 총계" 줄과 "지급 정보 · 추가" 줄이
+        따로 있었는데, 구역 제목이 이미 위에 있어 두 줄이 같은 말을 했다.
+        폰에서는 버튼이 한 줄에 다 들어가지 않으므로 넘치면 아래로 접는다.
+      */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border-primary px-4 py-3 md:px-5">
+        <span className="text-label">합계</span>
+        <span className="text-money text-[15px]">{formatMoney(total)}원</span>
+        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+          {actions}
+          <button
+            onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
+            className={`${BTN_SECONDARY} hidden md:inline-flex`}
+          >
+            <Plus size={14} className="text-txt-tertiary" /> 줄 추가
+          </button>
+        </div>
       </div>
 
       {/* 모바일 — 한 건이 카드 한 장. 7칸 표를 폰에 그리면 칸마다 40px도 안 남는다. */}
@@ -143,7 +144,7 @@ export default function PaymentTable({ rows, onChange, onPickVendor, actions }: 
 
         <button
           onClick={() => onChange([...rows, { ...EMPTY_PAYMENT }])}
-          className="mt-4 flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border-primary text-sm text-txt-secondary"
+          className="mt-4 flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border-primary text-[13px] text-txt-secondary"
         >
           <Plus size={16} className="text-txt-tertiary" /> 지급 건 추가
         </button>
@@ -195,7 +196,7 @@ export default function PaymentTable({ rows, onChange, onPickVendor, actions }: 
           ))}
           {rows.length === 0 && (
             <tr className="border-t border-border-primary">
-              <td colSpan={7} className="px-4 py-8 text-txt-tertiary">추가를 눌러 지급 정보를 입력하세요</td>
+              <td colSpan={7} className="px-4 py-8 text-txt-tertiary">&lsquo;줄 추가&rsquo;를 눌러 지급 정보를 적어 주세요</td>
             </tr>
           )}
         </tbody>

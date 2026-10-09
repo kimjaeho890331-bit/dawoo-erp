@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { presetToLines, LINE_PRESETS } from './linePresets'
+import { presetToLines, defaultLines, LINE_PRESETS } from './linePresets'
 
 const staff = [
   { id: 's1', name: '송승란' },
@@ -46,5 +46,19 @@ describe('LINE_PRESETS', () => {
       expect(p.names.length).toBeGreaterThan(0)
       expect(p.label.trim()).not.toBe('')
     }
+  })
+})
+
+describe('defaultLines', () => {
+  it('작성자가 프리셋에 없으면 첫 프리셋을 기본 결재선으로 준다', () => {
+    expect(defaultLines(staff, 's3').map(l => l.name)).toEqual(['송승란', '조혜진'])
+  })
+
+  it('작성자가 프리셋 안에 있으면 비워 둔다', () => {
+    expect(defaultLines(staff, 's1')).toEqual([])
+  })
+
+  it('프리셋의 누군가를 못 찾으면 비워 둔다', () => {
+    expect(defaultLines([{ id: 's2', name: '조혜진' }], 's3')).toEqual([])
   })
 })

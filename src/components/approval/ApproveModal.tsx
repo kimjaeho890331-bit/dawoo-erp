@@ -120,7 +120,7 @@ export default function ApproveModal({
           <div className="mb-5 rounded-lg bg-surface-secondary px-4 py-3.5">
             <div className="mb-1.5 text-[13px] font-medium">{title}</div>
             <div className="text-[12px] text-txt-secondary">
-              기안 {drafterName} · 지급 총계 {formatMoney(totalAmount)}원 · {paymentCount}건 · 결재자 {actorName}
+              작성 {drafterName} · 지급 총계 {formatMoney(totalAmount)}원 · {paymentCount}건 · 결재자 {actorName}
             </div>
           </div>
 
@@ -183,11 +183,11 @@ export default function ApproveModal({
             {mode === 'reject' ? <>반려 사유 <span className="text-danger">*</span></> : '결재의견'}
           </div>
           <textarea value={comment} onChange={e => setComment(e.target.value)}
-            placeholder={mode === 'reject' ? '기안자가 무엇을 고쳐야 하는지 적어 주세요' : undefined}
+            placeholder={mode === 'reject' ? '작성자가 무엇을 고쳐야 하는지 적어 주세요' : undefined}
             className="w-full h-20 px-3 py-2 text-base border border-border-primary rounded-lg placeholder:text-txt-quaternary md:text-sm" />
           {mode === 'reject' && (
             <p className="mt-2 text-xs text-txt-tertiary">
-              반려하면 문서가 기안자에게 돌아가고 알림이 갑니다. 기안자가 고쳐서 다시 상신하면 결재선은 1차부터 진행됩니다.
+              반려하면 문서가 작성자에게 돌아가고 알림이 갑니다. 작성자가 고쳐서 다시 올리면 결재는 처음 결재자부터 다시 진행됩니다.
             </p>
           )}
 

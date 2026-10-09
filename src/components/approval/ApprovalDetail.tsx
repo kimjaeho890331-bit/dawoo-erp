@@ -10,6 +10,7 @@ import ApprovalLineView, { type LineCard } from './ApprovalLineView'
 import ApproveModal from './ApproveModal'
 import ActorPicker, { useActor } from './ActorPicker'
 import MobileField, { MobileCard } from './MobileField'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER } from './ui'
 import {
   canApprove, canDelete, canEdit, canCancel, canResumeCompletion, isFinalApprover,
 } from '@/lib/approval/status'
@@ -24,10 +25,8 @@ import { projectLabel, workTargetLabel } from '@/lib/workTarget'
 type LineWithStaff = ExpenseReportLine & { staff: { name: string } | null }
 type ActionKey = 'delete' | 'cancel'
 
-// 하단 액션 버튼. 모바일에서는 남는 폭을 나눠 갖고 높이를 44px로 키워 손가락에 맞춘다.
-// md 이상에서는 예전 크기(px-5 py-2)로 되돌아간다.
-const ACTION_BTN =
-  'flex-1 min-h-11 flex items-center justify-center rounded-lg text-sm md:flex-none md:min-h-0 md:px-5 md:py-2'
+// 하단 액션 버튼. 모양·높이는 ui.ts의 공통 버튼을 쓰고, 폰에서는 남는 폭을 나눠 갖는다.
+const ACTION_BTN = 'flex-1 md:flex-none'
 
 // 저장 경로는 한글을 못 쓰므로(Storage 제약) 파일명이 밑줄로 바뀌어 있다.
 // 브라우저에서 바로 볼 수 없는 형식은 ?download=로 원래 파일명을 되살려 내려받게 한다.
@@ -91,8 +90,15 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
 
   useEffect(() => { load() }, [load])
 
+  // 되돌릴 수 없는 동작이라 한 번 묻는다. 예전에는 누르자마자 지워지거나 취소됐다.
+  const CONFIRM: Record<ActionKey, string> = {
+    delete: '이 결의서를 삭제할까요? 삭제하면 되돌릴 수 없습니다.',
+    cancel: '내 결재를 취소할까요? 문서는 다시 내 차례로 돌아옵니다.',
+  }
+
   const act = async (path: ActionKey) => {
-    if (!actor) { setError('행위자를 선택해 주세요'); return }
+    if (!actor) { setError('위에서 지금 쓰는 직원을 골라 주세요'); return }
+    if (!window.confirm(CONFIRM[path])) return
     setError(null)
     setActionBusy(path)
     try {
@@ -147,7 +153,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
       <div className="mb-8 rounded-lg border border-border-primary bg-surface px-5 py-4 md:hidden">
         <MobileField label="문서번호" value={report.doc_no ?? '-'} />
         <MobileField label="상태" value={APPROVAL_STATUS_LABEL[report.status]} />
-        <MobileField label="기안자" value={drafterName} />
+        <MobileField label="작성자" value={drafterName} />
         <MobileField label="기안양식" value="지출결의서" />
         <MobileField label="현장" value={targetText.text} />
         <MobileField label="보존연한" value={`${report.retention_years}년`} />
@@ -173,7 +179,7 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
               </td>
             </tr>
             <tr>
-              <td className="border-b border-border-primary px-5 py-3.5 text-label">기안자</td>
+              <td className="border-b border-border-primary px-5 py-3.5 text-label">작성자</td>
               <td className="border-b border-border-primary px-5 py-3.5">{drafterName}</td>
               <td className="border-b border-border-primary px-5 py-3.5 text-label">현장</td>
               <td className={`border-b border-border-primary px-5 py-3.5 ${targetText.missing ? 'font-medium text-danger' : ''}`}>{targetText.text}</td>
@@ -325,27 +331,27 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
                    pb-[calc(0.75rem+env(safe-area-inset-bottom))]
                    md:static md:z-auto md:justify-center md:bg-transparent md:px-0 md:py-0 md:pt-5 md:pb-0"
       >
-        <Link href="/approval" className={`${ACTION_BTN} border border-border-primary`}>목록</Link>
+        <Link href="/approval" className={`${ACTION_BTN} ${BTN_SECONDARY}`}>목록</Link>
 
         {report.status === 'approved' && (
-          <Link href={`/approval/${reportId}/reissue`} className={`${ACTION_BTN} border border-border-primary`}>
-            재기안
+          <Link href={`/approval/${reportId}/reissue`} className={`${ACTION_BTN} ${BTN_SECONDARY}`}>
+            다시 올리기
           </Link>
         )}
         {actor && canEdit(report, actor.id) && (
-          <Link href={`/approval/${reportId}/edit`} className={`${ACTION_BTN} border border-border-primary`}>
+          <Link href={`/approval/${reportId}/edit`} className={`${ACTION_BTN} ${BTN_SECONDARY}`}>
             수정
           </Link>
         )}
         {actor && canDelete(report, actor.id) && (
           <button onClick={() => act('delete')} disabled={busy}
-            className={`${ACTION_BTN} border border-border-primary text-danger disabled:opacity-40`}>
+            className={`${ACTION_BTN} ${BTN_DANGER}`}>
             {actionBusy === 'delete' ? '처리 중' : '삭제'}
           </button>
         )}
         {actor && canCancel(report, lines, actor.id) && (
           <button onClick={() => act('cancel')} disabled={busy}
-            className={`${ACTION_BTN} border border-border-primary disabled:opacity-40`}>
+            className={`${ACTION_BTN} ${BTN_SECONDARY}`}>
             {actionBusy === 'cancel' ? '처리 중' : '결재취소'}
           </button>
         )}
@@ -357,13 +363,13 @@ export default function ApprovalDetail({ reportId }: { reportId: string }) {
         */}
         {showApprove && !resumeOnly && (
           <button onClick={() => { setModalMode('reject'); setModal(true) }} disabled={busy}
-            className={`${ACTION_BTN} border border-danger text-danger disabled:opacity-40`}>
+            className={`${ACTION_BTN} ${BTN_DANGER}`}>
             반려
           </button>
         )}
         {showApprove && (
           <button onClick={() => { setModalMode('approve'); setModal(true) }} disabled={busy}
-            className={`${ACTION_BTN} bg-accent text-txt-inverse disabled:opacity-40`}>
+            className={`${ACTION_BTN} ${BTN_PRIMARY}`}>
             결재
           </button>
         )}

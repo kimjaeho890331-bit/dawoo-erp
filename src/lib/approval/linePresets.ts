@@ -48,3 +48,25 @@ export function presetToLines(
 
   return { lines, missing }
 }
+
+/**
+ * 새 결의서를 열 때 미리 채워 둘 결재선. 첫 번째 프리셋을 쓴다.
+ *
+ * 거의 모든 결의서가 같은 결재선으로 올라가는데, 예전에는 매번 빈칸에서 시작해
+ * 결재선 설정 창을 열고 프리셋을 눌러야 했다.
+ *
+ * 그대로 올릴 수 없는 결재선은 채우지 않는다 — 작성자가 프리셋 안에 있거나
+ * (본인은 결재자가 될 수 없다) 프리셋의 누군가를 직원 목록에서 못 찾으면 빈 결재선을
+ * 돌려준다. 한 명 빠진 결재선이 기본값으로 깔리면 모르고 올리게 된다.
+ */
+export function defaultLines(
+  staff: { id: string; name: string }[],
+  drafterStaffId: string,
+): PresetLine[] {
+  const preset = LINE_PRESETS[0]
+  if (!preset) return []
+  const { lines, missing } = presetToLines(preset, staff)
+  if (missing.length > 0) return []
+  if (lines.some(l => l.staff_id === drafterStaffId)) return []
+  return lines
+}

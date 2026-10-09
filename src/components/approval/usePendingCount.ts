@@ -19,7 +19,7 @@ interface LineForTurn {
  * 눌러보니 2건이면 직원이 문서를 놓친 줄 알고 헤맨다.
  * (문서가 pending이고, 내 앞 순번이 전부 처리돼 지금이 내 차례인 것만 센다.)
  *
- * 목록 화면과 기안작성 화면이 같은 사이드바를 쓰게 되면서 훅으로 뺐다.
+ * 목록의 "결재할 문서" 탭 숫자로 쓴다.
  */
 export function usePendingCount(actor: ActorStaff | null): number {
   const [count, setCount] = useState(0)

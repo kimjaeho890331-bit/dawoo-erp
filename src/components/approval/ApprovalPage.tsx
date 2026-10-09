@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { PenLine, Search, X } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ActorPicker, { useActor } from './ActorPicker'
-import ApprovalSidebar, { BOXES, BOX_META, type BoxKey } from './ApprovalSidebar'
+import { BOX_TABS, BOX_META, isBoxKey, type BoxKey } from './boxes'
+import { BTN_PRIMARY } from './ui'
 import { usePendingCount } from './usePendingCount'
 import { formatMoney } from '@/lib/utils/format'
 import {
@@ -64,7 +65,7 @@ export default function ApprovalPage() {
   const router = useRouter()
   const params = useSearchParams()
   const qBox = params.get('box')
-  const box: BoxKey = BOX_META.some(m => m.key === qBox) ? (qBox as BoxKey) : 'toApprove'
+  const box: BoxKey = isBoxKey(qBox) ? qBox : 'toApprove'
   const setBox = (key: BoxKey) => router.replace(`/approval?box=${key}`, { scroll: false })
   const [rows, setRows] = useState<Row[]>([])
   const [query, setQuery] = useState('')
@@ -214,26 +215,19 @@ export default function ApprovalPage() {
   useEffect(() => { load() }, [load])
 
   const currentBox = BOX_META.find(it => it.key === box)
+  const currentTab = currentBox?.tab ?? BOX_TABS[0]
+  const emptyText = query.trim() ? '검색 결과가 없습니다' : '이 칸에 문서가 없습니다'
 
   return (
-    <div className="-mx-4 -my-4 flex min-h-[calc(100vh-2rem)] md:-mx-8 md:-my-6 md:min-h-[calc(100vh-3rem)]">
-      <ApprovalSidebar
-        actorId={actorId}
-        staffList={staffList}
-        onActorChange={setActorId}
-        actorLoading={actorLoading}
-        pendingCount={pendingCount}
-        box={box}
-        onSelectBox={setBox}
-      />
-
-      <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">
-        {/*
-          모바일 머리말. 데스크톱은 왼쪽 사이드바가 같은 역할을 하므로 숨긴다.
-          직원 선택이 이 안에 있어야 한다 — 사이드바를 숨긴 폰에서 직원을 아직 안 골랐을 때,
-          아래 "직원을 선택해 주세요" 분기에 갇혀 고를 방법이 없어지면 안 된다.
-        */}
-        <div className="mb-6 flex flex-col gap-3 md:hidden">
+    <div className="mx-auto max-w-6xl">
+      {/*
+        머리줄 — 제목, 지금 누구로 쓰는지, 새 결의서.
+        예전에는 이 셋이 왼쪽 문서함 사이드바에 들어 있었고 폰에서는 따로 그렸다.
+        이제 PC와 폰이 같은 자리를 쓴다.
+      */}
+      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h1>지출결의서</h1>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
           <ActorPicker
             actorId={actorId}
             staffList={staffList}
@@ -241,51 +235,75 @@ export default function ApprovalPage() {
             loading={actorLoading}
             fullWidth
           />
-          <div className="flex items-center gap-3">
-            <select
-              value={box}
-              onChange={e => setBox(e.target.value as BoxKey)}
-              aria-label="문서함 선택"
-              className="h-11 min-w-0 flex-1 rounded-lg border border-border-primary bg-surface px-3 text-base text-txt-primary"
-            >
-              {/* 칸 이름 앞에 그룹을 붙인다. 기안함 완료와 결재함 완료된처럼
-                  이름만 보여주면 어느 쪽인지 알 수 없다. */}
-              {BOXES.map(g =>
-                g.items.map(it => (
-                  <option key={it.key} value={it.key}>{`${g.group} · ${it.label}`}</option>
-                )),
-              )}
-            </select>
-            {pendingCount > 0 && (
-              <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-xs leading-none text-txt-inverse">
-                {pendingCount}
-              </span>
-            )}
-          </div>
-          <Link
-            href="/approval/new"
-            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-border-primary text-sm text-txt-primary"
-          >
-            <PenLine size={15} className="text-txt-tertiary" /> 기안작성
+          <Link href="/approval/new" className={BTN_PRIMARY}>
+            <Plus size={15} /> 새 결의서
           </Link>
         </div>
+      </div>
 
-        {!actor ? (
-          <div className="py-16 text-center text-[13px] text-txt-tertiary">직원을 선택해 주세요</div>
-        ) : (
+      {/* 탭 — 결재할 문서 / 내가 올린 문서 / 전체 완료 문서 */}
+      <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border-primary" role="tablist">
+        {BOX_TABS.map(t => {
+          const active = t.key === currentTab.key
+          return (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setBox(t.items[0].key)}
+              className={`-mb-px flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-3 text-[13px] md:min-h-10 ${
+                active
+                  ? 'border-accent font-semibold text-txt-primary'
+                  : 'border-transparent text-txt-secondary hover:text-txt-primary'
+              }`}
+            >
+              {t.label}
+              {t.key === 'approve' && pendingCount > 0 && (
+                <span className="rounded-full bg-accent px-1.5 py-0.5 text-[11px] leading-none text-txt-inverse">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 탭 안의 칸. 칸이 하나뿐인 탭(전체 완료 문서)은 그리지 않는다. */}
+      {currentTab.items.length > 1 && (
+        <div className="mb-5 flex gap-1.5 overflow-x-auto">
+          {currentTab.items.map(it => {
+            const active = it.key === box
+            return (
+              <button
+                key={it.key}
+                onClick={() => setBox(it.key)}
+                aria-pressed={active}
+                className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] md:min-h-8 ${
+                  active
+                    ? 'border-txt-primary bg-txt-primary text-txt-inverse'
+                    : 'border-border-primary bg-surface text-txt-secondary hover:text-txt-primary'
+                }`}
+              >
+                {it.label}
+                {it.key === 'toApprove' && pendingCount > 0 && <span className="text-[11px] opacity-80">{pendingCount}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {!actor ? (
+        <div className="py-16 text-center text-[13px] text-txt-tertiary">위에서 지금 쓰는 직원을 골라 주세요</div>
+      ) : (
           <>
-            <div className="mb-5 flex items-start justify-between gap-3 md:mb-6">
-              <div className="min-w-0">
-                <h1 className="hidden md:block">지출결의</h1>
-                <p className="text-[13px] text-txt-secondary md:mt-2">
-                  {currentBox ? `${currentBox.group} · ${currentBox.label} · ` : ''}
-                  총 {visibleRows.length}건
-                  {/* 걸러낸 상태에서는 전체가 몇 건인지도 알려준다 */}
-                  {searchable && query.trim() && visibleRows.length !== rows.length && (
-                    <span className="text-txt-tertiary"> (전체 {rows.length}건)</span>
-                  )}
-                </p>
-              </div>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-[13px] text-txt-secondary">
+                총 {visibleRows.length}건
+                {/* 걸러낸 상태에서는 전체가 몇 건인지도 알려준다 */}
+                {searchable && query.trim() && visibleRows.length !== rows.length && (
+                  <span className="text-txt-tertiary"> (전체 {rows.length}건)</span>
+                )}
+              </p>
 
               {searchable && (
                 <div className="relative shrink-0">
@@ -293,9 +311,9 @@ export default function ApprovalPage() {
                   <input
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    placeholder="문서번호·제목·현장·기안자"
+                    placeholder="문서번호·제목·현장·작성자"
                     aria-label="문서 검색"
-                    className="h-9 w-[150px] rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-sm text-txt-primary placeholder:text-txt-quaternary focus:outline-none focus:ring-1 focus:ring-accent md:w-[240px]"
+                    className="h-9 w-[170px] rounded-lg border border-border-primary bg-surface pl-8 pr-7 text-[13px] text-txt-primary placeholder:text-txt-quaternary focus:outline-none focus:ring-1 focus:ring-accent md:w-[240px]"
                   />
                   {query && (
                     <button onClick={() => setQuery('')} aria-label="검색어 지우기"
@@ -333,7 +351,7 @@ export default function ApprovalPage() {
               ))}
               {!loading && visibleRows.length === 0 && (
                 <div className="py-16 text-center text-[13px] text-txt-tertiary">
-                  {query.trim() ? '검색 결과가 없습니다' : '문서가 없습니다'}
+                  {emptyText}
                 </div>
               )}
             </div>
@@ -348,19 +366,21 @@ export default function ApprovalPage() {
                       지급총계는 10억(1,000,000,000)이 한 줄에 들어갈 만큼,
                       상신일시는 짧은 형식이 한 줄에 들어갈 만큼만 준다.
                     */}
-                    <th className="w-[12%] px-4 py-3 text-left">문서번호</th>
-                    <th className="w-[26%] px-4 py-3 text-left">기안제목</th>
+                    <th className="w-[14%] px-4 py-3 text-left">문서번호</th>
+                    <th className="w-[24%] px-4 py-3 text-left">제목</th>
                     <th className="w-[21%] px-4 py-3 text-left">현장</th>
-                    <th className="w-[7%] px-4 py-3 text-left">기안자</th>
+                    <th className="w-[7%] px-4 py-3 text-left">작성자</th>
                     <th className="w-[13%] px-4 py-3 text-right">지급총계</th>
-                    <th className="w-[14%] px-2 py-3 text-left">상신일시</th>
+                    <th className="w-[14%] px-2 py-3 text-left">올린 날</th>
                     <th className="w-[7%] px-2 py-3 text-left">상태</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleRows.map(r => (
-                    <tr key={r.id} className="border-t border-border-primary">
-                      <td className="px-4 py-3 text-txt-tertiary">{r.doc_no ?? '-'}</td>
+                    // 줄 어디를 눌러도 열린다. 예전에는 제목 글자만 눌렸다.
+                    <tr key={r.id} onClick={() => router.push(`/approval/${r.id}`)}
+                      className="cursor-pointer border-t border-border-primary hover:bg-surface-secondary">
+                      <td className="px-4 py-3 whitespace-nowrap text-txt-tertiary">{r.doc_no ?? '-'}</td>
                       <td className="px-4 py-3">
                         {/* 제목은 길어도 두 줄까지만. 그 이상은 줄 높이가 들쭉날쭉해 표가 읽기 어렵다. */}
                         <Link href={`/approval/${r.id}`} className="line-clamp-2 text-txt-primary hover:underline">{r.title}</Link>
@@ -382,15 +402,14 @@ export default function ApprovalPage() {
                   ))}
                   {!loading && visibleRows.length === 0 && (
                     <tr><td colSpan={7} className="px-4 py-16 text-center text-txt-tertiary">
-                      {query.trim() ? '검색 결과가 없습니다' : '문서가 없습니다'}
+                      {emptyText}
                     </td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </>
-        )}
-      </main>
+      )}
     </div>
   )
 }

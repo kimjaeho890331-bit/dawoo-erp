@@ -14,7 +14,8 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * 결재 알림(웹푸시) 켜기 토글.
+ * 휴대폰 알림(웹푸시) 켜기 토글.
+ * 결재·연차·대시보드 지시 알림이 모두 이 구독 하나로 온다(서버가 staff_id로 받을 사람을 고른다).
  *
  * 구독을 어느 직원 앞으로 등록할지 알아야 하므로 useActor()로 "현재 직원"을 가져온다.
  * 결재 화면(ActorPicker)과 같은 localStorage 값을 공유하므로, 결재 화면에서
@@ -105,7 +106,7 @@ export default function PushToggle() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {on ? <Bell size={16} className="text-txt-tertiary" /> : <BellOff size={16} className="text-txt-tertiary" />}
-          <span className="text-sm text-txt-primary">결재 알림</span>
+          <span className="text-sm text-txt-primary">이 기기로 알림 받기</span>
         </div>
         <button
           onClick={enable}
@@ -115,8 +116,13 @@ export default function PushToggle() {
           {on ? '켜짐' : busy ? '설정 중' : '알림 켜기'}
         </button>
       </div>
+      <p className="mt-2 text-xs text-txt-tertiary">아래 알림을 이 기기로 받습니다.</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-txt-tertiary">
+        <li>지출결의서 — 내 결재 차례, 내가 올린 결의서의 승인·반려·결재 취소</li>
+        <li>연차 — 신청이 들어오면 승인자(대표·관리자·경리)에게, 승인·반려되면 신청한 사람에게</li>
+        <li>대시보드 지시 — 일을 받은 사람에게, 끝내면 시킨 사람에게</li>
+      </ul>
       <p className="mt-2 text-xs text-txt-tertiary">
-        결재 요청·승인·반려를 휴대폰으로 받습니다.
         아이폰은 사파리 탭이 아니라 <span className="font-medium">공유 → 홈 화면에 추가</span>로 설치한 뒤에만 알림이 옵니다.
       </p>
       {msg && (

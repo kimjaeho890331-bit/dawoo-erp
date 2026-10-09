@@ -156,7 +156,8 @@ export default function LeavePage() {
 
   // 이름(직원) 선택을 먼저 적용한 뒤 상태 필터 — 상태 개수 배지도 선택한 사람 기준으로 표시
   const staffScoped = filterStaffId ? requests.filter(r => r.staff_id === filterStaffId) : requests
-  const filtered = staffScoped.filter(r => r.status === filterStatus)
+  // '전체'는 대기 건이 없을 때 빈 화면 대신 지난 신청을 보여 주려고 둔다
+  const filtered = filterStatus === '전체' ? staffScoped : staffScoped.filter(r => r.status === filterStatus)
 
   // 폼 유효성 검사
   const formDays = useMemo(() => {
@@ -337,7 +338,8 @@ export default function LeavePage() {
       {/* 헤더 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">연차관리</h1>
+          {/* 메뉴 이름(연차신청)과 같게 — 다르면 다른 화면에 들어온 줄 안다 */}
+          <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">연차신청</h1>
           {pendingCount > 0 && (
             <span className="text-xs px-[10px] py-[2px] bg-yellow-100 text-yellow-700 rounded-full font-medium">승인 대기 {pendingCount}건</span>
           )}
@@ -389,11 +391,11 @@ export default function LeavePage() {
           {/* 상태 필터 (개수는 선택한 직원 기준) */}
           <div className="flex items-center justify-between">
             <div className="flex gap-1">
-              {['대기', '승인', '반려'].map(st => (
+              {['전체', '대기', '승인', '반려'].map(st => (
                 <button key={st} onClick={() => setFilterStatus(st)}
                   className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                     filterStatus === st ? 'bg-accent-light text-accent-text' : 'text-txt-secondary hover:bg-surface-secondary'
-                  }`}>{st} <span className="ml-0.5 opacity-70">({staffScoped.filter(r => r.status === st).length})</span></button>
+                  }`}>{st} <span className="ml-0.5 opacity-70">({st === '전체' ? staffScoped.length : staffScoped.filter(r => r.status === st).length})</span></button>
               ))}
             </div>
             <span className="text-xs text-txt-tertiary">{filtered.length}건</span>
@@ -420,7 +422,17 @@ export default function LeavePage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="text-center py-12 text-txt-quaternary text-sm">신청 내역이 없습니다</div>
+          filterStatus === '대기' ? (
+            // 첫 화면이 '대기'라, 예전 문구(신청 내역이 없습니다)는 자료가 하나도 없는 것처럼 보였다
+            <div className="flex flex-col items-center gap-3 py-12">
+              <p className="text-sm text-txt-quaternary">승인 대기 중인 신청이 없습니다</p>
+              {staffScoped.length > 0 && (
+                <button onClick={() => setFilterStatus('전체')} className="btn-secondary">전체 보기</button>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-txt-quaternary text-sm">신청 내역이 없습니다</div>
+          )
         ) : (
           <div className="divide-y divide-surface-secondary">
             {filtered.map(r => {
@@ -431,39 +443,43 @@ export default function LeavePage() {
                 : null
 
               return (
-                <div key={r.id} className="flex items-center gap-4 px-4 py-3 hover:bg-surface-tertiary transition-colors last:rounded-b-[10px]">
-                  <div className="flex items-center gap-2 w-20 shrink-0">
+                // 폰에서는 고정 폭 칸이 화면 밖으로 밀려 버튼이 안 보였다 — 폰은 줄바꿈, PC(md↑)는 그대로 한 줄
+                <div key={r.id} className="flex flex-wrap md:flex-nowrap items-center gap-x-4 gap-y-2 md:gap-4 px-4 py-3 hover:bg-surface-tertiary transition-colors last:rounded-b-[10px]">
+                  <div className="flex items-center gap-2 md:w-20 shrink-0">
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <span className="text-sm font-medium text-txt-primary">{getName(r.staff_id)}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 w-28 shrink-0">
+                  <div className="flex items-center gap-1.5 md:w-28 shrink-0">
                     <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${TYPE_COLORS[r.leave_type] || TYPE_COLORS['기타']}`}>
                       {r.leave_type}
                     </span>
                     {subtypeLabel && <span className="text-[10px] text-txt-tertiary">{subtypeLabel}</span>}
                   </div>
-                  <div className="flex items-center gap-2 w-36 shrink-0">
+                  <div className="flex items-center gap-2 md:w-36 shrink-0">
                     <span className="text-sm text-txt-secondary">{dateStr}</span>
                     <span className="text-xs text-txt-tertiary tabular-nums">({r.days}일)</span>
                   </div>
-                  <span className="text-sm text-txt-secondary flex-1 truncate">{r.reason || '-'}</span>
+                  <span className="text-sm text-txt-secondary w-full md:w-auto md:flex-1 truncate">{r.reason || '-'}</span>
+                  {/* '전체'에서는 승인·반려가 섞여 보이므로 상태를 글로 붙인다 */}
+                  {filterStatus === '전체' && r.status !== '대기' && <span className="shrink-0 text-[11px] text-txt-tertiary">{r.status}</span>}
                   {r.status === '승인' && <span className="shrink-0" title="캘린더 등록"><Calendar size={14} className="text-green-600" /></span>}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto md:ml-0">
                     {r.status === '대기' && !canDecideLeave(me, r.staff_id) && (
                       <span className="text-[11px] text-txt-tertiary">승인 대기</span>
                     )}
                     {r.status === '대기' && canDecideLeave(me, r.staff_id) && (
                       <>
+                        {/* 예전 24px 높이는 손가락으로 누르기 어려웠다 — 32px, 터치 기기는 40px */}
                         <button onClick={() => handleApprove(r.id)}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors">승인</button>
+                          className="min-h-8 pointer-coarse:min-h-10 text-xs font-medium px-3 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors">승인</button>
                         <button onClick={() => handleReject(r.id)}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-red-300 text-red-600 bg-surface hover:bg-red-50 transition-colors">반려</button>
+                          className="min-h-8 pointer-coarse:min-h-10 text-xs font-medium px-3 rounded-md border border-red-300 text-red-600 bg-surface hover:bg-red-50 transition-colors">반려</button>
                       </>
                     )}
                     {canChangeLeave(me, r) && <div className="relative">
                       <button onClick={() => setOpenMenuId(openMenuId === r.id ? null : r.id)}
                         aria-haspopup="menu" aria-expanded={openMenuId === r.id} title="수정 · 삭제"
-                        className="flex items-center gap-0.5 text-[11px] px-2 py-1 rounded-md border border-border-primary text-txt-secondary hover:bg-surface-secondary transition-colors">
+                        className="flex items-center gap-0.5 min-h-8 pointer-coarse:min-h-10 text-[11px] px-2 rounded-md border border-border-primary text-txt-secondary hover:bg-surface-secondary transition-colors">
                         관리 <ChevronDown size={13} className={`transition-transform ${openMenuId === r.id ? 'rotate-180' : ''}`} />
                       </button>
                       {openMenuId === r.id && (

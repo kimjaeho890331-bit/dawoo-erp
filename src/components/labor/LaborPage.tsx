@@ -490,6 +490,11 @@ export default function LaborPage() {
         </div>
       </div>
 
+      {/* 31칸짜리 표라 폰에서는 칸을 짚기도 어렵다. 안 되는 이유를 모른 채 애쓰지 않게 미리 알린다. */}
+      <p className="md:hidden rounded-lg bg-surface-secondary px-3 py-2 text-[13px] text-txt-secondary">
+        근무표 입력은 PC에서 해 주세요. 폰에서는 보기만 권장합니다.
+      </p>
+
       {/* 명세서 그리드 */}
       <div className="bg-surface border border-border-primary rounded-[10px] overflow-x-auto">
         {loading ? (

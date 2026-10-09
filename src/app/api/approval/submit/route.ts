@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import { canSubmit, currentTurnLine, validateApprovalLine } from '@/lib/approval/status'
 import { sendPush } from '@/lib/push/send'
@@ -71,12 +71,13 @@ export async function POST(request: NextRequest) {
   // 알림 실패는 상신 자체를 실패시키지 않는다(sendPush는 예외를 던지지 않는다).
   const turn = currentTurnLine(loaded.lines.map(l => ({ ...l, state: 'waiting' as const })))
   if (turn) {
-    await sendPush([turn.staff_id], {
+    // 알림은 응답을 돌려준 뒤 보낸다(after) — 예전에는 알림 전송까지 기다려 버튼 반응이 늦었다.
+    after(() => sendPush([turn.staff_id], {
       title: '결재 요청',
       body: `${loaded.report.title} / ${formatMoney(loaded.report.total_amount)}원`,
       url: `/approval/${id}`,
       tag: `approval-${id}`,
-    })
+    }))
   }
 
   return Response.json({ ok: true })

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { admin, resolveActor, loadReport } from '@/lib/approval/guard'
 import {
   canApprove, canResumeCompletion, currentTurnLine, isFinalApprover,
@@ -173,12 +173,13 @@ async function completeApproval({
   }
 
   // 알림 실패가 완료 처리 응답을 막아선 안 된다(sendPush는 예외를 던지지 않는다).
-  await sendPush([report.drafter_staff_id], {
+  // 알림은 응답을 돌려준 뒤 보낸다(after) — 예전에는 알림 전송까지 기다려 버튼 반응이 늦었다.
+  after(() => sendPush([report.drafter_staff_id], {
     title: '결재 완료',
     body: `${docNo} — ${report.title}`,
     url: `/approval/${id}`,
     tag: `approval-${id}`,
-  })
+  }))
 
   return Response.json({ ok: true, final: true, doc_no: docNo, expenses_created: created })
 }
@@ -263,12 +264,12 @@ export async function POST(request: NextRequest) {
         lines.map(l => (l.id === turn.id ? { ...l, state: 'approved' as const } : l)),
       )
       if (next) {
-        await sendPush([next.staff_id], {
+        after(() => sendPush([next.staff_id], {
           title: '결재 요청',
           body: report.title,
           url: `/approval/${id}`,
           tag: `approval-${id}`,
-        })
+        }))
       }
       return Response.json({ ok: true, final: false })
     }

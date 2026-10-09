@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import ProcessCalendar from '@/components/sites/ProcessCalendar'
 import {
   CONTRACT_TYPE_BID,
@@ -144,13 +145,16 @@ export default function SitesPage() {
     // 스크롤이 위(캘린더)로 튀고 입력 포커스가 사라지는 버그가 발생함.
     if (!initialLoadedRef.current) setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('sites')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (!error) setSites((data as Site[]) || [])
-      const exp = await supabase.from('expenses').select('site_id, amount')
-      if (!exp.error) setSpentBySite(sumExpensesBySite(exp.data || []))
+      // 현장 목록과 지출 합계는 동시에 읽는다 (예전에는 차례로 기다렸다).
+      // 지출은 1000건이 넘으면 뒤가 잘려 현장별 지출이 적게 나왔다 — 현장이 붙은 지출만 끝까지 읽는다.
+      const [sitesRes, expRows] = await Promise.all([
+        supabase.from('sites').select('*').order('created_at', { ascending: false }),
+        fetchAllPages<{ site_id: string | null; amount: number }>((from, to) =>
+          supabase.from('expenses').select('site_id, amount').not('site_id', 'is', null).order('id').range(from, to),
+        ).catch(() => null),
+      ])
+      if (!sitesRes.error) setSites((sitesRes.data as Site[]) || [])
+      if (expRows) setSpentBySite(sumExpensesBySite(expRows))
     } catch { /* 테이블 미생성 시 무시 */ }
     initialLoadedRef.current = true
     setLoading(false)

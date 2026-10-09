@@ -10,6 +10,7 @@ import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
 import { toast } from '@/lib/toast'
 import { PROGRESS_STEPS, missingFieldsForMove } from '@/lib/register/stepRules'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 
 // --- 타입 ---
 export type ProjectStep =
@@ -334,8 +335,11 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const currentStaff = useCurrentStaff()
 
   // 데이터 로드
+  // 처음 한 번만 「불러오는 중...」을 보인다. 예전에는 누가 접수를 고칠 때마다(실시간 알림,
+  // 상세 자동저장 3초마다 포함) 표가 「불러오는 중...」으로 바뀌었다가 다시 그려져 깜빡였다.
+  const loadedOnceRef = useRef(false)
   const loadProjects = useCallback(async () => {
-    setLoading(true)
+    if (!loadedOnceRef.current) setLoading(true)
     try {
       // 해당 카테고리의 work_type_id 목록 조회
       const { data: workTypes, error: typeError } = await supabase
@@ -347,23 +351,26 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
       const typeIds = workTypes?.map((wt: { id: string }) => wt.id) || []
 
-      let query = supabase
-        .from('projects')
-        .select(`
-          *,
-          staff:staff_id ( id, name, color ),
-          cities:city_id ( name ),
-          work_types:work_type_id ( name, work_categories:category_id ( name ) )
-        `)
-        .order('created_at', { ascending: false })
-
-      if (typeIds.length > 0) {
-        query = query.in('work_type_id', typeIds)
-      }
-
-      const { data, error } = await query
-      if (error) throw error
-      setProjects((data as DBProject[]) || [])
+      // 1000건이 넘으면 오래된 접수가 말없이 빠졌다 — 1000건씩 끝까지 읽는다.
+      // 같은 시각에 만든 건이 페이지 경계에서 겹치거나 빠지지 않게 id로도 정렬한다.
+      const data = await fetchAllPages<DBProject>((from, to) => {
+        let query = supabase
+          .from('projects')
+          .select(`
+            *,
+            staff:staff_id ( id, name, color ),
+            cities:city_id ( name ),
+            work_types:work_type_id ( name, work_categories:category_id ( name ) )
+          `)
+          .order('created_at', { ascending: false })
+          .order('id')
+        if (typeIds.length > 0) {
+          query = query.in('work_type_id', typeIds)
+        }
+        return query.range(from, to)
+      })
+      setProjects(data)
+      loadedOnceRef.current = true
       setLoadError(false)
     } catch (err) {
       console.error('프로젝트 로드 실패:', err)
@@ -382,6 +389,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   }, [])
 
   useEffect(() => {
+    loadedOnceRef.current = false  // 소규모↔수도를 바꾸면 처음 불러오기처럼 보인다
     loadProjects()
     loadCities()
   }, [loadProjects, loadCities])
@@ -417,17 +425,25 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   }, [])
 
   // Supabase Realtime: projects 테이블 변경 실시간 구독
+  // 변경이 몰려 오면(상세 자동저장 등) 매번 전체를 다시 받지 않고, 잠잠해진 뒤 한 번만 받는다.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
     const channel = supabase
       .channel('projects-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'projects' },
-        () => { loadProjects() }
+        () => {
+          if (timer) clearTimeout(timer)
+          timer = setTimeout(() => { loadProjects() }, 800)
+        }
       )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      if (timer) clearTimeout(timer)
+      supabase.removeChannel(channel)
+    }
   }, [loadProjects])
 
   // 연도 범위 내 프로젝트 (탭 건수·지역 건수도 연도 기준으로 일치)

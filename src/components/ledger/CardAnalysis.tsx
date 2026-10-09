@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 're
 import { toast } from '@/lib/toast'
 import { CreditCard, AlertTriangle, X, FileText, CheckCircle, Circle, Upload, Table } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllPagesResult } from '@/lib/fetchAllPages'
 import { inMonth, monthLabel, monthOptions } from '@/lib/monthFilter'
 import { todayKST } from '@/lib/utils/date'
 import { cardDateRange, splitNewCardRows, type CardRowKeyFields } from '@/lib/cardImport'
@@ -172,7 +173,9 @@ export default function CardAnalysis() {
 
   const loadData = useCallback(async () => {
     const [cardR, mapR, stfR] = await Promise.all([
-      supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }),
+      // 카드 내역은 달마다 수백 건씩 쌓인다 — 1000건에서 잘리지 않게 끝까지 읽는다
+      fetchAllPagesResult<CardTransaction>((from, to) =>
+        supabase.from('card_transactions').select('*').order('transaction_date', { ascending: false }).order('id').range(from, to)),
       supabase.from('card_mappings').select('*').order('card_last4'),
       supabase.from('staff').select('id, name, resign_date').order('name'),
     ])

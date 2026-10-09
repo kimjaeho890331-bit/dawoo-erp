@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllPagesResult } from '@/lib/fetchAllPages'
 import { formatMoney, parseMoney } from '@/lib/utils/format'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import SettlementTab from '@/components/expenses/SettlementTab'
@@ -77,13 +78,18 @@ export default function ExpensesPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    // 지출·접수·결재 연결은 해마다 쌓여 1000건을 넘는다. 넘으면 뒤가 말없이 잘려
+    // 오래된 지출이 안 보이고 현장 이름이 비었다 — 1000건씩 끝까지 읽는다.
     const [expR, stfR, sitR, projR, linkR] = await Promise.all([
-      supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
+      fetchAllPagesResult<Expense>((from, to) =>
+        supabase.from('expenses').select('*').order('expense_date', { ascending: false }).order('id').range(from, to)),
       supabase.from('staff').select('id, name, role'),
       supabase.from('sites').select('id, name, contract_type, status, budget'),
-      supabase.from('projects').select('id, building_name, ho, dong, total_cost').order('created_at', { ascending: false }),
+      fetchAllPagesResult<Project>((from, to) =>
+        supabase.from('projects').select('id, building_name, ho, dong, total_cost').order('created_at', { ascending: false }).order('id').range(from, to)),
       // 결재로 만들어진 지출이 어느 결의서에서 왔는지. 못 읽어도 목록은 그대로 보인다(링크만 빠진다).
-      supabase.from('expense_report_payments').select('report_id, expense_id').not('expense_id', 'is', null),
+      fetchAllPagesResult<{ report_id: string; expense_id: string }>((from, to) =>
+        supabase.from('expense_report_payments').select('report_id, expense_id').not('expense_id', 'is', null).order('report_id').order('expense_id').range(from, to)),
     ])
     if (!expR.error) setExpenses(expR.data || [])
     if (!stfR.error) setStaffList(stfR.data || [])

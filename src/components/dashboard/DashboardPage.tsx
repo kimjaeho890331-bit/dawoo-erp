@@ -156,19 +156,28 @@ export default function DashboardPage() {
       return
     }
 
-    // 1) 내 schedules (담당자=나, 아직 안 지난 일정)
-    const sRes = await supabase.from('schedules').select('*')
-      .neq('schedule_type', 'site')
-      .eq('staff_id', currentStaffId)
-      .gte('end_date', today)
-      .order('start_date')
+    // 세 조회는 서로 기다릴 필요가 없다 — 예전에는 하나씩 차례로 기다려 왕복 시간이 세 배였다
+    const [sRes, rRes, aRes] = await Promise.all([
+      // 1) 내 schedules (담당자=나, 아직 안 지난 일정)
+      supabase.from('schedules').select('*')
+        .neq('schedule_type', 'site')
+        .eq('staff_id', currentStaffId)
+        .gte('end_date', today)
+        .order('start_date'),
+      // 2) 내가 받은 tasks (assigned_to = 나, 미완료)
+      supabase.from('tasks').select('*')
+        .eq('assigned_to', currentStaffId)
+        .eq('done', false)
+        .order('deadline', { ascending: true, nullsFirst: false }),
+      // 3) 내가 시킨 tasks (assigned_by = 나, 미완료)
+      supabase.from('tasks').select('*')
+        .eq('assigned_by', currentStaffId)
+        .eq('done', false)
+        .order('deadline', { ascending: true, nullsFirst: false }),
+    ])
+
     if (!sRes.error) setMySchedules((sRes.data as Schedule[]) || [])
 
-    // 2) 내가 받은 tasks (assigned_to = 나, 미완료)
-    const rRes = await supabase.from('tasks').select('*')
-      .eq('assigned_to', currentStaffId)
-      .eq('done', false)
-      .order('deadline', { ascending: true, nullsFirst: false })
     if (rRes.error) {
       if (rRes.error.code === '42P01' || /does not exist|relation/.test(rRes.error.message)) {
         setTasksTableMissing(true)
@@ -179,11 +188,6 @@ export default function DashboardPage() {
       setMyTasksReceived((rRes.data as Task[]) || [])
     }
 
-    // 3) 내가 시킨 tasks (assigned_by = 나, 미완료)
-    const aRes = await supabase.from('tasks').select('*')
-      .eq('assigned_by', currentStaffId)
-      .eq('done', false)
-      .order('deadline', { ascending: true, nullsFirst: false })
     if (!aRes.error) setMyTasksAssigned((aRes.data as Task[]) || [])
   }, [today, currentStaffId])
 

@@ -71,12 +71,13 @@ const FAMILY_EVENT_TYPES = [
 
 const LEAVE_CATEGORIES = ['연차', '반차(오전)', '반차(오후)', '병가', '경조사', '기타'] as const
 
+// 종류(상태가 아님)는 회색 한 가지로 — 색은 진행 상태에만 쓴다 (대표 원칙)
 const TYPE_COLORS: Record<string, string> = {
-  '연차': 'bg-blue-100 text-blue-700',
-  '반차(오전)': 'bg-purple-100 text-purple-700',
-  '반차(오후)': 'bg-indigo-100 text-indigo-700',
-  '병가': 'bg-red-100 text-red-700',
-  '경조사': 'bg-pink-100 text-pink-700',
+  '연차': 'bg-surface-secondary text-txt-secondary',
+  '반차(오전)': 'bg-surface-secondary text-txt-secondary',
+  '반차(오후)': 'bg-surface-secondary text-txt-secondary',
+  '병가': 'bg-surface-secondary text-txt-secondary',
+  '경조사': 'bg-surface-secondary text-txt-secondary',
   '기타': 'bg-surface-secondary text-txt-secondary',
 }
 
@@ -327,16 +328,16 @@ export default function LeavePage() {
     }
   }
 
-  if (loading) return <div className="p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
+  if (loading) return <div className="md:p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
 
   const pendingCount = requests.filter(r => r.status === '대기').length
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-4">
+    <div className="md:p-6 max-w-[1200px] mx-auto space-y-4">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">연차관리</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">연차관리</h1>
           {pendingCount > 0 && (
             <span className="text-xs px-[10px] py-[2px] bg-yellow-100 text-yellow-700 rounded-full font-medium">승인 대기 {pendingCount}건</span>
           )}
@@ -359,7 +360,7 @@ export default function LeavePage() {
                 <span className="text-sm font-semibold text-txt-primary">{s.name}</span>
               </div>
               <div className="h-1.5 bg-surface-secondary rounded-full overflow-hidden mb-1.5">
-                <div className={`h-full rounded-full ${remain <= 3 ? 'bg-red-400' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                <div className={`h-full rounded-full ${remain <= 3 ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${pct}%` }} />
               </div>
               <div className="flex justify-between text-[11px]">
                 <span className="text-txt-tertiary tabular-nums">{used}/{total}일 사용</span>
@@ -372,7 +373,7 @@ export default function LeavePage() {
 
       {/* 규정 안내 */}
       <div className="bg-surface-secondary rounded-[10px] border border-border-primary px-4 py-3">
-        <div className="flex items-center gap-4 text-[11px] text-txt-secondary">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-txt-secondary">
           <span className="font-semibold text-txt-secondary flex items-center gap-1"><ClipboardList size={16} className="text-txt-tertiary" /> 규정</span>
           <span>연차: 1년 미만 월1일(최대11일) · 1년↑ 15일 · 3년↑ 2년마다 +1일(최대25일)</span>
           <span className="w-px h-3 bg-border-secondary" />
@@ -391,7 +392,7 @@ export default function LeavePage() {
               {['대기', '승인', '반려'].map(st => (
                 <button key={st} onClick={() => setFilterStatus(st)}
                   className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                    filterStatus === st ? 'bg-accent text-white' : 'text-txt-secondary hover:bg-surface-secondary'
+                    filterStatus === st ? 'bg-accent-light text-accent-text' : 'text-txt-secondary hover:bg-surface-secondary'
                   }`}>{st} <span className="ml-0.5 opacity-70">({staffScoped.filter(r => r.status === st).length})</span></button>
               ))}
             </div>
@@ -401,14 +402,14 @@ export default function LeavePage() {
           <div className="flex flex-wrap items-center gap-1">
             <button onClick={() => setFilterStaffId(null)}
               className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
-                filterStaffId === null ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
+                filterStaffId === null ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
               }`}>전체</button>
             {sortedStaff.map(s => {
               const active = filterStaffId === s.id
               return (
                 <button key={s.id} onClick={() => setFilterStaffId(active ? null : s.id)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
-                    active ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
+                    active ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-secondary'
                   }`}>
                   <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: staffColorMap[s.id] || '#94a3b8' }} />
                   {s.name}
@@ -518,7 +519,7 @@ export default function LeavePage() {
                   {LEAVE_CATEGORIES.map(t => (
                     <button key={t} type="button" onClick={() => { setFormLeaveType(t); if (t !== '경조사') setFormSubtype('') }}
                       className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                        formLeaveType === t ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+                        formLeaveType === t ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
                       }`}>{t}</button>
                   ))}
                 </div>
@@ -562,7 +563,7 @@ export default function LeavePage() {
                   <AlertTriangle size={14} className="text-red-600" /> {formValidation.error}
                 </div>
               ) : (
-                <div className="bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-700 tabular-nums">
+                <div className="bg-accent-light rounded-lg px-3 py-2 text-sm text-accent-text tabular-nums">
                   {formDays}일 사용 · 승인 시 업무 캘린더 자동 등록
                   {formLeaveType === '연차' || formLeaveType.includes('반차') ? (() => {
                     const staff = staffList.find(s => s.id === formStaffId)

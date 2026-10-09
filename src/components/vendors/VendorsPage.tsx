@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, DragEvent } from 'react'
 import { Check, Paperclip, FileText, Landmark, CreditCard, HardHat, Building2, User, Phone, Hash, Plus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 
 // --- 타입 ---
 interface Vendor {
@@ -167,9 +168,9 @@ export default function VendorsPage() {
   const handleAddChip = async () => {
     const name = chipInput.trim()
     if (!name) return
-    if (chips.some(c => c.name === name)) { alert('이미 등록된 공종입니다.'); return }
+    if (chips.some(c => c.name === name)) { toast.info('이미 등록된 공종입니다.'); return }
     const { error } = await supabase.from('vendor_categories').insert({ name })
-    if (error) { alert(`공종 등록 실패: ${error.message}`); return }
+    if (error) { toast.error(`공종 등록 실패: ${error.message}`); return }
     setChipInput('')
     setAddingChip(false)
     fetchChips()
@@ -177,7 +178,7 @@ export default function VendorsPage() {
 
   const handleDeleteChip = async (chip: VendorCategory) => {
     const { error } = await supabase.from('vendor_categories').delete().eq('id', chip.id)
-    if (error) { alert(`공종 삭제 실패: ${error.message}`); return }
+    if (error) { toast.error(`공종 삭제 실패: ${error.message}`); return }
     setChipDeleteConfirm(null)
     fetchChips()
   }
@@ -267,7 +268,7 @@ export default function VendorsPage() {
 
     const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
     const json = await res.json()
-    if (!res.ok) { alert(`파일 업로드 실패: ${json.error ?? `HTTP ${res.status}`}`); return }
+    if (!res.ok) { toast.error(`파일 업로드 실패: ${json.error ?? `HTTP ${res.status}`}`); return }
     setForm(prev => ({ ...prev, [field]: json.url }))
   }
 
@@ -291,7 +292,7 @@ export default function VendorsPage() {
     } catch (err) {
       console.error('저장 실패:', err)
       const msg = err instanceof Error ? err.message : (err as { message?: string })?.message || ''
-      alert(`저장에 실패했습니다.${msg ? '\n\n' + msg : ''}`)
+      toast.error(`저장에 실패했습니다.${msg ? '\n\n' + msg : ''}`)
     }
     finally { setSaving(false) }
   }
@@ -301,7 +302,7 @@ export default function VendorsPage() {
       const { error } = await supabase.from('vendors').delete().eq('id', id)
       if (error) throw error
       setDeleteConfirm(null); setModalOpen(false); fetchVendors()
-    } catch (err) { console.error('삭제 실패:', err); alert('삭제에 실패했습니다.') }
+    } catch (err) { console.error('삭제 실패:', err); toast.error('삭제에 실패했습니다.') }
   }
 
   const formatBusinessNumber = (value: string) => {
@@ -316,7 +317,7 @@ export default function VendorsPage() {
   const isWorker = form.vendor_type === '일용직'
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="md:p-6 max-w-7xl mx-auto">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">거래처 DB</h1>
@@ -356,7 +357,7 @@ export default function VendorsPage() {
             <span key={chip.id} className="group/chip inline-flex items-center gap-1 pl-3 pr-2 py-1 rounded-full text-[12px] font-medium bg-surface-secondary text-txt-secondary border border-border-primary">
               {chip.name}
               <button onClick={() => setChipDeleteConfirm(chip.id)}
-                className="opacity-0 group-hover/chip:opacity-100 transition-opacity text-txt-quaternary hover:text-red-500">
+                className="pointer-fine:opacity-0 pointer-fine:group-hover/chip:opacity-100 transition-opacity text-txt-quaternary hover:text-red-500">
                 <X size={12} />
               </button>
             </span>
@@ -505,7 +506,7 @@ export default function VendorsPage() {
                   {TABS.map(t => (
                     <button key={t.key} type="button" onClick={() => updateForm('vendor_type', t.key)}
                       className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                        form.vendor_type === t.key ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+                        form.vendor_type === t.key ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
                       }`}>{t.label}</button>
                   ))}
                 </div>
@@ -553,7 +554,7 @@ export default function VendorsPage() {
                             return (
                               <button key={name} type="button" onClick={() => toggleCat(name)}
                                 className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-colors ${
-                                  on ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
+                                  on ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary hover:bg-surface-tertiary'
                                 }`}>
                                 {name}
                               </button>

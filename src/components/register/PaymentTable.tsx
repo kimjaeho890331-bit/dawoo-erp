@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from '@/lib/toast'
 import { Trash2, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { recalcProjectPaymentTotals } from '@/lib/utils/recalcPayment'
@@ -90,15 +91,18 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
       await loadPayments()
     } catch (err) {
       console.error('입금 추가 실패:', err)
-      alert('입금 추가에 실패했습니다.')
+      toast.error('입금 추가에 실패했습니다.')
     } finally {
       setSaving(false)
     }
   }
 
   const handleDelete = async (payment: Payment) => {
+    // 입금 기록은 미수금 계산의 근거라 한 번 묻는다 (예전에는 누르면 바로 지워졌다)
+    if (!confirm(`${payment.amount.toLocaleString()}원 입금 기록을 삭제할까요? 미수금이 다시 계산됩니다.`)) return
     try {
-      await supabase.from('payments').delete().eq('id', payment.id)
+      const { error } = await supabase.from('payments').delete().eq('id', payment.id)
+      if (error) throw error
 
       // 전액 재합산으로 갱신
       await recalcProjectPaymentTotals(projectId, totalCost)
@@ -106,6 +110,7 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
       await loadPayments()
     } catch (err) {
       console.error('삭제 실패:', err)
+      toast.error('입금 기록을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     }
   }
 
@@ -165,7 +170,7 @@ export default function PaymentTable({ projectId, totalCost, additionalCost, onO
                   <td className="px-2 py-2">
                     <button
                       onClick={() => handleDelete(p)}
-                      className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-danger-bg text-txt-tertiary hover:text-danger transition-all"
+                      className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-danger-bg text-txt-tertiary hover:text-danger transition-all"
                     >
                       <Trash2 size={12} />
                     </button>

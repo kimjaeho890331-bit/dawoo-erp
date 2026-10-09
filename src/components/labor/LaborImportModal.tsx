@@ -8,6 +8,7 @@ import {
   type Deductions, type ImportedLaborRow, type LaborImportResult,
 } from '@/lib/labor/importExcel'
 import { calcRow, loadLaborRates, type LaborRates, type LaborRecord } from './LaborPage'
+import { toast } from '@/lib/toast'
 
 // 엑셀 불러오기 미리보기. 여기서 [불러오기]를 누르기 전에는 아무것도 저장하지 않는다.
 
@@ -141,7 +142,7 @@ export default function LaborImportModal({ file, onClose, onImported }: {
     const payload = pickedRows.map((r, i) => ({ ...r.insert, sort_order: existing.length + i }))
     const { error: insErr } = await supabase.from('labor_records').insert(payload)
     setSaving(false)
-    if (insErr) { alert(`불러오기 실패: ${insErr.message}`); return }
+    if (insErr) { toast.error(`불러오기 실패: ${insErr.message}`); return }
     onImported(parsed.year, parsed.month, payload.length)
   }
 

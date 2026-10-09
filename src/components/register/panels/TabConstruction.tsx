@@ -8,6 +8,7 @@ import FileDropZone from '@/components/common/FileDropZone'
 import PaymentTable from '@/components/register/PaymentTable'
 import type { TabProps } from './panelHelpers'
 import { FormInput, DateTimeInput, StaffSelect, useCurrentStaff } from './panelHelpers'
+import { toast } from '@/lib/toast'
 
 // --- 시공업체 검색 자동완성 ---
 function VendorSearch({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
@@ -39,7 +40,7 @@ function VendorSearch({ value, onChange }: { value: string | null | undefined; o
         onChange={e => { setQuery(e.target.value); onChange(e.target.value || null); setShowList(true) }}
         onFocus={() => query && setShowList(true)}
         placeholder="업체명 검색"
-        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10"
+        className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-[#c96442]/10"
       />
       {showList && vendors.length > 0 && (
         <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-border-primary rounded-lg shadow-lg max-h-[150px] overflow-y-auto">
@@ -67,7 +68,7 @@ export default function TabConstruction({ project, category, getVal, onChange, c
   const handleApprove = async () => {
     if (approving) return
     if (!currentStaff.name) {
-      alert('로그인 직원 정보를 확인할 수 없습니다. 다시 로그인 해주세요.')
+      toast.error('로그인 직원 정보를 확인할 수 없습니다. 다시 로그인 해주세요.')
       return
     }
     if (!confirm(`"${currentStaff.name}"님이 승인 처리하시겠습니까?`)) return
@@ -80,7 +81,7 @@ export default function TabConstruction({ project, category, getVal, onChange, c
         note: `승인 버튼 (${currentStaff.name})`,
       })
       if (!logged.ok) {
-        alert(logged.error)
+        toast.error(logged.error)
         return
       }
       const today = new Date().toISOString().slice(0, 10)
@@ -96,7 +97,7 @@ export default function TabConstruction({ project, category, getVal, onChange, c
       onRefresh?.()
     } catch (err) {
       console.error('승인 처리 실패:', err)
-      alert('승인 처리에 실패했습니다.\n' + (err instanceof Error ? err.message : String(err)))
+      toast.error('승인 처리에 실패했습니다.\n' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setApproving(false)
     }
@@ -115,7 +116,7 @@ export default function TabConstruction({ project, category, getVal, onChange, c
         note: '승인 취소',
       })
       if (!logged.ok) {
-        alert(logged.error)
+        toast.error(logged.error)
         return
       }
       const { error: uErr } = await supabase
@@ -130,7 +131,7 @@ export default function TabConstruction({ project, category, getVal, onChange, c
       onRefresh?.()
     } catch (err) {
       console.error('승인 취소 실패:', err)
-      alert('승인 취소에 실패했습니다.')
+      toast.error('승인 취소에 실패했습니다.')
     } finally {
       setApproving(false)
     }
@@ -164,7 +165,7 @@ export default function TabConstruction({ project, category, getVal, onChange, c
           <button
             onClick={handleApprove}
             disabled={approving}
-            className="w-full h-[44px] flex items-center justify-center gap-2 bg-[#c96442] text-white font-medium rounded-lg hover:bg-[#b5573a] transition-colors disabled:opacity-50"
+            className="w-full h-[44px] flex items-center justify-center gap-2 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
             {approving ? (
               <>

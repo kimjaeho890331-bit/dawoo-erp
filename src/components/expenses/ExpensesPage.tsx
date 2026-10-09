@@ -40,9 +40,10 @@ interface Project { id: string; building_name: string | null; ho: string | null;
 
 const EXPENSE_CATS = EXPENSE_CATEGORIES
 
+// 종류(상태가 아님)는 회색 한 가지로 — 색은 진행 상태에만 쓴다 (대표 원칙)
 const CAT_COLOR: Record<string, string> = {
-  '식대': 'bg-orange-100 text-orange-700', '교통비': 'bg-blue-100 text-blue-700', '자재비': 'bg-green-100 text-green-700',
-  '현장경비': 'bg-purple-100 text-purple-700', '노무비': 'bg-sky-100 text-sky-700', '사무용품': 'bg-yellow-100 text-yellow-700',
+  '식대': 'bg-surface-secondary text-txt-secondary', '교통비': 'bg-surface-secondary text-txt-secondary', '자재비': 'bg-surface-secondary text-txt-secondary',
+  '현장경비': 'bg-surface-secondary text-txt-secondary', '노무비': 'bg-surface-secondary text-txt-secondary', '사무용품': 'bg-surface-secondary text-txt-secondary',
   '기타': 'bg-surface-secondary text-txt-secondary',
 }
 
@@ -126,15 +127,15 @@ export default function ExpensesPage() {
 
   const filteredExpenses = filterCat === '전체' ? expenses : expenses.filter(e => e.category === filterCat)
 
-  if (loading) return <div className="p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
+  if (loading) return <div className="md:p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-4">
+    <div className="md:p-6 max-w-[1200px] mx-auto space-y-4">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">지출관리</h1>
-          <div className="flex bg-surface-secondary rounded-lg p-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">지출관리</h1>
+          <div className="flex bg-surface-secondary rounded-lg p-0.5 *:whitespace-nowrap">
             {[
               { key: 'expense' as Tab, label: '지출결의서' },
               { key: 'settle' as Tab, label: '정산' },
@@ -155,7 +156,7 @@ export default function ExpensesPage() {
       </div>
 
       {/* 요약 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className={`stat-card ${tab === 'expense' ? 'stat-card-active' : ''}`}>
           <p className="text-xs text-txt-secondary">이번 달 지출결의</p>
           <p className="text-xl font-semibold text-txt-primary tabular-nums">{monthStats.expTotal.toLocaleString()}원</p>
@@ -169,7 +170,7 @@ export default function ExpensesPage() {
           <div className="flex gap-2 flex-wrap">
             {['전체', ...EXPENSE_CATS].map(c => (
               <button key={c} onClick={() => setFilterCat(c)}
-                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${filterCat === c ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
+                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${filterCat === c ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
             ))}
           </div>
           <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
@@ -326,7 +327,7 @@ function UnifiedModal({ item, staffList, siteList, projectList, onClose, onSaved
             <div className="flex gap-1.5 flex-wrap">
               {cats.map(c => (
                 <button key={c} type="button" onClick={() => setCategory(c)}
-                  className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${category === c ? 'bg-accent text-white border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
+                  className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${category === c ? 'bg-accent-light text-accent-text border-accent' : 'bg-surface text-txt-secondary border-border-primary'}`}>{c}</button>
               ))}
             </div>
           </div>

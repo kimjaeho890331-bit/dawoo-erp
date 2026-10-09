@@ -8,6 +8,7 @@ import { insertStatusLog } from '@/lib/statusLog/client'
 import { useCurrentStaff } from '@/components/register/panels/panelHelpers'
 import ProjectDetailPanel from '@/components/register/ProjectDetailPanel'
 import NewProjectModal from '@/components/register/NewProjectModal'
+import { toast } from '@/lib/toast'
 
 // --- 타입 ---
 export type ProjectStep =
@@ -511,15 +512,15 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       toStatus: newStatus,
       note: '목록에서 변경',
     })
-    if (!logged.ok) { alert(logged.error); return }
+    if (!logged.ok) { toast.error(logged.error); return }
     const { error } = await supabase.from('projects').update({ status: newStatus }).eq('id', project.id)
-    if (error) { alert(`단계 변경 실패: ${error.message}`); return }
+    if (error) { toast.error(`단계 변경 실패: ${error.message}`); return }
     loadProjects()
   }
 
   // 엑셀 내보내기 (현재 필터된 목록)
   const handleExport = async () => {
-    if (filteredProjects.length === 0) { alert('내보낼 데이터가 없습니다.'); return }
+    if (filteredProjects.length === 0) { toast.info('내보낼 데이터가 없습니다.'); return }
     setExporting(true)
     try {
       const rows = filteredProjects.map(p => ({
@@ -561,7 +562,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      alert(`엑셀 저장 실패: ${err instanceof Error ? err.message : err}`)
+      toast.error(`엑셀 저장 실패: ${err instanceof Error ? err.message : err}`)
     } finally { setExporting(false) }
   }
 
@@ -600,22 +601,23 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       loadProjects()
     } catch (err) {
       console.error('삭제 실패:', err)
-      alert('삭제에 실패했습니다.')
+      toast.error('삭제에 실패했습니다.')
     }
   }
 
   return (
     <div className="max-w-full bg-page min-h-screen">
       {/* 상단 헤더 */}
-      <div className="flex items-center justify-between mb-2">
+      {/* 폰에서는 제목 아래로 검색·버튼이 접혀 내려온다 — 예전에는 한 줄이라 "신규등록"이 화면 밖으로 잘렸다 */}
+      <div className="flex flex-col gap-2 mb-2 md:flex-row md:items-center md:justify-between">
         <h1 className="text-[18px] md:text-[22px] font-semibold tracking-[-0.4px] text-txt-primary whitespace-nowrap">{category} 접수대장</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="text"
             placeholder="빌라명, 동·호, 소유주, 연락처, 담당자 검색..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-72 px-4 input-field"
+            className="w-full md:w-72 px-4 input-field"
           />
           <select
             value={sortBy}
@@ -677,13 +679,13 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         const totalOutstanding = yearProjects.reduce((s, p) => s + getOutstanding(p), 0)
         return (
           <div className="mb-5">
-            <div className="flex items-center justify-between mb-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-y-1 mb-2.5">
               <div className="flex items-center gap-2">
-                <h2 className="text-[13px] font-semibold text-txt-primary">연간 금액 정산</h2>
+                <h2 className="text-[13px] font-semibold text-txt-primary whitespace-nowrap">연간 금액 정산</h2>
                 <select
                   value={selectedYear === '전체' ? '전체' : String(selectedYear)}
                   onChange={e => setSelectedYear(e.target.value === '전체' ? '전체' : Number(e.target.value))}
-                  className="h-7 px-2 text-[12px] border border-border-primary rounded-md bg-surface focus:outline-none focus:border-[#c96442]"
+                  className="h-7 px-2 text-[12px] border border-border-primary rounded-md bg-surface focus:outline-none focus:border-accent"
                 >
                   {availableYears.map(y => (
                     <option key={y} value={String(y)}>{y}년</option>
@@ -694,22 +696,23 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
               </div>
               <span className="text-[11px] text-txt-tertiary">취소·예약 제외</span>
             </div>
-            <div className="grid grid-cols-4 gap-4">
+            {/* 폰은 2칸 — 4칸이면 큰 금액 숫자가 칸 밖으로 넘쳤다 */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
               <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
                 <p className="text-xs text-txt-tertiary font-medium mb-1">{selectedYear === '전체' ? '전체' : `${selectedYear}년`} 건수</p>
                 <p className="text-2xl font-bold tabular-nums">{yearProjects.length}</p>
               </div>
               <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
                 <p className="text-xs text-txt-tertiary font-medium mb-1">총공사비</p>
-                <p className="text-xl font-bold tabular-nums">{totalRevenue.toLocaleString()}</p>
+                <p className="text-lg md:text-xl font-bold tabular-nums break-all">{totalRevenue.toLocaleString()}</p>
               </div>
               <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
                 <p className="text-xs text-txt-tertiary font-medium mb-1">수금액</p>
-                <p className="text-xl font-bold tabular-nums text-green-600">{totalCollected.toLocaleString()}</p>
+                <p className="text-lg md:text-xl font-bold tabular-nums break-all text-money-positive">{totalCollected.toLocaleString()}</p>
               </div>
               <div className="bg-surface rounded-lg border border-border-primary p-4" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
                 <p className="text-xs text-txt-tertiary font-medium mb-1">미수금</p>
-                <p className="text-xl font-bold tabular-nums text-red-600">{totalOutstanding.toLocaleString()}</p>
+                <p className="text-lg md:text-xl font-bold tabular-nums break-all text-money-negative">{totalOutstanding.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -718,12 +721,13 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
       {/* 상태 필터 탭 + 진행 프로세스 가이드 */}
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-4 border-b border-border-primary">
-        <div className="flex gap-1">
+        {/* 폰에서는 탭이 옆으로 밀린다 — 예전에는 글자가 세로로 한 자씩 접혔다 */}
+        <div className="flex w-full gap-1 overflow-x-auto md:w-auto">
           {STATUS_TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setStatusFilter(tab.key)}
-              className={`px-4 py-2 text-[13px] font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-[13px] font-medium transition-colors ${
                 statusFilter === tab.key
                   ? 'border-b-[1.5px] border-accent text-accent'
                   : 'border-b-[1.5px] border-transparent text-txt-tertiary hover:text-txt-secondary'
@@ -742,7 +746,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
           <div className="bg-surface rounded-lg border border-border-primary p-2 mb-3" style={{boxShadow:'rgba(0,0,0,0.05) 0px 4px 24px'}}>
             <div className="flex items-center gap-1 px-2 py-1.5">
               {PROGRESS_STEPS.map((step, i) => {
-                const colors = ['bg-slate-400','bg-sky-500','bg-[#c96442]','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
+                const colors = ['bg-slate-400','bg-sky-500','bg-accent','bg-violet-500','bg-purple-500','bg-emerald-600','bg-teal-500','bg-amber-500','bg-blue-600','bg-green-600']
                 return (
                   <div key={step} className="flex items-center gap-0.5">
                     <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold text-white ${colors[i]}`}>{i+1}</span>
@@ -899,10 +903,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                         </span>
                       ) : (
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                          project.water_work_type === '공용' ? 'bg-blue-100 text-blue-700' :
-                          project.water_work_type === '옥내' ? 'bg-emerald-100 text-emerald-700' :
-                          project.water_work_type === '단독' ? 'bg-orange-100 text-orange-700' :
-                          'bg-gray-100 text-gray-600'
+                          'bg-surface-secondary text-txt-secondary'
                         }`}>
                           {project.water_work_type || project.work_types?.name || '-'}
                         </span>
@@ -1005,7 +1006,7 @@ function CityManagerModal({ cities, onClose, onRefresh }: {
     if (!newCity.trim()) return
     const { error } = await supabase.from('cities').insert({ name: newCity.trim() })
     if (error) {
-      alert('추가 실패: ' + error.message)
+      toast.error('추가 실패: ' + error.message)
       return
     }
     setNewCity('')
@@ -1016,7 +1017,7 @@ function CityManagerModal({ cities, onClose, onRefresh }: {
     setDeleting(id)
     const { error } = await supabase.from('cities').delete().eq('id', id)
     if (error) {
-      alert('삭제 실패: ' + error.message)
+      toast.error('삭제 실패: ' + error.message)
     }
     setDeleting(null)
     onRefresh()

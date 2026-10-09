@@ -420,6 +420,7 @@ export default function AccountingCalendarPage() {
 
   const handleDeleteCustom = useCallback(() => {
     if (!editingEvent) return
+    if (!confirm(`"${editingEvent.title}" 일정을 삭제할까요?`)) return
     setCustomEvents(prev => {
       const next = prev.filter(e => e.id !== editingEvent.id)
       saveCustomEvents(next)
@@ -500,10 +501,10 @@ export default function AccountingCalendarPage() {
   return (
     <div className="max-w-[1100px] mx-auto space-y-5">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">회계달력</h1>
-          <div className="flex bg-surface-secondary rounded-lg p-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">회계달력</h1>
+          <div className="flex bg-surface-secondary rounded-lg *:whitespace-nowrap p-0.5">
             <button onClick={() => setViewMode('calendar')}
               className={`px-3 py-1.5 text-[13px] rounded-md transition ${viewMode === 'calendar' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-tertiary'}`}>
               달력
@@ -522,7 +523,7 @@ export default function AccountingCalendarPage() {
           <button onClick={goToday} className="h-[36px] px-4 border border-border-primary rounded-lg text-[13px] text-txt-secondary hover:bg-surface-tertiary transition">
             오늘
           </button>
-          <button onClick={openAddModal} className="h-[36px] px-4 bg-accent text-white rounded-lg text-[13px] font-medium hover:bg-accent-hover transition flex items-center gap-1.5">
+          <button onClick={openAddModal} className="btn-primary flex items-center gap-1.5 whitespace-nowrap">
             <Plus size={14} />
             일정 추가
           </button>
@@ -530,9 +531,10 @@ export default function AccountingCalendarPage() {
       </div>
 
       {viewMode === 'calendar' ? (
-        <div className="flex gap-5">
+        // 폰에서는 달력 아래로 옆 패널이 내려온다 — 예전에는 320px 패널이 옆에 붙어 달력이 사라졌다
+        <div className="flex flex-col gap-5 md:flex-row">
           {/* 캘린더 */}
-          <div className="flex-1 bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+          <div className="min-w-0 flex-1 bg-surface rounded-[10px] border border-border-primary overflow-hidden">
             {/* 월 네비 */}
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-tertiary">
               <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-tertiary transition">
@@ -608,7 +610,7 @@ export default function AccountingCalendarPage() {
           </div>
 
           {/* 사이드 패널 */}
-          <div className="w-[320px] space-y-4">
+          <div className="w-full space-y-4 md:w-[320px] md:shrink-0">
             {/* 선택된 날짜 상세 */}
             {selectedDay !== null ? (
               <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">

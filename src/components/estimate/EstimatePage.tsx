@@ -365,7 +365,7 @@ export default function EstimatePage({ category, projectId }: Props) {
   // ── 렌더 ──
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="md:p-6 max-w-[1400px] mx-auto">
       {/* 상단 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -399,12 +399,7 @@ export default function EstimatePage({ category, projectId }: Props) {
           >
             {saving ? '저장 중...' : '저장'}
           </button>
-          <button
-            onClick={() => alert('PDF 저장 기능은 준비 중입니다.')}
-            className="px-4 py-2 border border-border-primary text-[13px] font-medium rounded-lg hover:bg-surface-tertiary transition-colors text-txt-secondary"
-          >
-            PDF 저장
-          </button>
+          {/* "PDF 저장"은 누르면 "준비 중입니다"만 떴다 — 기능이 생길 때까지 버튼을 뺀다 */}
         </div>
       </div>
 
@@ -417,7 +412,7 @@ export default function EstimatePage({ category, projectId }: Props) {
               type="checkbox"
               checked={checkedWorks.includes(wt)}
               onChange={() => toggleWork(wt)}
-              className="mr-1.5 accent-[#5e6ad2]"
+              className="mr-1.5 accent-accent"
             />
             <span className="text-[13px] text-txt-secondary">{WORK_TYPE_LABELS[wt]}</span>
           </label>

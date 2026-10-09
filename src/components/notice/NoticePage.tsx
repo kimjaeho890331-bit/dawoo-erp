@@ -15,11 +15,12 @@ interface Notice {
   updated_at: string
 }
 
+// 분류는 상태가 아니므로 회색 한 가지로 — 색은 진행 상태에만 쓴다 (대표 원칙)
 const CAT_STYLE: Record<string, { bg: string; text: string }> = {
-  '공지': { bg: 'bg-[#e0e7ff]', text: 'text-[#3730a3]' },
-  '규율': { bg: 'bg-[#fee2e2]', text: 'text-[#991b1b]' },
-  '규정': { bg: 'bg-[#fef3c7]', text: 'text-[#92400e]' },
-  '안내': { bg: 'bg-[#d1fae5]', text: 'text-[#065f46]' },
+  '공지': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
+  '규율': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
+  '규정': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
+  '안내': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
 }
 
 const CATEGORIES = ['전체', '공지', '규율', '규정', '안내'] as const
@@ -126,10 +127,10 @@ export default function NoticePage() {
 
   return (
     <div className="max-w-[900px] mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">공지사항</h1>
-          <div className="flex bg-surface-secondary rounded-lg p-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">공지사항</h1>
+          <div className="flex bg-surface-secondary rounded-lg p-0.5 *:whitespace-nowrap">
             {CATEGORIES.map(cat => (
               <button key={cat} onClick={() => setCatFilter(cat)}
                 className={`px-3 py-1.5 text-[13px] rounded-md transition ${
@@ -140,7 +141,7 @@ export default function NoticePage() {
             ))}
           </div>
         </div>
-        <button onClick={openNew} className="h-[36px] px-5 bg-accent hover:bg-accent-hover text-white rounded-lg text-[13px] font-medium transition flex items-center gap-1.5">
+        <button onClick={openNew} className="btn-primary flex items-center gap-1.5 whitespace-nowrap">
           <Plus size={14} /> 등록
         </button>
       </div>

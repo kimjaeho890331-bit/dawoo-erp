@@ -10,6 +10,7 @@ import { projectCreateRegionRefuseReason, regionNameFromCityId } from '@/lib/uti
 import { resolveCityId } from '@/lib/api/cities'
 import { useAuth } from '@/components/AuthProvider'
 import type { DBProject } from '@/components/register/RegisterPage'
+import { toast } from '@/lib/toast'
 
 // --- 주소 검색 결과 타입 ---
 interface AddressResult {
@@ -432,7 +433,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
       onSubmit()
     } catch (err) {
       console.error(isEdit ? '수정 실패:' : '등록 실패:', err)
-      alert(isEdit ? '수정에 실패했습니다. 다시 시도해주세요.' : '등록에 실패했습니다. 다시 시도해주세요.')
+      toast.error(isEdit ? '수정에 실패했습니다. 다시 시도해주세요.' : '등록에 실패했습니다. 다시 시도해주세요.')
     } finally {
       setSaving(false)
     }

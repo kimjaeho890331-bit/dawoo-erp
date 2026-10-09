@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { isTouchOnly } from '@/lib/touch'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CheckSquare, Check, Plus } from 'lucide-react'
@@ -62,6 +63,9 @@ export default function MyTodoCard({ todos, staffSelected, tasksTableMissing, on
   // 클릭 vs 더블클릭: 단일 클릭은 220ms 지연 후 라우팅, 더블클릭이면 cancel + 모달
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleTaskClick = (t: TodoItem) => {
+    // 폰에는 더블클릭이 없고, 접수 건과 이어지지 않은 할 일은 갈 곳이 없다(예전에는 대시보드로
+    // 다시 이동만 했다). 이 둘은 한 번 누르면 바로 상세를 연다.
+    if (isTouchOnly() || t.href === '/dashboard') { onOpenDetail(t.rawId); return }
     if (clickTimer.current) clearTimeout(clickTimer.current)
     clickTimer.current = setTimeout(() => {
       router.push(t.href)
@@ -129,7 +133,7 @@ export default function MyTodoCard({ todos, staffSelected, tasksTableMissing, on
 
             {todos.length === 0 ? (
               <div className="text-center py-8 text-txt-quaternary text-[13px]">
-                할 일 없음{tasksTableMissing ? '' : ' · 여유 있음 🎉'}
+                할 일 없음
               </div>
             ) : (
               <div className="space-y-0.5">

@@ -82,8 +82,9 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 const CONTRACT_BADGE_CLASS: Record<'bid' | 'private' | 'empty' | 'other', string> = {
-  bid: 'bg-[#e0e7ff] text-[#3730a3]',
-  private: 'bg-[#ffedd5] text-[#9a3412]',
+  // 계약 종류는 상태가 아니므로 회색 — 진행 상태 배지와 헷갈리지 않게 (예전에는 남색·주황)
+  bid: 'bg-surface-secondary text-txt-secondary',
+  private: 'bg-surface-secondary text-txt-secondary',
   empty: 'bg-surface-secondary text-txt-tertiary',
   other: 'bg-surface-secondary text-txt-secondary',
 }
@@ -180,12 +181,12 @@ export default function SitesPage() {
   }
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h1 className="text-[22px] font-semibold text-txt-primary">현장관리</h1>
+    <div className="md:p-6 max-w-[1400px] mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="whitespace-nowrap text-[22px] font-semibold text-txt-primary">현장관리</h1>
           <span className="text-[13px] text-txt-tertiary">{visibleSites.length}개 현장</span>
-          <div className="flex bg-surface-secondary rounded-lg p-0.5">
+          <div className="flex bg-surface-secondary rounded-lg p-0.5 *:whitespace-nowrap">
             {(['진행중', '정산완료', '전체'] as const).map(key => (
               <button
                 key={key}
@@ -222,7 +223,8 @@ export default function SitesPage() {
           )}
         </div>
       ) : (
-        <div>
+        // 폰에서는 목록을 옆으로 밀어서 본다 — 고정 폭 칸이 많아 현장명 칸이 사라졌다
+        <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0"><div className="min-w-[760px]">
           {/* 헤더 라인 */}
           <div className="flex items-center gap-4 px-5 py-2.5 bg-surface-secondary rounded-t-[10px] border border-border-primary text-[11px] font-medium text-txt-tertiary uppercase tracking-wider">
             <span className="w-4" />
@@ -248,7 +250,7 @@ export default function SitesPage() {
             />
           ))}
           </div>
-        </div>
+        </div></div>
       )}
 
       {showRegister && (
@@ -551,7 +553,7 @@ function SiteDetail({ site, onEdit, onDelete, onRefresh }: {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2 text-[13px] font-medium border-b-[1.5px] transition-colors ${
               activeTab === tab
                 ? 'border-accent text-accent'
                 : 'border-transparent text-txt-tertiary hover:text-txt-secondary'
@@ -786,7 +788,7 @@ function TabBasicInfo({ site, onRefresh }: { site: Site; onRefresh: () => void }
       <div className="flex justify-end h-4">
         {autoSaveError
           ? <span className="text-[11px] text-danger">{autoSaveError}</span>
-          : savedAt && <span className="text-[10px] text-money-positive">✓ 저장됨 ({savedAt})</span>}
+          : savedAt && <span className="text-[10px] text-money-positive">저장됨 ({savedAt})</span>}
       </div>
 
       {/* 1행: 현장명 | 진행 상황 | 계약 종류 */}

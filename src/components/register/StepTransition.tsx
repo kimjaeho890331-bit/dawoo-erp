@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { insertStatusLog } from '@/lib/statusLog/client'
 import { validateProjectData } from '@/lib/utils/validate'
 import type { DBProject, ProjectStep } from '@/components/register/RegisterPage'
+import { toast } from '@/lib/toast'
 
 const PROGRESS_STEPS: ProjectStep[] = [
   '문의', '실측', '견적전달', '동의서', '신청서제출',
@@ -85,7 +86,7 @@ export default function StepTransition({ project, pendingEdits, onStepChange }: 
         note: null,
       })
       if (!logged.ok) {
-        alert(logged.error)
+        toast.error(logged.error)
         return
       }
 
@@ -98,7 +99,7 @@ export default function StepTransition({ project, pendingEdits, onStepChange }: 
       onStepChange()
     } catch (err) {
       console.error('단계 변경 실패:', err)
-      alert('단계 변경에 실패했습니다.')
+      toast.error('단계 변경에 실패했습니다.')
     } finally {
       setChanging(false)
     }
@@ -146,7 +147,7 @@ export default function StepTransition({ project, pendingEdits, onStepChange }: 
             <button
               onClick={handleNext}
               disabled={changing}
-              className="flex items-center gap-0.5 px-3 py-1 text-[11px] font-medium text-white bg-[#c96442] rounded-md hover:bg-[#b5573a] transition-colors disabled:opacity-50"
+              className="flex items-center gap-0.5 px-3 py-1 text-[11px] font-medium text-white bg-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {changing ? '변경중...' : `다음: ${PROGRESS_STEPS[currentIdx + 1]}`} <ChevronRight size={12} />
             </button>

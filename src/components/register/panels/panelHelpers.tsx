@@ -51,7 +51,7 @@ export function FormInput({ label, type = 'text', placeholder, value, onChange }
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder || label}
-        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 hover:border-border-secondary transition-colors ${
+        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-[#c96442]/10 hover:border-border-secondary transition-colors ${
           hasValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
         }`}
       />
@@ -119,7 +119,7 @@ export function DateTimeInput({ label, value, onChange, timeValue, onTimeChange 
               onTimeChange!(v || null)
             }}
             maxLength={5}
-            className={`w-full h-[36px] px-3 border rounded-lg text-[13px] text-center focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 ${
+            className={`w-full h-[36px] px-3 border rounded-lg text-[13px] text-center focus:outline-none focus:border-accent focus:ring-2 focus:ring-[#c96442]/10 ${
               timeValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
             }`}
           />
@@ -150,7 +150,7 @@ export function StaffIdSelect({ label, value, onChange }: {
       <select
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
-        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 ${
+        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-[#c96442]/10 ${
           hasValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
         }`}
       >
@@ -186,7 +186,7 @@ export function StaffSelect({ label, value, onChange }: {
       <select
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
-        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-[#c96442] focus:ring-2 focus:ring-[#c96442]/10 ${
+        className={`w-full h-[36px] px-3 border rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-[#c96442]/10 ${
           hasValue ? 'bg-[#f5f4ed] border-[#e8e6dc]' : 'bg-white border-border-primary'
         }`}
       >

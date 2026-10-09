@@ -240,6 +240,16 @@ table tbody tr:hover {
   background: #922929;
 }
 
+/* 버튼 공통 — 누를 수 없을 때, 손가락으로 쓰는 기기에서의 높이 */
+.btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+@media (pointer: coarse) {
+  .btn-primary, .btn-secondary, .btn-danger { min-height: 40px; }
+}
+
 /* Inline action buttons (table row actions) — Anthropic Brand */
 .btn-inline {
   font-size: 11px;

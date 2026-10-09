@@ -49,7 +49,7 @@ function TaskLine({
     >
       <span
         className={`shrink-0 w-6 h-6 rounded-full border flex items-center justify-center ${
-          task.is_done ? 'border-blue-600 bg-blue-600' : 'border-border-secondary bg-surface'
+          task.is_done ? 'border-accent bg-accent' : 'border-border-secondary bg-surface'
         }`}
       >
         {task.is_done && (
@@ -106,7 +106,7 @@ function AddLine({
       }}
       placeholder="할 일 적기"
       disabled={saving}
-      className="w-full h-[44px] md:h-[40px] px-1 bg-transparent text-[15px] md:text-[14px] text-txt-primary placeholder:text-txt-quaternary border-0 border-b border-border-tertiary rounded-none outline-none focus:border-blue-600"
+      className="w-full h-[44px] md:h-[40px] px-1 bg-transparent text-[15px] md:text-[14px] text-txt-primary placeholder:text-txt-quaternary border-0 border-b border-border-tertiary rounded-none outline-none focus:border-accent"
     />
   )
 }
@@ -185,7 +185,7 @@ function SummaryBadges({
       <span className="text-txt-secondary">
         현장 <span className="font-semibold tabular-nums text-txt-primary">{siteCount}</span>
       </span>
-      <span className="text-blue-600">
+      <span className="text-accent-text">
         안 한 일 <span className="font-semibold tabular-nums">{openCount}</span>
       </span>
       <span className="text-danger">
@@ -309,10 +309,10 @@ export default function MySitesPage() {
     return <div className="text-[13px] text-txt-tertiary">확인 중...</div>
   }
   if (gate === 'staff-unread') {
-    return <div className="text-[13px] text-txt-tertiary">staff 못 읽음</div>
+    return <div className="text-[13px] text-txt-tertiary">직원 정보를 불러오지 못했습니다. 새로고침해 주세요.</div>
   }
   if (gate === 'no-access') {
-    return <div className="text-[13px] text-txt-tertiary">권한 없음</div>
+    return <div className="text-[13px] text-txt-tertiary">대표 전용 화면입니다.</div>
   }
 
   const settledLabel =
@@ -327,7 +327,7 @@ export default function MySitesPage() {
             <span className="md:hidden">안 한 일</span>
             <span className="hidden md:inline">내 현장</span>
           </h1>
-          <p className="text-[40px] font-semibold leading-none tabular-nums text-blue-600 md:hidden">
+          <p className="text-[40px] font-semibold leading-none tabular-nums text-accent-text md:hidden">
             {loading ? '–' : openAll}
           </p>
         </div>
@@ -397,7 +397,7 @@ export default function MySitesPage() {
                 <button
                   type="button"
                   onClick={() => focusAdd(site.id)}
-                  className="shrink-0 min-h-[44px] px-2 text-[13px] text-blue-600"
+                  className="shrink-0 min-h-[44px] px-2 text-[13px] text-accent-text"
                 >
                   적기
                 </button>
@@ -429,12 +429,12 @@ function WeeklyCard({
       <div className="flex items-start justify-between gap-3 min-h-[32px]">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-[18px] font-semibold text-txt-primary leading-snug">
-            <span className="shrink-0 w-2 h-2 rounded-full bg-blue-600" />
+            <span className="shrink-0 w-2 h-2 rounded-full bg-accent" />
             내일/내 일
           </h3>
         </div>
         {open > 0 && (
-          <span className="shrink-0 text-[16px] font-semibold tabular-nums text-blue-600">
+          <span className="shrink-0 text-[16px] font-semibold tabular-nums text-accent-text">
             {open}
           </span>
         )}
@@ -476,11 +476,11 @@ function SiteCard({
       <div>
         <div className="flex items-start justify-between gap-3 min-h-[32px]">
           <h3 className="flex items-center gap-2 text-[18px] font-semibold text-txt-primary leading-snug">
-            <span className="shrink-0 w-2 h-2 rounded-full bg-blue-600" />
+            <span className="shrink-0 w-2 h-2 rounded-full bg-accent" />
             <span className="min-w-0">{title}</span>
           </h3>
           {open > 0 && (
-            <span className="shrink-0 text-[16px] font-semibold tabular-nums text-blue-600">
+            <span className="shrink-0 text-[16px] font-semibold tabular-nums text-accent-text">
               {open}
             </span>
           )}

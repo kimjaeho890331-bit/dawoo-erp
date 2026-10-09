@@ -212,10 +212,10 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
         onDrop={handleDrop}
         className={`border-2 border-dashed rounded-lg transition-colors ${
           dragOver
-            ? 'border-[#c96442] bg-[#c96442]/10'
+            ? 'border-accent bg-accent/10'
             : hasFiles
               ? 'border-border-primary bg-surface-secondary/30'
-              : 'border-border-secondary hover:border-[#c96442] hover:bg-[#c96442]/5'
+              : 'border-border-secondary hover:border-accent hover:bg-accent/5'
         }`}
       >
         {hasFiles ? (
@@ -236,7 +236,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
                 />
                 <button
                   onClick={e => { e.stopPropagation(); handleDelete(file) }}
-                  className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 hover:bg-black/90 transition-all"
+                  className="absolute top-0.5 right-0.5 w-4 h-4 pointer-coarse:w-7 pointer-coarse:h-7 flex items-center justify-center rounded-full bg-black/70 text-white pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 hover:bg-black/90 transition-all"
                   title="삭제"
                 >
                   <X size={10} strokeWidth={3} />
@@ -251,7 +251,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
                 href={getPublicUrl(file.file_path)}
                 target="_blank"
                 rel="noreferrer"
-                className="relative group w-[56px] h-[56px] rounded-md border border-border-primary bg-surface flex flex-col items-center justify-center gap-0.5 flex-shrink-0 hover:border-[#c96442] transition-colors"
+                className="relative group w-[56px] h-[56px] rounded-md border border-border-primary bg-surface flex flex-col items-center justify-center gap-0.5 flex-shrink-0 hover:border-accent transition-colors"
                 title={file.name}
               >
                 <FileText size={16} className={isPdf(file.name) ? 'text-[#dc2626]' : 'text-txt-tertiary'} />
@@ -260,7 +260,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
                 </span>
                 <button
                   onClick={e => { e.preventDefault(); e.stopPropagation(); handleDelete(file) }}
-                  className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 hover:bg-black/90 transition-all"
+                  className="absolute top-0.5 right-0.5 w-4 h-4 pointer-coarse:w-7 pointer-coarse:h-7 flex items-center justify-center rounded-full bg-black/70 text-white pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 hover:bg-black/90 transition-all"
                   title="삭제"
                 >
                   <X size={10} strokeWidth={3} />
@@ -273,10 +273,10 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
               <button
                 onClick={() => !uploading && inputRef.current?.click()}
                 disabled={uploading}
-                className="w-[56px] h-[56px] rounded-md border-2 border-dashed border-border-secondary hover:border-[#c96442] hover:bg-[#c96442]/5 flex flex-col items-center justify-center gap-0.5 flex-shrink-0 transition-colors disabled:opacity-50"
+                className="w-[56px] h-[56px] rounded-md border-2 border-dashed border-border-secondary hover:border-accent hover:bg-accent/5 flex flex-col items-center justify-center gap-0.5 flex-shrink-0 transition-colors disabled:opacity-50"
               >
                 {uploading ? (
-                  <Upload size={14} className="text-[#c96442] animate-pulse" />
+                  <Upload size={14} className="text-accent-text animate-pulse" />
                 ) : (
                   <>
                     <Upload size={14} className="text-txt-tertiary" />
@@ -287,7 +287,7 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
             )}
 
             {uploading && uploadProgress && (
-              <span className="text-[11px] text-[#c96442] font-medium ml-1">
+              <span className="text-[11px] text-accent-text font-medium ml-1">
                 {uploadProgress.current}/{uploadProgress.total}
               </span>
             )}
@@ -300,15 +300,15 @@ export default function FileDropZone({ projectId, fileType, accept = 'image/*', 
           >
             {uploading ? (
               <>
-                <Upload size={compact ? 14 : 18} className="text-[#c96442] animate-pulse" />
-                <p className="text-[12px] text-[#c96442] font-medium">
+                <Upload size={compact ? 14 : 18} className="text-accent-text animate-pulse" />
+                <p className="text-[12px] text-accent-text font-medium">
                   {uploadProgress ? `업로드 중 ${uploadProgress.current}/${uploadProgress.total}` : '업로드 중...'}
                 </p>
               </>
             ) : (
               <>
-                <Upload size={compact ? 14 : 18} className={dragOver ? 'text-[#c96442]' : 'text-txt-tertiary'} />
-                <p className={`text-center ${dragOver ? 'text-[#c96442] font-medium' : 'text-txt-tertiary'} ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
+                <Upload size={compact ? 14 : 18} className={dragOver ? 'text-accent-text' : 'text-txt-tertiary'} />
+                <p className={`text-center ${dragOver ? 'text-accent-text font-medium' : 'text-txt-tertiary'} ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
                   {label || `${fileType} 파일을 드래그하거나 클릭`}
                 </p>
                 {multiple && (

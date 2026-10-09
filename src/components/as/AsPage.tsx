@@ -54,13 +54,14 @@ const STATUS_STYLE: Record<AsStatus, string> = {
   '완료': 'bg-[#d1fae5] text-[#065f46]',
 }
 
+// 종류(상태가 아님)는 회색 한 가지로 — 색은 진행 상태에만 쓴다 (대표 원칙)
 const ISSUE_STYLE: Record<IssueType, string> = {
-  '누수': 'bg-blue-100 text-blue-700',
-  '균열': 'bg-orange-100 text-orange-700',
-  '도배불량': 'bg-purple-100 text-purple-700',
-  '타일탈락': 'bg-pink-100 text-pink-700',
-  '설비고장': 'bg-red-100 text-red-700',
-  '전기불량': 'bg-amber-100 text-amber-700',
+  '누수': 'bg-surface-secondary text-txt-secondary',
+  '균열': 'bg-surface-secondary text-txt-secondary',
+  '도배불량': 'bg-surface-secondary text-txt-secondary',
+  '타일탈락': 'bg-surface-secondary text-txt-secondary',
+  '설비고장': 'bg-surface-secondary text-txt-secondary',
+  '전기불량': 'bg-surface-secondary text-txt-secondary',
   '기타': 'bg-surface-secondary text-txt-secondary',
 }
 
@@ -160,7 +161,7 @@ export default function AsPage() {
   // --- 저장 ---
   const handleSave = async () => {
     if (!form.site_name.trim() || !form.address.trim() || !form.description.trim()) {
-      alert('현장명, 주소, 내용은 필수입니다.')
+      toast.info('현장명, 주소, 내용은 필수입니다.')
       return
     }
     setSaving(true)
@@ -177,7 +178,7 @@ export default function AsPage() {
       : await supabase.from('as_records').insert(payload)
     setSaving(false)
     if (error) {
-      alert(`저장 실패: ${error.message}`)
+      toast.error(`저장 실패: ${error.message}`)
       return
     }
     setModalOpen(false)
@@ -203,13 +204,13 @@ export default function AsPage() {
 
   // --- 렌더 ---
   return (
-    <div className="p-6 space-y-6">
+    <div className="md:p-6 space-y-6">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">A/S 관리</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">A/S 관리</h1>
         <button
           onClick={openCreate}
-          className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition font-medium text-sm"
+          className="btn-primary whitespace-nowrap"
         >
           + A/S 접수
         </button>
@@ -233,7 +234,7 @@ export default function AsPage() {
 
       {/* 지원사업 하위 탭 (수도/소규모) */}
       {topTab === '지원사업' && (
-        <div className="flex gap-1 bg-surface-secondary rounded-lg p-1 w-fit">
+        <div className="flex gap-1 bg-surface-secondary rounded-lg p-1 w-fit max-w-full overflow-x-auto *:whitespace-nowrap *:shrink-0">
           {SUB_TABS.map(tab => (
             <button
               key={tab}
@@ -252,7 +253,7 @@ export default function AsPage() {
       )}
 
       {/* 요약 카드 */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         {[
           { label: '총 건수', value: summary.total, color: 'text-txt-primary', bg: 'bg-surface' },
           { label: '접수(대기)', value: summary.접수, color: 'text-[#991b1b]', bg: 'bg-[#fff5f5]' },
@@ -267,7 +268,7 @@ export default function AsPage() {
       </div>
 
       {/* 필터 탭 */}
-      <div className="flex gap-1 bg-surface-secondary rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-surface-secondary rounded-lg p-1 w-fit max-w-full overflow-x-auto *:whitespace-nowrap *:shrink-0">
         {FILTER_TABS.map(tab => (
           <button
             key={tab}

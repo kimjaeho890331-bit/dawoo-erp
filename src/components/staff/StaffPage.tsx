@@ -124,15 +124,15 @@ export default function StaffPage() {
   const resignedStaff = staffList.filter(s => !!s.resign_date)
   const totalSalary = activeStaff.reduce((s, st) => s + (st.salary || 0), 0)
 
-  if (loading) return <div className="p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
+  if (loading) return <div className="md:p-6 max-w-[1200px] mx-auto"><div className="text-center py-20 text-txt-tertiary">불러오는 중...</div></div>
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-4">
+    <div className="md:p-6 max-w-[1200px] mx-auto space-y-4">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">직원관리</h1>
-          <div className="flex bg-surface-secondary rounded-lg p-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="whitespace-nowrap text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">직원관리</h1>
+          <div className="flex bg-surface-secondary rounded-lg p-0.5 *:whitespace-nowrap">
             <button onClick={() => setTab('info')}
               className={`px-4 py-1.5 text-sm rounded-md transition ${tab === 'info' ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-tertiary'}`}>
               직원정보
@@ -147,7 +147,7 @@ export default function StaffPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowInviteModal(true)}
-            className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
+            className="btn-primary whitespace-nowrap">
             + 직원 초대
           </button>
         </div>
@@ -157,18 +157,18 @@ export default function StaffPage() {
       {tab === 'info' && (
         <>
           {/* 테이블 */}
-          <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
+          <div className="bg-surface rounded-[10px] border border-border-primary overflow-x-auto">
             {staffList.length === 0 ? (
               <div className="text-center py-16 text-txt-quaternary text-sm">등록된 직원이 없습니다</div>
             ) : (
-              <table className="w-full text-[13px]">
+              <table className="w-full min-w-[760px] text-[13px]">
                 <thead>
                   <tr className="bg-surface-secondary border-b border-border-primary">
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">이름</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직책</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">직급</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">연락처</th>
-                    <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">📱</th>
+                    <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">텔레그램</th>
                     <th className="px-4 py-2.5 text-center text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">계정연결</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">입사일</th>
                     <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">근속</th>
@@ -198,7 +198,7 @@ export default function StaffPage() {
                         <td className="px-4 py-3 text-center">
                           {s.telegram_chat_id ? (
                             <span className="inline-flex items-center gap-0.5 text-[11px] text-[#059669]" title={`연결됨 ${s.telegram_linked_at ? '· ' + s.telegram_linked_at.slice(0,10) : ''}`}>
-                              ✓
+                              연결
                             </span>
                           ) : (
                             <span className="text-[11px] text-txt-quaternary" title="미연결">—</span>
@@ -264,8 +264,8 @@ export default function StaffPage() {
           </div>
 
           {/* 연봉 테이블 */}
-          <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-            <table className="w-full text-[13px]">
+          <div className="bg-surface rounded-[10px] border border-border-primary overflow-x-auto">
+            <table className="w-full min-w-[760px] text-[13px]">
               <thead>
                 <tr className="bg-surface-secondary border-b border-border-primary">
                   <th className="px-4 py-2.5 text-left text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">이름</th>
@@ -496,7 +496,7 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
 
       const res = await fetch('/api/storage/upload', { method: 'POST', body: fd })
       const json = await res.json()
-      if (!res.ok) { alert('업로드 실패: ' + (json.error ?? `HTTP ${res.status}`)); return }
+      if (!res.ok) { toast.error('업로드 실패: ' + (json.error ?? `HTTP ${res.status}`)); return }
 
       // 기존 같은 타입 있으면 삭제 후 교체
       const existing = atts.find(a => a.doc_type === docType)
@@ -524,8 +524,7 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
       <div className="mt-4 pt-4 border-t border-border-tertiary">
         <p className="text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-2">첨부 파일</p>
         <div className="text-[11px] text-txt-quaternary bg-surface-tertiary/40 rounded-lg p-3">
-          DB 준비 필요 — Supabase SQL Editor에서{' '}
-          <code className="px-1 py-0.5 bg-surface-secondary rounded">sql/migration_calendar_sites_staff.sql</code> 실행해주세요.
+          첨부 파일 기능을 아직 쓸 수 없습니다. 관리자에게 알려 주세요.
         </div>
       </div>
     )
@@ -544,7 +543,7 @@ function StaffAttachmentsSection({ staffId }: { staffId: string }) {
               {existing ? (
                 <div>
                   <div className="text-[11px] text-txt-primary truncate mb-1.5" title={existing.file_name || ''}>
-                    📄 {existing.file_name || '첨부됨'}
+                    {existing.file_name || '첨부됨'}
                   </div>
                   <div className="flex gap-1">
                     <a href={existing.file_url} target="_blank" rel="noreferrer"
@@ -832,7 +831,7 @@ function StaffModal({ item, showPay, onClose, onSaved }: { item: Staff | null; s
                   item.value ? 'border-accent bg-accent/10 text-accent font-medium' : 'border-border-primary text-txt-secondary hover:border-accent'
                 }`}>
                   <input type="checkbox" checked={item.value} onChange={e => item.setter(e.target.checked)} className="sr-only" />
-                  <span>{item.value ? '☑' : '☐'}</span>
+                  <span aria-hidden className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border ${item.value ? 'border-accent bg-accent text-white' : 'border-border-secondary'}`}>{item.value && <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth={2}><path d="M2.5 6.5l2.2 2.2L9.5 3.8" /></svg>}</span>
                   {item.label}
                 </label>
               ))}
@@ -909,7 +908,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
       if (/does not exist|relation/.test(error.message)) {
         setTableMissing(true)
       } else {
-        alert('초대 코드 생성 실패: ' + error.message)
+        toast.error('초대 코드 생성 실패: ' + error.message)
       }
       setSaving(false)
       return
@@ -938,9 +937,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
         {tableMissing ? (
           <div className="p-5">
             <p className="text-[13px] text-txt-secondary leading-relaxed">
-              DB 준비가 필요합니다. Supabase SQL Editor에서{' '}
-              <code className="px-1 py-0.5 bg-surface-tertiary rounded text-[11px]">sql/migration_calendar_sites_staff.sql</code>{' '}
-              을 실행해주세요.
+              초대 코드 기능을 아직 쓸 수 없습니다. 관리자에게 알려 주세요.
             </p>
           </div>
         ) : !generatedCode ? (
@@ -992,10 +989,10 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             </div>
             <button onClick={handleCopy}
               className="w-full py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
-              {copied ? '✓ 복사됨' : '📋 전체 메시지 복사 (카톡 발송용)'}
+              {copied ? '복사됨' : '전체 메시지 복사 (카톡으로 보내기용)'}
             </button>
             <div className="text-[11px] text-txt-tertiary leading-relaxed bg-surface-tertiary/40 p-3 rounded-lg">
-              💡 나중에 카톡 API 연동 예정. 지금은 복사 후 수동 전달.
+              복사한 메시지를 카톡으로 직접 보내 주세요.
             </div>
             <div className="flex justify-end">
               <button onClick={onClose} className="px-4 py-2 text-sm text-txt-secondary border border-border-primary rounded-lg hover:bg-surface-tertiary">닫기</button>

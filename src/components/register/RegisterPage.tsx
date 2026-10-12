@@ -586,13 +586,23 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     loadProjects()
   }
 
+  /** 진행연도 선택지에 항상 띄울 과거 범위 (올해 기준 몇 해 전까지). */
+  const YEAR_BACK = 5
+
   /**
-   * 진행연도 선택지. 데이터에 있는 연도에 올해·내년을 더해 빠진 해가 없게 한다
-   * (작년 접수 건을 내년으로 미리 돌려놓는 경우가 있다).
+   * 진행연도 선택지.
+   *
+   * 데이터에 있는 연도만 넣으면 과거 연도를 처음 넣을 방법이 없다 —
+   * 2021을 고르려면 선택지에 있어야 하는데, 선택지에 뜨려면 이미 2021
+   * 데이터가 있어야 하는 앞뒤가 막힌 구조가 된다. 그래서 지난 자료를
+   * 옮겨 적을 수 있도록 올해 기준 5년 전까지 항상 띄운다.
+   *
+   * 그보다 더 오래된 연도가 데이터에 있으면 그것도 함께 보여 준다.
    */
   const yearOptions = useMemo(() => {
     const now = new Date().getFullYear()
-    const set = new Set<number>([now - 1, now, now + 1])
+    const set = new Set<number>()
+    for (let y = now + 1; y >= now - YEAR_BACK; y--) set.add(y)
     for (const p of projects) if (p.year) set.add(p.year)
     return Array.from(set).sort((a, b) => b - a)
   }, [projects])

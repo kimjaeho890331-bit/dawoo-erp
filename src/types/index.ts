@@ -452,3 +452,36 @@ export interface CredentialEntry {
   created_by: string | null
   updated_at: string
 }
+
+// --- 경리 > 새는 돈 찾기 (sql/leak_check.sql) ---
+/** 통장 거래내역 한 줄. amount는 늘 양수, 들고 난 방향은 direction. tx_at은 timestamptz(읽으면 UTC 표기). */
+export interface BankTransaction {
+  id: string
+  account: string
+  tx_at: string
+  direction: 'out' | 'in'
+  amount: number
+  balance: number | null
+  counterparty: string | null
+  description: string | null
+  memo: string | null
+  raw: Record<string, string> | null
+  created_at: string
+}
+
+/** unknown 검토 전 / keep 필요 / cancel 해지할 것 / reduce 줄일 것 / cancelled 해지함 */
+export const SPEND_DECISIONS = ['unknown', 'keep', 'cancel', 'reduce', 'cancelled'] as const
+export type SpendDecision = (typeof SPEND_DECISIONS)[number]
+
+/** 정기지출 검토 결과. item_key = '출처:정리한 이름' (src/lib/ledger/leaks.ts itemKey) */
+export interface SpendReview {
+  id: string
+  item_key: string
+  label: string | null
+  decision: SpendDecision
+  monthly_amount: number | null
+  note: string | null
+  decided_by: string | null
+  decided_at: string | null
+  updated_at: string
+}

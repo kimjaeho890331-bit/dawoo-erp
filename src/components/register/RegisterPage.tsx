@@ -176,6 +176,33 @@ function getTypeBadgeColor(): string {
 }
 
 // --- 케밥 메뉴 ---
+/**
+ * 눌러서 정렬하는 열 제목.
+ * 지금 정렬 중인 열에만 화살표가 뜨고, 다시 누르면 오름↔내림이 바뀐다.
+ */
+function SortableTh({ label, sortKey, active, dir, onSort }: {
+  label: string
+  sortKey: SortKey
+  active: boolean
+  dir: 'asc' | 'desc'
+  onSort: (key: SortKey) => void
+}) {
+  return (
+    <th className="px-3 py-2 text-left font-medium text-txt-tertiary">
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        title={`${label} 기준 정렬`}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-accent ${active ? 'text-accent' : ''}`}
+      >
+        {label}
+        {/* 정렬 중이 아닐 때도 자리를 비워 둬 제목이 밀리지 않게 한다 */}
+        <span className="w-2.5 text-[9px] leading-none">{active ? (dir === 'asc' ? '▲' : '▼') : ''}</span>
+      </button>
+    </th>
+  )
+}
+
 function KebabMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -329,9 +356,16 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   const [loadError, setLoadError] = useState(false)
   const [selectedYear, setSelectedYear] = useState<number | '전체'>(new Date().getFullYear())
   const [sortBy, setSortBy] = useState<SortKey>('default')
+  /** 열 제목을 눌러 바꾸는 오름/내림. 제목 옆 화살표로 보여 준다. */
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [outstandingOnly, setOutstandingOnly] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [myFirst, setMyFirst] = useState(true)
+  /**
+   * 맨 위로 올릴 담당자. 'me' = 로그인한 사람(기본), 'none' = 고정 안 함,
+   * 그 외는 직원 id. currentStaff가 늦게 채워져도 되도록 'me'는 값이 아니라
+   * 표시로 두고 정렬할 때 실제 id로 바꾼다.
+   */
+  const [pinnedStaff, setPinnedStaff] = useState<'me' | 'none' | string>('me')
   const currentStaff = useCurrentStaff()
 
   // 데이터 로드
@@ -508,6 +542,14 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
     // 정렬
     const sorted = [...result]
+    // 열 제목으로 고른 정렬(담당자·빌라명)에만 방향을 적용한다.
+    // 접수일·미수금은 이름 자체에 방향이 들어 있어(최신순/큰순) 뒤집지 않는다.
+    const dirMul = sortDir === 'asc' ? 1 : -1
+    // 빌라명 앞뒤 공백을 떼고 비교한다. 입력할 때 앞에 공백이 섞인 건이
+    // 17건 있는데(" 대광빌라 …"), 그대로 비교하면 공백이 한글보다 앞서
+    // 그 건들만 맨 위로 튀어 가나다순이 깨진다.
+    const byName = (a: DBProject, b: DBProject) =>
+      (a.building_name || '').trim().localeCompare((b.building_name || '').trim(), 'ko')
     switch (sortBy) {
       case 'receipt_new':
         sorted.sort((a, b) => getReceiptSortDate(b).localeCompare(getReceiptSortDate(a)))
@@ -516,13 +558,21 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         sorted.sort((a, b) => getReceiptSortDate(a).localeCompare(getReceiptSortDate(b)))
         break
       case 'name':
-        sorted.sort((a, b) => (a.building_name || '').localeCompare(b.building_name || '', 'ko'))
+        sorted.sort((a, b) => dirMul * byName(a, b))
         break
       case 'outstanding':
         sorted.sort((a, b) => getOutstanding(b) - getOutstanding(a))
         break
       case 'staff':
-        sorted.sort((a, b) => (a.staff?.name || 'ㅎㅎㅎ').localeCompare(b.staff?.name || 'ㅎㅎㅎ', 'ko'))
+        // 담당자로 묶고, 같은 담당자 안에서는 빌라명 ㄱ-ㅎ 순.
+        // 2차 정렬이 없으면 한 사람 몫이 DB 저장 순서대로 흩어져 찾기 어렵다.
+        // 담당자 없는 건은 늘 맨 뒤 (방향을 바꿔도 위로 올리지 않는다).
+        sorted.sort((a, b) => {
+          const an = a.staff?.name || '', bn = b.staff?.name || ''
+          if (!an !== !bn) return an ? -1 : 1
+          const byStaff = an.localeCompare(bn, 'ko')
+          return byStaff !== 0 ? dirMul * byStaff : byName(a, b)
+        })
         break
       default:
         // 기본: 단계 낮은 순 → 같은 단계면 실측일 오래된 순, 취소/예약 맨 뒤
@@ -538,15 +588,16 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         })
     }
 
-    // 내 담당 우선: 선택된 직원이 담당인 건을 맨 위로 (그룹 내에서는 위 정렬 유지 — sort는 안정 정렬)
-    if (myFirst && currentStaff.id) {
+    // 상단 고정: 고른 담당자의 건을 맨 위로 (그룹 안에서는 위 정렬 유지 — sort는 안정 정렬)
+    const pinnedId = pinnedStaff === 'me' ? currentStaff.id : pinnedStaff === 'none' ? null : pinnedStaff
+    if (pinnedId) {
       sorted.sort((a, b) =>
-        (a.staff_id === currentStaff.id ? 0 : 1) - (b.staff_id === currentStaff.id ? 0 : 1)
+        (a.staff_id === pinnedId ? 0 : 1) - (b.staff_id === pinnedId ? 0 : 1)
       )
     }
 
     return sorted
-  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortBy, outstandingOnly, myFirst, currentStaff.id])
+  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortBy, sortDir, outstandingOnly, pinnedStaff, currentStaff.id])
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null
 
@@ -585,6 +636,22 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     if (error) { toast.error(`단계 변경 실패: ${error.message}`); return }
     loadProjects()
   }
+
+  /**
+   * 열 제목 클릭 정렬. 같은 열을 다시 누르면 오름↔내림이 바뀐다.
+   * 드롭다운과 같은 sortBy를 쓰므로 둘이 따로 놀지 않는다.
+   */
+  const toggleSort = (key: SortKey) => {
+    if (sortBy === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortBy(key); setSortDir('asc') }
+  }
+
+  /** 목록에 있는 담당자들 (상단 고정 선택용). 따로 조회하지 않는다. */
+  const staffInList = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of projects) if (p.staff_id && p.staff?.name) map.set(p.staff_id, p.staff.name)
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [projects])
 
   /** 진행연도 선택지에 항상 띄울 과거 범위 (올해 기준 몇 해 전까지). */
   const YEAR_BACK = 5
@@ -739,19 +806,26 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
               <option key={o.key} value={o.key}>{o.label}</option>
             ))}
           </select>
-          {currentStaff.id && (
-            <button
-              onClick={() => setMyFirst(v => !v)}
-              title={currentStaff.name ? `${currentStaff.name} 담당 건을 맨 위로` : ''}
-              className={`h-[36px] px-3 rounded-lg text-[12px] font-medium border transition-colors whitespace-nowrap ${
-                myFirst
-                  ? 'bg-accent-light text-accent border-accent'
-                  : 'bg-surface text-txt-secondary border-border-primary hover:border-accent hover:text-accent'
-              }`}
-            >
-              내 담당 우선
-            </button>
-          )}
+          {/* 상단 고정 — 예전에는 '내 담당 우선' 켜기/끄기뿐이라 다른 사람 건을
+              위로 올릴 수 없었다. 기본값은 그대로 로그인한 사람이다. */}
+          <select
+            // 로그인 정보가 없으면 '내 담당' 항목 자체가 없다. 그때 'me'를 그대로
+            // 두면 선택 칸이 짝 없는 값이 되어 엉뚱한 이름이 보인다.
+            value={pinnedStaff === 'me' && !currentStaff.id ? 'none' : pinnedStaff}
+            onChange={e => setPinnedStaff(e.target.value)}
+            title="고른 담당자의 건을 목록 맨 위로 올립니다"
+            className={`h-[36px] px-2 text-[12px] rounded-lg border transition-colors whitespace-nowrap focus:outline-none ${
+              pinnedStaff === 'none'
+                ? 'bg-surface text-txt-secondary border-border-primary'
+                : 'bg-accent-light text-accent border-accent'
+            }`}
+          >
+            {currentStaff.id && <option value="me">내 담당 우선{currentStaff.name ? ` (${currentStaff.name})` : ''}</option>}
+            {staffInList
+              .filter(s => s.id !== currentStaff.id)
+              .map(s => <option key={s.id} value={s.id}>{s.name} 우선</option>)}
+            <option value="none">고정 안 함</option>
+          </select>
           <button
             onClick={() => setOutstandingOnly(v => !v)}
             className={`h-[36px] px-3 rounded-lg text-[12px] font-medium border transition-colors whitespace-nowrap ${
@@ -966,8 +1040,8 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
           <table className="w-full text-[12px]">
             <thead>
               <tr className="bg-surface-secondary/50">
-                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">담당</th>
-                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">빌라명</th>
+                <SortableTh label="담당" sortKey="staff" active={sortBy === 'staff'} dir={sortDir} onSort={toggleSort} />
+                <SortableTh label="빌라명" sortKey="name" active={sortBy === 'name'} dir={sortDir} onSort={toggleSort} />
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">호수</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">연락처</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">주소</th>

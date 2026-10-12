@@ -586,6 +586,39 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     loadProjects()
   }
 
+  /**
+   * 진행연도 선택지. 데이터에 있는 연도에 올해·내년을 더해 빠진 해가 없게 한다
+   * (작년 접수 건을 내년으로 미리 돌려놓는 경우가 있다).
+   */
+  const yearOptions = useMemo(() => {
+    const now = new Date().getFullYear()
+    const set = new Set<number>([now - 1, now, now + 1])
+    for (const p of projects) if (p.year) set.add(p.year)
+    return Array.from(set).sort((a, b) => b - a)
+  }, [projects])
+
+  /**
+   * 목록에서 진행연도 바로 변경.
+   *
+   * year가 비어 있으면 접수일 연도로 집계된다(getProjectYear). 실제로는
+   * 작년에 접수해 올해 진행하는 건이 있어, 그런 건을 올해로 옮기는 칸이다.
+   * 고른 연도 필터와 달라지면 그 행은 목록에서 빠진다 — 의도된 동작이라
+   * 어디로 갔는지 알 수 있게 알려준다.
+   */
+  const handleYearChange = async (project: DBProject, raw: string) => {
+    const next = raw === '' ? null : Number(raw)
+    if (next === (project.year ?? null)) return
+    const { error } = await supabase.from('projects').update({ year: next }).eq('id', project.id)
+    if (error) { toast.error(`진행연도 변경 실패: ${error.message}`); return }
+    if (selectedYear !== '전체') {
+      const shown = next ?? (project.created_at ? new Date(project.created_at).getFullYear() : selectedYear)
+      if (shown !== selectedYear) {
+        toast.info(`${project.building_name || '이 건'} → ${shown}년 목록으로 옮겼습니다`)
+      }
+    }
+    loadProjects()
+  }
+
   // 엑셀 내보내기 (현재 필터된 목록)
   const handleExport = async () => {
     if (filteredProjects.length === 0) { toast.info('내보낼 데이터가 없습니다.'); return }
@@ -931,6 +964,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">{category === '소규모' ? '지원사업' : '종류'}</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">상담내역</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">단계</th>
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary whitespace-nowrap">진행연도</th>
                 <th className="w-8 px-1 py-2"></th>
               </tr>
             </thead>
@@ -1007,6 +1041,26 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                         ['완료서류제출', '입금'].includes(project.status) && (
                         <span className="ml-1 text-[10px] font-semibold text-money-negative">미수금</span>
                       )}
+                    </td>
+                    {/* 진행연도 — 직접 고른 값은 진하게, 안 고른 건은 접수일 기준 추정이라 흐리게.
+                        흐린 값도 지금 이 연도 목록에 뜬 근거라 보여 줘야 한다. */}
+                    <td className="px-3 py-1.5" onClick={e => e.stopPropagation()}>
+                      <select
+                        value={project.year ?? ''}
+                        onChange={e => handleYearChange(project, e.target.value)}
+                        title={project.year ? '진행연도 (직접 지정)' : '접수일 기준 — 고르면 직접 지정됩니다'}
+                        className={`bg-transparent border-0 cursor-pointer appearance-auto text-[12px] tabular-nums pr-1 ${
+                          project.year ? 'text-txt-primary font-medium' : 'text-txt-quaternary'
+                        }`}
+                      >
+                        {/* 비움 = 직접 지정 안 함. 그래도 집계에 쓰이는 접수일 연도를 보여 준다. */}
+                        <option value="">
+                          {(project.created_at ? new Date(project.created_at).getFullYear() : new Date().getFullYear())} (접수일)
+                        </option>
+                        {yearOptions.map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-2 py-2.5">
                       <KebabMenu

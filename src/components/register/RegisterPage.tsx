@@ -125,16 +125,63 @@ function getProjectYear(p: DBProject): number {
 }
 
 // 정렬 옵션
-const SORT_OPTIONS = [
-  { key: 'default', label: '기본 (단계순)' },
-  { key: 'receipt_new', label: '접수 최신순' },
-  { key: 'receipt_old', label: '접수 오래된순' },
-  { key: 'name', label: '빌라명순' },
-  { key: 'outstanding', label: '미수금 큰순' },
-  { key: 'staff', label: '담당자순' },
+/**
+ * 정렬 항목.
+ *
+ * 규칙을 여러 개 쌓아 위에서부터 차례로 적용한다(1순위 담당 → 2순위 빌라명 …).
+ * 방향 이름은 항목 성격에 맞춘다 — 이름에 '오름차순'이라고만 적으면
+ * 날짜가 오래된 쪽인지 최신인지, 금액이 큰 쪽인지 바로 와닿지 않는다.
+ */
+const SORT_FIELDS = [
+  { key: 'step', label: '단계', asc: '앞 단계부터', desc: '뒤 단계부터' },
+  { key: 'staff', label: '담당', asc: 'ㄱ → ㅎ', desc: 'ㅎ → ㄱ' },
+  { key: 'name', label: '빌라명', asc: 'ㄱ → ㅎ', desc: 'ㅎ → ㄱ' },
+  { key: 'receipt', label: '접수일', asc: '오래된순', desc: '최신순' },
+  { key: 'outstanding', label: '미수금', asc: '작은순', desc: '큰순' },
+  { key: 'year', label: '진행연도', asc: '과거순', desc: '최근순' },
 ] as const
 
-type SortKey = (typeof SORT_OPTIONS)[number]['key']
+type SortKey = (typeof SORT_FIELDS)[number]['key']
+type SortDir = 'asc' | 'desc'
+interface SortRule { key: SortKey; dir: SortDir }
+
+const sortFieldOf = (key: SortKey) => SORT_FIELDS.find(f => f.key === key)!
+
+/**
+ * 한 항목 기준 두 건 비교. 항상 '오름차순' 기준으로만 답하고,
+ * 내림차순은 부르는 쪽에서 뒤집는다.
+ *
+ * 빌라명·담당자는 앞뒤 공백을 떼고 비교한다 — 입력할 때 앞에 공백이
+ * 섞인 건이 있는데(" 대광빌라 …"), 공백이 한글보다 앞서 정렬되는 바람에
+ * 그 건들만 맨 위로 튀어 가나다순이 깨졌다.
+ */
+function compareByField(a: DBProject, b: DBProject, key: SortKey): number {
+  switch (key) {
+    case 'staff': {
+      const an = (a.staff?.name || '').trim(), bn = (b.staff?.name || '').trim()
+      // 담당자 없는 건은 방향과 상관없이 늘 맨 뒤로 보낸다.
+      if (!an !== !bn) return an ? -1 : 1
+      return an.localeCompare(bn, 'ko')
+    }
+    case 'name':
+      return (a.building_name || '').trim().localeCompare((b.building_name || '').trim(), 'ko')
+    case 'receipt':
+      return getReceiptSortDate(a).localeCompare(getReceiptSortDate(b))
+    case 'outstanding':
+      return getOutstanding(a) - getOutstanding(b)
+    case 'year':
+      return getProjectYear(a) - getProjectYear(b)
+    case 'step': {
+      const ai = PROGRESS_STEPS.indexOf(a.status as ProjectStep)
+      const bi = PROGRESS_STEPS.indexOf(b.status as ProjectStep)
+      // 취소·예약처럼 단계에 없는 건은 맨 뒤
+      const as_ = ai >= 0 ? ai : 99, bs = bi >= 0 ? bi : 99
+      if (as_ !== bs) return as_ - bs
+      // 같은 단계면 실측일 오래된 순 (예전 기본 정렬과 같게)
+      return (a.survey_date || '9999').localeCompare(b.survey_date || '9999')
+    }
+  }
+}
 
 // 접수일 기준 정렬용 (접수일 → 실측일 → 등록일 순으로 대체)
 function getReceiptSortDate(p: DBProject): string {
@@ -176,6 +223,108 @@ function getTypeBadgeColor(): string {
 }
 
 // --- 케밥 메뉴 ---
+/**
+ * 정렬 규칙 패널 (노션의 정렬 설정과 같은 방식).
+ * 규칙을 위에서부터 차례로 적용하고, 각 줄에서 항목과 방향을 고른다.
+ */
+function SortPanel({ rules, onSetRule, onRemoveRule, onAddRule, onReset }: {
+  rules: SortRule[]
+  onSetRule: (i: number, patch: Partial<SortRule>) => void
+  onRemoveRule: (i: number) => void
+  onAddRule: () => void
+  onReset: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  // 바깥을 누르거나 ESC를 누르면 닫는다
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-sort-panel]')) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const canAdd = rules.length < SORT_FIELDS.length
+
+  return (
+    <div className="relative" data-sort-panel>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="정렬 기준을 순서대로 정합니다"
+        className={`h-[36px] px-3 rounded-lg text-[12px] font-medium border transition-colors whitespace-nowrap ${
+          rules.length > 1 || rules[0]?.key !== 'step'
+            ? 'bg-accent-light text-accent border-accent'
+            : 'bg-surface text-txt-secondary border-border-primary hover:border-accent hover:text-accent'
+        }`}
+      >
+        정렬 {rules.length}개
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-[40px] z-30 w-[320px] rounded-lg border border-border-primary bg-surface p-2 shadow-lg">
+          {rules.map((rule, i) => {
+            const field = sortFieldOf(rule.key)
+            return (
+              <div key={i} className="flex items-center gap-1.5 mb-1.5">
+                <span className="w-4 shrink-0 text-center text-[11px] text-txt-quaternary">{i + 1}</span>
+                <select
+                  value={rule.key}
+                  onChange={e => onSetRule(i, { key: e.target.value as SortKey })}
+                  className="h-[30px] flex-1 min-w-0 rounded-md border border-border-primary bg-surface px-1.5 text-[12px] focus:outline-none focus:border-accent"
+                >
+                  {SORT_FIELDS
+                    // 다른 줄이 이미 쓰는 항목은 빼서 같은 항목이 두 번 들어가지 않게 한다
+                    .filter(f => f.key === rule.key || !rules.some(r => r.key === f.key))
+                    .map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                </select>
+                <select
+                  value={rule.dir}
+                  onChange={e => onSetRule(i, { dir: e.target.value as SortDir })}
+                  className="h-[30px] w-[108px] shrink-0 rounded-md border border-border-primary bg-surface px-1.5 text-[12px] focus:outline-none focus:border-accent"
+                >
+                  <option value="asc">{field.asc}</option>
+                  <option value="desc">{field.desc}</option>
+                </select>
+                <button
+                  onClick={() => onRemoveRule(i)}
+                  disabled={rules.length <= 1}
+                  aria-label={`${field.label} 정렬 빼기`}
+                  className="h-[30px] w-[26px] shrink-0 rounded-md text-txt-quaternary hover:bg-surface-secondary hover:text-txt-secondary disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  &#x2715;
+                </button>
+              </div>
+            )
+          })}
+
+          <div className="mt-1 flex items-center justify-between border-t border-border-tertiary pt-1.5">
+            <button
+              onClick={onAddRule}
+              disabled={!canAdd}
+              className="px-2 py-1 text-[12px] text-accent hover:underline disabled:text-txt-quaternary disabled:no-underline"
+            >
+              + 정렬 추가
+            </button>
+            <button
+              onClick={onReset}
+              className="px-2 py-1 text-[12px] text-txt-tertiary hover:text-txt-secondary"
+            >
+              기본으로
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /**
  * 눌러서 정렬하는 열 제목.
  * 지금 정렬 중인 열에만 화살표가 뜨고, 다시 누르면 오름↔내림이 바뀐다.
@@ -355,9 +504,11 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
   // 불러오기 실패 — 예전에는 콘솔에만 남아 "등록된 프로젝트가 없습니다"로 보였다
   const [loadError, setLoadError] = useState(false)
   const [selectedYear, setSelectedYear] = useState<number | '전체'>(new Date().getFullYear())
-  const [sortBy, setSortBy] = useState<SortKey>('default')
-  /** 열 제목을 눌러 바꾸는 오름/내림. 제목 옆 화살표로 보여 준다. */
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  /**
+   * 정렬 규칙 목록. 위에서부터 1순위다.
+   * 기본값은 예전 '기본 (단계순)'과 같다.
+   */
+  const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'step', dir: 'asc' }])
   const [outstandingOnly, setOutstandingOnly] = useState(false)
   const [exporting, setExporting] = useState(false)
   /**
@@ -540,53 +691,16 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       )
     }
 
-    // 정렬
+    // 정렬 — 규칙을 위에서부터 차례로 적용한다. 앞 규칙이 같을 때만 다음 규칙을 본다.
     const sorted = [...result]
-    // 열 제목으로 고른 정렬(담당자·빌라명)에만 방향을 적용한다.
-    // 접수일·미수금은 이름 자체에 방향이 들어 있어(최신순/큰순) 뒤집지 않는다.
-    const dirMul = sortDir === 'asc' ? 1 : -1
-    // 빌라명 앞뒤 공백을 떼고 비교한다. 입력할 때 앞에 공백이 섞인 건이
-    // 17건 있는데(" 대광빌라 …"), 그대로 비교하면 공백이 한글보다 앞서
-    // 그 건들만 맨 위로 튀어 가나다순이 깨진다.
-    const byName = (a: DBProject, b: DBProject) =>
-      (a.building_name || '').trim().localeCompare((b.building_name || '').trim(), 'ko')
-    switch (sortBy) {
-      case 'receipt_new':
-        sorted.sort((a, b) => getReceiptSortDate(b).localeCompare(getReceiptSortDate(a)))
-        break
-      case 'receipt_old':
-        sorted.sort((a, b) => getReceiptSortDate(a).localeCompare(getReceiptSortDate(b)))
-        break
-      case 'name':
-        sorted.sort((a, b) => dirMul * byName(a, b))
-        break
-      case 'outstanding':
-        sorted.sort((a, b) => getOutstanding(b) - getOutstanding(a))
-        break
-      case 'staff':
-        // 담당자로 묶고, 같은 담당자 안에서는 빌라명 ㄱ-ㅎ 순.
-        // 2차 정렬이 없으면 한 사람 몫이 DB 저장 순서대로 흩어져 찾기 어렵다.
-        // 담당자 없는 건은 늘 맨 뒤 (방향을 바꿔도 위로 올리지 않는다).
-        sorted.sort((a, b) => {
-          const an = a.staff?.name || '', bn = b.staff?.name || ''
-          if (!an !== !bn) return an ? -1 : 1
-          const byStaff = an.localeCompare(bn, 'ko')
-          return byStaff !== 0 ? dirMul * byStaff : byName(a, b)
-        })
-        break
-      default:
-        // 기본: 단계 낮은 순 → 같은 단계면 실측일 오래된 순, 취소/예약 맨 뒤
-        sorted.sort((a, b) => {
-          const aIdx = PROGRESS_STEPS.indexOf(a.status as ProjectStep)
-          const bIdx = PROGRESS_STEPS.indexOf(b.status as ProjectStep)
-          const aStep = aIdx >= 0 ? aIdx : 99
-          const bStep = bIdx >= 0 ? bIdx : 99
-          if (aStep !== bStep) return aStep - bStep
-          const aDate = a.survey_date || '9999'
-          const bDate = b.survey_date || '9999'
-          return aDate.localeCompare(bDate)
-        })
-    }
+    sorted.sort((a, b) => {
+      for (const rule of sortRules) {
+        const cmp = compareByField(a, b, rule.key)
+        if (cmp !== 0) return rule.dir === 'asc' ? cmp : -cmp
+      }
+      // 규칙이 다 같으면 늘 같은 자리에 오도록 빌라명으로 마무리한다.
+      return compareByField(a, b, 'name')
+    })
 
     // 상단 고정: 고른 담당자의 건을 맨 위로 (그룹 안에서는 위 정렬 유지 — sort는 안정 정렬)
     const pinnedId = pinnedStaff === 'me' ? currentStaff.id : pinnedStaff === 'none' ? null : pinnedStaff
@@ -597,7 +711,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     }
 
     return sorted
-  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortBy, sortDir, outstandingOnly, pinnedStaff, currentStaff.id])
+  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortRules, outstandingOnly, pinnedStaff, currentStaff.id])
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null
 
@@ -642,9 +756,28 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
    * 드롭다운과 같은 sortBy를 쓰므로 둘이 따로 놀지 않는다.
    */
   const toggleSort = (key: SortKey) => {
-    if (sortBy === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortBy(key); setSortDir('asc') }
+    setSortRules(rules => {
+      // 이미 1순위면 방향만 뒤집고, 아니면 그 항목을 1순위로 끌어올린다.
+      // 아래 순위에 같은 항목이 있으면 중복되지 않게 뺀다.
+      if (rules[0]?.key === key) {
+        return [{ key, dir: rules[0].dir === 'asc' ? 'desc' : 'asc' }, ...rules.slice(1)]
+      }
+      return [{ key, dir: 'asc' }, ...rules.filter(r => r.key !== key)]
+    })
   }
+
+  const setRule = (i: number, patch: Partial<SortRule>) =>
+    setSortRules(rules => rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+
+  const removeRule = (i: number) =>
+    setSortRules(rules => (rules.length <= 1 ? rules : rules.filter((_, idx) => idx !== i)))
+
+  /** 아직 안 쓴 항목 중 하나를 다음 순위로 추가한다. */
+  const addRule = () =>
+    setSortRules(rules => {
+      const unused = SORT_FIELDS.find(f => !rules.some(r => r.key === f.key))
+      return unused ? [...rules, { key: unused.key, dir: 'asc' as SortDir }] : rules
+    })
 
   /** 목록에 있는 담당자들 (상단 고정 선택용). 따로 조회하지 않는다. */
   const staffInList = useMemo(() => {
@@ -797,15 +930,13 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full md:w-72 px-4 input-field"
           />
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortKey)}
-            className="h-[36px] px-2 text-[12px] border border-border-primary rounded-lg bg-surface focus:outline-none focus:border-accent text-txt-secondary"
-          >
-            {SORT_OPTIONS.map(o => (
-              <option key={o.key} value={o.key}>{o.label}</option>
-            ))}
-          </select>
+          <SortPanel
+            rules={sortRules}
+            onSetRule={setRule}
+            onRemoveRule={removeRule}
+            onAddRule={addRule}
+            onReset={() => setSortRules([{ key: 'step', dir: 'asc' }])}
+          />
           {/* 상단 고정 — 예전에는 '내 담당 우선' 켜기/끄기뿐이라 다른 사람 건을
               위로 올릴 수 없었다. 기본값은 그대로 로그인한 사람이다. */}
           <select
@@ -1040,8 +1171,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
           <table className="w-full text-[12px]">
             <thead>
               <tr className="bg-surface-secondary/50">
-                <SortableTh label="담당" sortKey="staff" active={sortBy === 'staff'} dir={sortDir} onSort={toggleSort} />
-                <SortableTh label="빌라명" sortKey="name" active={sortBy === 'name'} dir={sortDir} onSort={toggleSort} />
+                {/* 제목 클릭 = 그 항목을 1순위로. 화살표는 1순위일 때만 뜬다. */}
+                <SortableTh label="담당" sortKey="staff" active={sortRules[0]?.key === 'staff'} dir={sortRules[0]?.dir ?? 'asc'} onSort={toggleSort} />
+                <SortableTh label="빌라명" sortKey="name" active={sortRules[0]?.key === 'name'} dir={sortRules[0]?.dir ?? 'asc'} onSort={toggleSort} />
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">호수</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">연락처</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">주소</th>

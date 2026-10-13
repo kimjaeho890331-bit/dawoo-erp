@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
 import { toast } from '@/lib/toast'
 import { canDecideLeave, canChangeLeave } from '@/lib/leave/permissions'
+import { computeLeaveBalance } from '@/lib/leave/balance'
 import { notifyLeave } from '@/lib/notify/client'
 
 interface LeaveRequest {
@@ -96,6 +97,20 @@ function formatDate(d: string) {
 // 회사 규정: 최대 5일 (주말 포함)
 const MAX_CONSECUTIVE_DAYS = 5
 
+// 이월분 사용 기한(개월) 기본값 — 설정(leave_settings)이 없으면 이 값을 쓴다
+const DEFAULT_CARRYOVER_MONTHS = 1
+
+// 'YYYY-MM-DD' → 'M/D'
+const mdOf = (iso: string | null) => (iso ? `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}` : '')
+// 오늘부터 해당 날짜까지 남은 일수 (표시용, 대략)
+const dDayUntil = (iso: string | null) => {
+  if (!iso) return 0
+  const t = new Date()
+  const today = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())
+  const [y, m, d] = iso.split('-').map(Number)
+  return Math.round((Date.UTC(y, m - 1, d) - today) / 86400000)
+}
+
 export default function LeavePage() {
   const { staff: currentStaff } = useAuth()
   const [requests, setRequests] = useState<LeaveRequest[]>([])
@@ -107,6 +122,8 @@ export default function LeavePage() {
   const [filterStatus, setFilterStatus] = useState('대기')
   const [filterStaffId, setFilterStaffId] = useState<string | null>(null)  // null = 전체
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)  // 수정/삭제 드롭다운
+  // 이월 사용 기한(개월) — 설정값(설정 › 연차). 없으면 기본값
+  const [carryoverMonths, setCarryoverMonths] = useState(DEFAULT_CARRYOVER_MONTHS)
 
   // 폼
   const [formStaffId, setFormStaffId] = useState('')
@@ -126,12 +143,15 @@ export default function LeavePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [reqRes, staffRes] = await Promise.all([
+    const [reqRes, staffRes, setRes] = await Promise.all([
       supabase.from('leave_requests').select('*').order('start_date', { ascending: false }),
       supabase.from('staff').select('*').order('name'),
+      supabase.from('leave_settings').select('carryover_months').limit(1).maybeSingle(),
     ])
     if (!reqRes.error) setRequests((reqRes.data as LeaveRequest[]) || [])
     if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
+    // leave_settings 테이블이 아직 없을 수 있다 — 에러면 조용히 기본값(1개월) 유지
+    if (!setRes.error && setRes.data?.carryover_months != null) setCarryoverMonths(Number(setRes.data.carryover_months))
     setLoading(false)
   }, [])
 
@@ -142,6 +162,16 @@ export default function LeavePage() {
 
   const getName = (id: string) => staffList.find(s => s.id === id)?.name || ''
   const getUsed = (id: string) => requests.filter(r => r.staff_id === id && r.status === '승인').reduce((s, r) => s + r.days, 0)
+
+  // 직원별 연차 잔여 — 이월·만료·소멸까지 반영 (src/lib/leave/balance.ts)
+  const balanceOf = useCallback((staffId: string) => {
+    const staff = staffList.find(s => s.id === staffId)
+    return computeLeaveBalance({
+      joinDate: staff?.join_date || new Date().toISOString().slice(0, 10),
+      approved: requests.filter(r => r.staff_id === staffId),
+      carryoverMonths,
+    })
+  }, [staffList, requests, carryoverMonths])
 
   // 직책+직급 순 정렬 (현황 카드 + 이름 칩 공용)
   /**
@@ -355,26 +385,37 @@ export default function LeavePage() {
         <button onClick={openCreate} className="btn-primary">+ 연차 신청</button>
       </div>
 
-      {/* 직원별 연차 현황 카드 — 전 직원, 직책+직급 순 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 직원별 연차 현황 — 이월·당해·잔여 (전 직원, 직책+직급 순) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
         {sortedStaff.map(s => {
-          const total = calcTotalLeave(s.join_date)
-          const used = getUsed(s.id)
-          const remain = total - used
-          const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0
+          const bal = balanceOf(s.id)
           const color = staffColorMap[s.id] || '#94a3b8'
           return (
             <div key={s.id} className="bg-surface rounded-[10px] border border-border-primary p-3">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                <span className="text-sm font-semibold text-txt-primary">{s.name}</span>
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-sm font-semibold text-txt-primary truncate">{s.name}</span>
+                <span className="ml-auto flex items-baseline gap-0.5 shrink-0">
+                  <span className="text-lg font-bold tabular-nums text-txt-primary">{bal.usable}</span>
+                  <span className="text-[11px] text-txt-tertiary">일</span>
+                </span>
               </div>
-              <div className="h-1.5 bg-surface-secondary rounded-full overflow-hidden mb-1.5">
-                <div className={`h-full rounded-full ${remain <= 3 ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${pct}%` }} />
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-txt-tertiary tabular-nums">{used}/{total}일 사용</span>
-                <span className={`font-semibold tabular-nums ${remain <= 3 ? 'text-red-500' : 'text-accent-text'}`}>{remain}일</span>
+              <div className="space-y-1 border-t border-border-tertiary pt-1.5 text-[11px]">
+                {bal.isAccruing ? (
+                  <div className="text-txt-secondary tabular-nums">적립 {bal.grant}일 · 사용 {bal.used} <span className="text-txt-quaternary">(1년 미만)</span></div>
+                ) : (
+                  <>
+                    {bal.carryStatus === 'valid' ? (
+                      <div className="tabular-nums">
+                        <span className="text-txt-secondary">이월 {bal.carryRemaining}일</span>
+                        <span className={dDayUntil(bal.carryExpiry) <= 14 ? ' text-amber-600 font-medium' : ' text-txt-tertiary'}> · 만료 {mdOf(bal.carryExpiry)} (D-{Math.max(dDayUntil(bal.carryExpiry), 0)})</span>
+                      </div>
+                    ) : (
+                      <div className="text-txt-quaternary">이월 없음</div>
+                    )}
+                    <div className="text-txt-secondary tabular-nums">당해 {bal.grant}일 · 잔여 {bal.grantRemaining}</div>
+                  </>
+                )}
               </div>
             </div>
           )
@@ -390,6 +431,8 @@ export default function LeavePage() {
           <span>연속 최대 5일(주말 포함)</span>
           <span className="w-px h-3 bg-border-secondary" />
           <span>경조사: 본인결혼5 · 자녀결혼1 · 부모/배우자상5 · 조부모/형제상3</span>
+          <span className="w-px h-3 bg-border-secondary" />
+          <span>이월 사용 기한 {carryoverMonths}개월 <span className="text-txt-quaternary">(설정 › 연차에서 변경)</span></span>
         </div>
       </div>
 

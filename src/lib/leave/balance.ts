@@ -118,14 +118,19 @@ export function computeLeaveBalance(params: ComputeLeaveParams): LeaveBalance {
   // 1년 이상: 당해 부여 + 직전 구간에서 넘어온 이월
   const grant = grantForPeriod(k)
 
-  // 이월 체인: 0년차(적립 11)부터 구간별로 (부여 + 이월 − 사용)의 잔여를 다음 구간으로 넘긴다
+  // 이월 체인: 각 구간에 들어온 이월은 N개월 뒤 소멸하므로 '다음 구간으로' 넘기지 않는다.
+  // 다음 구간으로 넘어가는 건 그 구간 '당해 부여'의 미사용분뿐 → 이월이 해마다 쌓이지 않는다.
   let carryOut = 0
   for (let p = 0; p < k; p++) {
     const pStart = addYearsUTC(join, p)
     const pEnd = addYearsUTC(join, p + 1)
     const pBase = p === 0 ? 11 : grantForPeriod(p)
+    const pExpiry = addMonthsUTC(pStart, params.carryoverMonths)
     const pUsed = usedInRange(params.approved, pStart, pEnd)
-    carryOut = Math.max(0, pBase + carryOut - pUsed)
+    const pUsedBeforeExpiry = usedInRange(params.approved, pStart, pExpiry)
+    const pCarryConsumed = Math.min(carryOut, pUsedBeforeExpiry) // 들어온 이월 중 만료 전 사용분
+    const pGrantConsumed = pUsed - pCarryConsumed
+    carryOut = Math.max(0, pBase - pGrantConsumed) // 당해 부여 미사용분만 다음 구간으로
   }
   const carryIn = carryOut
   const carryExpiry = carryIn > 0 ? addMonthsUTC(periodStart, params.carryoverMonths) : null

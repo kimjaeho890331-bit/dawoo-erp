@@ -112,6 +112,18 @@ describe('computeLeaveBalance — 경계 케이스', () => {
     expect(b.grant).toBe(16)
   })
 
+  it('여러 해 안 써도 이월은 쌓이지 않는다 — 직전 구간 부여분만 이월', () => {
+    const b = computeLeaveBalance({
+      joinDate: '2021-01-01',
+      approved: [], // 한 번도 안 씀
+      carryoverMonths: 1,
+      today: new Date('2026-10-13'), // 약 5.8년 → 5년차
+    })
+    expect(b.periodIndex).toBe(5)
+    // 직전 구간(4년차) 부여 16일만 이월돼야지, 5년치(57 등)가 쌓이면 안 된다
+    expect(b.carryIn).toBe(16)
+  })
+
   it('반려·대기 연차는 사용으로 치지 않는다', () => {
     const b = computeLeaveBalance({
       joinDate: '2025-09-01',

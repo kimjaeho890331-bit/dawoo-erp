@@ -8,8 +8,8 @@ import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
 import { toast } from '@/lib/toast'
-import { canDecideLeave, canChangeLeave, isLeaveApprover } from '@/lib/leave/permissions'
-import { computeLeaveBalance, type ForfeitRow } from '@/lib/leave/balance'
+import { canDecideLeave, canChangeLeave } from '@/lib/leave/permissions'
+import { computeLeaveBalance } from '@/lib/leave/balance'
 import { notifyLeave } from '@/lib/notify/client'
 
 interface LeaveRequest {
@@ -122,8 +122,7 @@ export default function LeavePage() {
   const [filterStatus, setFilterStatus] = useState('대기')
   const [filterStaffId, setFilterStaffId] = useState<string | null>(null)  // null = 전체
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)  // 수정/삭제 드롭다운
-  // 이월·소멸: 소멸 기록(직원·구간시작일·일수)과 이월 사용 기한(개월, 설정값)
-  const [forfeits, setForfeits] = useState<Array<{ staff_id: string } & ForfeitRow>>([])
+  // 이월 사용 기한(개월) — 설정값(설정 › 연차). 없으면 기본값
   const [carryoverMonths, setCarryoverMonths] = useState(DEFAULT_CARRYOVER_MONTHS)
 
   // 폼
@@ -144,16 +143,14 @@ export default function LeavePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [reqRes, staffRes, forfeitRes, setRes] = await Promise.all([
+    const [reqRes, staffRes, setRes] = await Promise.all([
       supabase.from('leave_requests').select('*').order('start_date', { ascending: false }),
       supabase.from('staff').select('*').order('name'),
-      supabase.from('leave_carryover_forfeits').select('staff_id, period_start, days'),
       supabase.from('leave_settings').select('carryover_months').limit(1).maybeSingle(),
     ])
     if (!reqRes.error) setRequests((reqRes.data as LeaveRequest[]) || [])
     if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
-    // 아래 두 가지는 테이블이 아직 없을 수 있다 — 에러면 조용히 기본값 유지
-    if (!forfeitRes.error) setForfeits((forfeitRes.data as Array<{ staff_id: string } & ForfeitRow>) || [])
+    // leave_settings 테이블이 아직 없을 수 있다 — 에러면 조용히 기본값(1개월) 유지
     if (!setRes.error && setRes.data?.carryover_months != null) setCarryoverMonths(Number(setRes.data.carryover_months))
     setLoading(false)
   }, [])
@@ -173,9 +170,8 @@ export default function LeavePage() {
       joinDate: staff?.join_date || new Date().toISOString().slice(0, 10),
       approved: requests.filter(r => r.staff_id === staffId),
       carryoverMonths,
-      forfeits: forfeits.filter(f => f.staff_id === staffId),
     })
-  }, [staffList, requests, forfeits, carryoverMonths])
+  }, [staffList, requests, carryoverMonths])
 
   // 직책+직급 순 정렬 (현황 카드 + 이름 칩 공용)
   /**
@@ -325,26 +321,6 @@ export default function LeavePage() {
     loadData()
   }
 
-  // 이월분 소멸 처리 — 대표·관리자·경리만 (기록을 남겨 잔여에서 뺀다)
-  const handleForfeit = async (staffId: string, periodStart: string, days: number) => {
-    if (!isLeaveApprover(me.role)) { toast.error('이월 소멸은 대표·관리자·경리만 할 수 있습니다'); return }
-    if (days <= 0) return
-    if (!confirm(`${getName(staffId)}님의 이월 ${days}일을 소멸 처리할까요? (되돌리려면 소멸 기록을 지워야 합니다)`)) return
-    const { error } = await supabase.from('leave_carryover_forfeits').insert({
-      staff_id: staffId, period_start: periodStart, days, forfeited_by: myStaffId,
-    })
-    if (error) { toast.error(`소멸 처리에 실패했습니다: ${error.message}`); return }
-    toast.success(`${getName(staffId)}님의 이월 ${days}일을 소멸 처리했습니다`)
-    loadData()
-  }
-
-  // 이월 사용 기한(개월) 저장 — 대표·관리자·경리만 (단일 행 설정)
-  const saveCarryoverMonths = async (n: number) => {
-    setCarryoverMonths(n) // 화면 먼저 반영
-    const { error } = await supabase.from('leave_settings').upsert({ id: 1, carryover_months: n })
-    if (error) toast.error(`이월 기한 저장 실패: ${error.message}`)
-  }
-
   const openCreate = () => {
     // 현재 직원을 기본 선택 (목록에 실제 존재할 때만) — 없으면 첫 직원
     // 기본값도 고를 수 있는 사람 중에서 — 퇴사자가 기본으로 잡히면 저장이 막힌다
@@ -414,41 +390,28 @@ export default function LeavePage() {
         {sortedStaff.map(s => {
           const bal = balanceOf(s.id)
           const color = staffColorMap[s.id] || '#94a3b8'
-          const canForfeit = isLeaveApprover(me.role)
           return (
             <div key={s.id} className="bg-surface rounded-[10px] border border-border-primary p-3">
-              <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                 <span className="text-sm font-semibold text-txt-primary truncate">{s.name}</span>
-              </div>
-              <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-xl font-bold tabular-nums text-txt-primary">{bal.usable}</span>
-                <span className="text-[11px] text-txt-tertiary">일 남음</span>
+                <span className="ml-auto flex items-baseline gap-0.5 shrink-0">
+                  <span className="text-lg font-bold tabular-nums text-txt-primary">{bal.usable}</span>
+                  <span className="text-[11px] text-txt-tertiary">일</span>
+                </span>
               </div>
               <div className="space-y-1 border-t border-border-tertiary pt-1.5 text-[11px]">
                 {bal.isAccruing ? (
                   <div className="text-txt-secondary tabular-nums">적립 {bal.grant}일 · 사용 {bal.used} <span className="text-txt-quaternary">(1년 미만)</span></div>
                 ) : (
                   <>
-                    {bal.carryStatus === 'valid' && (
+                    {bal.carryStatus === 'valid' ? (
                       <div className="tabular-nums">
                         <span className="text-txt-secondary">이월 {bal.carryRemaining}일</span>
                         <span className={dDayUntil(bal.carryExpiry) <= 14 ? ' text-amber-600 font-medium' : ' text-txt-tertiary'}> · 만료 {mdOf(bal.carryExpiry)} (D-{Math.max(dDayUntil(bal.carryExpiry), 0)})</span>
                       </div>
-                    )}
-                    {bal.carryStatus === 'pending' && (
-                      <div className="flex items-center gap-1.5 flex-wrap tabular-nums">
-                        <span className="text-red-600 font-medium">이월 {bal.carryRemaining}일 만료</span>
-                        {canForfeit ? (
-                          <button onClick={() => handleForfeit(s.id, bal.periodStart, bal.carryRemaining)}
-                            className="text-[11px] font-medium px-2 py-0.5 rounded border border-red-300 text-red-600 bg-surface hover:bg-red-50 transition-colors">소멸</button>
-                        ) : (
-                          <span className="text-[10px] text-txt-quaternary">소멸 대기</span>
-                        )}
-                      </div>
-                    )}
-                    {bal.carryStatus === 'forfeited' && (
-                      <div className="text-txt-quaternary tabular-nums"><span className="line-through">이월 {bal.forfeited}일</span> 소멸됨</div>
+                    ) : (
+                      <div className="text-txt-quaternary">이월 없음</div>
                     )}
                     <div className="text-txt-secondary tabular-nums">당해 {bal.grant}일 · 잔여 {bal.grantRemaining}</div>
                   </>
@@ -469,17 +432,7 @@ export default function LeavePage() {
           <span className="w-px h-3 bg-border-secondary" />
           <span>경조사: 본인결혼5 · 자녀결혼1 · 부모/배우자상5 · 조부모/형제상3</span>
           <span className="w-px h-3 bg-border-secondary" />
-          {isLeaveApprover(me.role) ? (
-            <span className="flex items-center gap-1">
-              이월 사용 기한
-              <input type="number" min={1} max={12} value={carryoverMonths}
-                onChange={e => saveCarryoverMonths(Math.max(1, Math.min(12, Number(e.target.value) || 1)))}
-                className="w-11 h-6 px-1 text-center border border-border-primary rounded bg-surface tabular-nums" />
-              개월 <span className="text-txt-quaternary">(지나면 소멸 대상)</span>
-            </span>
-          ) : (
-            <span>이월 사용 기한 {carryoverMonths}개월</span>
-          )}
+          <span>이월 사용 기한 {carryoverMonths}개월 <span className="text-txt-quaternary">(설정 › 연차에서 변경)</span></span>
         </div>
       </div>
 

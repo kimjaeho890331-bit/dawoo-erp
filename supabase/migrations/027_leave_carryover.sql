@@ -9,11 +9,11 @@
 
 CREATE TABLE IF NOT EXISTS leave_settings (
   id INT PRIMARY KEY DEFAULT 1,
-  carryover_months INT NOT NULL DEFAULT 1,
+  carryover_months INT NOT NULL DEFAULT 2,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT leave_settings_singleton CHECK (id = 1)
 );
-INSERT INTO leave_settings (id, carryover_months) VALUES (1, 1)
+INSERT INTO leave_settings (id, carryover_months) VALUES (1, 2)
   ON CONFLICT (id) DO NOTHING;
 
 COMMENT ON TABLE leave_settings IS '연차 전역 설정 (이월 사용 기한 등, 단일 행)';

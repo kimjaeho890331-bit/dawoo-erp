@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { ClipboardList, Calendar, AlertTriangle, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { selectableStaff } from '@/lib/staff/selectable'
-import { calcTotalLeave } from '@/lib/utils/leave'
 import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
 import { toast } from '@/lib/toast'
@@ -98,7 +97,7 @@ function formatDate(d: string) {
 const MAX_CONSECUTIVE_DAYS = 5
 
 // 이월분 사용 기한(개월) 기본값 — 설정(leave_settings)이 없으면 이 값을 쓴다
-const DEFAULT_CARRYOVER_MONTHS = 1
+const DEFAULT_CARRYOVER_MONTHS = 2
 
 // 'YYYY-MM-DD' → 'M/D'
 const mdOf = (iso: string | null) => (iso ? `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}` : '')
@@ -161,7 +160,6 @@ export default function LeavePage() {
   const me = { id: myStaffId, role: staffList.find(s => s.id === myStaffId)?.role ?? null }
 
   const getName = (id: string) => staffList.find(s => s.id === id)?.name || ''
-  const getUsed = (id: string) => requests.filter(r => r.staff_id === id && r.status === '승인').reduce((s, r) => s + r.days, 0)
 
   // 직원별 연차 잔여 — 이월·만료·소멸까지 반영 (src/lib/leave/balance.ts)
   const balanceOf = useCallback((staffId: string) => {
@@ -200,18 +198,15 @@ export default function LeavePage() {
     if (!formStaffId || !formStartDate || !formEndDate) return { valid: false, error: '' }
 
     const days = formDays
-    const staff = staffList.find(s => s.id === formStaffId)
 
     // 1) 최대 5일 제한 (주말 포함)
     if (days > MAX_CONSECUTIVE_DAYS && formLeaveType !== '경조사') {
       return { valid: false, error: `최대 ${MAX_CONSECUTIVE_DAYS}일까지 신청 가능합니다 (주말 포함)` }
     }
 
-    // 2) 연차/반차: 잔여일 체크
+    // 2) 연차/반차: 잔여일 체크 (이월 포함 — balanceOf의 쓸 수 있는 잔여)
     if (formLeaveType === '연차' || formLeaveType.includes('반차')) {
-      const totalLeave = calcTotalLeave(staff?.join_date || null)
-      const used = getUsed(formStaffId)
-      const remaining = totalLeave - used
+      const remaining = balanceOf(formStaffId).usable
       if (days > remaining) {
         return { valid: false, error: `잔여 연차 부족 (잔여 ${remaining}일, 신청 ${days}일)` }
       }
@@ -232,7 +227,7 @@ export default function LeavePage() {
     }
 
     return { valid: true, error: '' }
-  }, [formStaffId, formStartDate, formEndDate, formLeaveType, formSubtype, formDays, staffList])
+  }, [formStaffId, formStartDate, formEndDate, formLeaveType, formSubtype, formDays, balanceOf])
 
   // 경조사 선택 시 자동 종료일 설정
   const handleSubtypeChange = (subtype: string) => {
@@ -405,7 +400,7 @@ export default function LeavePage() {
                   <div className="text-txt-secondary tabular-nums">적립 {bal.grant}일 · 사용 {bal.used} <span className="text-txt-quaternary">(1년 미만)</span></div>
                 ) : (
                   <>
-                    {bal.carryStatus === 'valid' ? (
+                    {bal.carryStatus === 'valid' && bal.carryRemaining > 0 ? (
                       <div className="tabular-nums">
                         <span className="text-txt-secondary">이월 {bal.carryRemaining}일</span>
                         <span className={dDayUntil(bal.carryExpiry) <= 14 ? ' text-amber-600 font-medium' : ' text-txt-tertiary'}> · 만료 {mdOf(bal.carryExpiry)} (D-{Math.max(dDayUntil(bal.carryExpiry), 0)})</span>
@@ -570,11 +565,9 @@ export default function LeavePage() {
                 ) : (
                   <select value={formStaffId} onChange={e => setFormStaffId(e.target.value)}
                     className="input-field w-full">
-                    {sortedStaff.map(s => {
-                      const total = calcTotalLeave(s.join_date)
-                      const remain = total - getUsed(s.id)
-                      return <option key={s.id} value={s.id}>{s.name} (잔여 {remain}일)</option>
-                    })}
+                    {sortedStaff.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} (잔여 {balanceOf(s.id).usable}일)</option>
+                    ))}
                   </select>
                 )}
               </div>
@@ -631,13 +624,17 @@ export default function LeavePage() {
                 </div>
               ) : (
                 <div className="bg-accent-light rounded-lg px-3 py-2 text-sm text-accent-text tabular-nums">
-                  {formDays}일 사용 · 승인 시 업무 캘린더 자동 등록
                   {formLeaveType === '연차' || formLeaveType.includes('반차') ? (() => {
-                    const staff = staffList.find(s => s.id === formStaffId)
-                    const total = calcTotalLeave(staff?.join_date || null)
-                    const used = getUsed(formStaffId)
-                    return ` · 잔여 ${total - used - formDays}일`
-                  })() : ''}
+                    const bal = balanceOf(formStaffId)
+                    const carryAvail = bal.carryStatus === 'valid' ? bal.carryRemaining : 0
+                    const fromCarry = Math.min(carryAvail, formDays)
+                    const fromGrant = formDays - fromCarry
+                    const use = fromCarry > 0 && fromGrant > 0 ? `이월 ${fromCarry}일 + 당해 ${fromGrant}일`
+                      : fromCarry > 0 ? `이월 ${fromCarry}일`
+                      : `당해 ${formDays}일`
+                    return `${use} 사용 · 신청 후 잔여 ${bal.usable - formDays}일`
+                  })() : `${formDays}일 사용`}
+                  {' · 승인 시 업무 캘린더 자동 등록'}
                 </div>
               )}
 

@@ -12,7 +12,7 @@ import { isLeaveApprover } from '@/lib/leave/permissions'
  * 바꾸는 건 대표·관리자·경리만 — 다른 직책은 값만 본다.
  */
 export default function LeaveSettings() {
-  const [months, setMonths] = useState(1)
+  const [months, setMonths] = useState(2)
   const [canEdit, setCanEdit] = useState(false)
   const [loading, setLoading] = useState(true)
 

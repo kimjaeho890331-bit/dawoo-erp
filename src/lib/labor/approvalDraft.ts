@@ -34,14 +34,38 @@ export interface LaborDraft {
 
 const TITLE_MAX = 50
 
+/**
+ * 제목은 쓰던 관행을 따른다 — `26년 9월 상암오수펌프장 노무비[김창식,김수만] 집행 요청의 건`.
+ * 공사건이 제목에 들어가야 공사건별 1장이 서로 구분되고, 중복 제목 경고도 제 일을 한다.
+ * 50자를 넘으면 이름을 인원수로, 그래도 넘으면 공사건명을 자른다.
+ */
+function laborDraftTitle(input: { year: number; month: number; workTargetName: string; names: string[] }): string {
+  const { year, month, names } = input
+  const target = input.workTargetName.trim()
+  const yy = String(year % 100).padStart(2, '0')
+  const build = (t: string, who: string) => `${yy}년 ${month}월 ${t} 노무비${who} 집행 요청의 건`
+
+  const withNames = build(target, `[${names.join(',')}]`)
+  if (withNames.length <= TITLE_MAX) return withNames
+
+  const withCount = build(target, `(${names.length}명)`)
+  if (withCount.length <= TITLE_MAX) return withCount
+
+  // 공사건명이 길어 인원수로도 안 줄면 공사건명을 잘라 맞춘다 ('…' 한 글자 자리를 남긴다)
+  const cut = Math.max(1, target.length - (withCount.length - TITLE_MAX) - 1)
+  return build(`${target.slice(0, cut)}…`, `(${names.length}명)`)
+}
+
 export function laborApprovalDraft(input: {
   year: number
   month: number
   lines: LaborPayLine[]
   /** 지급일이 비어 있을 때 쓸 날짜 (YYYY-MM-DD) */
   today: string
+  /** 공사건(현장/접수건) 이름. 결의서 한 장 = 공사건 하나 */
+  workTargetName: string
 }): { ok: true; draft: LaborDraft } | { ok: false; error: string } {
-  const { year, month, lines, today } = input
+  const { year, month, lines, today, workTargetName } = input
   if (lines.length === 0) return { ok: false, error: '결재 올릴 근무자를 체크해 주세요.' }
 
   const unnamed = lines.filter(l => !l.worker_name.trim()).length
@@ -53,9 +77,7 @@ export function laborApprovalDraft(input: {
   }
 
   const names = lines.map(l => l.worker_name.trim())
-  const base = `${year}년 ${month}월 일용직 노무비`
-  const withNames = `${base} (${names[0]}${names.length > 1 ? ` 외 ${names.length - 1}명` : ''})`
-  const title = withNames.length <= TITLE_MAX ? withNames : `${base} (${names.length}명)`
+  const title = laborDraftTitle({ year, month, workTargetName, names })
 
   return {
     ok: true,

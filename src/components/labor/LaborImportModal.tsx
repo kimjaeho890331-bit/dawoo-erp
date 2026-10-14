@@ -25,13 +25,18 @@ interface PreviewRow {
 }
 
 const won = (n: number) => n.toLocaleString()
+export type WorkTarget = { site_id: string | null; project_id: string | null } | null
+
 const maskRid = (rid: string | null) => (rid ? rid.replace(/^(\d{6})-?\d+$/, '$1-*******') : '')
 
 function toPreview(
   src: ImportedLaborRow, year: number, month: number, rates: LaborRates, existing: LaborRecord[],
+  workTarget: WorkTarget,
 ): PreviewRow {
   const base: PreviewRow['insert'] = {
     year, month,
+    // 공사건은 불러온 섹션의 것으로 넣는다. 엑셀의 현장명(site_name)은 파일 값 그대로 보존한다.
+    site_id: workTarget?.site_id ?? null, project_id: workTarget?.project_id ?? null,
     worker_name: src.worker_name, resident_id: src.resident_id, phone: src.phone,
     bank_name: src.bank_name, account_number: src.account_number,
     day_values: src.day_values, daily_wage: src.daily_wage, vehicle_cost: src.vehicle_cost,
@@ -74,8 +79,14 @@ function toPreview(
   }
 }
 
-export default function LaborImportModal({ file, onClose, onImported }: {
+export default function LaborImportModal({ file, workTarget, workTargetName, viewYear, viewMonth, onClose, onImported }: {
   file: File
+  /** 어느 공사건으로 넣을지. 불러온 행에 그대로 들어간다 */
+  workTarget: WorkTarget
+  workTargetName?: string
+  /** 화면이 보고 있는 달 — 엑셀의 달과 다르면 경고한다 */
+  viewYear: number
+  viewMonth: number
   onClose: () => void
   onImported: (year: number, month: number, count: number) => void
 }) {
@@ -115,8 +126,8 @@ export default function LaborImportModal({ file, onClose, onImported }: {
 
   const rows = useMemo(() => {
     if (!parsed || !rates) return []
-    return parsed.rows.map(r => toPreview(r, parsed.year, parsed.month, rates, existing))
-  }, [parsed, rates, existing])
+    return parsed.rows.map(r => toPreview(r, parsed.year, parsed.month, rates, existing, workTarget))
+  }, [parsed, rates, existing, workTarget])
 
   // 이미 있는 줄은 기본으로 빼 둔다 (같은 파일을 두 번 넣어도 겹치지 않게)
   useEffect(() => {
@@ -124,6 +135,7 @@ export default function LaborImportModal({ file, onClose, onImported }: {
   }, [rows])
 
   const fileRates = parsed?.rates ?? null
+  const monthDiffers = !!parsed && (parsed.year !== viewYear || parsed.month !== viewMonth)
   const rateDiffers = !!(fileRates && rates && DEDUCTION_KEYS.some(k => fileRates[k] !== rates[k]))
   const pickedRows = rows.filter((_, i) => picked.has(i))
   const pickedNet = pickedRows.reduce((s, r) => s + r.netPay, 0)
@@ -171,10 +183,18 @@ export default function LaborImportModal({ file, onClose, onImported }: {
                 <span className="text-txt-tertiary">등록할 달 <b className="text-txt-primary">{parsed.year}년 {parsed.month}월</b></span>
                 <span className="text-txt-tertiary">시트 <b className="text-txt-primary">{parsed.sheetName}</b></span>
                 <span className="text-txt-tertiary">읽은 근무자 <b className="text-txt-primary">{rows.length}</b>줄</span>
+                <span className="text-txt-tertiary">공사건 <b className="text-txt-primary">{workTargetName || '미지정'}</b></span>
               </div>
 
-              {(parsed.warnings.length > 0 || rateDiffers) && (
+              {(parsed.warnings.length > 0 || rateDiffers || monthDiffers || !workTarget) && (
                 <ul className="rounded-lg bg-caution-bg text-caution-text text-[12px] px-4 py-2.5 space-y-0.5">
+                  {monthDiffers && (
+                    <li>
+                      엑셀의 달({parsed.year}년 {parsed.month}월)이 지금 보고 있는 달({viewYear}년 {viewMonth}월)과 다릅니다.
+                      그래도 넣으면 <b>엑셀의 달</b>로 들어갑니다.
+                    </li>
+                  )}
+                  {!workTarget && <li>공사건이 지정되지 않았습니다. 불러온 뒤 「공사건으로 옮기기」로 지정해 주세요.</li>}
                   {parsed.warnings.map(w => <li key={w}>{w}</li>)}
                   {rateDiffers && (
                     <li>엑셀의 요율이 이 달 ERP 요율과 다릅니다. 공제액은 엑셀에 적힌 금액 그대로 넣습니다.</li>

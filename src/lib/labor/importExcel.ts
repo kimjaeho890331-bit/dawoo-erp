@@ -339,6 +339,9 @@ interface RowIdentity {
   site_name?: string | null
   daily_wage?: number | null
   day_values?: Record<string, number> | null
+  /** 공사건(현장). 같은 사람이 같은 일급·출역으로 두 공사건에 있을 수 있다 */
+  site_id?: string | null
+  project_id?: string | null
 }
 
 function dayKey(days: Record<string, number> | null | undefined): string {
@@ -349,12 +352,19 @@ function dayKey(days: Record<string, number> | null | undefined): string {
     .join(',')
 }
 
-/** 이미 등록된 줄인지: 이름·현장·일급·출역이 모두 같을 때만 같은 줄로 본다. */
+/** 이미 등록된 줄인지: 공사건·이름·현장·일급·출역이 모두 같을 때만 같은 줄로 본다. */
 export function isSameLaborRow(a: RowIdentity, b: RowIdentity): boolean {
   return (
+    workTargetOf(a) === workTargetOf(b) &&
     a.worker_name.trim() === b.worker_name.trim() &&
     (a.site_name ?? '').trim() === (b.site_name ?? '').trim() &&
     Number(a.daily_wage ?? 0) === Number(b.daily_wage ?? 0) &&
     dayKey(a.day_values) === dayKey(b.day_values)
   )
+}
+
+function workTargetOf(r: RowIdentity): string {
+  if (r.site_id) return `site:${r.site_id}`
+  if (r.project_id) return `project:${r.project_id}`
+  return 'none'
 }

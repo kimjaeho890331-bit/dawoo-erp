@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Download, Upload, FileCheck, ChevronDown, Percent } from 'lucide-react'
+import { Plus, Trash2, Download, Upload, FileCheck, ChevronDown, Percent, ArrowRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
-import { workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
+import { projectLabel, workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
+import { groupLaborRows, assertWorkTargetAssigned, type LaborGroup } from '@/lib/labor/laborGroups'
+import LaborSectionHead from './LaborSectionHead'
 import { DEFAULT_RATES, pickRates, type LaborRates, type LaborRateRow } from '@/lib/labor/rates'
 import LaborImportModal from './LaborImportModal'
 import { maskResidentId } from '@/lib/labor/mask'
@@ -30,6 +32,11 @@ export interface LaborRecord {
   daily_wage: number | null
   vehicle_cost: number | null
   payment_date: string | null
+  /** 공사건 — 입찰/수의 현장 */
+  site_id: string | null
+  /** 공사건 — 지원사업 접수건 */
+  project_id: string | null
+  /** 엑셀 양식의 현장명(자유기재). 공사건과 별개로 보존한다 */
   site_name: string | null
   work_type: string | null
   note: string | null
@@ -140,9 +147,13 @@ export default function LaborPage() {
   const [nameDropdown, setNameDropdown] = useState<string | null>(null) // 열려있는 근무자 드롭다운의 record id
   const [exporting, setExporting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [workKind, setWorkKind] = useState<WorkKind>('')
-  const [siteId, setSiteId] = useState('')
-  const [projectId, setProjectId] = useState('')
+  // 공사건 고르기 — 섹션 추가 / 행 옮기기 / 엑셀 불러오기에 쓰는 임시 선택.
+  // 예전에는 화면 전체에 공사건 하나였다. 이제 공사건은 행에 저장된다(028).
+  const [picker, setPicker] = useState<null | { mode: 'add' | 'assign' | 'import'; rowIds?: string[] }>(null)
+  const [pickKind, setPickKind] = useState<WorkKind>('')
+  const [pickSiteId, setPickSiteId] = useState('')
+  const [pickProjectId, setPickProjectId] = useState('')
+  const [importTarget, setImportTarget] = useState<{ site_id: string | null; project_id: string | null } | null>(null)
   const [sites, setSites] = useState<WorkSiteOption[]>([])
   const [projects, setProjects] = useState<WorkProjectOption[]>([])
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -248,9 +259,12 @@ export default function LaborPage() {
     }
   }, [flushPending])
 
-  const addRow = async () => {
+  const addRow = async (target?: { site_id: string | null; project_id: string | null }) => {
     const { data, error } = await supabase.from('labor_records')
-      .insert({ year, month, worker_name: '', day_values: {}, sort_order: records.length })
+      .insert({
+        year, month, worker_name: '', day_values: {}, sort_order: records.length,
+        site_id: target?.site_id ?? null, project_id: target?.project_id ?? null,
+      })
       .select().single()
     if (error) { toast.error(`행 추가 실패: ${error.message}`); return }
     setRecords(prev => [...prev, data as LaborRecord])
@@ -311,6 +325,50 @@ export default function LaborPage() {
 
   const checkedRecords = records.filter(r => checked.has(r.id))
 
+  // 공사건 섹션 (미지정은 맨 뒤)
+  const groups = useMemo(() => groupLaborRows(records), [records])
+
+  /** 공사건 이름 — 섹션 머리줄과 결의서 제목에 쓴다 */
+  const targetName = useCallback((site_id: string | null, project_id: string | null): string => {
+    if (site_id) return sites.find(x => x.id === site_id)?.name?.trim() || '현장'
+    if (project_id) {
+      const p = projects.find(x => x.id === project_id)
+      return p ? projectLabel(p) : '지원사업'
+    }
+    return '공사건 미지정'
+  }, [sites, projects])
+
+  /** 고른 공사건으로 행들을 옮긴다. 잘못 넣은 행 복구와 기존 미지정 행 일괄 지정을 겸한다. */
+  const assignRows = (rowIds: string[], site_id: string | null, project_id: string | null) => {
+    for (const id of rowIds) patchRecord(id, { site_id, project_id }, true)
+    setChecked(new Set())
+    toast.success(`${rowIds.length}개 행을 「${targetName(site_id, project_id)}」(으)로 옮겼습니다.`)
+  }
+
+  const closePicker = () => { setPicker(null); setPickKind(''); setPickSiteId(''); setPickProjectId('') }
+
+  /** 공사건을 고르면 용도에 따라 — 섹션 추가 / 행 옮기기 / 엑셀 불러오기로 이어진다 */
+  const handlePick = (next: { kind: WorkKind; siteId: string; projectId: string }) => {
+    const site_id = next.siteId || null
+    const project_id = next.projectId || null
+    if (!site_id && !project_id) return
+    const mode = picker?.mode
+    const rowIds = picker?.rowIds ?? []
+    closePicker()
+    if (mode === 'add') {
+      const already = records.some(r => (r.site_id ?? null) === site_id && (r.project_id ?? null) === project_id)
+      if (already) { toast.info(`「${targetName(site_id, project_id)}」 묶음이 이미 있습니다.`); return }
+      addRow({ site_id, project_id })
+    } else if (mode === 'assign') {
+      assignRows(rowIds, site_id, project_id)
+    } else if (mode === 'import') {
+      // 불러온 행에 이 공사건을 넣는다. 파일 고르기는 그 다음.
+      setImportTarget({ site_id, project_id })
+      flushPending()
+      fileInputRef.current?.click()
+    }
+  }
+
   // --- 엑셀 불러오기: 저장이 끝나면 그 파일의 달로 화면을 옮긴다 ---
   const handleImported = (y: number, m: number, count: number) => {
     setImportFile(null)
@@ -328,7 +386,15 @@ export default function LaborPage() {
       const res = await fetch('/api/labor/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, rates, records: checkedRecords }),
+        // 체크한 전체가 한 시트로 나간다(통합 저장). 공사건은 현장명 열로 구분되게,
+        // 공사건이 지정된 행은 그 이름을 현장명으로 써서 보낸다 — 엑셀 양식에 현장 칸이 하나뿐이다.
+        body: JSON.stringify({
+          year, month, rates,
+          records: checkedRecords.map(r => ({
+            ...r,
+            site_name: r.site_id || r.project_id ? targetName(r.site_id, r.project_id) : r.site_name,
+          })),
+        }),
       })
       if (!res.ok) throw new Error(await res.text())
       const blob = await res.blob()
@@ -343,60 +409,94 @@ export default function LaborPage() {
     } finally { setExporting(false) }
   }
 
-  // --- 노무비 결재 올리기 (체크된 근무자 → 지출결의서 초안) ---
-  // 대표 결정(2026-10-09): 노무비도 지출결의서 결재를 거친다. 예전에는 결재 없이 지출에
-  // 바로 저장했다. 여기서는 작성중 결의서를 만들고 수정 화면을 연다 — 작성자가 결재선을
-  // 확인하고 "결재 올리기"를 눌러야 결재가 시작되고, 결재가 끝나야 지출에 들어간다.
-  const handleSubmitApproval = async () => {
+  // --- 노무비 결의서 만들기 (공사건별 1장) ---
+  // 대표 결정(2026-10-09): 노무비도 지출결의서 결재를 거친다. 여기서는 작성중 결의서만
+  // 만들고, 상신은 결의서를 열어 사람이 한다 — 증빙 첨부와 내용 확인을 거치게.
+  // 결의서는 공사건을 문서당 하나만 가지므로(026 CHECK) 공사건별로 한 장씩 만든다.
+  const handleCreateDrafts = async (targetGroups: LaborGroup<LaborRecord>[]) => {
     const actorId = typeof window !== 'undefined' ? localStorage.getItem(STAFF_STORAGE_KEY) : null
     if (!actorId) { toast.info('지금 쓰는 직원이 정해져 있지 않습니다. 지출결의서 화면 위쪽에서 직원을 먼저 골라 주세요.'); return }
-    if (!siteId && !projectId) { toast.info('위쪽에서 현장(또는 지원사업)을 먼저 골라 주세요. 노무비는 현장 연결이 필요합니다.'); return }
+    if (targetGroups.length === 0) { toast.info('결의서를 만들 근무자를 체크해 주세요.'); return }
+
+    const assigned = assertWorkTargetAssigned(targetGroups.flatMap(g => g.rows))
+    if (!assigned.ok) { toast.error(assigned.error); return }
 
     flushPending()
     const today = new Date().toISOString().slice(0, 10)
-    const built = laborApprovalDraft({
-      year, month, today,
-      lines: checkedRecords.map(r => {
-        const c = calcRow(r, rates)
-        return {
-          worker_name: r.worker_name || '',
-          netPay: c.netPay,
-          bank_name: r.bank_name,
-          account_number: r.account_number,
-          payment_date: r.payment_date,
-          detail: `${r.worker_name}: ${c.workDays}일 × ${fmt(r.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`,
-        }
-      }),
-    })
-    if (!built.ok) { toast.error(built.error); return }
-    const { title, payments, body_html } = built.draft
-    const totalNet = payments.reduce((s, p) => s + p.amount, 0)
 
-    // 같은 달 같은 묶음을 두 번 누르면 결의서가 두 장 생긴다. 이미 있으면 한 번 더 묻는다.
-    const { data: dup } = await supabase.from('expense_reports').select('id, status').eq('title', title).limit(1)
-    if (dup && dup.length > 0
-      && !confirm(`같은 제목의 지출결의서가 이미 있습니다.\n${title}\n\n그래도 새로 만들까요?`)) return
-
-    if (!confirm(`노무비 지출결의서를 만듭니다.\n\n${title}\n실지급 합계: ${totalNet.toLocaleString()}원 (${payments.length}명)\n\n다음 화면에서 내용과 결재선을 확인하고 「결재 올리기」를 눌러 주세요.\n결재가 끝나면 지출관리에 자동으로 들어갑니다.`)) return
-
-    setSubmitting(true)
-    try {
-      const res = await fetch('/api/approval/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor_staff_id: actorId, title, body_html,
-          site_id: siteId || null, project_id: projectId || null,
-          payments, lines: [], files: [],
+    // 한 장이라도 못 만들면 아무것도 만들지 않는다 — 반쪽짜리 묶음이 올라가지 않게.
+    const built: { rows: LaborRecord[]; name: string; title: string; body_html: string; payments: { vendor_name: string; amount: number; pay_request_date: string; bank: string; account_no: string; business_no: string }[]; total: number }[] = []
+    for (const g of targetGroups) {
+      const name = targetName(g.rows[0].site_id ?? null, g.rows[0].project_id ?? null)
+      const r = laborApprovalDraft({
+        year, month, today, workTargetName: name,
+        lines: g.rows.map(row => {
+          const c = calcRow(row, rates)
+          return {
+            worker_name: row.worker_name || '',
+            netPay: c.netPay,
+            bank_name: row.bank_name,
+            account_number: row.account_number,
+            payment_date: row.payment_date,
+            detail: `${row.worker_name}: ${c.workDays}일 × ${fmt(row.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`,
+          }
         }),
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) { toast.error(`결의서를 만들지 못했습니다: ${json.error || res.statusText}`); return }
-      router.push(`/approval/${json.id}/edit`)
+      if (!r.ok) { toast.error(`${name}: ${r.error}`); return }
+      built.push({
+        rows: g.rows, name, title: r.draft.title, body_html: r.draft.body_html,
+        payments: r.draft.payments, total: r.draft.payments.reduce((sum, x) => sum + x.amount, 0),
+      })
+    }
+
+    // 같은 묶음을 두 번 누르면 결의서가 두 장 생긴다. 이미 있으면 한 번 더 묻는다.
+    const { data: dup } = await supabase.from('expense_reports').select('title').in('title', built.map(b => b.title))
+    if (dup && dup.length > 0
+      && !confirm(`같은 제목의 지출결의서가 이미 있습니다.
+${dup.map(d => d.title).join('\n')}
+
+그래도 새로 만들까요?`)) return
+
+    const summary = built.map((b, i) => `  ${i + 1}. ${b.name}  ${b.total.toLocaleString()}원 (${b.payments.length}명)`).join('\n')
+    if (!confirm(`노무비 지출결의서 ${built.length}장을 만듭니다.
+
+${summary}
+
+만든 뒤 결의서를 열어 「결재 올리기」를 눌러 주세요.
+결재가 끝나면 지출관리에 자동으로 들어갑니다.`)) return
+
+    setSubmitting(true)
+    const madeIds: string[] = []
+    const failed: string[] = []
+    try {
+      // 문서 단위 API라 전부-또는-전무로 묶을 수 없다. 성공한 것은 남기고 실패만 알린다.
+      for (const b of built) {
+        const res = await fetch('/api/approval/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actor_staff_id: actorId, title: b.title, body_html: b.body_html,
+            site_id: b.rows[0].site_id ?? null, project_id: b.rows[0].project_id ?? null,
+            payments: b.payments, lines: [], files: [],
+          }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) { failed.push(`${b.name}(${json.error || res.statusText})`); continue }
+        madeIds.push(json.id)
+      }
     } finally {
       setSubmitting(false)
     }
+
+    if (failed.length > 0) toast.error(`만들지 못한 공사건: ${failed.join(', ')}`)
+    if (madeIds.length === 0) return
+    if (madeIds.length === 1 && failed.length === 0) { router.push(`/approval/${madeIds[0]}/edit`); return }
+    toast.success(`결의서 ${madeIds.length}장을 만들었습니다. 하나씩 열어 결재를 올려 주세요.`)
+    router.push('/approval')
   }
+
+  /** 상단 버튼 — 체크된 행을 공사건별로 묶어 N장 */
+  const handleSubmitApproval = () => handleCreateDrafts(groupLaborRows(checkedRecords))
 
   // --- 합계 ---
   const totals = useMemo(() => {
@@ -416,28 +516,20 @@ export default function LaborPage() {
   return (
     <div className="md:p-6 space-y-5">
       {importFile && (
-        <LaborImportModal file={importFile} onClose={() => setImportFile(null)} onImported={handleImported} />
+        <LaborImportModal
+          file={importFile}
+          workTarget={importTarget}
+          workTargetName={importTarget ? targetName(importTarget.site_id, importTarget.project_id) : undefined}
+          viewYear={year}
+          viewMonth={month}
+          onClose={() => { setImportFile(null); setImportTarget(null) }}
+          onImported={handleImported}
+        />
       )}
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">일용직 근무관리</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="min-w-[220px] max-w-sm">
-            <WorkTargetPicker
-              compact
-              floating
-              kind={workKind}
-              siteId={siteId}
-              projectId={projectId}
-              sites={sites}
-              projects={projects}
-              onChange={next => {
-                setWorkKind(next.kind || workKindFromIds(next.siteId, next.projectId))
-                setSiteId(next.siteId)
-                setProjectId(next.projectId)
-              }}
-            />
-          </div>
           <Link href="/labor/rates"
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition">
             <Percent size={15} className="text-txt-tertiary" />
@@ -445,7 +537,7 @@ export default function LaborPage() {
           </Link>
           <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden"
             onChange={e => { setImportFile(e.target.files?.[0] ?? null); e.target.value = '' }} />
-          <button onClick={() => { flushPending(); fileInputRef.current?.click() }}
+          <button onClick={() => setPicker({ mode: 'import' })}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition">
             <Upload size={15} className="text-txt-tertiary" />
             엑셀 불러오기
@@ -458,7 +550,7 @@ export default function LaborPage() {
           <button onClick={handleSubmitApproval} disabled={submitting}
             className="btn-primary flex items-center gap-1.5 whitespace-nowrap">
             <FileCheck size={15} />
-            {submitting ? '만드는 중...' : '노무비 결재 올리기'}
+            {submitting ? '만드는 중...' : '노무비 결의서 만들기'}
           </button>
         </div>
       </div>
@@ -489,6 +581,47 @@ export default function LaborPage() {
           <span className="text-txt-tertiary">실지급 <b className="text-accent-text tabular-nums">{fmt(totals.netPay)}</b>원</span>
         </div>
       </div>
+
+      {/* 공사건 고르기 — 섹션 추가 / 행 옮기기 / 엑셀 불러오기가 모두 여기를 거친다 */}
+      {picker && (
+        <div className="rounded-[10px] border border-accent bg-surface p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <b className="text-[13px] text-txt-primary">
+              {picker.mode === 'add' ? '어느 공사건을 추가할까요?'
+                : picker.mode === 'assign' ? `선택한 ${picker.rowIds?.length ?? 0}개 행을 어느 공사건으로 옮길까요?`
+                : '어느 공사건으로 불러올까요? (고르면 파일 선택이 열립니다)'}
+            </b>
+            <button type="button" onClick={closePicker} className="text-[12px] text-txt-tertiary hover:text-txt-secondary">취소</button>
+          </div>
+          <WorkTargetPicker
+            compact
+            kind={pickKind}
+            siteId={pickSiteId}
+            projectId={pickProjectId}
+            sites={sites}
+            projects={projects}
+            onChange={next => {
+              setPickKind(next.kind || workKindFromIds(next.siteId, next.projectId))
+              setPickSiteId(next.siteId)
+              setPickProjectId(next.projectId)
+              handlePick(next)
+            }}
+          />
+        </div>
+      )}
+
+      {/* 체크한 행을 다른 공사건으로 옮긴다 — 잘못 넣은 행 복구와 기존 미지정 행 일괄 지정 */}
+      {checked.size > 0 && !picker && (
+        <div className="flex items-center gap-2 flex-wrap rounded-[10px] border border-border-primary bg-surface-secondary px-3 py-2">
+          <span className="text-[13px] text-txt-secondary">
+            선택한 <b className="text-txt-primary">{checked.size}</b>개 행
+          </span>
+          <button type="button" onClick={() => setPicker({ mode: 'assign', rowIds: [...checked] })}
+            className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-surface px-2 py-1 text-[12px] text-txt-secondary hover:bg-surface-tertiary transition">
+            <ArrowRight size={13} /> 공사건으로 옮기기
+          </button>
+        </div>
+      )}
 
       {/* 31칸짜리 표라 폰에서는 칸을 짚기도 어렵다. 안 되는 이유를 모른 채 애쓰지 않게 미리 알린다. */}
       <p className="md:hidden rounded-lg bg-surface-secondary px-3 py-2 text-[13px] text-txt-secondary">
@@ -539,15 +672,40 @@ export default function LaborPage() {
             </thead>
             <tbody>
               {records.length === 0 ? (
-                <tr><td colSpan={30} className="text-center py-12 text-txt-quaternary text-sm">등록된 근무자가 없습니다. 아래 [근무자 추가]를 눌러주세요.</td></tr>
-              ) : records.map(r => {
-                const c = calcRow(r, rates)
+                <tr><td colSpan={COL_WIDTHS.length} className="text-center py-12 text-txt-quaternary text-sm">등록된 근무자가 없습니다. 아래 [+ 공사건 추가]로 시작해 주세요.</td></tr>
+              ) : groups.map(g => {
+                const site_id = g.rows[0].site_id ?? null
+                const project_id = g.rows[0].project_id ?? null
+                const assigned = g.kind !== 'none'
+                const groupNetPay = g.rows.reduce((sum, row) => sum + calcRow(row, rates).netPay, 0)
                 return (
-                  <FragmentRow key={r.id} r={r} c={c} daysInMonth={daysInMonth} days1={days1} days2={days2}
-                    tdCls={tdCls} checked={checked.has(r.id)} toggleCheck={toggleCheck}
-                    nameDropdown={nameDropdown} setNameDropdown={setNameDropdown} dropdownRef={dropdownRef}
-                    workers={workers} pickWorker={pickWorker} patchRecord={patchRecord}
-                    setDayValue={setDayValue} setDeduction={setDeduction} resetDeduction={resetDeduction} deleteRow={deleteRow} />
+                  <Fragment key={g.key}>
+                    <LaborSectionHead
+                      colSpan={COL_WIDTHS.length}
+                      label={targetName(site_id, project_id)}
+                      sourceLabel={!assigned ? null
+                        : g.kind === 'project' ? '지원사업'
+                        : (sites.find(x => x.id === site_id)?.contract_type || '현장')}
+                      count={g.rows.length}
+                      netPay={groupNetPay}
+                      assigned={assigned}
+                      busy={submitting}
+                      onAddWorker={() => addRow({ site_id, project_id })}
+                      onImport={() => { setImportTarget({ site_id, project_id }); flushPending(); fileInputRef.current?.click() }}
+                      onMove={() => setPicker({ mode: 'assign', rowIds: g.rows.map(row => row.id) })}
+                      onDraft={() => handleCreateDrafts([g])}
+                    />
+                    {g.rows.map(r => {
+                      const c = calcRow(r, rates)
+                      return (
+                        <FragmentRow key={r.id} r={r} c={c} daysInMonth={daysInMonth} days1={days1} days2={days2}
+                          tdCls={tdCls} checked={checked.has(r.id)} toggleCheck={toggleCheck}
+                          nameDropdown={nameDropdown} setNameDropdown={setNameDropdown} dropdownRef={dropdownRef}
+                          workers={workers} pickWorker={pickWorker} patchRecord={patchRecord}
+                          setDayValue={setDayValue} setDeduction={setDeduction} resetDeduction={resetDeduction} deleteRow={deleteRow} />
+                      )
+                    })}
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -555,9 +713,9 @@ export default function LaborPage() {
         )}
       </div>
 
-      <button onClick={addRow}
+      <button onClick={() => setPicker({ mode: 'add' })}
         className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-dashed border-border-secondary text-txt-tertiary rounded-lg hover:border-accent hover:text-accent-text transition">
-        <Plus size={15} /> 근무자 추가
+        <Plus size={15} /> 공사건 추가
       </button>
 
       <p className="text-xs text-txt-quaternary leading-relaxed">
@@ -566,7 +724,10 @@ export default function LaborPage() {
         · 소득세는 일급 15만원 초과분 × 요율(일 세액 1,000원 미만 소액부징수), 주민세는 소득세 × 요율, 장기요양은 건강보험 × 요율, 나머지는 총지급액 × 요율 기준입니다.<br />
         · 공제 대상이 아닌 근무자는 <b>해당 칸을 비우고 Enter</b>(또는 0 입력) → 요율과 무관하게 0으로 확정됩니다.<br />
         · 그 칸에서 <b>Esc</b>를 누르면 수기값을 버리고 다시 요율 자동계산으로 돌아갑니다(회색 글씨 = 자동, 진한 글씨 = 수기).<br />
-        · 근무자 이름을 클릭하면 이전에 등록한 작업자를 선택할 수 있고, 주민등록번호/연락처/은행/계좌가 자동 입력됩니다.
+        · 근무자 이름을 클릭하면 이전에 등록한 작업자를 선택할 수 있고, 주민등록번호/연락처/은행/계좌가 자동 입력됩니다.<br />
+        · <b>공사건 추가</b>로 묶음을 만들고, 그 묶음의 <b>엑셀 불러오기</b>로 근무자를 채웁니다. 불러온 행에는 그 공사건이 자동으로 들어갑니다.<br />
+        · <b>노무비 결의서 만들기</b>는 체크한 행을 공사건별로 묶어 결의서를 한 장씩 만듭니다(결의서는 공사건 하나만 담을 수 있습니다). 상신은 결의서를 열어서 합니다.<br />
+        · <b>엑셀 저장</b>은 체크한 전체를 통합 한 시트로 내립니다. 공사건은 현장명 칸으로 구분됩니다.
       </p>
     </div>
   )

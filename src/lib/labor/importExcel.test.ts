@@ -254,4 +254,14 @@ describe('isSameLaborRow', () => {
   it('현장이 비어 있는 것끼리는 같다고 본다', () => {
     expect(isSameLaborRow({ ...base, site_name: null }, { ...base, site_name: '' })).toBe(true)
   })
+
+  it('공사건이 다르면 같은 사람·일급·출역이라도 다른 줄이다', () => {
+    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, site_id: 'S2' })).toBe(false)
+    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, project_id: 'S1' })).toBe(false)
+    expect(isSameLaborRow({ ...base, site_id: 'S1' }, base)).toBe(false)
+  })
+
+  it('공사건까지 같으면 같은 줄이다', () => {
+    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, site_id: 'S1' })).toBe(true)
+  })
 })

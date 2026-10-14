@@ -162,6 +162,8 @@ export default function LaborPage() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const pendingPatch = useRef(new Map<string, Partial<LaborRecord>>())
+  /** 빈 달에 기본 근무자 줄을 만든 달 (중복 생성 방지) */
+  const autoRowFor = useRef<string | null>(null)
 
   const daysInMonth = new Date(year, month, 0).getDate()
 
@@ -171,7 +173,20 @@ export default function LaborPage() {
     const { data, error } = await supabase.from('labor_records').select('*')
       .eq('year', year).eq('month', month)
       .order('sort_order').order('created_at')
-    if (!error && data) setRecords(data as LaborRecord[])
+    if (!error && data) {
+      // 빈 달이면 근무자 한 줄을 미리 만들어 둔다 — 들어오자마자 바로 칠 수 있게.
+      // 같은 달에 두 번 만들지 않도록 ref로 막는다(개발 모드에서 이펙트가 두 번 도는 것 포함).
+      const key = `${year}-${month}`
+      if (data.length === 0 && autoRowFor.current !== key) {
+        autoRowFor.current = key
+        const { data: made } = await supabase.from('labor_records')
+          .insert({ year, month, worker_name: '', day_values: {}, sort_order: 0 })
+          .select().single()
+        setRecords(made ? [made as LaborRecord] : [])
+      } else {
+        setRecords(data as LaborRecord[])
+      }
+    }
     setChecked(new Set())
     setLoading(false)
   }, [year, month])

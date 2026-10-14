@@ -539,6 +539,7 @@ ${summary}
         </div>
         <WorkTargetPicker
           compact
+          oneLine
           kind={pickKind}
           siteId={pickSiteId}
           projectId={pickProjectId}

@@ -26,6 +26,7 @@ export default function WorkTargetPicker({
   onChange,
   compact,
   floating,
+  oneLine,
 }: {
   kind: WorkKind
   siteId: string
@@ -34,6 +35,8 @@ export default function WorkTargetPicker({
   projects: WorkProjectOption[]
   onChange: (next: { kind: WorkKind; siteId: string; projectId: string }) => void
   compact?: boolean
+  /** 출처 칩(왼쪽)과 검색칸(오른쪽)을 한 줄에 둔다. 좁은 자리에 끼울 때 */
+  oneLine?: boolean
   /** 결과 목록을 아래 내용 위에 띄운다 (목록이 화면을 밀어내지 않게) */
   floating?: boolean
 }) {
@@ -84,6 +87,23 @@ export default function WorkTargetPicker({
     ? 'h-8 w-full rounded-lg border border-border-primary bg-surface pl-8 pr-3 text-xs text-txt-primary'
     : 'input-field w-full pl-9 text-base md:text-[13px]'
 
+  const searchBox = (
+    <div className="relative min-w-0 flex-1">
+      <Search
+        size={14}
+        className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-txt-tertiary ${compact ? 'left-2.5' : 'left-3'}`}
+      />
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="현장·접수 이름 검색"
+        aria-label="현장 검색"
+        autoComplete="off"
+        className={inputCls}
+      />
+    </div>
+  )
+
   return (
     <div className="relative space-y-2">
       {selected ? (
@@ -99,28 +119,16 @@ export default function WorkTargetPicker({
             <X size={14} className="text-txt-tertiary" />
           </button>
         </div>
-      ) : (
+      ) : oneLine ? null : (
         <p className="text-[11px] text-txt-tertiary">
           {kind === '' ? '비워 두면 목록에 현장 없음으로 보입니다. 저장은 됩니다.' : '검색해서 현장을 고르세요.'}
         </p>
       )}
 
-      <div className="relative">
-        <Search
-          size={14}
-          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-txt-tertiary ${compact ? 'left-2.5' : 'left-3'}`}
-        />
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="현장·접수 이름 검색"
-          aria-label="현장 검색"
-          autoComplete="off"
-          className={inputCls}
-        />
-      </div>
+      {/* 한 줄 모드: 왼쪽 출처 칩 · 오른쪽 검색. 좁은 자리(섹션 머리줄)에 끼울 때 */}
+      {!oneLine && searchBox}
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className={`flex flex-wrap items-center gap-1.5 ${oneLine ? 'gap-2' : ''}`}>
         {WORK_SOURCE_FILTERS.map(opt => (
           <button
             key={opt.key}
@@ -132,7 +140,7 @@ export default function WorkTargetPicker({
             {opt.label}
           </button>
         ))}
-        <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[12px] text-txt-secondary">
+        <label className={`flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-[12px] text-txt-secondary ${oneLine ? '' : 'ml-auto'}`}>
           <input
             type="checkbox"
             checked={includeCompleted}
@@ -141,6 +149,7 @@ export default function WorkTargetPicker({
           />
           완료 포함
         </label>
+        {oneLine && searchBox}
       </div>
 
       {query.trim() || isBrowsableSource(source) ? (

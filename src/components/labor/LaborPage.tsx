@@ -149,7 +149,8 @@ export default function LaborPage() {
   const [submitting, setSubmitting] = useState(false)
   // 공사건 고르기 — 섹션 추가 / 행 옮기기 / 엑셀 불러오기에 쓰는 임시 선택.
   // 예전에는 화면 전체에 공사건 하나였다. 이제 공사건은 행에 저장된다(028).
-  const [picker, setPicker] = useState<null | { mode: 'add' | 'assign' | 'import'; rowIds?: string[] }>(null)
+  // at — 피커를 띄울 자리. 'top'(체크한 행 옮기기·엑셀 불러오기) · 'bottom'(공사건 추가) · 섹션 key(공사건 바꾸기)
+  const [picker, setPicker] = useState<null | { mode: 'add' | 'assign' | 'import'; rowIds?: string[]; at: 'top' | 'bottom' | string }>(null)
   const [pickKind, setPickKind] = useState<WorkKind>('')
   const [pickSiteId, setPickSiteId] = useState('')
   const [pickProjectId, setPickProjectId] = useState('')
@@ -507,6 +508,38 @@ ${summary}
     }, { total: 0, dedSum: 0, netPay: 0 })
   }, [records, rates])
 
+  // 공사건 고르기 패널. 섹션 머리줄·표 아래·상단 — picker.at 이 가리키는 자리에서 그려진다.
+  // 예전에는 어디서 눌러도 화면 맨 위에 떠서, 누른 자리와 멀어 헷갈렸다.
+  const pickerPanel = () => {
+    if (!picker) return null
+    const title = picker.mode === 'add' ? '어느 공사건을 추가할까요?'
+      : picker.mode === 'import' ? '어느 공사건으로 불러올까요? (고르면 파일 선택이 열립니다)'
+      : picker.at === 'top' ? `선택한 ${picker.rowIds?.length ?? 0}개 행을 어느 공사건으로 옮길까요?`
+      : '이 묶음을 어느 공사건으로 바꿀까요?'
+    return (
+      <div className="rounded-[10px] border border-accent bg-surface p-3 space-y-2 text-left">
+        <div className="flex items-center justify-between gap-2">
+          <b className="text-[13px] text-txt-primary">{title}</b>
+          <button type="button" onClick={closePicker} className="text-[12px] text-txt-tertiary hover:text-txt-secondary">취소</button>
+        </div>
+        <WorkTargetPicker
+          compact
+          kind={pickKind}
+          siteId={pickSiteId}
+          projectId={pickProjectId}
+          sites={sites}
+          projects={projects}
+          onChange={next => {
+            setPickKind(next.kind || workKindFromIds(next.siteId, next.projectId))
+            setPickSiteId(next.siteId)
+            setPickProjectId(next.projectId)
+            handlePick(next)
+          }}
+        />
+      </div>
+    )
+  }
+
   const days1 = Array.from({ length: 15 }, (_, i) => i + 1)
   const days2 = Array.from({ length: 16 }, (_, i) => i + 16)
 
@@ -537,7 +570,7 @@ ${summary}
           </Link>
           <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden"
             onChange={e => { setImportFile(e.target.files?.[0] ?? null); e.target.value = '' }} />
-          <button onClick={() => setPicker({ mode: 'import' })}
+          <button onClick={() => setPicker({ mode: 'import', at: 'top' })}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition">
             <Upload size={15} className="text-txt-tertiary" />
             엑셀 불러오기
@@ -582,33 +615,8 @@ ${summary}
         </div>
       </div>
 
-      {/* 공사건 고르기 — 섹션 추가 / 행 옮기기 / 엑셀 불러오기가 모두 여기를 거친다 */}
-      {picker && (
-        <div className="rounded-[10px] border border-accent bg-surface p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <b className="text-[13px] text-txt-primary">
-              {picker.mode === 'add' ? '어느 공사건을 추가할까요?'
-                : picker.mode === 'assign' ? `선택한 ${picker.rowIds?.length ?? 0}개 행을 어느 공사건으로 옮길까요?`
-                : '어느 공사건으로 불러올까요? (고르면 파일 선택이 열립니다)'}
-            </b>
-            <button type="button" onClick={closePicker} className="text-[12px] text-txt-tertiary hover:text-txt-secondary">취소</button>
-          </div>
-          <WorkTargetPicker
-            compact
-            kind={pickKind}
-            siteId={pickSiteId}
-            projectId={pickProjectId}
-            sites={sites}
-            projects={projects}
-            onChange={next => {
-              setPickKind(next.kind || workKindFromIds(next.siteId, next.projectId))
-              setPickSiteId(next.siteId)
-              setPickProjectId(next.projectId)
-              handlePick(next)
-            }}
-          />
-        </div>
-      )}
+      {/* 공사건 고르기 — 부른 자리에서 뜬다. 상단은 체크한 행 옮기기·엑셀 불러오기용 */}
+      {picker?.at === 'top' && pickerPanel()}
 
       {/* 체크한 행을 다른 공사건으로 옮긴다 — 잘못 넣은 행 복구와 기존 미지정 행 일괄 지정 */}
       {checked.size > 0 && !picker && (
@@ -616,7 +624,7 @@ ${summary}
           <span className="text-[13px] text-txt-secondary">
             선택한 <b className="text-txt-primary">{checked.size}</b>개 행
           </span>
-          <button type="button" onClick={() => setPicker({ mode: 'assign', rowIds: [...checked] })}
+          <button type="button" onClick={() => setPicker({ mode: 'assign', rowIds: [...checked], at: 'top' })}
             className="inline-flex items-center gap-1 rounded-md border border-border-primary bg-surface px-2 py-1 text-[12px] text-txt-secondary hover:bg-surface-tertiary transition">
             <ArrowRight size={13} /> 공사건으로 옮기기
           </button>
@@ -692,7 +700,8 @@ ${summary}
                       busy={submitting}
                       onAddWorker={() => addRow({ site_id, project_id })}
                       onImport={() => { setImportTarget({ site_id, project_id }); flushPending(); fileInputRef.current?.click() }}
-                      onMove={() => setPicker({ mode: 'assign', rowIds: g.rows.map(row => row.id) })}
+                      onMove={() => setPicker({ mode: 'assign', rowIds: g.rows.map(row => row.id), at: g.key })}
+                      picker={picker?.at === g.key ? pickerPanel() : null}
                       onDraft={() => handleCreateDrafts([g])}
                     />
                     {g.rows.map(r => {
@@ -713,10 +722,14 @@ ${summary}
         )}
       </div>
 
-      <button onClick={() => setPicker({ mode: 'add' })}
-        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-dashed border-border-secondary text-txt-tertiary rounded-lg hover:border-accent hover:text-accent-text transition">
-        <Plus size={15} /> 공사건 추가
-      </button>
+      {picker?.at === 'bottom' ? (
+        <div className="max-w-xl">{pickerPanel()}</div>
+      ) : (
+        <button onClick={() => setPicker({ mode: 'add', at: 'bottom' })}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-dashed border-border-secondary text-txt-tertiary rounded-lg hover:border-accent hover:text-accent-text transition">
+          <Plus size={15} /> 공사건 추가
+        </button>
+      )}
 
       <p className="text-xs text-txt-quaternary leading-relaxed">
         · 공제 6종은 표 머리글에 보이는 요율대로 자동 산출되어 -금액으로 표시됩니다. 요율은 위 <b>요율 설정</b>에서 고칩니다.<br />

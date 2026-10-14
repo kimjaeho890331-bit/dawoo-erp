@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Plus, Upload, FileCheck, ArrowRight } from 'lucide-react'
 
 /**
@@ -8,7 +9,7 @@ import { Plus, Upload, FileCheck, ArrowRight } from 'lucide-react'
  */
 export default function LaborSectionHead({
   colSpan, label, sourceLabel, count, netPay, assigned, busy,
-  onAddWorker, onImport, onMove, onDraft,
+  onAddWorker, onImport, onMove, onDraft, picker,
 }: {
   colSpan: number
   label: string
@@ -23,11 +24,16 @@ export default function LaborSectionHead({
   onImport: () => void
   onMove: () => void
   onDraft: () => void
+  /** 공사건을 바꾸는 중이면 고르기 패널. 이 자리에서 바로 고치게 한다 */
+  picker?: ReactNode
 }) {
   const btn = 'inline-flex items-center gap-1 rounded-md border border-border-primary bg-surface px-2 py-1 text-[12px] text-txt-secondary hover:bg-surface-tertiary transition disabled:opacity-50'
   return (
     <tr className="border-t-2 border-border-primary bg-surface-secondary">
       <td colSpan={colSpan} className="px-2 py-1.5">
+        {picker ? (
+          <div className="max-w-xl">{picker}</div>
+        ) : (
         <div className="flex items-center gap-2 flex-wrap">
           {sourceLabel && (
             <span className="rounded border border-border-secondary px-1.5 py-0.5 text-[11px] text-txt-tertiary">
@@ -57,6 +63,7 @@ export default function LaborSectionHead({
             </button>
           )}
         </div>
+        )}
       </td>
     </tr>
   )

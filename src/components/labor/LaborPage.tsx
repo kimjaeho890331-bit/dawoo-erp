@@ -178,9 +178,11 @@ export default function LaborPage() {
       .order('sort_order').order('created_at')
     if (!error && data) {
       // 빈 달이면 근무자 한 줄을 미리 만들어 둔다 — 들어오자마자 바로 칠 수 있게.
+      // 지난 달을 둘러보기만 해도 빈 행이 생겨 쓰레기가 쌓였다(2026-10-15). 이번 달에만 만든다.
       // 같은 달에 두 번 만들지 않도록 ref로 막는다(개발 모드에서 이펙트가 두 번 도는 것 포함).
       const key = `${year}-${month}`
-      if (data.length === 0 && autoRowFor.current !== key) {
+      const thisMonth = year === new Date().getFullYear() && month === new Date().getMonth() + 1
+      if (data.length === 0 && thisMonth && autoRowFor.current !== key) {
         autoRowFor.current = key
         const { data: made } = await supabase.from('labor_records')
           .insert({ year, month, worker_name: '', day_values: {}, sort_order: 0 })

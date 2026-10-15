@@ -96,6 +96,8 @@ export default function LaborImportModal({ file, workTarget, workTargetName, vie
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [saving, setSaving] = useState(false)
+  /** 읽을 시트. 파일에 구역별 시트가 여러 개면 사람이 고른다 */
+  const [sheet, setSheet] = useState<string>('')
 
   useEffect(() => {
     let alive = true
@@ -103,6 +105,7 @@ export default function LaborImportModal({ file, workTarget, workTargetName, vie
       try {
         const body = new FormData()
         body.append('file', file)
+        if (sheet) body.append('sheet', sheet)
         const res = await fetch('/api/labor/import', { method: 'POST', body })
         const json = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(json.error || '엑셀을 읽지 못했습니다.')
@@ -122,7 +125,7 @@ export default function LaborImportModal({ file, workTarget, workTargetName, vie
       }
     })()
     return () => { alive = false }
-  }, [file])
+  }, [file, sheet])
 
   const rows = useMemo(() => {
     if (!parsed || !rates) return []
@@ -181,7 +184,20 @@ export default function LaborImportModal({ file, workTarget, workTargetName, vie
             <>
               <div className="flex items-center gap-4 flex-wrap text-sm">
                 <span className="text-txt-tertiary">등록할 달 <b className="text-txt-primary">{parsed.year}년 {parsed.month}월</b></span>
-                <span className="text-txt-tertiary">시트 <b className="text-txt-primary">{parsed.sheetName}</b></span>
+                <span className="text-txt-tertiary">
+                  시트{' '}
+                  {parsed.sheets.length > 1 ? (
+                    <select
+                      value={parsed.sheetName}
+                      onChange={e => { setSheet(e.target.value); setPicked(new Set()) }}
+                      className="rounded-md border border-border-primary bg-surface px-2 py-1 text-[13px] text-txt-primary outline-none focus:border-accent"
+                    >
+                      {parsed.sheets.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  ) : (
+                    <b className="text-txt-primary">{parsed.sheetName}</b>
+                  )}
+                </span>
                 <span className="text-txt-tertiary">읽은 근무자 <b className="text-txt-primary">{rows.length}</b>줄</span>
                 <span className="text-txt-tertiary">공사건 <b className="text-txt-primary">{workTargetName || '미지정'}</b></span>
               </div>

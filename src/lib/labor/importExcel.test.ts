@@ -164,6 +164,23 @@ describe('parseLaborWorkbook', () => {
     expect(res.warnings.join(' ')).toContain('숨겨진 시트 1개')
   })
 
+  // 파일에 구역별 시트가 같이 들어 있으면 맨 앞 시트만 읽혀서, 넣으려던 사람이 아니라
+  // 다른 구역 사람이 들어왔다(2026-10-15). 어느 시트를 읽을지 고를 수 있어야 한다.
+  it('시트가 여러 개면 읽을 시트를 고를 수 있다', () => {
+    const wb = new ExcelJS.Workbook()
+    addSheet(wb, '1구역', { workers: [{ name: '김창식', wage: 190000, top: { 1: 1 } }] })
+    addSheet(wb, '2구역', { workers: [{ name: '박정헌', wage: 360000, top: { 2: 1 } }] })
+
+    const first = parseLaborWorkbook(wb)
+    expect(first.sheetName).toBe('1구역')
+    expect(first.sheets).toEqual(['1구역', '2구역'])
+    expect(first.rows.map(r => r.worker_name)).toEqual(['김창식'])
+
+    const picked = parseLaborWorkbook(wb, '2구역')
+    expect(picked.sheetName).toBe('2구역')
+    expect(picked.rows.map(r => r.worker_name)).toEqual(['박정헌'])
+  })
+
   it('은행과 계좌를 한 칸에 적은 것을 나눈다', () => {
     const wb = new ExcelJS.Workbook()
     addSheet(wb, 's', { workers: [{ name: '홍길동', wage: 90000, top: { 1: 1 }, bankTop: '국민 123456-00-123456' }] })

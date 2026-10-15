@@ -32,6 +32,8 @@ export interface ImportedLaborRow {
 
 export interface LaborImportResult {
   sheetName: string
+  /** 읽을 수 있는 시트 이름들. 둘 이상이면 화면에서 고를 수 있다 */
+  sheets: string[]
   year: number
   month: number
   /** 머리글의 요율(% 단위). 하나라도 못 읽으면 null. */
@@ -238,24 +240,33 @@ function readPayDate(row: ExcelJS.Row, col: number | null): { payment_date: stri
   return { payment_date: null, note: `지급일: ${s}` }
 }
 
-export function parseLaborWorkbook(wb: ExcelJS.Workbook): LaborImportResult {
+/**
+ * @param sheetName 읽을 시트. 비우면 맨 앞의 읽을 수 있는 시트.
+ *   파일에 구역별 시트가 같이 들어 있으면 맨 앞 시트만 읽혀 엉뚱한 사람이 들어왔다(2026-10-15).
+ */
+export function parseLaborWorkbook(wb: ExcelJS.Workbook, sheetName?: string): LaborImportResult {
   const warnings: string[] = []
   let hiddenCount = 0
-  let target: { ws: ExcelJS.Worksheet; headerRow: number } | null = null
-  const skippedVisible: string[] = []
+  const candidates: { ws: ExcelJS.Worksheet; headerRow: number }[] = []
 
   for (const ws of wb.worksheets) {
     if (ws.state !== 'visible') { hiddenCount++; continue }
     const headerRow = findHeaderRow(ws)
     if (headerRow == null) continue
-    if (target) skippedVisible.push(ws.name)
-    else target = { ws, headerRow }
+    candidates.push({ ws, headerRow })
   }
 
-  if (!target) {
+  if (candidates.length === 0) {
     throw new Error('노무비 지급내역 양식을 찾지 못했습니다. 「성명 · 주민등록번호」 머리글이 있는 시트가 보이는 상태여야 합니다.')
   }
-  const { ws, headerRow } = target
+
+  const sheets = candidates.map(c => c.ws.name)
+  const wanted = sheetName ? candidates.find(c => c.ws.name === sheetName) : candidates[0]
+  if (!wanted) {
+    throw new Error(`「${sheetName}」 시트를 찾지 못했습니다. 읽을 수 있는 시트: ${sheets.join(', ')}`)
+  }
+  const { ws, headerRow } = wanted
+  const skippedVisible = sheets.filter(n => n !== ws.name)
 
   const period = findPeriod(ws, headerRow)
   if (!period) {
@@ -270,7 +281,7 @@ export function parseLaborWorkbook(wb: ExcelJS.Workbook): LaborImportResult {
 
   if (hiddenCount > 0) warnings.push(`숨겨진 시트 ${hiddenCount}개는 읽지 않았습니다.`)
   if (skippedVisible.length > 0) {
-    warnings.push(`「${ws.name}」 시트만 읽었습니다. 읽지 않은 시트: ${skippedVisible.join(', ')}`)
+    warnings.push(`「${ws.name}」 시트를 읽었습니다. 다른 시트를 넣으려면 위에서 시트를 바꿔 주세요: ${skippedVisible.join(', ')}`)
   }
 
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -320,7 +331,7 @@ export function parseLaborWorkbook(wb: ExcelJS.Workbook): LaborImportResult {
     })
   }
 
-  return { sheetName: ws.name, year, month, rates, rows, warnings }
+  return { sheetName: ws.name, sheets, year, month, rates, rows, warnings }
 }
 
 /**

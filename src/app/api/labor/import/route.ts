@@ -28,7 +28,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json(parseLaborWorkbook(wb))
+    // 어느 시트를 읽을지 — 비우면 맨 앞의 읽을 수 있는 시트
+    const sheet = form?.get('sheet')
+    return NextResponse.json(parseLaborWorkbook(wb, typeof sheet === 'string' && sheet ? sheet : undefined))
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : '엑셀을 읽지 못했습니다.' }, { status: 400 })
   }

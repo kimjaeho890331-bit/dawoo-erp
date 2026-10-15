@@ -352,10 +352,15 @@ function dayKey(days: Record<string, number> | null | undefined): string {
     .join(',')
 }
 
-/** 이미 등록된 줄인지: 공사건·이름·현장·일급·출역이 모두 같을 때만 같은 줄로 본다. */
+/**
+ * 이미 등록된 줄인지: 이름·현장·일급·출역이 모두 같으면 같은 줄로 본다.
+ *
+ * 공사건(site_id/project_id)은 **보지 않는다.** 공사건은 어느 묶음에 넣을지 사람이 고르는
+ * 값이라, 같은 엑셀을 다른 묶음에 불러왔을 때 이미 등록된 사람이 또 들어왔다(2026-10-15).
+ * 한 사람이 정말 두 공사건에서 일했다면 미리보기에서 직접 체크해 넣는다.
+ */
 export function isSameLaborRow(a: RowIdentity, b: RowIdentity): boolean {
   return (
-    workTargetOf(a) === workTargetOf(b) &&
     a.worker_name.trim() === b.worker_name.trim() &&
     (a.site_name ?? '').trim() === (b.site_name ?? '').trim() &&
     Number(a.daily_wage ?? 0) === Number(b.daily_wage ?? 0) &&
@@ -363,8 +368,3 @@ export function isSameLaborRow(a: RowIdentity, b: RowIdentity): boolean {
   )
 }
 
-function workTargetOf(r: RowIdentity): string {
-  if (r.site_id) return `site:${r.site_id}`
-  if (r.project_id) return `project:${r.project_id}`
-  return 'none'
-}

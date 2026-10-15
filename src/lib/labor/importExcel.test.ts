@@ -255,13 +255,11 @@ describe('isSameLaborRow', () => {
     expect(isSameLaborRow({ ...base, site_name: null }, { ...base, site_name: '' })).toBe(true)
   })
 
-  it('공사건이 다르면 같은 사람·일급·출역이라도 다른 줄이다', () => {
-    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, site_id: 'S2' })).toBe(false)
-    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, project_id: 'S1' })).toBe(false)
-    expect(isSameLaborRow({ ...base, site_id: 'S1' }, base)).toBe(false)
-  })
-
-  it('공사건까지 같으면 같은 줄이다', () => {
-    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, site_id: 'S1' })).toBe(true)
+  // 같은 엑셀을 다른 공사건 묶음에 불러오면 이미 등록된 사람이 또 들어왔다(2026-10-15).
+  // 공사건은 묶음을 고를 때 사람이 정하는 값이지, 그 줄이 다른 줄인지를 가르는 값이 아니다.
+  it('공사건이 달라도 사람·현장·일급·출역이 같으면 같은 줄로 본다', () => {
+    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, site_id: 'S2' })).toBe(true)
+    expect(isSameLaborRow({ ...base, site_id: 'S1' }, base)).toBe(true)
+    expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, project_id: 'P1' })).toBe(true)
   })
 })

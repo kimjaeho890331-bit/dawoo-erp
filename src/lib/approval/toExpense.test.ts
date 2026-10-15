@@ -93,4 +93,22 @@ describe('paymentsToExpenses', () => {
     // 필터링 전 payments.length=2이므로 multi=true → 거래처명 접미사 포함
     expect(out[0].expense.title).toBe('잠원초 인방보수공사 계약금 30% (신성공사)')
   })
+
+  it('줄에 공사건이 있으면 그 줄의 공사건으로 지출을 만든다', () => {
+    const withSite = { ...report, site_id: 'doc-site', project_id: null }
+    const out = paymentsToExpenses({
+      report: withSite,
+      payments: [
+        payment({ id: 'p1', site_id: 'line-site-A' }),
+        payment({ id: 'p2', project_id: 'line-proj-B' }),
+        payment({ id: 'p3' }),
+      ],
+      category: '노무비', firstFileUrl: null,
+    })
+    expect(out.map(o => [o.expense.site_id, o.expense.project_id])).toEqual([
+      ['line-site-A', null],   // 줄의 현장이 이긴다
+      [null, 'line-proj-B'],   // 줄의 접수건이 이긴다 (문서 현장은 따라오지 않는다)
+      ['doc-site', null],      // 줄이 비어 있으면 문서의 공사건을 따른다
+    ])
+  })
 })

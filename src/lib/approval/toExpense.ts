@@ -30,6 +30,18 @@ interface Args {
  * 지급정보 1행 = 지출 1건.
  * expense_id가 이미 있는 행은 건너뛴다 — 재처리·중복 호출로 지출이 두 번 생기는 것을 막는다.
  */
+/**
+ * 그 지출이 어느 공사건의 것인가. 줄에 공사건이 있으면 그 줄을 따르고, 없으면 문서를 따른다.
+ * 한 장에 여러 공사건을 담을 수 있게 되면서(029) 현장별 원가는 줄 단위로 갈린다.
+ */
+function workTargetOf(
+  p: Pick<ExpenseReportPayment, 'site_id' | 'project_id'>,
+  report: Pick<ExpenseReport, 'site_id' | 'project_id'>,
+): { site_id: string | null; project_id: string | null } {
+  if (p.site_id || p.project_id) return { site_id: p.site_id ?? null, project_id: p.project_id ?? null }
+  return { site_id: report.site_id ?? null, project_id: report.project_id ?? null }
+}
+
 export function paymentsToExpenses({
   report, payments, category, firstFileUrl,
 }: Args): { payment_id: string; expense: ExpenseInsert }[] {
@@ -45,8 +57,7 @@ export function paymentsToExpenses({
         expense_date: p.pay_request_date,
         category,
         staff_id: report.drafter_staff_id,
-        site_id: report.site_id ?? null,
-        project_id: report.project_id ?? null,
+        ...workTargetOf(p, report),
         receipt_url: firstFileUrl,
         memo: `[${report.doc_no ?? ''}] ${p.vendor_name} / ${p.bank} ${p.account_no}`,
         expense_report_payment_id: p.id,

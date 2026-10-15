@@ -4,9 +4,10 @@ import { suggestedLaborCategory, validateLaborApproval } from '@/lib/expenseCate
 
 const line = (o: Partial<LaborPayLine> = {}): LaborPayLine => ({
   worker_name: '박일용', netPay: 1_620_000, bank_name: '국민', account_number: '123-45',
-  payment_date: '2026-10-31', detail: '박일용: 9일 × 180,000원', ...o,
+  payment_date: '2026-10-31', detail: '박일용: 9일 × 180,000원',
+  workTargetName: '상암오수펌프장', site_id: 'S1', project_id: null, ...o,
 })
-const base = { year: 2026, month: 10, today: '2026-10-09', workTargetName: '상암오수펌프장' }
+const base = { year: 2026, month: 10, today: '2026-10-09' }
 
 describe('laborApprovalDraft', () => {
   it('근무자 한 명이 지급정보 한 줄이 된다', () => {
@@ -14,16 +15,20 @@ describe('laborApprovalDraft', () => {
     if (!r.ok) throw new Error(r.error)
     expect(r.draft.title).toBe('26년 10월 상암오수펌프장 노무비[박일용,최일용] 집행 요청의 건')
     expect(r.draft.payments).toEqual([
-      { vendor_name: '박일용', amount: 1_620_000, pay_request_date: '2026-10-31', bank: '국민', account_no: '123-45', business_no: '' },
-      { vendor_name: '최일용', amount: 1_620_000, pay_request_date: '2026-10-09', bank: '', account_no: '123-45', business_no: '' },
+      { vendor_name: '박일용', amount: 1_620_000, pay_request_date: '2026-10-31', bank: '국민', account_no: '123-45', business_no: '', site_id: 'S1', project_id: null, work_target_label: '상암오수펌프장' },
+      { vendor_name: '최일용', amount: 1_620_000, pay_request_date: '2026-10-09', bank: '', account_no: '123-45', business_no: '', site_id: 'S1', project_id: null, work_target_label: '상암오수펌프장' },
     ])
     expect(r.draft.body_html).toContain('박일용: 9일')
   })
 
   it('제목이 50자를 넘으면 이름을 인원수로 줄인다', () => {
     const r = laborApprovalDraft({
-      ...base, workTargetName: '수도권서부본부 사옥 외부 도장공사',
-      lines: [line({ worker_name: '김창식' }), line({ worker_name: '김수만' }), line({ worker_name: '이희건' })],
+      ...base,
+      lines: [
+        line({ worker_name: '김창식', workTargetName: '수도권서부본부 사옥 외부 도장공사' }),
+        line({ worker_name: '김수만', workTargetName: '수도권서부본부 사옥 외부 도장공사' }),
+        line({ worker_name: '이희건', workTargetName: '수도권서부본부 사옥 외부 도장공사' }),
+      ],
     })
     if (!r.ok) throw new Error(r.error)
     expect(r.draft.title).toContain('노무비(3명)')
@@ -32,7 +37,7 @@ describe('laborApprovalDraft', () => {
   })
 
   it('공사건명이 길어 인원수로도 안 줄면 공사건명을 자른다', () => {
-    const r = laborApprovalDraft({ ...base, workTargetName: '아'.repeat(60), lines: [line()] })
+    const r = laborApprovalDraft({ ...base, lines: [line({ workTargetName: '아'.repeat(60) })] })
     if (!r.ok) throw new Error(r.error)
     expect(r.draft.title.length).toBeLessThanOrEqual(50)
     expect(r.draft.title).toContain('…')
@@ -50,5 +55,37 @@ describe('laborApprovalDraft', () => {
     expect(laborApprovalDraft({ ...base, lines: [] }).ok).toBe(false)
     expect(laborApprovalDraft({ ...base, lines: [line({ worker_name: ' ' })] }).ok).toBe(false)
     expect(laborApprovalDraft({ ...base, lines: [line({ netPay: 0 })] }).ok).toBe(false)
+  })
+
+  it('공사건이 둘이면 제목에 둘 다 적고, 지급줄마다 그 공사건이 붙는다', () => {
+    const r = laborApprovalDraft({
+      ...base,
+      lines: [
+        line({ worker_name: '김창식', workTargetName: '수도권서부본부', site_id: 'S1' }),
+        line({ worker_name: '최영근', workTargetName: '영통1동', site_id: 'S2' }),
+      ],
+    })
+    if (!r.ok) throw new Error(r.error)
+    expect(r.draft.title).toBe('26년 10월 수도권서부본부,영통1동 노무비[김창식,최영근] 집행 요청의 건')
+    expect(r.draft.payments.map(p => [p.vendor_name, p.site_id, p.work_target_label])).toEqual([
+      ['김창식', 'S1', '수도권서부본부'],
+      ['최영근', 'S2', '영통1동'],
+    ])
+    // 문서 자체의 공사건(026 제약)은 첫 묶음을 대표로 쓴다
+    expect([r.draft.site_id, r.draft.project_id]).toEqual(['S1', null])
+  })
+
+  it('공사건이 많아 제목이 길면 「외 N건」으로 줄인다', () => {
+    const r = laborApprovalDraft({
+      ...base,
+      lines: [
+        line({ worker_name: '김창식', workTargetName: '수도권서부본부 사옥 외부 도장공사', site_id: 'S1' }),
+        line({ worker_name: '최영근', workTargetName: '영통1동 청사 냉난방기 추가 설치 공사', site_id: 'S2' }),
+        line({ worker_name: '이희건', workTargetName: '인천지사 폐토사 처리시설', site_id: 'S3' }),
+      ],
+    })
+    if (!r.ok) throw new Error(r.error)
+    expect(r.draft.title).toContain('외 2건')
+    expect(r.draft.title.length).toBeLessThanOrEqual(50)
   })
 })

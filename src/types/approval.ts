@@ -71,6 +71,9 @@ export interface ExpenseReportPayment {
   account_no: string
   business_no: string | null
   expense_id: string | null
+  /** 줄별 공사건. 비우면 문서의 공사건을 따른다 (029) */
+  site_id?: string | null
+  project_id?: string | null
 }
 
 export interface ExpenseReportLine {
@@ -112,6 +115,11 @@ export interface PaymentRow {
   bank: string
   account_no: string
   business_no: string
+  /** 줄별 공사건. 비우면 문서의 공사건을 따른다 (029) */
+  site_id?: string | null
+  project_id?: string | null
+  /** 화면에 보여줄 공사건 이름. 저장하지 않는다 */
+  work_target_label?: string
 }
 
 export const EMPTY_PAYMENT: PaymentRow = {

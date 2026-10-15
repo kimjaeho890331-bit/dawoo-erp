@@ -6,6 +6,8 @@ import { suggestedLaborCategory, validateLaborApproval } from '@/lib/expenseCate
 interface PaymentInput {
   vendor_name: string; amount: number; pay_request_date: string
   bank: string; account_no: string; business_no?: string | null
+  /** 줄별 공사건 (029). 비우면 문서의 공사건을 따른다 */
+  site_id?: string | null; project_id?: string | null
 }
 interface LineInput { staff_id: string; role: 'approval' | 'cooperation' }
 interface FileInput { file_name: string; file_url: string; size: number; source?: 'manual' | 'vendor' }
@@ -144,6 +146,7 @@ export async function POST(request: NextRequest) {
         vendor_name: p.vendor_name, amount: p.amount,
         pay_request_date: p.pay_request_date, bank: p.bank,
         account_no: p.account_no, business_no: p.business_no ?? null,
+        site_id: p.site_id ?? null, project_id: p.project_id ?? null,
       })),
     )
     if (paymentsError) {

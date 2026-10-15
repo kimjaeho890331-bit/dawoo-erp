@@ -7,7 +7,7 @@ import { Plus, Trash2, Download, Upload, FileCheck, ChevronDown, Percent, ArrowR
 import { supabase } from '@/lib/supabase'
 import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { projectLabel, workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
-import { groupLaborRows, assertWorkTargetAssigned, type LaborGroup } from '@/lib/labor/laborGroups'
+import { groupLaborRows, assertWorkTargetAssigned } from '@/lib/labor/laborGroups'
 import LaborSectionHead from './LaborSectionHead'
 import { DEFAULT_RATES, pickRates, type LaborRates, type LaborRateRow } from '@/lib/labor/rates'
 import LaborImportModal from './LaborImportModal'
@@ -164,6 +164,9 @@ export default function LaborPage() {
   const pendingPatch = useRef(new Map<string, Partial<LaborRecord>>())
   /** 빈 달에 기본 근무자 줄을 만든 달 (중복 생성 방지) */
   const autoRowFor = useRef<string | null>(null)
+  /** 끌어다 놓은 엑셀 — 공사건을 고른 뒤 그대로 불러오기로 넘긴다 */
+  const droppedFile = useRef<File | null>(null)
+  const [dragOver, setDragOver] = useState(false)
 
   const daysInMonth = new Date(year, month, 0).getDate()
 
@@ -183,6 +186,8 @@ export default function LaborPage() {
           .insert({ year, month, worker_name: '', day_values: {}, sort_order: 0 })
           .select().single()
         setRecords(made ? [made as LaborRecord] : [])
+        // 들어오자마자 공사건부터 고르게 — 빈 달은 공사건 고르는 칸을 열어 둔다
+        if (made) setPicker({ mode: 'assign', rowIds: [(made as LaborRecord).id], at: 'none' })
       } else {
         setRecords(data as LaborRecord[])
       }
@@ -361,7 +366,19 @@ export default function LaborPage() {
     toast.success(`${rowIds.length}개 행을 「${targetName(site_id, project_id)}」(으)로 옮겼습니다.`)
   }
 
-  const closePicker = () => { setPicker(null); setPickKind(''); setPickSiteId(''); setPickProjectId('') }
+  const closePicker = () => {
+    setPicker(null); setPickKind(''); setPickSiteId(''); setPickProjectId('')
+    droppedFile.current = null
+  }
+
+  /** 엑셀을 끌어다 놓으면 — 어느 공사건으로 넣을지부터 고른다 */
+  const handleDropExcel = (f: File | undefined) => {
+    setDragOver(false)
+    if (!f) return
+    if (!/\.xlsx$/i.test(f.name)) { toast.error('.xlsx 파일만 불러올 수 있습니다. (.xls는 엑셀에서 .xlsx로 다시 저장해 주세요)'); return }
+    droppedFile.current = f
+    setPicker({ mode: 'import', at: 'top' })
+  }
 
   /** 공사건을 고르면 용도에 따라 — 섹션 추가 / 행 옮기기 / 엑셀 불러오기로 이어진다 */
   const handlePick = (next: { kind: WorkKind; siteId: string; projectId: string }) => {
@@ -378,10 +395,13 @@ export default function LaborPage() {
     } else if (mode === 'assign') {
       assignRows(rowIds, site_id, project_id)
     } else if (mode === 'import') {
-      // 불러온 행에 이 공사건을 넣는다. 파일 고르기는 그 다음.
+      // 불러온 행에 이 공사건을 넣는다. 파일은 끌어다 놓은 게 있으면 그것, 없으면 골라서.
       setImportTarget({ site_id, project_id })
       flushPending()
-      fileInputRef.current?.click()
+      const dropped = droppedFile.current
+      droppedFile.current = null
+      if (dropped) setImportFile(dropped)
+      else fileInputRef.current?.click()
     }
   }
 
@@ -425,94 +445,81 @@ export default function LaborPage() {
     } finally { setExporting(false) }
   }
 
-  // --- 노무비 결의서 만들기 (공사건별 1장) ---
+  // --- 노무비 결의서 만들기 (한 장, 공사건별 지급표) ---
   // 대표 결정(2026-10-09): 노무비도 지출결의서 결재를 거친다. 여기서는 작성중 결의서만
   // 만들고, 상신은 결의서를 열어 사람이 한다 — 증빙 첨부와 내용 확인을 거치게.
-  // 결의서는 공사건을 문서당 하나만 가지므로(026 CHECK) 공사건별로 한 장씩 만든다.
-  const handleCreateDrafts = async (targetGroups: LaborGroup<LaborRecord>[]) => {
+  // 공사건이 여럿이어도 문서는 한 장이다(2026-10-15). 지급줄마다 공사건을 달아(029)
+  // 작성 화면이 공사건별로 묶어 보여주고, 승인 시 지출은 줄의 공사건으로 등록된다.
+  const handleCreateDraft = async (rows: LaborRecord[]) => {
     const actorId = typeof window !== 'undefined' ? localStorage.getItem(STAFF_STORAGE_KEY) : null
     if (!actorId) { toast.info('지금 쓰는 직원이 정해져 있지 않습니다. 지출결의서 화면 위쪽에서 직원을 먼저 골라 주세요.'); return }
-    if (targetGroups.length === 0) { toast.info('결의서를 만들 근무자를 체크해 주세요.'); return }
+    if (rows.length === 0) { toast.info('결의서를 만들 근무자를 체크해 주세요.'); return }
 
-    const assigned = assertWorkTargetAssigned(targetGroups.flatMap(g => g.rows))
+    const assigned = assertWorkTargetAssigned(rows)
     if (!assigned.ok) { toast.error(assigned.error); return }
 
     flushPending()
     const today = new Date().toISOString().slice(0, 10)
-
-    // 한 장이라도 못 만들면 아무것도 만들지 않는다 — 반쪽짜리 묶음이 올라가지 않게.
-    const built: { rows: LaborRecord[]; name: string; title: string; body_html: string; payments: { vendor_name: string; amount: number; pay_request_date: string; bank: string; account_no: string; business_no: string }[]; total: number }[] = []
-    for (const g of targetGroups) {
-      const name = targetName(g.rows[0].site_id ?? null, g.rows[0].project_id ?? null)
-      const r = laborApprovalDraft({
-        year, month, today, workTargetName: name,
-        lines: g.rows.map(row => {
-          const c = calcRow(row, rates)
-          return {
-            worker_name: row.worker_name || '',
-            netPay: c.netPay,
-            bank_name: row.bank_name,
-            account_number: row.account_number,
-            payment_date: row.payment_date,
-            detail: `${row.worker_name}: ${c.workDays}일 × ${fmt(row.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`,
-          }
-        }),
-      })
-      if (!r.ok) { toast.error(`${name}: ${r.error}`); return }
-      built.push({
-        rows: g.rows, name, title: r.draft.title, body_html: r.draft.body_html,
-        payments: r.draft.payments, total: r.draft.payments.reduce((sum, x) => sum + x.amount, 0),
-      })
-    }
+    const built = laborApprovalDraft({
+      year, month, today,
+      lines: rows.map(r => {
+        const c = calcRow(r, rates)
+        return {
+          worker_name: r.worker_name || '',
+          netPay: c.netPay,
+          bank_name: r.bank_name,
+          account_number: r.account_number,
+          payment_date: r.payment_date,
+          detail: `${r.worker_name}: ${c.workDays}일 × ${fmt(r.daily_wage || 0)}원 = ${fmt(c.total)}원, 공제 ${fmt(c.dedSum)}원, 실지급 ${fmt(c.netPay)}원`,
+          workTargetName: targetName(r.site_id ?? null, r.project_id ?? null),
+          site_id: r.site_id ?? null,
+          project_id: r.project_id ?? null,
+        }
+      }),
+    })
+    if (!built.ok) { toast.error(built.error); return }
+    const draft = built.draft
 
     // 같은 묶음을 두 번 누르면 결의서가 두 장 생긴다. 이미 있으면 한 번 더 묻는다.
-    const { data: dup } = await supabase.from('expense_reports').select('title').in('title', built.map(b => b.title))
+    const { data: dup } = await supabase.from('expense_reports').select('title').eq('title', draft.title).limit(1)
     if (dup && dup.length > 0
-      && !confirm(`같은 제목의 지출결의서가 이미 있습니다.
-${dup.map(d => d.title).join('\n')}
+      && !confirm(`같은 제목의 지출결의서가 이미 있습니다.\n${draft.title}\n\n그래도 새로 만들까요?`)) return
 
-그래도 새로 만들까요?`)) return
-
-    const summary = built.map((b, i) => `  ${i + 1}. ${b.name}  ${b.total.toLocaleString()}원 (${b.payments.length}명)`).join('\n')
-    if (!confirm(`노무비 지출결의서 ${built.length}장을 만듭니다.
-
-${summary}
-
-만든 뒤 결의서를 열어 「결재 올리기」를 눌러 주세요.
-결재가 끝나면 지출관리에 자동으로 들어갑니다.`)) return
+    // 확인창에 공사건별 금액과 총 합계를 보여준다
+    const byTarget = new Map<string, { sum: number; n: number }>()
+    for (const pay of draft.payments) {
+      const g = byTarget.get(pay.work_target_label) ?? { sum: 0, n: 0 }
+      g.sum += pay.amount; g.n += 1
+      byTarget.set(pay.work_target_label, g)
+    }
+    const total = draft.payments.reduce((sum, pay) => sum + pay.amount, 0)
+    const summary = [...byTarget.entries()]
+      .map(([name, g], i) => `  ${i + 1}. ${name}  ${g.sum.toLocaleString()}원 (${g.n}명)`)
+      .join('\n')
+    const totalLine = byTarget.size > 1 ? `\n  총 합계 ${total.toLocaleString()}원 (${draft.payments.length}명)` : ''
+    if (!confirm(`노무비 지출결의서를 만듭니다.\n\n${summary}${totalLine}\n\n만든 뒤 결의서에서 내용을 확인하고 「결재 올리기」를 눌러 주세요.\n결재가 끝나면 지출관리에 자동으로 들어갑니다.`)) return
 
     setSubmitting(true)
-    const madeIds: string[] = []
-    const failed: string[] = []
     try {
-      // 문서 단위 API라 전부-또는-전무로 묶을 수 없다. 성공한 것은 남기고 실패만 알린다.
-      for (const b of built) {
-        const res = await fetch('/api/approval/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            actor_staff_id: actorId, title: b.title, body_html: b.body_html,
-            site_id: b.rows[0].site_id ?? null, project_id: b.rows[0].project_id ?? null,
-            payments: b.payments, lines: [], files: [],
-          }),
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) { failed.push(`${b.name}(${json.error || res.statusText})`); continue }
-        madeIds.push(json.id)
-      }
+      const res = await fetch('/api/approval/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_staff_id: actorId, title: draft.title, body_html: draft.body_html,
+          site_id: draft.site_id, project_id: draft.project_id,
+          payments: draft.payments, lines: [], files: [],
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(`결의서를 만들지 못했습니다: ${json.error || res.statusText}`); return }
+      router.push(`/approval/${json.id}/edit`)
     } finally {
       setSubmitting(false)
     }
-
-    if (failed.length > 0) toast.error(`만들지 못한 공사건: ${failed.join(', ')}`)
-    if (madeIds.length === 0) return
-    if (madeIds.length === 1 && failed.length === 0) { router.push(`/approval/${madeIds[0]}/edit`); return }
-    toast.success(`결의서 ${madeIds.length}장을 만들었습니다. 하나씩 열어 결재를 올려 주세요.`)
-    router.push('/approval')
   }
 
-  /** 상단 버튼 — 체크된 행을 공사건별로 묶어 N장 */
-  const handleSubmitApproval = () => handleCreateDrafts(groupLaborRows(checkedRecords))
+  /** 상단 버튼 — 체크된 행 전부를 한 장으로 */
+  const handleSubmitApproval = () => handleCreateDraft(checkedRecords)
 
   // --- 합계 ---
   const totals = useMemo(() => {
@@ -591,6 +598,17 @@ ${summary}
             <Upload size={15} className="text-txt-tertiary" />
             엑셀 불러오기
           </button>
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); handleDropExcel(e.dataTransfer.files?.[0]) }}
+            className={`flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-sm transition ${
+              dragOver ? 'border-accent bg-accent-light text-accent-text' : 'border-border-secondary text-txt-tertiary'
+            }`}
+          >
+            <Upload size={14} />
+            엑셀 끌어다 놓기
+          </div>
           <button onClick={handleExport} disabled={exporting}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition disabled:opacity-50">
             <Download size={15} className="text-txt-tertiary" />
@@ -718,7 +736,7 @@ ${summary}
                       onImport={() => { setImportTarget({ site_id, project_id }); flushPending(); fileInputRef.current?.click() }}
                       onMove={() => setPicker({ mode: 'assign', rowIds: g.rows.map(row => row.id), at: g.key })}
                       picker={picker?.at === g.key ? pickerPanel() : null}
-                      onDraft={() => handleCreateDrafts([g])}
+                      onDraft={() => handleCreateDraft(g.rows)}
                     />
                     {g.rows.map(r => {
                       const c = calcRow(r, rates)

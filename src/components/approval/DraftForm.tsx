@@ -196,6 +196,8 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         vendor_name: x.vendor_name, amount: x.amount,
         pay_request_date: x.pay_request_date, bank: x.bank,
         account_no: x.account_no, business_no: x.business_no ?? '',
+        // 줄별 공사건(029). 노무비처럼 한 장에 여러 공사건을 담은 문서는 이 값으로 묶인다.
+        site_id: x.site_id ?? null, project_id: x.project_id ?? null,
       })) as PaymentRow[]
       const loadedLines = (l ?? []).map((x: Record<string, unknown>) => ({
         staff_id: x.staff_id as string,
@@ -395,8 +397,18 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
     if (!dirty) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
     window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [dirty])
+  /** 지급줄의 공사건 이름. 한 장에 여러 공사건이 섞인 문서(노무비)에서 묶음 제목으로 쓴다 */
+  const paymentTargetLabel = (r: PaymentRow): string => {
+    if (r.site_id) return sites.find(x => x.id === r.site_id)?.name?.trim() || '현장'
+    if (r.project_id) {
+      const pr = projects.find(x => x.id === r.project_id)
+      return pr ? projectLabel(pr) : '지원사업'
+    }
+    return '공사건 없음'
+  }
+
   const pageTitle = reportId ? '지출결의서 수정' : copyFromId ? '새 지출결의서 (복사)' : '새 지출결의서'
   const submitLabel = reportId && existingStatus === 'pending' ? '고친 내용 저장' : '결재 올리기'
 
@@ -509,7 +521,7 @@ export default function DraftForm({ reportId, copyFromId }: { reportId?: string;
         <div className={`rounded-lg ${error?.field === 'payments' ? 'ring-1 ring-danger' : ''}`}>
           <PaymentTable
             actions={excelActions}
-            rows={payments}
+            rows={payments.map(r => ({ ...r, work_target_label: paymentTargetLabel(r) }))}
             onChange={rows => { setPayments(rows); clearErrorFor('payments') }}
             onPickVendor={onPickVendor}
           />

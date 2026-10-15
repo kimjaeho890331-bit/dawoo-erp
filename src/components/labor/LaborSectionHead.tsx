@@ -49,14 +49,15 @@ export default function LaborSectionHead({
           ) : (
             <span className="text-[12px] text-txt-tertiary">공사건을 지정해야 결의서를 만들 수 있습니다</span>
           )}
+          {/* 공사건 바꾸기는 공사건 이름·금액 바로 옆에 둔다 — 무엇을 바꾸는지 눈에 붙어 있게 */}
+          <button type="button" className={btn} onClick={onMove}>
+            <ArrowRight size={13} /> {assigned ? '공사건 바꾸기' : '공사건 지정'}
+          </button>
           <span className="flex-1" />
           <button type="button" className={btn} onClick={onAddWorker}><Plus size={13} /> 근무자 추가</button>
           {assigned && (
             <button type="button" className={btn} onClick={onImport}><Upload size={13} /> 엑셀 불러오기</button>
           )}
-          <button type="button" className={btn} onClick={onMove}>
-            <ArrowRight size={13} /> {assigned ? '공사건 바꾸기' : '공사건 지정'}
-          </button>
           {assigned && (
             <button type="button" className={btn} onClick={onDraft} disabled={busy}>
               <FileCheck size={13} /> 결의서 만들기

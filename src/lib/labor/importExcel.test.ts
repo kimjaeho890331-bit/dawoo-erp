@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
-import { parseLaborWorkbook, reconcileDeductions, isSameLaborRow } from './importExcel'
+import { parseLaborWorkbook, reconcileDeductions, isSameLaborRow, defaultPickedRows } from './importExcel'
 
 // 사내 「노무비지급내역」 양식을 흉내 낸다. 이름·주민번호는 전부 가짜다.
 // 근무자 한 명이 두 줄: 윗줄 1~15일, 아랫줄 16~31일 + 일급 + 계좌번호.
@@ -278,5 +278,28 @@ describe('isSameLaborRow', () => {
     expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, site_id: 'S2' })).toBe(true)
     expect(isSameLaborRow({ ...base, site_id: 'S1' }, base)).toBe(true)
     expect(isSameLaborRow({ ...base, site_id: 'S1' }, { ...base, project_id: 'P1' })).toBe(true)
+  })
+})
+
+// 사내 양식은 한 시트에 여러 현장 사람이 섞여 들어온다. 공사건 묶음으로 불러올 때
+// 다른 현장 사람까지 딸려 들어왔다(2026-10-15). 현장명이 그 공사건인 줄만 기본 선택한다.
+describe('defaultPickedRows', () => {
+  const rows = [
+    { site_name: '수도권서부본부 사옥 외부 도장공사', duplicate: false },   // 0
+    { site_name: '전문건설공제조합 본사 임원실 리모델링 공사', duplicate: false }, // 1
+    { site_name: '수도권서부본부 사옥 외부 도장공사', duplicate: true },    // 2 이미 등록
+    { site_name: '  수도권서부본부 사옥 외부 도장공사  ', duplicate: false }, // 3 앞뒤 공백
+  ]
+
+  it('공사건을 정해 불러오면 그 현장명 줄만 고른다', () => {
+    expect(defaultPickedRows(rows, '수도권서부본부 사옥 외부 도장공사')).toEqual([0, 3])
+  })
+
+  it('공사건이 없으면 중복 아닌 줄을 전부 고른다', () => {
+    expect(defaultPickedRows(rows)).toEqual([0, 1, 3])
+  })
+
+  it('현장명이 하나도 안 맞으면 아무것도 고르지 않는다', () => {
+    expect(defaultPickedRows(rows, '영통1동 청사 냉난방기 추가 설치 공사')).toEqual([])
   })
 })

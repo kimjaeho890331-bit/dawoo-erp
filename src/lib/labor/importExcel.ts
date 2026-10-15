@@ -379,3 +379,25 @@ export function isSameLaborRow(a: RowIdentity, b: RowIdentity): boolean {
   )
 }
 
+
+/**
+ * 미리보기에서 기본으로 체크할 줄.
+ *
+ * 사내 양식은 한 시트에 여러 현장 사람이 섞여 들어온다. 공사건 묶음을 정해 불러올 때
+ * 다른 현장 사람까지 딸려 들어왔다(2026-10-15) — 엑셀의 현장명이 그 공사건인 줄만 고른다.
+ * 공사건을 정하지 않았으면 예전처럼 중복이 아닌 줄을 전부 고른다.
+ * 이름이 조금 달라 안 맞으면 아무것도 안 골라지므로, 사람이 보고 직접 체크하면 된다.
+ */
+export function defaultPickedRows(
+  rows: { site_name?: string | null; duplicate: boolean }[],
+  workTargetName?: string,
+): number[] {
+  const target = (workTargetName ?? '').trim()
+  const picked: number[] = []
+  rows.forEach((r, i) => {
+    if (r.duplicate) return
+    if (target && (r.site_name ?? '').trim() !== target) return
+    picked.push(i)
+  })
+  return picked
+}

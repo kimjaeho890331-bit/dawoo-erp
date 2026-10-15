@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X, Check, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import {
-  DEDUCTION_KEYS, reconcileDeductions, isSameLaborRow,
+  DEDUCTION_KEYS, reconcileDeductions, isSameLaborRow, defaultPickedRows,
   type Deductions, type ImportedLaborRow, type LaborImportResult,
 } from '@/lib/labor/importExcel'
 import { calcRow, loadLaborRates, type LaborRates, type LaborRecord } from './LaborPage'
@@ -132,10 +132,16 @@ export default function LaborImportModal({ file, workTarget, workTargetName, vie
     return parsed.rows.map(r => toPreview(r, parsed.year, parsed.month, rates, existing, workTarget))
   }, [parsed, rates, existing, workTarget])
 
-  // 이미 있는 줄은 기본으로 빼 둔다 (같은 파일을 두 번 넣어도 겹치지 않게)
+  // 기본 체크: 이미 등록된 줄은 빼고(같은 파일을 두 번 넣어도 겹치지 않게),
+  // 공사건을 정해 불러올 때는 엑셀의 현장명이 그 공사건인 줄만 고른다.
   useEffect(() => {
-    setPicked(new Set(rows.flatMap((r, i) => (r.duplicate ? [] : [i]))))
-  }, [rows])
+    setPicked(new Set(defaultPickedRows(rows.map(r => ({ site_name: r.src.site_name, duplicate: r.duplicate })), workTargetName)))
+  }, [rows, workTargetName])
+
+  /** 공사건이 달라서 기본에서 빠진 줄 수 — 안내에 쓴다 */
+  const otherTargetCount = workTargetName
+    ? rows.filter(r => !r.duplicate && (r.src.site_name ?? '').trim() !== workTargetName.trim()).length
+    : 0
 
   const fileRates = parsed?.rates ?? null
   const monthDiffers = !!parsed && (parsed.year !== viewYear || parsed.month !== viewMonth)
@@ -202,7 +208,7 @@ export default function LaborImportModal({ file, workTarget, workTargetName, vie
                 <span className="text-txt-tertiary">공사건 <b className="text-txt-primary">{workTargetName || '미지정'}</b></span>
               </div>
 
-              {(parsed.warnings.length > 0 || rateDiffers || monthDiffers || !workTarget) && (
+              {(parsed.warnings.length > 0 || rateDiffers || monthDiffers || !workTarget || otherTargetCount > 0) && (
                 <ul className="rounded-lg bg-caution-bg text-caution-text text-[12px] px-4 py-2.5 space-y-0.5">
                   {monthDiffers && (
                     <li>
@@ -211,6 +217,12 @@ export default function LaborImportModal({ file, workTarget, workTargetName, vie
                     </li>
                   )}
                   {!workTarget && <li>공사건이 지정되지 않았습니다. 불러온 뒤 「공사건으로 옮기기」로 지정해 주세요.</li>}
+                  {otherTargetCount > 0 && (
+                    <li>
+                      엑셀의 현장명이 「{workTargetName}」이 아닌 줄 {otherTargetCount}개는 <b>체크를 해제</b>해 두었습니다.
+                      함께 넣으려면 직접 체크해 주세요.
+                    </li>
+                  )}
                   {parsed.warnings.map(w => <li key={w}>{w}</li>)}
                   {rateDiffers && (
                     <li>엑셀의 요율이 이 달 ERP 요율과 다릅니다. 공제액은 엑셀에 적힌 금액 그대로 넣습니다.</li>

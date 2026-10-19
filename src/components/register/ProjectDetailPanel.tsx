@@ -44,6 +44,21 @@ interface Props {
   onRefresh?: () => void
 }
 
+/**
+ * 주소 복사. 어느 쪽을 복사했는지 알려 준다 —
+ * 도로명과 지번 두 버튼이 나란히 있어 무엇이 담겼는지 보이지 않으면 헷갈린다.
+ */
+async function copyAddress(text: string, label: string) {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(`${label} 복사됨`)
+  } catch {
+    // 권한이 없거나 보안 컨텍스트가 아니면 조용히 실패한다 — 주소는 화면에 떠 있다.
+    toast.error('복사하지 못했습니다. 주소를 직접 선택해 복사해주세요.')
+  }
+}
+
 export default function ProjectDetailPanel({ project, category, onClose, onDelete, onRefresh }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('접수')
   const [editData, setEditData] = useState<Record<string, string | number | null>>({})
@@ -674,13 +689,25 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             <div className="flex-1 min-w-0">
               <p className="text-[12px] text-txt-secondary">{project.road_address || project.jibun_address || '-'}</p>
               {project.road_address && project.jibun_address && (
-                <p className="text-[11px] text-txt-tertiary mt-0.5">지번 · {project.jibun_address}</p>
+                <p className="text-[11px] text-txt-tertiary mt-0.5 flex items-center gap-1.5">
+                  <span className="min-w-0 break-all">지번 · {project.jibun_address}</span>
+                  {/* 지번만 따로 복사. 오른쪽 복사 버튼은 도로명을 집으므로
+                      지번이 필요할 때 쓸 수단이 없었다. */}
+                  <button
+                    onClick={() => copyAddress(project.jibun_address!, '지번주소')}
+                    className="shrink-0 text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent-text"
+                  >복사</button>
+                </p>
               )}
             </div>
             {(project.road_address || project.jibun_address) && (
               <div className="flex gap-1 shrink-0">
                 <button
-                  onClick={() => navigator.clipboard.writeText(project.road_address || project.jibun_address || '')}
+                  onClick={() => copyAddress(
+                    project.road_address || project.jibun_address || '',
+                    project.road_address ? '도로명주소' : '지번주소',
+                  )}
+                  title={project.road_address ? '도로명주소 복사' : '지번주소 복사'}
                   className="text-[10px] px-1.5 py-0.5 bg-surface border border-border-primary rounded text-txt-tertiary hover:text-accent-text"
                 >복사</button>
                 <a

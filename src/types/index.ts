@@ -131,8 +131,14 @@ export interface Project {
   region: string | null;
   city_id: string | null;
   work_type_id: string | null;
+  /** 대표자1 이름 (옛 이름: 소유주) */
   owner_name: string | null;
+  /** 대표자1 연락처 */
   owner_phone: string | null;
+  /** 대표자2 이름. 연락 닿는 사람이 둘일 때 쓴다 */
+  rep2_name: string | null;
+  /** 대표자2 연락처 */
+  rep2_phone: string | null;
   tenant_phone: string | null;
   total_cost: number;
   self_pay: number;

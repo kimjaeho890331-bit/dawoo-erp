@@ -726,8 +726,8 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-x-4 mb-1.5 text-[13px]">
-              <InfoField label="소유주" value={(getVal('owner_name') as string) || '-'} />
-              <InfoField label="연락처" value={(getVal('owner_phone') as string) || '-'} />
+              <InfoField label="대표자1" value={(getVal('owner_name') as string) || '-'} />
+              <InfoField label="대표자1 연락처" value={(getVal('owner_phone') as string) || '-'} />
               <InfoField label="담당자" value={(() => {
                 const sid = getVal('staff_id') as string
                 return staffOptions.find(s => s.id === sid)?.name || project.staff?.name || '-'

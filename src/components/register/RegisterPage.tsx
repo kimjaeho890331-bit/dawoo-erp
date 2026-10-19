@@ -26,8 +26,12 @@ export interface DBProject {
   region: string | null
   city_id: string | null
   work_type_id: string | null
+  /** 대표자1 (옛 이름: 소유주) */
   owner_name: string | null
   owner_phone: string | null
+  /** 대표자2 — 연락 닿는 사람이 둘일 때 */
+  rep2_name: string | null
+  rep2_phone: string | null
   tenant_phone: string | null
   total_cost: number
   self_pay: number
@@ -737,6 +741,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         (p.building_name || '').toLowerCase().includes(q) ||
         (p.owner_name || '').toLowerCase().includes(q) ||
         (p.owner_phone || '').includes(q) ||
+        // 대표자2로도 찾을 수 있어야 한다 — 전화만 알고 검색하는 경우가 많다
+        (p.rep2_name || '').toLowerCase().includes(q) ||
+        (p.rep2_phone || '').includes(q) ||
         (p.road_address || '').toLowerCase().includes(q) ||
         (p.jibun_address || '').toLowerCase().includes(q) ||
         (p.dong || '').toLowerCase().includes(q) ||

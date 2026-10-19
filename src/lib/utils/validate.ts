@@ -51,6 +51,7 @@ const PROJECT_FIELD_SCHEMA: Record<string, FieldRule> = {
   year: { type: 'number' },
   // 전화번호
   owner_phone: { type: 'phone' },
+  rep2_phone: { type: 'phone' },
   tenant_phone: { type: 'phone' },
   // JSON
   extra_fields: { type: 'json' },

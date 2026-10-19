@@ -112,17 +112,17 @@ export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocke
 
   return (
     <div className="space-y-5">
-      {/* 소유주 · 연락처 · 담당자 */}
+      {/* 대표자 · 담당자 — 대표자1은 예전 '소유주' 칸이다(저장 위치 그대로). */}
       <section>
-        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">소유주 · 연락처 · 담당자</h3>
+        <h3 className="text-[11px] font-semibold text-txt-tertiary uppercase tracking-wider mb-3">대표자 · 담당자</h3>
         <div className="grid grid-cols-3 gap-3">
           <FormInput
-            label="소유주"
+            label="대표자1"
             value={getVal('owner_name') as string}
             onChange={v => onChange('owner_name', v || null)}
           />
           <FormInput
-            label="연락처"
+            label="대표자1 연락처"
             type="tel"
             value={getVal('owner_phone') as string}
             onChange={v => onChange('owner_phone', v || null)}
@@ -131,6 +131,17 @@ export default function TabBasicInfo({ project, getVal, onChange, apiFieldsLocke
             label="담당자"
             value={getVal('staff_id') as string}
             onChange={v => onChange('staff_id', v)}
+          />
+          <FormInput
+            label="대표자2"
+            value={getVal('rep2_name') as string}
+            onChange={v => onChange('rep2_name', v || null)}
+          />
+          <FormInput
+            label="대표자2 연락처"
+            type="tel"
+            value={getVal('rep2_phone') as string}
+            onChange={v => onChange('rep2_phone', v || null)}
           />
         </div>
       </section>

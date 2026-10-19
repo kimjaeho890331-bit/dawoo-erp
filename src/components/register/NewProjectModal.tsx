@@ -66,6 +66,15 @@ interface Props {
   editProject?: DBProject
 }
 
+/**
+ * 진행연도 선택지 — 올해를 가운데 두고 앞뒤 5년씩(모두 11개).
+ * 접수대장 목록의 진행연도 칸과 같은 범위를 쓴다.
+ */
+const YEAR_CHOICES = (() => {
+  const now = new Date().getFullYear()
+  return Array.from({ length: 11 }, (_, i) => now + 5 - i)
+})()
+
 export default function NewProjectModal({ category, onClose, onSubmit, editProject }: Props) {
   const { staff: currentStaff } = useAuth()
   const isEdit = !!editProject
@@ -98,7 +107,12 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     jibun_address: '',
     owner_name: '',
     owner_phone: '',
+    rep2_name: '',
+    rep2_phone: '',
     tenant_phone: '',
+    // 진행연도 — 예전에는 등록 시 늘 올해로 박혔다. 작년 건을 뒤늦게
+    // 올리거나 내년 건을 미리 잡는 경우가 있어 고를 수 있게 한다.
+    year: String(new Date().getFullYear()),
     note: '',
     work_type_id: '',
     staff_id: '',
@@ -154,7 +168,10 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           jibun_address: editProject.jibun_address || '',
           owner_name: editProject.owner_name || '',
           owner_phone: editProject.owner_phone || '',
+          rep2_name: editProject.rep2_name || '',
+          rep2_phone: editProject.rep2_phone || '',
           tenant_phone: editProject.tenant_phone || '',
+          year: String(editProject.year || new Date().getFullYear()),
           note: editProject.note || '',
           work_type_id: editProject.work_type_id || typesData[0]?.id || '',
           staff_id: editProject.staff_id || assignable[0]?.id || '',
@@ -406,7 +423,10 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         jibun_address: form.jibun_address || null,
         owner_name: form.owner_name,
         owner_phone: form.owner_phone,
+        rep2_name: form.rep2_name || null,
+        rep2_phone: form.rep2_phone || null,
         tenant_phone: form.tenant_phone || null,
+        year: Number(form.year) || new Date().getFullYear(),
         note: form.note,
         work_type_id: form.work_type_id || null,
         staff_id: form.staff_id || null,
@@ -433,7 +453,6 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           ...payload,
           region,
           status: '문의',
-          year: new Date().getFullYear(),
         })
         if (error) throw error
       }
@@ -599,8 +618,11 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
             </div>
           )}
 
-          {/* 동호수 입력 + 전유면적 */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* 동호수 입력 + 전유면적
+              전유면적은 소규모에서 쓰지 않아 칸을 숨긴다(수도는 그대로).
+              숨겨도 동호수를 자동완성에서 고르면 건축물대장 면적이 함께 저장된다 —
+              값을 버리지는 않는다. */}
+          <div className={category === '소규모' ? '' : 'grid grid-cols-2 gap-4'}>
             <div ref={hoInputRef} className="relative">
               <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">동호수</label>
               <input
@@ -634,35 +656,58 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                 </div>
               )}
             </div>
-            <div>
-              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">전유면적 (m²)</label>
-              {form.exclusive_area ? (
-                <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] text-txt-secondary bg-surface-secondary">
-                  {form.exclusive_area} m²
-                </p>
-              ) : (
-                <input type="number" step="0.01" value={form.exclusive_area} onChange={e => update('exclusive_area', e.target.value)}
-                  placeholder="직접 입력"
-                  className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
-              )}
-            </div>
+            {category !== '소규모' && (
+              <div>
+                <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">전유면적 (m²)</label>
+                {form.exclusive_area ? (
+                  <p className="h-[36px] px-3 flex items-center border border-border-tertiary rounded-lg text-[13px] text-txt-secondary bg-surface-secondary">
+                    {form.exclusive_area} m²
+                  </p>
+                ) : (
+                  <input type="number" step="0.01" value={form.exclusive_area} onChange={e => update('exclusive_area', e.target.value)}
+                    placeholder="직접 입력"
+                    className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light" />
+                )}
+              </div>
+            )}
           </div>
 
+          {/* 대표자1 — 예전 '소유주/연락처' 칸이다. 저장 위치(owner_name·owner_phone)는
+              그대로라 지난 자료가 그대로 보인다. */}
           <div className="grid grid-cols-2 gap-4">
             <ModalField
-              label="소유주"
+              label="대표자1"
               value={form.owner_name}
               onChange={v => update('owner_name', v)}
               placeholder="예: 김영수"
               error={errors.owner_name}
             />
             <ModalField
-              label="연락처"
+              label="대표자1 연락처"
               value={form.owner_phone}
               onChange={v => update('owner_phone', formatPhone(v))}
               placeholder="010-0000-0000"
               type="tel"
               error={errors.owner_phone}
+            />
+          </div>
+
+          {/* 대표자2 — 연락 닿는 사람이 둘인 빌라가 흔하다. 없으면 비워 둔다. */}
+          <div className="grid grid-cols-2 gap-4">
+            <ModalField
+              label="대표자2"
+              value={form.rep2_name}
+              onChange={v => update('rep2_name', v)}
+              placeholder="없으면 비워두세요"
+              error={errors.rep2_name}
+            />
+            <ModalField
+              label="대표자2 연락처"
+              value={form.rep2_phone}
+              onChange={v => update('rep2_phone', formatPhone(v))}
+              placeholder="010-0000-0000"
+              type="tel"
+              error={errors.rep2_phone}
             />
           </div>
 
@@ -711,6 +756,20 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                 {/* 새로 접수하는 건이므로 재직자만 */}
                 {selectableStaff(staff).map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            {/* 진행연도 — 접수대장 목록의 연도 필터가 이 값으로 묶는다.
+                올해 앞뒤 5년씩, 목록 화면의 선택지와 같은 범위다. */}
+            <div>
+              <label className="block text-[11px] font-medium tracking-[0.3px] text-txt-tertiary mb-1">진행연도</label>
+              <select
+                value={form.year}
+                onChange={e => update('year', e.target.value)}
+                className="w-full h-[36px] px-3 border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-light"
+              >
+                {YEAR_CHOICES.map(y => (
+                  <option key={y} value={String(y)}>{y}년</option>
                 ))}
               </select>
             </div>

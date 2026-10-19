@@ -666,9 +666,17 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
               {editingInfo ? '완료' : '수정'}
             </button>
           </div>
-          {/* 주소 + 카카오맵 */}
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[12px] text-txt-secondary flex-1">{project.road_address || project.jibun_address || '-'}</span>
+          {/* 주소 + 카카오맵 — 도로명과 지번을 함께 보여 준다.
+              현장에서는 지번으로 찾는 경우가 많은데 도로명만 떠서,
+              지번을 보려면 기본정보 탭까지 들어가야 했다.
+              둘 중 하나만 있으면 있는 것만 나온다. */}
+          <div className="flex items-start gap-2 mb-1.5">
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] text-txt-secondary">{project.road_address || project.jibun_address || '-'}</p>
+              {project.road_address && project.jibun_address && (
+                <p className="text-[11px] text-txt-tertiary mt-0.5">지번 · {project.jibun_address}</p>
+              )}
+            </div>
             {(project.road_address || project.jibun_address) && (
               <div className="flex gap-1 shrink-0">
                 <button

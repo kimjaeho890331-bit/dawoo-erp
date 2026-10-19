@@ -353,8 +353,16 @@ export default function LaborPage() {
       return next
     })
   }
+  // 전체선택은 이름이 있는 줄만 잡는다. 공사건을 만들 때 생기는 빈 줄까지 잡히면
+  // 「이름이 비어 있는 근무자가 있습니다」로 결의서 만들기가 막힌다(2026-10-19).
+  // 빈 줄도 직접 체크하면 선택은 된다.
+  const selectableIds = useMemo(
+    () => records.filter(r => r.worker_name?.trim()).map(r => r.id),
+    [records],
+  )
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => checked.has(id))
   const toggleAll = () => {
-    setChecked(prev => (prev.size === records.length ? new Set() : new Set(records.map(r => r.id))))
+    setChecked(allSelected ? new Set() : new Set(selectableIds))
   }
 
   const checkedRecords = records.filter(r => checked.has(r.id))
@@ -726,7 +734,7 @@ export default function LaborPage() {
             <thead>
               <tr>
                 <th className={thCls} rowSpan={2}>
-                  <input type="checkbox" checked={records.length > 0 && checked.size === records.length} onChange={toggleAll} />
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} />
                 </th>
                 <th className={thCls} rowSpan={2}>근무자</th>
                 <th className={thCls}>주민등록번호</th>

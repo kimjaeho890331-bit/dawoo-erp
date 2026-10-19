@@ -20,6 +20,14 @@ export function isLeaveApprover(role: string | null | undefined): boolean {
   return APPROVER_ROLES.has((role ?? '').trim())
 }
 
+/**
+ * 직원별 이월 수량을 손으로 고칠 수 있는가 — 대표·관리자·경리 (2026-10-19 사용자 지시).
+ * 지금은 승인자와 같은 집합이라 isLeaveApprover에 위임한다(한 곳에서 관리).
+ */
+export function canEditCarryover(role: string | null | undefined): boolean {
+  return isLeaveApprover(role)
+}
+
 /** 승인·반려를 누를 수 있는가. 관리자·경리도 본인 연차는 승인할 수 없다(대표만 예외). */
 export function canDecideLeave(me: LeaveActor, requestStaffId: string): boolean {
   if (!me.id || !isLeaveApprover(me.role)) return false

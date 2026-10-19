@@ -14,6 +14,11 @@ export interface ForfeitRow {
   days: number
 }
 
+export interface CarryOverrideRow {
+  period_start: string // 수정된 이월이 속한 구간의 시작일(YYYY-MM-DD)
+  days: number
+}
+
 export type CarryStatus = 'none' | 'valid' | 'pending' | 'forfeited'
 
 export interface LeaveBalance {
@@ -38,6 +43,8 @@ export interface ComputeLeaveParams {
   approved: LeaveUsageRow[]
   carryoverMonths: number
   forfeits?: ForfeitRow[]
+  /** 직원별 이월 수량 수동 수정 — 현재 구간 것이 있으면 계산값 대신 쓴다 */
+  carryOverrides?: CarryOverrideRow[]
   today?: Date
 }
 
@@ -132,8 +139,13 @@ export function computeLeaveBalance(params: ComputeLeaveParams): LeaveBalance {
     const pGrantConsumed = pUsed - pCarryConsumed
     carryOut = Math.max(0, pBase - pGrantConsumed) // 당해 부여 미사용분만 다음 구간으로
   }
-  const carryIn = carryOut
-  const carryExpiry = carryIn > 0 ? addMonthsUTC(periodStart, params.carryoverMonths) : null
+  // 수동 이월 수정(override)이 현재 구간에 있으면 계산값 대신 그 값을 쓴다.
+  // 관리자/경리가 명시적으로 준 값이므로 N개월 기한이 아니라 이번 구간 끝(다음 입사기념일)까지 유효.
+  const override = params.carryOverrides?.find(o => o.period_start === fmtUTC(periodStart))
+  const carryIn = override ? Math.max(0, override.days) : carryOut
+  const carryExpiry = carryIn > 0
+    ? (override ? periodEnd : addMonthsUTC(periodStart, params.carryoverMonths))
+    : null
 
   const used = usedInRange(params.approved, periodStart, periodEnd)
   // 선입선출: 당해 사용 중 '만료 전'에 쓴 것만 이월에서 차감, 나머지는 당해 부여에서 뺀다

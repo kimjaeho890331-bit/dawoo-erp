@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ClipboardList, Calendar, AlertTriangle, ChevronDown } from 'lucide-react'
+import { ClipboardList, Calendar, AlertTriangle, ChevronDown, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { selectableStaff } from '@/lib/staff/selectable'
 import { useAuth } from '@/components/AuthProvider'
 import { buildStaffColorMap } from '@/lib/staff-colors'
 import { toast } from '@/lib/toast'
-import { canDecideLeave, canChangeLeave } from '@/lib/leave/permissions'
-import { computeLeaveBalance } from '@/lib/leave/balance'
+import { canDecideLeave, canChangeLeave, canEditCarryover } from '@/lib/leave/permissions'
+import { computeLeaveBalance, type CarryOverrideRow } from '@/lib/leave/balance'
 import { notifyLeave } from '@/lib/notify/client'
 
 interface LeaveRequest {
@@ -123,6 +123,10 @@ export default function LeavePage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)  // 수정/삭제 드롭다운
   // 이월 사용 기한(개월) — 설정값(설정 › 연차). 없으면 기본값
   const [carryoverMonths, setCarryoverMonths] = useState(DEFAULT_CARRYOVER_MONTHS)
+  // 직원별 이월 수량 수동 수정 (관리자·경리만). staff_id+period_start 당 한 행
+  const [overrides, setOverrides] = useState<Array<{ staff_id: string } & CarryOverrideRow>>([])
+  const [editCarryId, setEditCarryId] = useState<string | null>(null)  // 이월 수정 중인 직원 id
+  const [editCarryVal, setEditCarryVal] = useState('')
 
   // 폼
   const [formStaffId, setFormStaffId] = useState('')
@@ -142,15 +146,18 @@ export default function LeavePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [reqRes, staffRes, setRes] = await Promise.all([
+    const [reqRes, staffRes, setRes, ovrRes] = await Promise.all([
       supabase.from('leave_requests').select('*').order('start_date', { ascending: false }),
       supabase.from('staff').select('*').order('name'),
       supabase.from('leave_settings').select('carryover_months').limit(1).maybeSingle(),
+      supabase.from('leave_carryover_overrides').select('staff_id, period_start, days'),
     ])
     if (!reqRes.error) setRequests((reqRes.data as LeaveRequest[]) || [])
     if (!staffRes.error) setStaffList((staffRes.data as Staff[]) || [])
-    // leave_settings 테이블이 아직 없을 수 있다 — 에러면 조용히 기본값(1개월) 유지
+    // leave_settings 테이블이 아직 없을 수 있다 — 에러면 조용히 기본값(2개월) 유지
     if (!setRes.error && setRes.data?.carryover_months != null) setCarryoverMonths(Number(setRes.data.carryover_months))
+    // leave_carryover_overrides 테이블도 아직 없을 수 있다 — 에러면 조용히 빈 목록
+    if (!ovrRes.error) setOverrides((ovrRes.data as Array<{ staff_id: string } & CarryOverrideRow>) || [])
     setLoading(false)
   }, [])
 
@@ -168,8 +175,24 @@ export default function LeavePage() {
       joinDate: staff?.join_date || new Date().toISOString().slice(0, 10),
       approved: requests.filter(r => r.staff_id === staffId),
       carryoverMonths,
+      carryOverrides: overrides.filter(o => o.staff_id === staffId),
     })
-  }, [staffList, requests, carryoverMonths])
+  }, [staffList, requests, carryoverMonths, overrides])
+
+  // 이월 수량 수정 권한 — 대표·관리자·경리
+  const canEditCarry = canEditCarryover(me.role)
+
+  // 직원의 이번 구간 이월 수량을 손으로 저장 (대표·관리자·경리)
+  const saveCarryOverride = async (staffId: string, periodStart: string) => {
+    if (!canEditCarry) { toast.error('이월 수량은 대표·관리자·경리만 바꿀 수 있습니다'); return }
+    const n = Math.max(0, Math.min(60, Math.floor(Number(editCarryVal) || 0)))
+    const { error } = await supabase.from('leave_carryover_overrides')
+      .upsert({ staff_id: staffId, period_start: periodStart, days: n }, { onConflict: 'staff_id,period_start' })
+    if (error) { toast.error(`이월 수량을 저장하지 못했습니다: ${error.message}`); return }
+    toast.success(`${getName(staffId)} 이월을 ${n}일로 저장했습니다`)
+    setEditCarryId(null)
+    loadData()
+  }
 
   // 직책+직급 순 정렬 (현황 카드 + 이름 칩 공용)
   /**
@@ -398,16 +421,38 @@ export default function LeavePage() {
               <div className="space-y-1 border-t border-border-tertiary pt-1.5 text-[11px]">
                 {bal.isAccruing ? (
                   <div className="text-txt-secondary tabular-nums">적립 {bal.grant}일 · 사용 {bal.used} <span className="text-txt-quaternary">(1년 미만)</span></div>
+                ) : editCarryId === s.id ? (
+                  // 이월 수량 수정 (대표·관리자·경리). 저장하면 이번 구간 끝까지 쓸 수 있는 이월이 된다.
+                  <div className="flex items-center gap-1 tabular-nums">
+                    <span className="text-txt-tertiary shrink-0">이월</span>
+                    <input type="number" min={0} max={60} autoFocus value={editCarryVal}
+                      onChange={e => setEditCarryVal(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveCarryOverride(s.id, bal.periodStart); else if (e.key === 'Escape') setEditCarryId(null) }}
+                      className="input-field w-12 h-7 py-0 px-1.5 text-center tabular-nums" />
+                    <span className="text-txt-tertiary shrink-0">일</span>
+                    <button onClick={() => saveCarryOverride(s.id, bal.periodStart)}
+                      className="ml-auto shrink-0 text-accent-text font-medium hover:underline">저장</button>
+                    <button onClick={() => setEditCarryId(null)}
+                      className="shrink-0 text-txt-tertiary hover:underline">취소</button>
+                  </div>
                 ) : (
                   <>
-                    {bal.carryStatus === 'valid' && bal.carryRemaining > 0 ? (
-                      <div className="tabular-nums">
-                        <span className="text-txt-secondary">이월 {bal.carryRemaining}일</span>
-                        <span className={dDayUntil(bal.carryExpiry) <= 14 ? ' text-amber-600 font-medium' : ' text-txt-tertiary'}> · 만료 {mdOf(bal.carryExpiry)} (D-{Math.max(dDayUntil(bal.carryExpiry), 0)})</span>
-                      </div>
-                    ) : (
-                      <div className="text-txt-quaternary">이월 없음</div>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {bal.carryStatus === 'valid' && bal.carryRemaining > 0 ? (
+                        <span className="tabular-nums">
+                          <span className="text-txt-secondary">이월 {bal.carryRemaining}일</span>
+                          <span className={dDayUntil(bal.carryExpiry) <= 14 ? ' text-amber-600 font-medium' : ' text-txt-tertiary'}> · 만료 {mdOf(bal.carryExpiry)} (D-{Math.max(dDayUntil(bal.carryExpiry), 0)})</span>
+                        </span>
+                      ) : (
+                        <span className="text-txt-quaternary">이월 없음</span>
+                      )}
+                      {canEditCarry && (
+                        <button onClick={() => { setEditCarryId(s.id); setEditCarryVal(String(bal.carryIn)) }}
+                          title="이월 수량 수정" className="ml-auto shrink-0 -my-0.5 p-0.5 text-txt-tertiary hover:text-accent-text transition-colors">
+                          <Pencil size={11} />
+                        </button>
+                      )}
+                    </div>
                     <div className="text-txt-secondary tabular-nums">당해 {bal.grant}일 · 잔여 {bal.grantRemaining}</div>
                   </>
                 )}

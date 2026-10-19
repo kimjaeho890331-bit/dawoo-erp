@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canDecideLeave, canChangeLeave, isLeaveApprover } from './permissions'
+import { canDecideLeave, canChangeLeave, isLeaveApprover, canEditCarryover } from './permissions'
 
 const 대표 = { id: 'ceo', role: '대표' }
 const 관리자 = { id: 'mgr', role: '관리자' }
@@ -14,6 +14,19 @@ describe('isLeaveApprover', () => {
     expect(isLeaveApprover('직원')).toBe(false)
     expect(isLeaveApprover('현장소장')).toBe(false)
     expect(isLeaveApprover(null)).toBe(false)
+  })
+})
+
+describe('canEditCarryover', () => {
+  it('대표·관리자·경리는 이월 수량을 고칠 수 있다', () => {
+    expect(canEditCarryover('대표')).toBe(true)
+    expect(canEditCarryover('관리자')).toBe(true)
+    expect(canEditCarryover('경리')).toBe(true)
+  })
+  it('직원·현장소장은 고칠 수 없다', () => {
+    expect(canEditCarryover('직원')).toBe(false)
+    expect(canEditCarryover('현장소장')).toBe(false)
+    expect(canEditCarryover(null)).toBe(false)
   })
 })
 

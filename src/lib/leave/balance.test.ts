@@ -138,3 +138,43 @@ describe('computeLeaveBalance — 경계 케이스', () => {
     expect(b.used).toBe(0)
   })
 })
+
+describe('computeLeaveBalance — 이월 수량 수동 수정(override)', () => {
+  it('현재 구간 override가 있으면 계산값 대신 그 값을 이월로 쓴다', () => {
+    const b = computeLeaveBalance({
+      joinDate: '2025-09-01',
+      approved: [], // 계산상 이월 11
+      carryoverMonths: 12,
+      today: new Date('2026-10-14'),
+      carryOverrides: [{ period_start: '2026-09-01', days: 3 }],
+    })
+    expect(b.periodIndex).toBe(1)
+    expect(b.carryIn).toBe(3) // 계산값(11) 대신 override 3
+    expect(b.carryStatus).toBe('valid')
+    expect(b.usable).toBe(18) // 3(이월) + 15(당해)
+  })
+
+  it('현재 구간과 다른 구간의 override는 무시한다', () => {
+    const b = computeLeaveBalance({
+      joinDate: '2025-09-01',
+      approved: [],
+      carryoverMonths: 12,
+      today: new Date('2026-10-14'),
+      carryOverrides: [{ period_start: '2025-09-01', days: 3 }], // 다른(지난) 구간
+    })
+    expect(b.carryIn).toBe(11) // override 적용 안 됨 → 계산값 유지
+  })
+
+  it('수동 override 이월은 N 기한이 지났어도 이번 구간 끝까지 유효', () => {
+    const b = computeLeaveBalance({
+      joinDate: '2025-03-04',
+      approved: [],
+      carryoverMonths: 2, // 정상 기한(2026-05-04)은 이미 지남
+      today: new Date('2026-10-14'),
+      carryOverrides: [{ period_start: '2026-03-04', days: 3 }],
+    })
+    expect(b.carryIn).toBe(3)
+    expect(b.carryStatus).toBe('valid') // override라 지금도 유효
+    expect(b.usable).toBe(18) // 3 + 15
+  })
+})

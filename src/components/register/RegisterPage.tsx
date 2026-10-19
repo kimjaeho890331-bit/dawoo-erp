@@ -139,6 +139,8 @@ const SORT_FIELDS = [
   { key: 'receipt', label: '접수일', asc: '오래된순', desc: '최신순' },
   { key: 'outstanding', label: '미수금', asc: '작은순', desc: '큰순' },
   { key: 'year', label: '진행연도', asc: '과거순', desc: '최근순' },
+  // 소규모는 지원사업(소규모·공동주택·새빛…), 수도는 공사종류(옥내·공용…)
+  { key: 'program', label: '지원사업/종류', asc: 'ㄱ → ㅎ', desc: 'ㅎ → ㄱ' },
 ] as const
 
 type SortKey = (typeof SORT_FIELDS)[number]['key']
@@ -155,6 +157,47 @@ const sortFieldOf = (key: SortKey) => SORT_FIELDS.find(f => f.key === key)!
  * 섞인 건이 있는데(" 대광빌라 …"), 공백이 한글보다 앞서 정렬되는 바람에
  * 그 건들만 맨 위로 튀어 가나다순이 깨졌다.
  */
+const DEFAULT_SORT_RULES: SortRule[] = [{ key: 'step', dir: 'asc' }]
+
+/** 정렬 설정 저장 키 — 소규모·수도를 따로 기억한다. */
+const sortStorageKey = (category: string) => `dawoo_register_sort_${category}`
+
+/**
+ * 저장해 둔 정렬 설정 읽기.
+ * 값이 깨졌거나 예전에 쓰던 항목 이름이면 기본값으로 돌아간다 —
+ * 화면이 정렬을 못 해 빈 목록처럼 보이는 일이 없어야 한다.
+ */
+function loadSortRules(category: string): SortRule[] {
+  if (typeof window === 'undefined') return DEFAULT_SORT_RULES
+  try {
+    const raw = localStorage.getItem(sortStorageKey(category))
+    if (!raw) return DEFAULT_SORT_RULES
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return DEFAULT_SORT_RULES
+    const valid = parsed.filter((r): r is SortRule =>
+      !!r && typeof r === 'object'
+      && SORT_FIELDS.some(f => f.key === (r as SortRule).key)
+      && ((r as SortRule).dir === 'asc' || (r as SortRule).dir === 'desc'),
+    )
+    return valid.length > 0 ? valid : DEFAULT_SORT_RULES
+  } catch {
+    return DEFAULT_SORT_RULES
+  }
+}
+
+function saveSortRules(category: string, rules: SortRule[]): void {
+  try {
+    localStorage.setItem(sortStorageKey(category), JSON.stringify(rules))
+  } catch {
+    /* 저장 못 해도 이번 화면 정렬은 그대로 동작한다 */
+  }
+}
+
+/** 목록에 보이는 '지원사업/종류' 값. 소규모·수도가 서로 다른 칸을 쓴다. */
+function programOf(p: DBProject): string {
+  return (p.support_program || p.water_work_type || p.work_types?.name || '').trim()
+}
+
 function compareByField(a: DBProject, b: DBProject, key: SortKey): number {
   switch (key) {
     case 'staff': {
@@ -171,6 +214,12 @@ function compareByField(a: DBProject, b: DBProject, key: SortKey): number {
       return getOutstanding(a) - getOutstanding(b)
     case 'year':
       return getProjectYear(a) - getProjectYear(b)
+    case 'program': {
+      // 같은 지원사업끼리 모이게 한다. 값 없는 건은 늘 맨 뒤.
+      const av = programOf(a), bv = programOf(b)
+      if (!av !== !bv) return av ? -1 : 1
+      return av.localeCompare(bv, 'ko')
+    }
     case 'step': {
       const ai = PROGRESS_STEPS.indexOf(a.status as ProjectStep)
       const bi = PROGRESS_STEPS.indexOf(b.status as ProjectStep)
@@ -508,7 +557,13 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
    * 정렬 규칙 목록. 위에서부터 1순위다.
    * 기본값은 예전 '기본 (단계순)'과 같다.
    */
-  const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'step', dir: 'asc' }])
+  const [sortRules, setSortRules] = useState<SortRule[]>(() => loadSortRules(category))
+
+  /**
+   * 정렬 설정을 이 기기에 접수대장별로 기억한다.
+   * 소규모와 수도는 보는 기준이 달라 한 벌로 묶으면 서로 덮어쓴다.
+   */
+  useEffect(() => { saveSortRules(category, sortRules) }, [category, sortRules])
   const [outstandingOnly, setOutstandingOnly] = useState(false)
   const [exporting, setExporting] = useState(false)
   /**
@@ -937,7 +992,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             onSetRule={setRule}
             onRemoveRule={removeRule}
             onAddRule={addRule}
-            onReset={() => setSortRules([{ key: 'step', dir: 'asc' }])}
+            onReset={() => setSortRules(DEFAULT_SORT_RULES)}
           />
           {/* 상단 고정 — 예전에는 '내 담당 우선' 켜기/끄기뿐이라 다른 사람 건을
               위로 올릴 수 없었다. 기본값은 그대로 로그인한 사람이다. */}
@@ -1179,7 +1234,13 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">호수</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">연락처</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">주소</th>
-                <th className="px-3 py-2 text-left font-medium text-txt-tertiary">{category === '소규모' ? '지원사업' : '종류'}</th>
+                <SortableTh
+                  label={category === '소규모' ? '지원사업' : '종류'}
+                  sortKey="program"
+                  active={sortRules[0]?.key === 'program'}
+                  dir={sortRules[0]?.dir ?? 'asc'}
+                  onSort={toggleSort}
+                />
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">상담내역</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">단계</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary whitespace-nowrap">진행연도</th>

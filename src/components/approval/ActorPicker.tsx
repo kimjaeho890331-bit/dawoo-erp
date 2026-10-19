@@ -1,12 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { selectableStaff } from '@/lib/staff/selectable'
+import { useAuth } from '@/components/AuthProvider'
 
 // 대시보드 등 기존 화면과 동일한 localStorage 키를 재사용한다.
 // 새 신원 개념을 만들지 않고, 이미 골라둔 "현재 직원"을 결재 화면에서도 그대로 이어받는다.
 const STAFF_STORAGE_KEY = 'dawoo_current_staff_id'
+
+/** 이번 브라우저 세션에서 '로그인한 사람으로 맞추기'를 이미 했는지 */
+const AUTO_APPLIED_KEY = 'dawoo_actor_auto_applied'
 
 export interface ActorStaff {
   id: string
@@ -43,6 +47,7 @@ interface UseActorResult {
  * 여기서는 "화면에 무엇을 보여줄지"만 결정하면 된다.
  */
 export function useActor(): UseActorResult {
+  const { staff: authStaff } = useAuth()
   const [staffList, setStaffList] = useState<ActorStaff[]>([])
   const [actorId, setActorIdState] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
@@ -80,6 +85,32 @@ export function useActor(): UseActorResult {
       window.removeEventListener('storage', onStorage)
     }
   }, [])
+
+  /**
+   * 로그인한 사람으로 자동 지정.
+   *
+   * 예전에는 로그인 계정과 직원이 연결되지 않아 화면에서 직접 골라야 했다.
+   * 지금은 계정 연결(staff_emails)이 있어 "지금 쓰는 사람"을 알 수 있으므로,
+   * 화면을 열면 본인으로 맞춰 둔다 — 공용 PC에 남아 있던 남의 이름으로
+   * 결재가 올라가는 일을 막는다.
+   *
+   * 브라우저를 연 뒤 한 번만 맞춘다. 경리가 다른 사람 몫을 대신 작성하는
+   * 경우가 있는데, 화면을 옮길 때마다 본인으로 되돌리면 그 작업이 불가능해진다.
+   * 그래서 '이번 세션에 이미 맞췄는지'를 sessionStorage에 남긴다 —
+   * 탭을 닫았다 열면 다시 본인으로 시작한다.
+   */
+  const autoApplied = useRef(false)
+  useEffect(() => {
+    if (autoApplied.current) return
+    const myId = authStaff?.id
+    if (!myId || typeof window === 'undefined') return
+    autoApplied.current = true
+    if (sessionStorage.getItem(AUTO_APPLIED_KEY) === '1') return
+    sessionStorage.setItem(AUTO_APPLIED_KEY, '1')
+    if (myId === actorId) return
+    localStorage.setItem(STAFF_STORAGE_KEY, myId)
+    actorListeners.forEach(fn => fn(myId))
+  }, [authStaff?.id, actorId])
 
   const setActorId = useCallback((id: string) => {
     if (typeof window !== 'undefined') {

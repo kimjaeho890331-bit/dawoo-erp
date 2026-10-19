@@ -12,6 +12,8 @@ import { useAuth } from '@/components/AuthProvider'
 import type { DBProject } from '@/components/register/RegisterPage'
 import { toast } from '@/lib/toast'
 import { hasUnsavedInput } from '@/lib/register/formDirty'
+import { groupUnitAreas, readAreaGroups, type AreaGroup } from '@/lib/building/areaGroups'
+import AreaGroupChips from '@/components/register/AreaGroupChips'
 
 // --- 주소 검색 결과 타입 ---
 interface AddressResult {
@@ -122,6 +124,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
     building_use: '',
     unit_count: '',
     approval_date: '',
+    total_floor_area: '',
     dong: '',
     ho: '',
     exclusive_area: '',
@@ -181,6 +184,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           building_use: editProject.building_use || '',
           unit_count: editProject.unit_count?.toString() || '',
           approval_date: editProject.approval_date || '',
+          total_floor_area: editProject.total_floor_area?.toString() || '',
           dong,
           ho,
           exclusive_area: editProject.exclusive_area?.toString() || '',
@@ -330,6 +334,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
           building_use: bldData.mainPurpsCdNm || bldData.etcPurps || prev.building_use || '',
           unit_count: bldData.hhldCnt?.toString() || prev.unit_count || '',
           approval_date: formattedDate || prev.approval_date || '',
+          total_floor_area: bldData.totArea ? String(bldData.totArea) : prev.total_floor_area || '',
           building_name: prev.building_name || bldData.bldNm || '',
         }))
       }
@@ -435,12 +440,25 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
         building_use: form.building_use || null,
         unit_count: form.unit_count ? Number(form.unit_count) : null,
         approval_date: form.approval_date || null,
+        total_floor_area: form.total_floor_area ? Number(form.total_floor_area) : null,
         dong: form.dong || null,
         ho: form.ho || null,
         exclusive_area: form.exclusive_area ? Number(form.exclusive_area) : null,
         water_work_type: form.water_work_type || null,
       }
       if (region) payload.region = region
+
+      // 전유면적 (세대별) — 조회한 전유부는 등록을 마치면 사라졌다.
+      // 상세 기본정보에서도 같은 내용을 보도록 extra_fields 에 남긴다.
+      const areaGroups: AreaGroup[] = units.length > 0
+        ? groupUnitAreas(units)
+        : readAreaGroups(editProject?.extra_fields)
+      if (areaGroups.length > 0) {
+        payload.extra_fields = {
+          ...((editProject?.extra_fields as Record<string, unknown> | null) ?? {}),
+          area_groups: areaGroups,
+        }
+      }
 
       if (isEdit) {
         const { error } = await supabase
@@ -598,7 +616,7 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                 <p className="text-[12px] text-txt-tertiary">조회 중...</p>
               ) : (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-3">
                     <div>
                       <p className="text-[10px] text-txt-tertiary">용도</p>
                       <p className="text-[13px] text-txt-primary">{form.building_use || '-'}</p>
@@ -608,11 +626,21 @@ export default function NewProjectModal({ category, onClose, onSubmit, editProje
                       <p className="text-[13px] text-txt-primary">{form.unit_count || '-'}</p>
                     </div>
                     <div>
+                      <p className="text-[10px] text-txt-tertiary">연면적</p>
+                      <p className="text-[13px] text-txt-primary">{form.total_floor_area ? `${form.total_floor_area}m²` : '-'}</p>
+                    </div>
+                    <div>
                       <p className="text-[10px] text-txt-tertiary">사용승인일</p>
                       <p className="text-[13px] text-txt-primary">{form.approval_date || '-'}</p>
                     </div>
                   </div>
-                  <AreaGroupDisplay units={units} />
+                  <div className="mt-2 pt-2 border-t border-border-tertiary">
+                    <p className="text-[10px] text-txt-tertiary mb-1">전유면적 (세대별)</p>
+                    <AreaGroupChips
+                      groups={units.length > 0 ? groupUnitAreas(units) : readAreaGroups(editProject?.extra_fields)}
+                      emptyText="전유면적 데이터 없음 (대단지 건물은 조회 불가)"
+                    />
+                  </div>
                 </>
               )}
             </div>
@@ -837,33 +865,3 @@ function ModalField({
   )
 }
 
-// 전유면적 세대별 그룹핑 표시
-function AreaGroupDisplay({ units }: { units: UnitInfo[] }) {
-  // 전유부 데이터가 없으면 (대단지 아파트 등 API 한도 초과)
-  if (units.length === 0) return (
-    <div className="mt-2 pt-2 border-t border-border-tertiary">
-      <p className="text-[10px] text-txt-quaternary">전유면적 데이터 없음 (대단지 건물은 조회 불가)</p>
-    </div>
-  )
-  const privateUnits = units.filter(u => u.exposPubuseGbCdNm === '전유')
-  if (privateUnits.length === 0) return null
-
-  const areaMap: Record<string, number> = {}
-  privateUnits.forEach(u => {
-    const key = String(u.area)
-    areaMap[key] = (areaMap[key] || 0) + 1
-  })
-
-  return (
-    <div className="mt-2 pt-2 border-t border-border-tertiary">
-      <p className="text-[10px] text-txt-tertiary mb-1">전유면적 (세대별)</p>
-      <div className="flex flex-wrap gap-1.5">
-        {Object.entries(areaMap).map(([area, count]) => (
-          <span key={area} className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-medium">
-            {area}m² x {count}세대
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}

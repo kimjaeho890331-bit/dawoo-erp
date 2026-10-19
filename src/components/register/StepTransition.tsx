@@ -17,7 +17,7 @@ interface Props {
    * 예전에는 저장된 값만 봐서, 실측일을 넣자마자 "다음 단계"를 누르면
    * "실측일을 입력해주세요"가 떴다. 입력값은 자동저장이 그대로 이어서 저장한다.
    */
-  pendingEdits?: Record<string, string | number | null>
+  pendingEdits?: Record<string, string | number | null | Record<string, unknown>>
   onStepChange: () => void
 }
 

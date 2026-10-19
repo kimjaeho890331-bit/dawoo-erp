@@ -82,12 +82,16 @@ export interface DBProject {
   dong: string | null
   ho: string | null
   exclusive_area: number | null
+  /** 연면적 — 건축물대장 표제부 totArea */
+  total_floor_area: number | null
   building_use: string | null
   bank_name: string | null
   account_number: string | null
   account_holder: string | null
   support_program: string | null
   year: number | null
+  /** 예비 확장 칸. area_groups(전유면적 세대별)가 여기 들어간다 */
+  extra_fields: Record<string, unknown> | null
   created_at: string
   updated_at: string
   // JOIN 필드

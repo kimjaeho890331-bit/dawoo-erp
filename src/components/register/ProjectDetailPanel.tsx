@@ -61,7 +61,7 @@ async function copyAddress(text: string, label: string) {
 
 export default function ProjectDetailPanel({ project, category, onClose, onDelete, onRefresh }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('접수')
-  const [editData, setEditData] = useState<Record<string, string | number | null>>({})
+  const [editData, setEditData] = useState<Record<string, string | number | null | Record<string, unknown>>>({})
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -153,7 +153,7 @@ export default function ProjectDetailPanel({ project, category, onClose, onDelet
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const updateField = useCallback((field: string, value: string | number | null) => {
+  const updateField = useCallback((field: string, value: string | number | null | Record<string, unknown>) => {
     setEditData(prev => ({ ...prev, [field]: value }))
     setHasChanges(true)
   }, [])

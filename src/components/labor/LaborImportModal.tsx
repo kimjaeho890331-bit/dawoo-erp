@@ -37,6 +37,8 @@ function toPreview(
     year, month,
     // 공사건은 불러온 섹션의 것으로 넣는다. 엑셀의 현장명(site_name)은 파일 값 그대로 보존한다.
     site_id: workTarget?.site_id ?? null, project_id: workTarget?.project_id ?? null,
+    // 갓 불러온 행은 아직 결의서에 안 올라갔다 — 작업대에 보인다
+    expense_report_id: null,
     worker_name: src.worker_name, resident_id: src.resident_id, phone: src.phone,
     bank_name: src.bank_name, account_number: src.account_number,
     day_values: src.day_values, daily_wage: src.daily_wage, vehicle_cost: src.vehicle_cost,

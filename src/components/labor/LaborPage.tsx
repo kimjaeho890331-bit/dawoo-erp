@@ -9,6 +9,7 @@ import WorkTargetPicker from '@/components/common/WorkTargetPicker'
 import { projectLabel, workKindFromIds, type WorkKind, type WorkProjectOption, type WorkSiteOption } from '@/lib/workTarget'
 import { groupLaborRows, assertWorkTargetAssigned } from '@/lib/labor/laborGroups'
 import LaborSectionHead from './LaborSectionHead'
+import LaborLedger from './LaborLedger'
 import { DEFAULT_RATES, pickRates, type LaborRates, type LaborRateRow } from '@/lib/labor/rates'
 import LaborImportModal from './LaborImportModal'
 import { maskResidentId } from '@/lib/labor/mask'
@@ -32,6 +33,8 @@ export interface LaborRecord {
   daily_wage: number | null
   vehicle_cost: number | null
   payment_date: string | null
+  /** 이 행을 담아 올린 노무비 결의서. 비어 있으면 아직 안 올린 행 (030) */
+  expense_report_id: string | null
   /** 공사건 — 입찰/수의 현장 */
   site_id: string | null
   /** 공사건 — 지원사업 접수건 */
@@ -137,12 +140,16 @@ function CellInput({ value, onSave, onReset, className = '', align = 'left', pla
 export default function LaborPage() {
   const router = useRouter()
   const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
+  // 년/월 고르는 칸은 없앴다(2026-10-15). 새로 만드는 줄의 기본 달로만 쓴다 —
+  // 묶음에 이미 줄이 있으면 그 줄의 달을 따른다.
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
   const [records, setRecords] = useState<LaborRecord[]>([])
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
   const [rates, setRates] = useState<LaborRates>(DEFAULT_RATES)
   const [loading, setLoading] = useState(true)
+  /** draft = 결의서 만드는 작업대 · ledger = 승인된 노무비 대장 */
+  const [tab, setTab] = useState<'draft' | 'ledger'>('draft')
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [nameDropdown, setNameDropdown] = useState<string | null>(null) // 열려있는 근무자 드롭다운의 record id
   const [exporting, setExporting] = useState(false)
@@ -155,6 +162,8 @@ export default function LaborPage() {
   const [pickSiteId, setPickSiteId] = useState('')
   const [pickProjectId, setPickProjectId] = useState('')
   const [importTarget, setImportTarget] = useState<{ site_id: string | null; project_id: string | null } | null>(null)
+  /** 어느 달 묶음으로 불러오는 중인지 — 엑셀의 달과 다르면 경고한다 */
+  const [importPeriod, setImportPeriod] = useState<{ year: number; month: number } | null>(null)
   const [sites, setSites] = useState<WorkSiteOption[]>([])
   const [projects, setProjects] = useState<WorkProjectOption[]>([])
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -168,21 +177,21 @@ export default function LaborPage() {
   const droppedFile = useRef<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
-  const daysInMonth = new Date(year, month, 0).getDate()
 
   // --- 데이터 로드 ---
   const fetchRecords = useCallback(async () => {
     setLoading(true)
+    // 작업대는 「아직 결의서로 안 올린 행」만 본다. 달은 가리지 않는다 —
+    // 년/월 고르는 칸을 없앴고(2026-10-15), 올린 행은 근무지출관리 탭으로 넘어간다.
     const { data, error } = await supabase.from('labor_records').select('*')
-      .eq('year', year).eq('month', month)
-      .order('sort_order').order('created_at')
+      .is('expense_report_id', null)
+      .order('year').order('month').order('sort_order').order('created_at')
     if (!error && data) {
       // 빈 달이면 근무자 한 줄을 미리 만들어 둔다 — 들어오자마자 바로 칠 수 있게.
       // 지난 달을 둘러보기만 해도 빈 행이 생겨 쓰레기가 쌓였다(2026-10-15). 이번 달에만 만든다.
       // 같은 달에 두 번 만들지 않도록 ref로 막는다(개발 모드에서 이펙트가 두 번 도는 것 포함).
       const key = `${year}-${month}`
-      const thisMonth = year === new Date().getFullYear() && month === new Date().getMonth() + 1
-      if (data.length === 0 && thisMonth && autoRowFor.current !== key) {
+      if (data.length === 0 && autoRowFor.current !== key) {
         autoRowFor.current = key
         const { data: made } = await supabase.from('labor_records')
           .insert({ year, month, worker_name: '', day_values: {}, sort_order: 0 })
@@ -282,10 +291,12 @@ export default function LaborPage() {
     }
   }, [flushPending])
 
-  const addRow = async (target?: { site_id: string | null; project_id: string | null }) => {
+  const addRow = async (target?: { site_id: string | null; project_id: string | null; year?: number; month?: number }) => {
     const { data, error } = await supabase.from('labor_records')
       .insert({
-        year, month, worker_name: '', day_values: {}, sort_order: records.length,
+        // 달은 그 묶음의 달을 따른다. 묶음이 없으면(새로 만드는 중) 이번 달.
+        year: target?.year ?? year, month: target?.month ?? month,
+        worker_name: '', day_values: {}, sort_order: records.length,
         site_id: target?.site_id ?? null, project_id: target?.project_id ?? null,
       })
       .select().single()
@@ -349,7 +360,7 @@ export default function LaborPage() {
   const checkedRecords = records.filter(r => checked.has(r.id))
 
   // 공사건 섹션 (미지정은 맨 뒤)
-  const groups = useMemo(() => groupLaborRows(records), [records])
+  const groups = useMemo(() => groupLaborRows(records, { byPeriod: true }), [records])
 
   /** 공사건 이름 — 섹션 머리줄과 결의서 제목에 쓴다 */
   const targetName = useCallback((site_id: string | null, project_id: string | null): string => {
@@ -408,10 +419,28 @@ export default function LaborPage() {
   }
 
   // --- 엑셀 불러오기: 저장이 끝나면 그 파일의 달로 화면을 옮긴다 ---
-  const handleImported = (y: number, m: number, count: number) => {
+  const handleImported = async (y: number, m: number, count: number) => {
+    const target = importTarget
     setImportFile(null)
-    if (y === year && m === month) { fetchRecords(); fetchRates() }
-    else { setYear(y); setMonth(m) }
+
+    // 공사건을 만들 때 자리만 잡아둔 빈 줄은 지운다 — 불러온 사람만 남게.
+    // 더 넣을 사람이 있으면 「근무자 추가」로 줄을 만든다.
+    if (count > 0 && target) {
+      const { data: pending } = await supabase.from('labor_records')
+        .select('id, worker_name, daily_wage, day_values, site_id, project_id')
+        .eq('year', y).eq('month', m).is('expense_report_id', null)
+      const blanks = (pending ?? []).filter(r =>
+        (r.site_id ?? null) === target.site_id &&
+        (r.project_id ?? null) === target.project_id &&
+        !String(r.worker_name ?? '').trim() &&
+        !r.daily_wage &&
+        Object.keys((r.day_values ?? {}) as Record<string, number>).length === 0)
+      if (blanks.length > 0) await supabase.from('labor_records').delete().in('id', blanks.map(r => r.id))
+    }
+
+    setImportTarget(null)
+    fetchRecords()
+    fetchRates()
     fetchWorkers()
     toast.success(`${y}년 ${m}월에 ${count}줄을 불러왔습니다.`)
   }
@@ -460,10 +489,19 @@ export default function LaborPage() {
     const assigned = assertWorkTargetAssigned(rows)
     if (!assigned.ok) { toast.error(assigned.error); return }
 
+    // 결의서는 달 단위다. 작업대에 여러 달이 섞여 있으므로 한 달씩만 올린다.
+    const periods = [...new Set(rows.map(r => `${r.year}-${r.month}`))]
+    if (periods.length > 1) {
+      toast.error(`달이 다른 근무표가 섞여 있습니다(${periods.join(', ')}). 한 달씩 올려 주세요.`)
+      return
+    }
+    const docYear = rows[0].year
+    const docMonth = rows[0].month
+
     flushPending()
     const today = new Date().toISOString().slice(0, 10)
     const built = laborApprovalDraft({
-      year, month, today,
+      year: docYear, month: docMonth, today,
       lines: rows.map(r => {
         const c = calcRow(r, rates)
         return {
@@ -514,6 +552,13 @@ export default function LaborPage() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(`결의서를 만들지 못했습니다: ${json.error || res.statusText}`); return }
+
+      // 올린 근무표 행에 문서를 적어 둔다 — 작업대에서 빠지고 근무지출관리로 넘어간다
+      const { error: linkErr } = await supabase.from('labor_records')
+        .update({ expense_report_id: json.id }).in('id', rows.map(r => r.id))
+      if (linkErr) toast.error(`근무표를 결의서에 잇지 못했습니다: ${linkErr.message} — 결의서는 만들어졌습니다.`)
+      else setRecords(prev => prev.filter(r => !rows.some(x => x.id === r.id)))
+
       router.push(`/approval/${json.id}/edit`)
     } finally {
       setSubmitting(false)
@@ -578,8 +623,8 @@ export default function LaborPage() {
           file={importFile}
           workTarget={importTarget}
           workTargetName={importTarget ? targetName(importTarget.site_id, importTarget.project_id) : undefined}
-          viewYear={year}
-          viewMonth={month}
+          viewYear={importPeriod?.year ?? year}
+          viewMonth={importPeriod?.month ?? month}
           onClose={() => { setImportFile(null); setImportTarget(null) }}
           onImported={handleImported}
         />
@@ -587,7 +632,7 @@ export default function LaborPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-[22px] font-semibold tracking-[-0.4px] text-txt-primary">일용직 근무관리</h1>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className={`items-center gap-2 flex-wrap ${tab === 'draft' ? 'flex' : 'hidden'}`}>
           <Link href="/labor/rates"
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-surface border border-border-primary rounded-lg hover:bg-surface-tertiary transition">
             <Percent size={15} className="text-txt-tertiary" />
@@ -624,25 +669,22 @@ export default function LaborPage() {
         </div>
       </div>
 
-      {/* 연도/월 선택 + 요약 */}
+      {/* 탭 — 왼쪽은 결의서를 만드는 작업대, 오른쪽은 승인된 것이 쌓이는 대장 */}
+      <div className="inline-flex rounded-lg bg-surface-secondary p-1">
+        {([['draft', '결의서 만들기'], ['ledger', '근무지출관리']] as const).map(([key, label]) => (
+          <button key={key} type="button" onClick={() => setTab(key)}
+            className={`px-4 py-1.5 text-sm rounded-md transition ${tab === key ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-secondary'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'ledger' ? <LaborLedger /> : (
+      <>
+      {/* 요약 — 달은 묶음 머리줄에 적힌다. 작업대에는 아직 안 올린 행만 있다 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-txt-tertiary">연도 / 월</span>
-          <select value={year} onChange={e => setYear(Number(e.target.value))}
-            className="border border-border-primary rounded-lg px-3 h-[34px] text-sm outline-none focus:border-accent">
-            {[...new Set([year, ...Array.from({ length: 6 }, (_, i) => now.getFullYear() - 3 + i)])].sort().map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-          <select value={month} onChange={e => setMonth(Number(e.target.value))}
-            className="border border-border-primary rounded-lg px-3 h-[34px] text-sm outline-none focus:border-accent">
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-              <option key={m} value={m}>{m}월</option>
-            ))}
-          </select>
-          <span className="text-sm text-txt-tertiary ml-2">
-            {year}-{String(month).padStart(2, '0')}-01 ~ {year}-{String(month).padStart(2, '0')}-{String(daysInMonth).padStart(2, '0')}
-          </span>
+          <span className="text-sm text-txt-tertiary">아직 결의서로 올리지 않은 근무표입니다. 결의서를 만들면 「근무지출관리」로 넘어갑니다.</span>
         </div>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-txt-tertiary">총지급액 <b className="text-txt-primary tabular-nums">{fmt(totals.total)}</b>원</span>
@@ -705,7 +747,7 @@ export default function LaborPage() {
               <tr>
                 <th className={thCls}>연락처</th>
                 <th className={thCls}>계좌번호</th>
-                {days2.map(d => <th key={d} className={`${thCls} px-0! ${d > daysInMonth ? 'opacity-30' : ''}`}>{d}</th>)}
+                {days2.map(d => <th key={d} className={`${thCls} px-0!`}>{d}</th>)}
                 <th className={thCls}>일급</th>
                 <th className={thCls}>주민세<br /><RateLabel value={rates.resident} /></th>
                 <th className={thCls}>고용보험<br /><RateLabel value={rates.employment} /></th>
@@ -722,10 +764,15 @@ export default function LaborPage() {
                 const project_id = g.rows[0].project_id ?? null
                 const assigned = g.kind !== 'none'
                 const groupNetPay = g.rows.reduce((sum, row) => sum + calcRow(row, rates).netPay, 0)
+                // 달은 묶음마다 다르다 — 날짜 칸(1~31)도 그 달 기준으로 막는다
+                const gYear = g.year ?? year
+                const gMonth = g.month ?? month
+                const gDays = new Date(gYear, gMonth, 0).getDate()
                 return (
                   <Fragment key={g.key}>
                     <LaborSectionHead
                       colSpan={COL_WIDTHS.length}
+                      period={`${gYear}년 ${gMonth}월`}
                       label={targetName(site_id, project_id)}
                       sourceLabel={!assigned ? null
                         : g.kind === 'project' ? '지원사업'
@@ -734,8 +781,8 @@ export default function LaborPage() {
                       netPay={groupNetPay}
                       assigned={assigned}
                       busy={submitting}
-                      onAddWorker={() => addRow({ site_id, project_id })}
-                      onImport={() => { setImportTarget({ site_id, project_id }); flushPending(); fileInputRef.current?.click() }}
+                      onAddWorker={() => addRow({ site_id, project_id, year: gYear, month: gMonth })}
+                      onImport={() => { setImportTarget({ site_id, project_id }); setImportPeriod({ year: gYear, month: gMonth }); flushPending(); fileInputRef.current?.click() }}
                       onMove={() => setPicker({ mode: 'assign', rowIds: g.rows.map(row => row.id), at: g.key })}
                       picker={picker?.at === g.key ? pickerPanel() : null}
                       onDraft={() => handleCreateDraft(g.rows)}
@@ -743,7 +790,7 @@ export default function LaborPage() {
                     {g.rows.map(r => {
                       const c = calcRow(r, rates)
                       return (
-                        <FragmentRow key={r.id} r={r} c={c} daysInMonth={daysInMonth} days1={days1} days2={days2}
+                        <FragmentRow key={r.id} r={r} c={c} daysInMonth={gDays} days1={days1} days2={days2}
                           tdCls={tdCls} checked={checked.has(r.id)} toggleCheck={toggleCheck}
                           nameDropdown={nameDropdown} setNameDropdown={setNameDropdown} dropdownRef={dropdownRef}
                           workers={workers} pickWorker={pickWorker} patchRecord={patchRecord}
@@ -778,6 +825,8 @@ export default function LaborPage() {
         · <b>노무비 결의서 만들기</b>는 체크한 행을 공사건별로 묶어 결의서를 한 장씩 만듭니다(결의서는 공사건 하나만 담을 수 있습니다). 상신은 결의서를 열어서 합니다.<br />
         · <b>엑셀 저장</b>은 체크한 전체를 통합 한 시트로 내립니다. 공사건은 현장명 칸으로 구분됩니다.
       </p>
+      </>
+      )}
     </div>
   )
 }

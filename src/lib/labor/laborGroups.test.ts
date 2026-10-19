@@ -42,3 +42,28 @@ describe('assertWorkTargetAssigned', () => {
     expect(r).toEqual({ ok: true })
   })
 })
+
+// 작업대에는 년/월 고르는 칸이 없다(2026-10-15). 여러 달 행이 한 화면에 섞이므로
+// 달이 다르면 따로 묶는다 — 결의서는 달 단위이고 날짜 칸(1~31)도 달마다 다르다.
+describe('groupLaborRows — 달까지 나누기', () => {
+  it('같은 공사건이라도 달이 다르면 따로 묶는다', () => {
+    const groups = groupLaborRows([
+      row({ id: 'a', site_id: 'S1', year: 2026, month: 8, sort_order: 0 }),
+      row({ id: 'b', site_id: 'S1', year: 2026, month: 9, sort_order: 1 }),
+      row({ id: 'c', site_id: 'S1', year: 2026, month: 8, sort_order: 2 }),
+    ], { byPeriod: true })
+
+    expect(groups.map(g => [g.key, g.year, g.month, g.rows.map(r => r.id)])).toEqual([
+      ['2026-8|site:S1', 2026, 8, ['a', 'c']],
+      ['2026-9|site:S1', 2026, 9, ['b']],
+    ])
+  })
+
+  it('끄면 달을 가리지 않고 공사건으로만 묶는다', () => {
+    const groups = groupLaborRows([
+      row({ id: 'a', site_id: 'S1', year: 2026, month: 8 }),
+      row({ id: 'b', site_id: 'S1', year: 2026, month: 9 }),
+    ])
+    expect(groups.map(g => g.rows.map(r => r.id))).toEqual([['a', 'b']])
+  })
+})

@@ -8,10 +8,12 @@ import { Plus, Upload, FileCheck, ArrowRight } from 'lucide-react'
  * 결의서는 공사건을 문서당 하나만 가지므로(026) 묶음별로 한 장씩 만든다.
  */
 export default function LaborSectionHead({
-  colSpan, label, sourceLabel, count, netPay, assigned, busy,
+  colSpan, period, label, sourceLabel, count, netPay, assigned, busy,
   onAddWorker, onImport, onMove, onDraft, picker,
 }: {
   colSpan: number
+  /** 「2026년 8월」 — 작업대에는 여러 달이 섞여 있어 묶음마다 적는다 */
+  period?: string
   label: string
   /** 입찰 / 수의계약 / 지원사업 */
   sourceLabel: string | null
@@ -39,6 +41,9 @@ export default function LaborSectionHead({
             <span className="rounded border border-border-secondary px-1.5 py-0.5 text-[11px] text-txt-tertiary">
               {sourceLabel}
             </span>
+          )}
+          {period && (
+            <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] font-medium text-txt-secondary">{period}</span>
           )}
           <b className={`text-[13px] ${assigned ? 'text-txt-primary' : 'text-txt-tertiary'}`}>{label}</b>
           <span className="text-[12px] text-txt-tertiary">{count}명</span>

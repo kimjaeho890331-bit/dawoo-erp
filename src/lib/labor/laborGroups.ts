@@ -11,16 +11,21 @@ export interface LaborGroupRow {
   site_id?: string | null
   project_id?: string | null
   sort_order?: number
+  year?: number
+  month?: number
 }
 
 export type LaborGroupKind = 'site' | 'project' | 'none'
 
 export interface LaborGroup<T extends LaborGroupRow = LaborGroupRow> {
-  /** `site:<id>` · `project:<id>` · `none` */
+  /** `site:<id>` · `project:<id>` · `none`. 달까지 나누면 앞에 `2026-8|` 이 붙는다 */
   key: string
   kind: LaborGroupKind
   /** 공사건 id. 미지정이면 null */
   id: string | null
+  /** 달까지 나눌 때만 채워진다 */
+  year?: number
+  month?: number
   rows: T[]
 }
 
@@ -31,17 +36,27 @@ export function workTargetKey(row: LaborGroupRow): string {
   return 'none'
 }
 
-/** 공사건별로 묶는다. 섹션 순서는 그 섹션 행들의 최소 sort_order, 미지정은 맨 뒤. */
-export function groupLaborRows<T extends LaborGroupRow>(rows: T[]): LaborGroup<T>[] {
+/**
+ * 공사건별로 묶는다. 섹션 순서는 그 섹션 행들의 최소 sort_order, 미지정은 맨 뒤.
+ *
+ * @param opts.byPeriod 달까지 나눈다. 작업대에는 년/월 고르는 칸이 없어 여러 달이 섞이는데,
+ *   결의서는 달 단위이고 날짜 칸(1~31)도 달마다 달라서 같은 공사건이라도 달이 다르면 따로 묶는다.
+ */
+export function groupLaborRows<T extends LaborGroupRow>(
+  rows: T[],
+  opts: { byPeriod?: boolean } = {},
+): LaborGroup<T>[] {
   const groups = new Map<string, LaborGroup<T>>()
   for (const r of rows) {
-    const key = workTargetKey(r)
+    const target = workTargetKey(r)
+    const key = opts.byPeriod ? `${r.year}-${r.month}|${target}` : target
     let g = groups.get(key)
     if (!g) {
       g = {
         key,
         kind: r.site_id ? 'site' : r.project_id ? 'project' : 'none',
         id: r.site_id ?? r.project_id ?? null,
+        ...(opts.byPeriod ? { year: r.year, month: r.month } : {}),
         rows: [],
       }
       groups.set(key, g)

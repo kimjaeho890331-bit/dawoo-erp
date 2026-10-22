@@ -694,19 +694,35 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     }
   }, [loadProjects])
 
-  // 연도 범위 내 프로젝트 (탭 건수·지역 건수도 연도 기준으로 일치)
+  /**
+   * 검색할 때는 연도 칸을 비껴간다.
+   *
+   * 예전에는 2026년이 잡혀 있으면 2024년에 등록한 빌라를 아무리 쳐도 '없습니다'가
+   * 떴다. 빌라 이름이나 전화번호로 찾는 사람은 그게 몇 년 건인지 모르는 채로
+   * 찾는다 — 연도를 먼저 맞춰야 찾아지는 검색은 검색이 아니다.
+   * 연간 금액 정산 카드는 말 그대로 '연간'이라 그대로 연도를 따른다.
+   */
+  const searching = searchQuery.trim().length > 0
+
+  // 연도 범위 내 프로젝트 — 연간 금액 정산 카드 전용 (늘 연도 기준)
   const yearScopedProjects = useMemo(() => {
     if (selectedYear === '전체') return projects
     return projects.filter(p => getProjectYear(p) === selectedYear)
   }, [projects, selectedYear])
 
+  // 목록·탭·지역 건수가 세는 범위 (검색 중이면 연도 전체)
+  const listScopedProjects = useMemo(
+    () => (searching ? projects : yearScopedProjects),
+    [searching, projects, yearScopedProjects],
+  )
+
   // 상태별 건수
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {
       '진행중': 0, '접수': 0, '승인': 0, '완료': 0,
-      '취소': 0, '문의(예약)': 0, '전체': yearScopedProjects.length,
+      '취소': 0, '문의(예약)': 0, '전체': listScopedProjects.length,
     }
-    yearScopedProjects.forEach(p => {
+    listScopedProjects.forEach(p => {
       STATUS_TABS.forEach(tab => {
         if (tab.key !== '전체' && matchesStatusFilter(p.status, tab.key)) {
           counts[tab.key]++
@@ -714,7 +730,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       })
     })
     return counts
-  }, [yearScopedProjects])
+  }, [listScopedProjects])
 
   // 최종 필터링
   const filteredProjects = useMemo(() => {
@@ -722,8 +738,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
 
     result = result.filter(p => matchesStatusFilter(p.status, statusFilter))
 
-    // 연도 필터 (정산 카드와 동일 기준: year 컬럼 → 등록일)
-    if (selectedYear !== '전체') {
+    // 연도 필터 (정산 카드와 동일 기준: year 컬럼 → 등록일).
+    // 검색 중에는 건너뛴다 — 몇 년 건인지 모르고 찾는 경우가 대부분이다.
+    if (selectedYear !== '전체' && !searching) {
       result = result.filter(p => getProjectYear(p) === selectedYear)
     }
 
@@ -777,7 +794,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     }
 
     return sorted
-  }, [projects, statusFilter, selectedCities, searchQuery, selectedYear, sortRules, outstandingOnly, pinnedStaff, currentStaff.id])
+  }, [projects, statusFilter, selectedCities, searchQuery, searching, selectedYear, sortRules, outstandingOnly, pinnedStaff, currentStaff.id])
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null
 
@@ -888,7 +905,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
     if (next === (project.year ?? null)) return
     const { error } = await supabase.from('projects').update({ year: next }).eq('id', project.id)
     if (error) { toast.error(`진행연도 변경 실패: ${error.message}`); return }
-    if (selectedYear !== '전체') {
+    if (selectedYear !== '전체' && !searching) {
       const shown = next ?? (project.created_at ? new Date(project.created_at).getFullYear() : selectedYear)
       if (shown !== selectedYear) {
         toast.info(`${project.building_name || '이 건'} → ${shown}년 목록으로 옮겼습니다`)
@@ -927,7 +944,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           category,
-          yearLabel: selectedYear === '전체' ? '전체' : `${selectedYear}년`,
+          yearLabel: searching || selectedYear === '전체' ? '전체' : `${selectedYear}년`,
           statusLabel: statusFilter,
           rows,
         }),
@@ -937,7 +954,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${category}접수대장_${selectedYear === '전체' ? '전체' : selectedYear}.xlsx`
+      a.download = `${category}접수대장_${searching || selectedYear === '전체' ? '전체' : selectedYear}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
@@ -1076,7 +1093,11 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                   ))}
                   <option value="전체">전체 연도</option>
                 </select>
-                <span className="text-[11px] text-txt-quaternary">목록에도 적용됨</span>
+                {/* 검색 중에는 목록이 연도를 비껴간다. 2026년이 잡혀 있는데
+                    2024년 건이 나오는 이유를 여기서 알 수 있게 한다. */}
+                <span className={`text-[11px] ${searching ? 'text-accent-text' : 'text-txt-quaternary'}`}>
+                  {searching ? '검색 중 — 목록은 전체 연도에서 찾습니다' : '목록에도 적용됨'}
+                </span>
               </div>
               <span className="text-[11px] text-txt-tertiary">취소·예약 제외</span>
             </div>
@@ -1152,9 +1173,9 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
       {(() => {
         const cityNames = [...new Set(projects.map(p => p.cities?.name).filter(Boolean) as string[])].sort()
         if (cityNames.length === 0) return null
-        // 지역별 건수 (현재 탭·연도 기준)
+        // 지역별 건수 (현재 탭 기준. 검색 중이면 연도 전체)
         const cityCounts: Record<string, number> = {}
-        yearScopedProjects.forEach(p => {
+        listScopedProjects.forEach(p => {
           const cn = p.cities?.name
           if (cn && matchesStatusFilter(p.status, statusFilter)) {
             cityCounts[cn] = (cityCounts[cn] || 0) + 1

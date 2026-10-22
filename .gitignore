@@ -12,3 +12,6 @@ tsconfig.tsbuildinfo
 supabase/.temp/
 .obsidian/
 .next-build/
+
+# superpowers brainstorm (로컬 시안)
+.superpowers/

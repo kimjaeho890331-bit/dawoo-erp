@@ -325,6 +325,22 @@ export default function CostRatioPage() {
         </div>
       </div>
 
+      {/* 조달청 바로가기 — 표보다 위에 둔다. 요율을 보러 왔다가 '최신인가?'
+          싶을 때 바로 확인하러 갈 수 있어야 한다. */}
+      <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-3">
+        <a href={PPS_BOARD_URL} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent-text hover:underline underline-offset-2">
+          <ExternalLink size={13} /> 조달청 시설공사 자료실 열기
+        </a>
+        {editing ? (
+          <textarea value={draftSettings.source_note ?? ''} rows={2}
+            onChange={e => setDraftSettings(p => ({ ...p, source_note: e.target.value }))}
+            className="mt-2 w-full px-3 py-2 bg-surface border border-border-primary rounded-lg text-[12px] focus:outline-none focus:border-accent" />
+        ) : (
+          settings.source_note && <div className="mt-1"><LinkedNote text={settings.source_note} /></div>
+        )}
+      </div>
+
       {/* 비율 표 */}
       {loading ? (
         <div className="space-y-2" aria-busy="true" aria-label="불러오는 중">
@@ -464,22 +480,6 @@ export default function CostRatioPage() {
               )}
             </div>
 
-            <div>
-              <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <p className="text-[11px] font-medium text-txt-tertiary">조달청에서 찾아가는 길</p>
-                <a href={PPS_BOARD_URL} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-accent-text border border-border-primary rounded-md hover:bg-surface-secondary transition-colors">
-                  <ExternalLink size={11} /> 조달청 시설공사 자료실 열기
-                </a>
-              </div>
-              {editing ? (
-                <textarea value={draftSettings.source_note ?? ''} rows={3}
-                  onChange={e => setDraftSettings(p => ({ ...p, source_note: e.target.value }))}
-                  className="w-full px-3 py-2 bg-surface border border-border-primary rounded-lg text-[12px] focus:outline-none focus:border-accent" />
-              ) : (
-                <LinkedNote text={settings.source_note || '-'} />
-              )}
-            </div>
           </div>
         )}
       </div>

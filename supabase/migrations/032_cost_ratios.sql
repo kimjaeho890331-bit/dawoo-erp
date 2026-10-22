@@ -65,7 +65,7 @@ ON CONFLICT (item) DO NOTHING;
 INSERT INTO cost_ratio_settings (id, effective_from, source_note) VALUES (
   1,
   '2026-04-13',
-  '조달청 1588-0800 → 상단 조달업무 → 업무별자료·시설공사 → "간접" 검색 → 간접공사비(제비율) 적용기준 변경알림'
+  '상단 조달업무 → 업무별자료 ''시설공사'' → "간접" 검색 → 간접공사비(제비율) 적용기준 변경알림'
 ) ON CONFLICT (id) DO NOTHING;
 
 -- anon/authenticated가 화면에서 직접 접근 (RLS 미사용 — leave_settings 와 동일)

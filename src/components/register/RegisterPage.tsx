@@ -102,13 +102,14 @@ export interface DBProject {
 
 // --- 상수 ---
 const STATUS_TABS = [
+  // '전체'가 맨 뒤에 있어 한참 찾아야 했다. 가장 자주 누르는 탭이라 맨 앞에 둔다.
+  { key: '전체', label: '전체' },
   { key: '진행중', label: '진행중' },
   { key: '접수', label: '접수' },
   { key: '승인', label: '승인' },
   { key: '완료', label: '완료' },
   { key: '취소', label: '취소' },
   { key: '문의(예약)', label: '문의(예약)' },
-  { key: '전체', label: '전체' },
 ] as const
 
 type StatusFilter = (typeof STATUS_TABS)[number]['key']
@@ -1261,6 +1262,7 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
             <thead>
               <tr className="bg-surface-secondary/50">
                 {/* 제목 클릭 = 그 항목을 1순위로. 화살표는 1순위일 때만 뜬다. */}
+                <th className="px-3 py-2 text-left font-medium text-txt-tertiary whitespace-nowrap">진행연도</th>
                 <SortableTh label="담당" sortKey="staff" active={sortRules[0]?.key === 'staff'} dir={sortRules[0]?.dir ?? 'asc'} onSort={toggleSort} />
                 <SortableTh label="빌라명" sortKey="name" active={sortRules[0]?.key === 'name'} dir={sortRules[0]?.dir ?? 'asc'} onSort={toggleSort} />
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">호수</th>
@@ -1275,7 +1277,6 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                 />
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">상담내역</th>
                 <th className="px-3 py-2 text-left font-medium text-txt-tertiary">단계</th>
-                <th className="px-3 py-2 text-left font-medium text-txt-tertiary whitespace-nowrap">진행연도</th>
                 <th className="w-8 px-1 py-2"></th>
               </tr>
             </thead>
@@ -1303,6 +1304,31 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                         : ''
                     }`}
                   >
+                    {/* 진행연도 — 직접 고른 값은 진하게, 안 고른 건은 접수일 기준 추정이라 흐리게.
+                        흐린 값도 지금 이 연도 목록에 뜬 근거라 보여 줘야 한다. */}
+                    <td className="px-3 py-1.5" onClick={e => e.stopPropagation()}>
+                      <select
+                        value={project.year ?? ''}
+                        onChange={e => handleYearChange(project, e.target.value)}
+                        title={project.year ? '진행연도 (직접 지정)' : '접수일 기준 — 고르면 직접 지정됩니다'}
+                        className={`w-[62px] bg-transparent border-0 cursor-pointer appearance-auto text-[12px] tabular-nums pr-0 ${
+                          project.year ? 'text-txt-primary font-medium' : 'text-txt-quaternary'
+                        }`}
+                      >
+                        {/* '2026 (접수일)' 한 줄이 가장 길어서 칸 너비를 혼자 벌려 놓았다.
+                            지금은 502건 전부 진행연도가 채워져 있어 이 줄이 쓰이지 않는다.
+                            값이 빈 건이 생겼을 때만 띄운다 — 아예 없애면 빈 건이 엉뚱한
+                            연도로 보인다. */}
+                        {project.year == null && (
+                          <option value="">
+                            {(project.created_at ? new Date(project.created_at).getFullYear() : new Date().getFullYear())} (접수일)
+                          </option>
+                        )}
+                        {yearOptions.map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="px-3 py-1.5">
                       {project.staff?.name ? (
                         <span
@@ -1352,26 +1378,6 @@ export default function RegisterPage({ category }: { category: '소규모' | '�
                         ['완료서류제출', '입금'].includes(project.status) && (
                         <span className="ml-1 text-[10px] font-semibold text-money-negative">미수금</span>
                       )}
-                    </td>
-                    {/* 진행연도 — 직접 고른 값은 진하게, 안 고른 건은 접수일 기준 추정이라 흐리게.
-                        흐린 값도 지금 이 연도 목록에 뜬 근거라 보여 줘야 한다. */}
-                    <td className="px-3 py-1.5" onClick={e => e.stopPropagation()}>
-                      <select
-                        value={project.year ?? ''}
-                        onChange={e => handleYearChange(project, e.target.value)}
-                        title={project.year ? '진행연도 (직접 지정)' : '접수일 기준 — 고르면 직접 지정됩니다'}
-                        className={`bg-transparent border-0 cursor-pointer appearance-auto text-[12px] tabular-nums pr-1 ${
-                          project.year ? 'text-txt-primary font-medium' : 'text-txt-quaternary'
-                        }`}
-                      >
-                        {/* 비움 = 직접 지정 안 함. 그래도 집계에 쓰이는 접수일 연도를 보여 준다. */}
-                        <option value="">
-                          {(project.created_at ? new Date(project.created_at).getFullYear() : new Date().getFullYear())} (접수일)
-                        </option>
-                        {yearOptions.map(y => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
                     </td>
                     <td className="px-2 py-2.5">
                       <KebabMenu

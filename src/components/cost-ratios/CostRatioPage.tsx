@@ -8,7 +8,8 @@
  * 표·적용기간·캡처를 모두 화면에서 고칠 수 있다.
  *
  * 기준 칸(50억 미만, 10억 미만 …)이 견적에서 바로 필요하므로 표를 전체 폭으로 둔다.
- * 조달청 캡처는 가끔만 보므로 평소 접어둔다.
+ * 조달청 캡처는 들어오면 바로 보이게 펴둔다. 접어뒀더니 캡처가 있는지조차
+ * 몰라서 결국 조달청을 다시 열어보게 됐다. 접는 버튼은 남겨둔다.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -58,7 +59,7 @@ export default function CostRatioPage() {
   const [removedIds, setRemovedIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
-  const [captureOpen, setCaptureOpen] = useState(false)
+  const [captureOpen, setCaptureOpen] = useState(true)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -386,7 +387,7 @@ export default function CostRatioPage() {
         </div>
       )}
 
-      {/* 조달청 캡처 — 평소 접어둔다 */}
+      {/* 조달청 캡처 — 들어오면 펴진 채로 보인다 */}
       <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
         <button onClick={() => setCaptureOpen(o => !o)}
           className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-secondary transition-colors">

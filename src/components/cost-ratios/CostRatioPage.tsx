@@ -8,13 +8,13 @@
  * 표·적용기간·캡처를 모두 화면에서 고칠 수 있다.
  *
  * 기준 칸(50억 미만, 10억 미만 …)이 견적에서 바로 필요하므로 표를 전체 폭으로 둔다.
- * 조달청 캡처는 들어오면 바로 보이게 펴둔다. 접어뒀더니 캡처가 있는지조차
- * 몰라서 결국 조달청을 다시 열어보게 됐다. 접는 버튼은 남겨둔다.
+ * 조달청 캡처는 접지 않고 늘 보여준다. 접어뒀더니 캡처가 있는지조차 몰라서
+ * 결국 조달청을 다시 열어보게 됐다.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, ChevronDown, ChevronRight, Upload, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, X, Upload, Trash2, ExternalLink } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
 interface CostRatio {
@@ -85,7 +85,6 @@ export default function CostRatioPage() {
   const [removedIds, setRemovedIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
-  const [captureOpen, setCaptureOpen] = useState(true)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -244,7 +243,6 @@ export default function CostRatioPage() {
         toast.success('캡처를 올렸습니다')
         await load()
       }
-      setCaptureOpen(true)
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -440,48 +438,37 @@ export default function CostRatioPage() {
         </div>
       )}
 
-      {/* 조달청 캡처 — 들어오면 펴진 채로 보인다 */}
-      <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-        <button onClick={() => setCaptureOpen(o => !o)}
-          className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-secondary transition-colors">
-          {captureOpen ? <ChevronDown size={15} className="text-txt-tertiary" /> : <ChevronRight size={15} className="text-txt-tertiary" />}
-          <span className="text-[13px] font-medium text-txt-primary">조달청 적용기준 캡처</span>
-          {!viewSettings.capture_url && <span className="text-[11px] text-txt-tertiary">없음</span>}
-        </button>
-
-        {captureOpen && (
-          <div className="border-t border-border-primary px-4 py-4 space-y-3">
-            {viewSettings.capture_url ? (
-              <a href={viewSettings.capture_url} target="_blank" rel="noopener noreferrer" className="block">
-                {/* 캡처는 원본 비율을 봐야 해서 next/image 로 자르지 않는다 */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={viewSettings.capture_url} alt={viewSettings.capture_name || '조달청 적용기준 캡처'}
-                  className="max-w-full rounded-lg border border-border-primary" />
-              </a>
-            ) : (
-              <p className="text-[12px] text-txt-tertiary">올린 캡처가 없습니다.</p>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleCapture(f) }} />
-              <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-accent-text border border-border-primary rounded-lg hover:bg-surface-secondary transition-colors disabled:opacity-50">
-                <Upload size={13} /> {uploading ? '올리는 중...' : viewSettings.capture_url ? '캡처 교체' : '캡처 올리기'}
-              </button>
-              {viewSettings.capture_url && editing && (
-                <button onClick={() => setDraftSettings(p => ({ ...p, capture_url: null, capture_name: null }))}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-txt-secondary rounded-lg hover:bg-surface-secondary transition-colors">
-                  <X size={13} /> 캡처 지우기
-                </button>
-              )}
-              {viewSettings.capture_name && (
-                <span className="text-[11px] text-txt-tertiary">{viewSettings.capture_name}</span>
-              )}
-            </div>
-
-          </div>
+      {/* 조달청 캡처 — 접이식 제목을 뺐다. 제목만 보이고 접혀 있으면 캡처가
+          있는지 없는지 매번 눌러 봐야 해서, 그림을 바로 보여준다. */}
+      <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-4 space-y-3">
+        {viewSettings.capture_url ? (
+          <a href={viewSettings.capture_url} target="_blank" rel="noopener noreferrer" className="block">
+            {/* 캡처는 원본 비율을 봐야 해서 next/image 로 자르지 않는다 */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={viewSettings.capture_url} alt={viewSettings.capture_name || '조달청 적용기준 캡처'}
+              className="max-w-full rounded-lg border border-border-primary" />
+          </a>
+        ) : (
+          <p className="text-[12px] text-txt-tertiary">올린 캡처가 없습니다.</p>
         )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleCapture(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-accent-text border border-border-primary rounded-lg hover:bg-surface-secondary transition-colors disabled:opacity-50">
+            <Upload size={13} /> {uploading ? '올리는 중...' : viewSettings.capture_url ? '캡처 교체' : '캡처 올리기'}
+          </button>
+          {viewSettings.capture_url && editing && (
+            <button onClick={() => setDraftSettings(p => ({ ...p, capture_url: null, capture_name: null }))}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-txt-secondary rounded-lg hover:bg-surface-secondary transition-colors">
+              <X size={13} /> 캡처 지우기
+            </button>
+          )}
+          {viewSettings.capture_name && (
+            <span className="text-[11px] text-txt-tertiary">{viewSettings.capture_name}</span>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, ChevronDown, ChevronRight, Upload, Trash2 } from 'lucide-react'
+import { Plus, X, ChevronDown, ChevronRight, Upload, Trash2, ExternalLink } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
 interface CostRatio {
@@ -46,6 +46,32 @@ const EMPTY_SETTINGS: Settings = {
 type DraftRow = CostRatio & { isNew?: boolean }
 
 const SKELETON_ROWS = 6
+
+/**
+ * 조달청 업무별자료 → 시설공사 게시판.
+ * 제비율 변경알림이 올라오는 곳이다. 게시판 검색어는 주소로 미리 넣을 수 없어
+ * (POST로만 받는다) 게시판까지만 연결하고, 검색어는 아래 안내에 남겨둔다.
+ */
+const PPS_BOARD_URL = 'https://www.pps.go.kr/kor/bbs/list.do?key=00038'
+
+/** 안내글에 적힌 주소를 눌러 열 수 있게 한다. 주소는 화면에서 고칠 수 있다. */
+function LinkedNote({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g)
+  return (
+    <p className="text-[12px] text-txt-secondary whitespace-pre-wrap">
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+            className="text-accent-text underline underline-offset-2 break-all">
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </p>
+  )
+}
 
 export default function CostRatioPage() {
   const [rows, setRows] = useState<CostRatio[]>([])
@@ -428,13 +454,19 @@ export default function CostRatioPage() {
             </div>
 
             <div>
-              <p className="text-[11px] font-medium text-txt-tertiary mb-1">조달청에서 찾아가는 길</p>
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                <p className="text-[11px] font-medium text-txt-tertiary">조달청에서 찾아가는 길</p>
+                <a href={PPS_BOARD_URL} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-accent-text border border-border-primary rounded-md hover:bg-surface-secondary transition-colors">
+                  <ExternalLink size={11} /> 조달청 시설공사 자료실 열기
+                </a>
+              </div>
               {editing ? (
-                <textarea value={draftSettings.source_note ?? ''} rows={2}
+                <textarea value={draftSettings.source_note ?? ''} rows={3}
                   onChange={e => setDraftSettings(p => ({ ...p, source_note: e.target.value }))}
                   className="w-full px-3 py-2 bg-surface border border-border-primary rounded-lg text-[12px] focus:outline-none focus:border-accent" />
               ) : (
-                <p className="text-[12px] text-txt-secondary whitespace-pre-wrap">{settings.source_note || '-'}</p>
+                <LinkedNote text={settings.source_note || '-'} />
               )}
             </div>
           </div>

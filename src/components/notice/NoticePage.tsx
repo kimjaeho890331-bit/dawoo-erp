@@ -9,7 +9,7 @@ interface Notice {
   id: string
   title: string
   content: string
-  category: '공지' | '규율' | '규정' | '안내'
+  category: '공지' | '규율' | '규정' | '안내' | '업데이트'
   pinned: boolean
   created_at: string
   updated_at: string
@@ -21,10 +21,19 @@ const CAT_STYLE: Record<string, { bg: string; text: string }> = {
   '규율': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
   '규정': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
   '안내': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
+  // ERP가 바뀐 내용을 알리는 칸. 직원이 '언제부터 이게 생겼지?'를 여기서 본다.
+  '업데이트': { bg: 'bg-surface-secondary', text: 'text-txt-secondary' },
 }
 
-const CATEGORIES = ['전체', '공지', '규율', '규정', '안내'] as const
-const FORM_CATEGORIES = ['공지', '규율', '규정', '안내'] as const
+/**
+ * 목록에 모르는 분류가 섞여도 화면이 죽지 않게 한다.
+ * 예전에는 CAT_STYLE 에 없는 분류가 오면 cs.bg 에서 터졌다 — DB에는 분류 제약이
+ * 없어서 화면에 없는 값이 언제든 들어올 수 있다.
+ */
+const DEFAULT_CAT_STYLE = { bg: 'bg-surface-secondary', text: 'text-txt-secondary' }
+
+const CATEGORIES = ['전체', '공지', '규율', '규정', '안내', '업데이트'] as const
+const FORM_CATEGORIES = ['공지', '규율', '규정', '안내', '업데이트'] as const
 const SKELETON_ROWS = 3
 
 export default function NoticePage() {
@@ -156,7 +165,7 @@ export default function NoticePage() {
         ) : (
           filtered.map(notice => {
             const isOpen = expandedId === notice.id
-            const cs = CAT_STYLE[notice.category]
+            const cs = CAT_STYLE[notice.category] ?? DEFAULT_CAT_STYLE
             return (
               <div key={notice.id} className={`bg-surface rounded-[10px] border transition ${
                 notice.pinned ? 'border-[#d97706]/30' : 'border-border-primary'

@@ -1,16 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { selectableStaff } from '@/lib/staff/selectable'
 import { useAuth } from '@/components/AuthProvider'
+import { CURRENT_STAFF_KEY, applyLoginActor, readCurrentActor, writeCurrentActor } from '@/lib/staff/currentActor'
 
-// 대시보드 등 기존 화면과 동일한 localStorage 키를 재사용한다.
-// 새 신원 개념을 만들지 않고, 이미 골라둔 "현재 직원"을 결재 화면에서도 그대로 이어받는다.
-const STAFF_STORAGE_KEY = 'dawoo_current_staff_id'
-
-/** 이번 브라우저 세션에서 '로그인한 사람으로 맞추기'를 이미 했는지 */
-const AUTO_APPLIED_KEY = 'dawoo_actor_auto_applied'
+// 현재 직원을 정하는 규칙과 저장 키는 AuthProvider와 한 모듈에서 공유한다
+// (@/lib/staff/currentActor). 두 곳이 각자 판단하면 화면마다 다른 사람을 가리킨다.
 
 export interface ActorStaff {
   id: string
@@ -51,7 +48,7 @@ export function useActor(): UseActorResult {
   const [staffList, setStaffList] = useState<ActorStaff[]>([])
   const [actorId, setActorIdState] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
-    return localStorage.getItem(STAFF_STORAGE_KEY)
+    return readCurrentActor()
   })
   const [loading, setLoading] = useState(true)
 
@@ -77,7 +74,7 @@ export function useActor(): UseActorResult {
     const onLocalChange = (id: string) => setActorIdState(id)
     actorListeners.add(onLocalChange)
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STAFF_STORAGE_KEY && e.newValue) setActorIdState(e.newValue)
+      if (e.key === CURRENT_STAFF_KEY && e.newValue) setActorIdState(e.newValue)
     }
     window.addEventListener('storage', onStorage)
     return () => {
@@ -87,34 +84,26 @@ export function useActor(): UseActorResult {
   }, [])
 
   /**
-   * 로그인한 사람으로 자동 지정.
+   * 로그인한 사람을 현재 직원으로 맞춘다.
    *
-   * 예전에는 로그인 계정과 직원이 연결되지 않아 화면에서 직접 골라야 했다.
-   * 지금은 계정 연결(staff_emails)이 있어 "지금 쓰는 사람"을 알 수 있으므로,
-   * 화면을 열면 본인으로 맞춰 둔다 — 공용 PC에 남아 있던 남의 이름으로
-   * 결재가 올라가는 일을 막는다.
+   * 판단은 applyLoginActor가 한다 — AuthProvider도 로그인 직후 같은 함수를 부르므로
+   * 두 곳의 결론이 항상 같다. 여기서 한 번 더 부르는 이유는 "반영"에 있다:
+   * AuthProvider가 localStorage에 써도 같은 탭에서는 storage 이벤트가 오지 않아
+   * 이 드롭다운이 옛 이름을 그대로 들고 있었다. 결재 화면과 사이드바가 서로 다른
+   * 사람을 가리키던 원인이다.
    *
-   * 브라우저를 연 뒤 한 번만 맞춘다. 경리가 다른 사람 몫을 대신 작성하는
-   * 경우가 있는데, 화면을 옮길 때마다 본인으로 되돌리면 그 작업이 불가능해진다.
-   * 그래서 '이번 세션에 이미 맞췄는지'를 sessionStorage에 남긴다 —
-   * 탭을 닫았다 열면 다시 본인으로 시작한다.
+   * 손으로 바꾼 선택은 applyLoginActor가 그대로 두므로 여기서도 덮어쓰지 않는다.
    */
-  const autoApplied = useRef(false)
   useEffect(() => {
-    if (autoApplied.current) return
     const myId = authStaff?.id
     if (!myId || typeof window === 'undefined') return
-    autoApplied.current = true
-    if (sessionStorage.getItem(AUTO_APPLIED_KEY) === '1') return
-    sessionStorage.setItem(AUTO_APPLIED_KEY, '1')
-    if (myId === actorId) return
-    localStorage.setItem(STAFF_STORAGE_KEY, myId)
-    actorListeners.forEach(fn => fn(myId))
+    const resolved = applyLoginActor(myId)
+    if (resolved !== actorId) actorListeners.forEach(fn => fn(resolved))
   }, [authStaff?.id, actorId])
 
   const setActorId = useCallback((id: string) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STAFF_STORAGE_KEY, id)
+      writeCurrentActor(id)
     }
     // 자기 자신도 이 목록에 들어 있으므로 여기서 상태가 갱신된다.
     actorListeners.forEach(fn => fn(id))

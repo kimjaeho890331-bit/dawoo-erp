@@ -6,6 +6,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
 import { supabase as dataClient, setDataClientSession } from '@/lib/supabase'
 import { isAutoCreatedStaff } from '@/lib/staff/ghost'
+import { applyLoginActor } from '@/lib/staff/currentActor'
 
 interface StaffInfo {
   id: string
@@ -103,8 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (data) {
           setStaff(data as StaffInfo)
-          // staff ID를 localStorage에 저장 (다른 컴포넌트에서 사용)
-          localStorage.setItem('dawoo_current_staff_id', data.id)
+          applyLoginActor(data.id)
         } else if (!['/link-account', '/login'].includes(window.location.pathname)) {
           // 직원 정보와 연결되지 않은 계정 — 본인 이름을 고르는 화면으로 보낸다.
           // 예전에는 그대로 들어와 엉뚱한 이름(또는 자동 생성된 직원)으로 기록이 남았다.

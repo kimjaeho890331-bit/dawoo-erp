@@ -338,13 +338,17 @@ export default function CostRatioPage() {
         </div>
       ) : (
         <div className="bg-surface rounded-[10px] border border-border-primary overflow-hidden">
-          <table className="w-full">
+          {/* 칸 너비를 고정한다. 비목 칸이 늘어나면 요율 숫자가 멀리 밀려
+              '간접노무비 ...... 17.5'처럼 읽혀서 눈이 따라가기 힘들었다.
+              좁은 화면에서는 고정폭이 넘치므로 가로로 민다. */}
+          <div className="overflow-x-auto">
+          <table className="w-full table-fixed min-w-[760px]">
             <thead>
               <tr className="bg-surface-secondary">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-txt-tertiary tracking-wider">비목</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-txt-tertiary tracking-wider w-[100px]">요율 (%)</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-txt-tertiary tracking-wider">구성비</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-txt-tertiary tracking-wider">기준</th>
+                <th className="w-[260px] text-left px-3 py-2 text-[11px] font-semibold text-txt-tertiary tracking-wider border-r border-border-primary">비목</th>
+                <th className="w-[88px] text-right px-2 py-2 text-[11px] font-semibold text-txt-tertiary tracking-wider border-r border-border-primary">요율 (%)</th>
+                <th className="w-[210px] text-left px-3 py-2 text-[11px] font-semibold text-txt-tertiary tracking-wider border-r border-border-primary">구성비</th>
+                <th className={`text-left px-3 py-2 text-[11px] font-semibold text-txt-tertiary tracking-wider ${editing ? 'border-r border-border-primary' : ''}`}>기준</th>
                 {editing && <th className="w-[44px]" />}
               </tr>
             </thead>
@@ -357,25 +361,31 @@ export default function CostRatioPage() {
                 </tr>
               )}
               {view.map((r, idx) => (
-                <tr key={r.id} className="border-t border-border-primary">
+                // 전역 CSS(globals.css)가 표의 모든 줄을 44px로 못박아 둬서 여백만
+                // 줄여서는 짧아지지 않는다. 그 규칙은 레이어 밖에 있어 Tailwind
+                // 유틸리티(h-auto)로도 못 이긴다 — 그래서 인라인으로 푼다.
+                // 다른 화면의 표는 그대로 둔다.
+                <tr key={r.id} style={{ height: 'auto' }} className="border-t border-border-primary">
                   {editing ? (
                     <>
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-1.5 border-r border-border-primary">
                         <input value={r.item} onChange={e => updateRow(idx, { item: e.target.value })}
                           placeholder="비목"
                           className="w-full h-[32px] px-2 bg-surface border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent" />
                       </td>
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-1.5 border-r border-border-primary">
+                        {/* 숫자 입력칸의 위아래 화살표가 오른쪽 정렬한 숫자를 덮어
+                            3.595 가 '3.5('처럼 보였다. 화살표를 없앤다. */}
                         <input type="number" step="0.001" value={r.rate ?? ''}
                           onChange={e => updateRow(idx, { rate: e.target.value === '' ? null : Number(e.target.value) })}
-                          className="w-full h-[32px] px-2 bg-surface border border-border-primary rounded-lg text-[13px] text-right tabular-nums focus:outline-none focus:border-accent" />
+                          className="w-full h-[32px] px-1.5 bg-surface border border-border-primary rounded-lg text-[13px] text-right tabular-nums focus:outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                       </td>
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-1.5 border-r border-border-primary">
                         <input value={r.basis ?? ''} onChange={e => updateRow(idx, { basis: e.target.value })}
                           placeholder="예: 직접노무비 × 율"
                           className="w-full h-[32px] px-2 bg-surface border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent" />
                       </td>
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-1.5 border-r border-border-primary">
                         <input value={r.criteria ?? ''} onChange={e => updateRow(idx, { criteria: e.target.value })}
                           placeholder="예: 10억 미만"
                           className="w-full h-[32px] px-2 bg-surface border border-border-primary rounded-lg text-[13px] focus:outline-none focus:border-accent" />
@@ -389,18 +399,19 @@ export default function CostRatioPage() {
                     </>
                   ) : (
                     <>
-                      <td className="px-4 py-2.5 text-[13px] text-txt-primary">{r.item}</td>
-                      <td className="px-4 py-2.5 text-[13px] font-semibold text-txt-primary text-right tabular-nums">
+                      <td className="px-3 py-1.5 text-[13px] text-txt-primary border-r border-border-primary">{r.item}</td>
+                      <td className="px-2 py-1.5 text-[13px] font-semibold text-txt-primary text-right tabular-nums border-r border-border-primary">
                         {r.rate ?? '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-[12px] text-txt-secondary">{r.basis || '-'}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-txt-secondary">{r.criteria || '-'}</td>
+                      <td className="px-3 py-1.5 text-[12px] text-txt-secondary border-r border-border-primary">{r.basis || '-'}</td>
+                      <td className="px-3 py-1.5 text-[12px] text-txt-secondary">{r.criteria || '-'}</td>
                     </>
                   )}
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
 
           {editing && (
             <div className="border-t border-border-primary px-3 py-2">

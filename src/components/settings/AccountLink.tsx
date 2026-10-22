@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Link2, UserCheck, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { Link2, UserCheck, Loader2, LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 
@@ -24,7 +25,7 @@ interface StaffOption {
  * 서버가 확정해서 남의 계정에 잘못 붙는 걸 막을 수 있다.
  */
 export default function AccountLink() {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const sessionEmail = user?.email ?? null
 
   const [linkedStaffName, setLinkedStaffName] = useState<string | null>(null)
@@ -36,6 +37,27 @@ export default function AccountLink() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [msgType, setMsgType] = useState<'info' | 'error'>('info')
+  const [signingOut, setSigningOut] = useState(false)
+
+  /**
+   * 다른 계정으로 바꾸려면 먼저 지금 계정에서 나가야 한다.
+   * 로그아웃하면 /login으로 가고, 거기서 쓰려는 계정으로 들어오면 된다.
+   *
+   * 이 버튼이 필요한 이유: 퇴사 처리된 직원의 계정으로 로그인돼 있으면 화면이
+   * 사실상 막힌다(고를 수 있는 직원 목록에서 그 이름이 빠져 '현재 직원'이 비어
+   * 있게 된다). 그런데 설정 화면에는 나가는 길이 없었다.
+   */
+  const handleSignOut = async () => {
+    setSigningOut(true)
+    try {
+      await signOut()
+    } catch {
+      // 실패하면 다시 누를 수 있어야 한다
+      setSigningOut(false)
+      setMsgType('error')
+      setMsg('로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    }
+  }
 
   const loadLinkStatus = useCallback(async () => {
     if (!sessionEmail) {
@@ -163,7 +185,15 @@ export default function AccountLink() {
       </p>
 
       {!sessionEmail && checked && (
-        <p className="mt-2 text-xs text-txt-tertiary">로그인 후 이용할 수 있습니다.</p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs text-txt-tertiary">로그인 후 이용할 수 있습니다.</span>
+          <Link
+            href="/login"
+            className="px-3 py-1.5 text-xs border border-border-primary rounded-lg text-txt-primary"
+          >
+            로그인
+          </Link>
+        </div>
       )}
 
       {sessionEmail && (
@@ -182,6 +212,22 @@ export default function AccountLink() {
             </>
           )}
         </p>
+      )}
+
+      {sessionEmail && (
+        <div className="mt-2">
+          <button
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border-primary rounded-lg text-txt-primary disabled:opacity-40"
+          >
+            <LogOut size={13} className="text-txt-tertiary" />
+            {signingOut ? '로그아웃 중' : '로그아웃하고 다른 계정으로 로그인'}
+          </button>
+          <p className="mt-1.5 text-xs text-txt-tertiary">
+            다른 사람 계정으로 들어와 있다면 여기서 나간 뒤 본인 계정으로 다시 들어오세요.
+          </p>
+        </div>
       )}
 
       {editing && sessionEmail && !confirming && (

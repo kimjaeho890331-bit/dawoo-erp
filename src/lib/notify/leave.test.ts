@@ -69,6 +69,11 @@ describe('planLeaveNotice — requested', () => {
     expect(plan.ok && plan.recipients.sort()).toEqual(['acc', 'mgr'])
   })
 
+  it('경리가 신청하면 본인은 빼고 대표·관리자에게만 (경리는 본인 연차를 스스로 승인해도 자기 알림은 안 받음)', () => {
+    const plan = planLeaveNotice('requested', row({ staff_id: 'acc' }), staff)
+    expect(plan.ok && plan.recipients.sort()).toEqual(['ceo', 'mgr'])
+  })
+
   it('이미 처리된 신청이면 409', () => {
     const plan = planLeaveNotice('requested', row({ status: '승인' }), staff)
     expect(plan).toEqual({ ok: false, status: 409, error: expect.any(String) })

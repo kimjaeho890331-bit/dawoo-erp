@@ -39,12 +39,15 @@ describe('canDecideLeave', () => {
     expect(canDecideLeave(관리자, 'emp')).toBe(true)
     expect(canDecideLeave(관리자, 'mgr')).toBe(false)
   })
-  it('경리는 남의 연차만 승인한다', () => {
+  it('경리는 남의 연차도 본인 연차도 승인한다 (2026-10-28 정책 변경)', () => {
     expect(canDecideLeave(경리, 'emp')).toBe(true)
-    expect(canDecideLeave(경리, 'acc')).toBe(false)
+    expect(canDecideLeave(경리, 'acc')).toBe(true)
   })
   it('대표는 본인 연차도 승인한다', () => {
     expect(canDecideLeave(대표, 'ceo')).toBe(true)
+  })
+  it('관리자는 여전히 본인 연차는 승인할 수 없다', () => {
+    expect(canDecideLeave(관리자, 'mgr')).toBe(false)
   })
   it('현재 직원을 고르지 않았으면 아무도 승인할 수 없다', () => {
     expect(canDecideLeave({ id: null, role: '대표' }, 'emp')).toBe(false)

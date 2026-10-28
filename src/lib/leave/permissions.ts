@@ -28,10 +28,14 @@ export function canEditCarryover(role: string | null | undefined): boolean {
   return isLeaveApprover(role)
 }
 
-/** 승인·반려를 누를 수 있는가. 관리자·경리도 본인 연차는 승인할 수 없다(대표만 예외). */
+/** 승인·반려를 누를 수 있는가. 관리자는 본인 연차를 승인할 수 없고, 대표·경리는 본인 연차도 승인할 수 있다(2026-10-28 경리 추가). */
 export function canDecideLeave(me: LeaveActor, requestStaffId: string): boolean {
   if (!me.id || !isLeaveApprover(me.role)) return false
-  if (me.id === requestStaffId) return (me.role ?? '').trim() === '대표'
+  // 본인 연차 자가 승인: 대표·경리만 가능 (관리자는 불가)
+  if (me.id === requestStaffId) {
+    const r = (me.role ?? '').trim()
+    return r === '대표' || r === '경리'
+  }
   return true
 }
 

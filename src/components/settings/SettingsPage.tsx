@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, Smartphone, UserRound, CalendarDays } from 'lucide-react'
+import { Bell, Smartphone, UserRound, CalendarDays, CalendarRange } from 'lucide-react'
 import InstallPanel from '@/components/pwa/InstallPanel'
 import PushToggle from '@/components/settings/PushToggle'
 import AccountLink from '@/components/settings/AccountLink'
 import LeaveSettings from '@/components/settings/LeaveSettings'
+import CalendarSettings from '@/components/settings/CalendarSettings'
 
 /**
  * 설정 — 실제로 동작하는 것만 둔다.
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'account', label: '내 계정 연결', icon: UserRound },
   { key: 'notification', label: '알림', icon: Bell },
   { key: 'leave', label: '연차', icon: CalendarDays },
+  { key: 'calendar', label: '업무 캘린더', icon: CalendarRange },
   { key: 'app', label: '앱 설치', icon: Smartphone },
 ] as const
 
@@ -73,6 +75,12 @@ export default function SettingsPage() {
             <section>
               <h2 className="text-sm font-medium mb-2 text-txt-primary">연차 이월</h2>
               <LeaveSettings />
+            </section>
+          )}
+          {tab === 'calendar' && (
+            <section>
+              <h2 className="text-sm font-medium mb-2 text-txt-primary">상단 직원 표시</h2>
+              <CalendarSettings />
             </section>
           )}
           {/* 앱 설치 — 배너를 닫았더라도 여기서는 항상 설치할 수 있다 */}

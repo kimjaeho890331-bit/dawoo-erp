@@ -5,6 +5,7 @@ import { Palette, Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildStaffColorMap, getContrastText, ensureReadableOnLight } from '@/lib/staff-colors'
 import { staffBadgeLabel } from '@/lib/staff/badge'
+import { selectableStaff } from '@/lib/staff/selectable'
 import StaffColorPopover from './StaffColorPopover'
 import { UI_HIDDEN } from '@/lib/uiHidden'
 import { todayKST, todayMonthKST, todayDowKST } from '@/lib/utils/date'
@@ -38,6 +39,8 @@ interface Staff {
   role: string
   /** 채워져 있으면 퇴사자. 색깔 칩에는 남기고 담당자 배정에서만 뺀다. */
   resign_date?: string | null
+  /** 상단 직원 칩에 띄울지 (설정 > 업무 캘린더, 회사 공통). 꺼도 일정은 그대로 남는다. */
+  show_in_calendar?: boolean | null
   color?: string | null
 }
 
@@ -285,6 +288,31 @@ export default function WorkCalendarPage() {
   // staff.color 우선, 미지정 시 id 해시로 fallback 팔레트 매핑
   const staffColorMap = useMemo(() => buildStaffColorMap(staffList), [staffList])
 
+  /**
+   * 상단 직원 칩에 띄울 사람.
+   *
+   * staffList 자체는 거르지 않는다 — 같은 목록으로 일정에 적힌 이름도 찾기 때문에,
+   * 통째로 거르면 퇴사자가 담당인 옛 일정에서 이름이 빈칸이 된다.
+   * 여기서 거르는 건 '고르는 칸'인 칩 줄뿐이다.
+   */
+  const chipStaff = useMemo(
+    () => selectableStaff(staffList).filter(s => s.show_in_calendar !== false),
+    [staffList],
+  )
+
+  /**
+   * 칩에서 사라진 사람이 필터로 켜져 있으면 그 필터를 푼다.
+   * 칩은 없는데 필터는 걸린 채면 "왜 일정이 안 보이지"가 되고, 끌 방법도 없다.
+   */
+  useEffect(() => {
+    if (staffList.length === 0) return
+    const shown = new Set(chipStaff.map(s => s.id))
+    setActiveStaff(prev => {
+      const next = new Set([...prev].filter(id => shown.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [chipStaff, staffList.length])
+
   // 직원 색상 팝오버 (칩 우클릭, 또는 '색 변경' 누른 뒤 칩 누르기)
   const [colorPicker, setColorPicker] = useState<{ staffId: string; x: number; y: number } | null>(null)
   // 예전에는 우클릭으로만 열려 태블릿·폰에서는 색을 바꿀 방법이 없었다.
@@ -470,7 +498,7 @@ export default function WorkCalendarPage() {
           <div className="bg-surface rounded-[10px] border border-border-primary px-4 py-3 mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-txt-secondary w-10 shrink-0">직원</span>
-              {staffList.map(s => {
+              {chipStaff.map(s => {
                 const c = staffColorMap[s.id] || '#94a3b8'
                 const on = activeStaff.size === 0 || activeStaff.has(s.id)
                 return (

@@ -1,52 +1,35 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { toast } from '@/lib/toast'
 import { supabase } from '@/lib/supabase'
+import AsTargetPicker from './AsTargetPicker'
+import AsVendorPicker from './AsVendorPicker'
+import AsDetailPanel from './AsDetailPanel'
+import {
+  AS_CATEGORY_OPTIONS,
+  AS_ISSUE_TYPES,
+  AS_STATUS_LIST,
+  normalizeAsRecord,
+  type AsIssueType,
+  type AsRecord,
+  type AsStatus,
+} from '@/lib/as/record'
+import type { AsCategory, AsTargetPick } from '@/lib/as/target'
 
 // --- 타입 ---
-interface AsRecord {
-  id: string
-  project_id: string | null
-  site_name: string
-  address: string
-  category: AsCategory
-  issue_type: string
-  description: string
-  status: AsStatus
-  reported_date: string
-  resolved_date: string | null
-  assigned_vendor_id: string | null
-  cost: number | null
-  resolution: string | null
-  memo: string | null
-  photos: string[]
-  created_at: string
-}
-
-type AsStatus = '접수' | '진행중' | '완료'
-type AsCategory = '입찰수의계약' | '수도' | '소규모'
 type TopTab = '입찰수의계약' | '지원사업'
 type SubTab = '수도' | '소규모'
-type IssueType = '누수' | '균열' | '도배불량' | '타일탈락' | '설비고장' | '전기불량' | '기타'
 type FilterTab = '전체' | AsStatus
 
 // --- 상수 ---
-const STATUS_LIST: AsStatus[] = ['접수', '진행중', '완료']
 const FILTER_TABS: FilterTab[] = ['전체', '접수', '진행중', '완료']
-const ISSUE_TYPES: IssueType[] = ['누수', '균열', '도배불량', '타일탈락', '설비고장', '전기불량', '기타']
 
 const TOP_TABS: { key: TopTab; label: string }[] = [
   { key: '입찰수의계약', label: '입찰 및 수의계약' },
   { key: '지원사업', label: '지원사업' },
 ]
 const SUB_TABS: SubTab[] = ['수도', '소규모']
-
-const CATEGORY_OPTIONS: { value: AsCategory; label: string }[] = [
-  { value: '입찰수의계약', label: '입찰 및 수의계약' },
-  { value: '수도', label: '지원사업 · 수도' },
-  { value: '소규모', label: '지원사업 · 소규모' },
-]
 
 const STATUS_STYLE: Record<AsStatus, string> = {
   '접수': 'bg-[#fee2e2] text-[#991b1b]',
@@ -55,18 +38,14 @@ const STATUS_STYLE: Record<AsStatus, string> = {
 }
 
 // 종류(상태가 아님)는 회색 한 가지로 — 색은 진행 상태에만 쓴다 (대표 원칙)
-const ISSUE_STYLE: Record<IssueType, string> = {
-  '누수': 'bg-surface-secondary text-txt-secondary',
-  '균열': 'bg-surface-secondary text-txt-secondary',
-  '도배불량': 'bg-surface-secondary text-txt-secondary',
-  '타일탈락': 'bg-surface-secondary text-txt-secondary',
-  '설비고장': 'bg-surface-secondary text-txt-secondary',
-  '전기불량': 'bg-surface-secondary text-txt-secondary',
-  '기타': 'bg-surface-secondary text-txt-secondary',
-}
+const ISSUE_CHIP = 'bg-surface-secondary text-txt-secondary'
 
-const EMPTY_FORM: Omit<AsRecord, 'id' | 'created_at'> = {
+type AsForm = Omit<AsRecord, 'id' | 'created_at' | 'photos' | 'photos_before' | 'photos_after'>
+
+const EMPTY_FORM: AsForm = {
   project_id: null,
+  site_id: null,
+  vendor_id: null,
   site_name: '',
   address: '',
   category: '입찰수의계약',
@@ -79,7 +58,6 @@ const EMPTY_FORM: Omit<AsRecord, 'id' | 'created_at'> = {
   cost: null,
   resolution: null,
   memo: null,
-  photos: [],
 }
 
 // --- 컴포넌트 ---
@@ -91,7 +69,8 @@ export default function AsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>('전체')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [form, setForm] = useState<AsForm>(EMPTY_FORM)
   const [customIssueType, setCustomIssueType] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -102,7 +81,7 @@ export default function AsPage() {
       .from('as_records')
       .select('*')
       .order('reported_date', { ascending: false })
-    if (!error && data) setRecords(data as AsRecord[])
+    if (!error && data) setRecords((data as AsRecord[]).map(normalizeAsRecord))
     setLoading(false)
   }, [])
 
@@ -113,6 +92,8 @@ export default function AsPage() {
   const activeCategory: AsCategory = topTab === '지원사업' ? subTab : '입찰수의계약'
   const categoryRecords = records.filter(r => r.category === activeCategory)
   const filtered = activeTab === '전체' ? categoryRecords : categoryRecords.filter(r => r.status === activeTab)
+
+  const selected = useMemo(() => records.find(r => r.id === selectedId) ?? null, [records, selectedId])
 
   // --- 카테고리별 건수 (탭 뱃지용) ---
   const countByCategory = (cat: AsCategory) => records.filter(r => r.category === cat).length
@@ -137,10 +118,12 @@ export default function AsPage() {
 
   const openEdit = (record: AsRecord) => {
     setEditingId(record.id)
-    const isPresetIssue = ISSUE_TYPES.includes(record.issue_type as IssueType)
+    const isPresetIssue = (AS_ISSUE_TYPES as readonly string[]).includes(record.issue_type)
     setCustomIssueType(isPresetIssue ? '' : record.issue_type)
     setForm({
       project_id: record.project_id,
+      site_id: record.site_id,
+      vendor_id: record.vendor_id,
       site_name: record.site_name,
       address: record.address,
       category: record.category || '입찰수의계약',
@@ -153,15 +136,29 @@ export default function AsPage() {
       cost: record.cost,
       resolution: record.resolution,
       memo: record.memo,
-      photos: record.photos || [],
     })
     setModalOpen(true)
+  }
+
+  // 구분을 바꾸면 고른 현장은 떼어 낸다 — 수도 접수를 골라 둔 채 입찰로 바꾸면 짝이 안 맞는다
+  const changeCategory = (category: AsCategory) => {
+    setForm(f => (f.category === category ? f : { ...f, category, site_id: null, project_id: null }))
+  }
+
+  const applyTarget = (pick: AsTargetPick) => {
+    setForm(f => ({
+      ...f,
+      site_id: pick.site_id,
+      project_id: pick.project_id,
+      site_name: pick.site_name || f.site_name,
+      address: pick.address || f.address,
+    }))
   }
 
   // --- 저장 ---
   const handleSave = async () => {
     if (!form.site_name.trim() || !form.address.trim() || !form.description.trim()) {
-      toast.info('현장명, 주소, 내용은 필수입니다.')
+      toast.info('현장명, 주소, 하자접수 내용은 필수입니다.')
       return
     }
     setSaving(true)
@@ -199,6 +196,7 @@ export default function AsPage() {
     if (!confirm('이 A/S 기록을 삭제하시겠습니까?')) return
     const { error } = await supabase.from('as_records').delete().eq('id', id)
     if (error) { toast.error(`삭제하지 못했습니다: ${error.message}`); return }
+    if (selectedId === id) setSelectedId(null)
     fetchRecords()
   }
 
@@ -301,7 +299,7 @@ export default function AsPage() {
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">접수일</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">현장/주소</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">하자유형</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">내용</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">하자접수 내용</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">해결내용</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">담당업체</th>
                   <th className="text-left px-4 py-3 text-[11px] font-medium tracking-[0.3px] text-txt-tertiary">상태</th>
@@ -315,15 +313,23 @@ export default function AsPage() {
                   <tr key={record.id} className="border-b border-border-tertiary hover:bg-surface-tertiary transition">
                     <td className="px-4 py-3 text-txt-secondary whitespace-nowrap">{record.reported_date}</td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-txt-primary">{record.site_name}</div>
+                      {/* 현장명을 누르면 상세가 오른쪽에서 열린다 — 사진은 거기서 올린다 */}
+                      <button
+                        onClick={() => setSelectedId(record.id)}
+                        className="text-left font-medium text-txt-primary hover:text-accent-text hover:underline"
+                      >
+                        {record.site_name || '(이름없음)'}
+                      </button>
                       <div className="text-xs text-txt-tertiary mt-0.5">{record.address}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-[10px] py-[2px] rounded-full text-[11px] font-medium ${ISSUE_STYLE[record.issue_type as IssueType] || ISSUE_STYLE['기타']}`}>
+                      <span className={`inline-block px-[10px] py-[2px] rounded-full text-[11px] font-medium ${ISSUE_CHIP}`}>
                         {record.issue_type}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-txt-secondary max-w-[200px] truncate">{record.description}</td>
+                    <td className="px-4 py-3 text-txt-secondary max-w-[200px] truncate" title={record.description || ''}>
+                      {record.description}
+                    </td>
                     <td className="px-4 py-3 text-txt-secondary max-w-[200px] truncate" title={record.resolution || ''}>
                       {record.resolution || '-'}
                     </td>
@@ -334,7 +340,7 @@ export default function AsPage() {
                         onChange={e => handleStatusChange(record.id, e.target.value as AsStatus)}
                         className={`px-[10px] py-[2px] rounded-full text-[11px] font-medium border-0 cursor-pointer ${STATUS_STYLE[record.status]}`}
                       >
-                        {STATUS_LIST.map(s => (
+                        {AS_STATUS_LIST.map(s => (
                           <option key={s} value={s}>{s}</option>
                         ))}
                       </select>
@@ -369,6 +375,20 @@ export default function AsPage() {
         )}
       </div>
 
+      {/* 상세 패널 */}
+      {selected && (
+        <AsDetailPanel
+          record={selected}
+          onClose={() => setSelectedId(null)}
+          onEdit={() => openEdit(selected)}
+          onDelete={() => handleDelete(selected.id)}
+          onStatusChange={status => handleStatusChange(selected.id, status)}
+          onPhotosSaved={next =>
+            setRecords(prev => prev.map(r => (r.id === selected.id ? { ...r, ...next } : r)))
+          }
+        />
+      )}
+
       {/* 모달 */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
@@ -391,14 +411,24 @@ export default function AsPage() {
                 <label className="block text-sm font-medium text-txt-secondary mb-1">구분 *</label>
                 <select
                   value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value as AsCategory }))}
+                  onChange={e => changeCategory(e.target.value as AsCategory)}
                   className="w-full border border-border-primary rounded-lg px-3 h-[36px] text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
                 >
-                  {CATEGORY_OPTIONS.map(opt => (
+                  {AS_CATEGORY_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
               </div>
+
+              {/* 현장 고르기 — 구분에 따라 현장관리 / 접수대장에서 찾는다 */}
+              <AsTargetPicker
+                category={form.category}
+                siteId={form.site_id}
+                projectId={form.project_id}
+                siteName={form.site_name}
+                onPick={applyTarget}
+                onClear={() => setForm(f => ({ ...f, site_id: null, project_id: null }))}
+              />
 
               {/* 현장명 */}
               <div>
@@ -430,10 +460,10 @@ export default function AsPage() {
                   <label className="block text-sm font-medium text-txt-secondary mb-1">하자유형</label>
                   <select
                     value={form.issue_type}
-                    onChange={e => setForm(f => ({ ...f, issue_type: e.target.value as IssueType }))}
+                    onChange={e => setForm(f => ({ ...f, issue_type: e.target.value as AsIssueType }))}
                     className="w-full border border-border-primary rounded-lg px-3 h-[36px] text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
                   >
-                    {ISSUE_TYPES.map(t => (
+                    {AS_ISSUE_TYPES.map(t => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
@@ -454,7 +484,7 @@ export default function AsPage() {
                     onChange={e => setForm(f => ({ ...f, status: e.target.value as AsStatus }))}
                     className="w-full border border-border-primary rounded-lg px-3 h-[36px] text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
                   >
-                    {STATUS_LIST.map(s => (
+                    {AS_STATUS_LIST.map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
@@ -483,15 +513,15 @@ export default function AsPage() {
                 </div>
               </div>
 
-              {/* 내용 */}
+              {/* 하자접수 내용 */}
               <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">내용 *</label>
+                <label className="block text-sm font-medium text-txt-secondary mb-1">하자접수 내용 *</label>
                 <textarea
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   rows={3}
                   className="w-full border border-border-primary rounded-lg px-3 py-2 text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none resize-none"
-                  placeholder="하자 내용을 입력하세요"
+                  placeholder="접수된 하자 내용을 입력하세요"
                 />
               </div>
 
@@ -510,16 +540,12 @@ export default function AsPage() {
               )}
 
               {/* 담당업체 */}
-              <div>
-                <label className="block text-sm font-medium text-txt-secondary mb-1">담당업체</label>
-                <input
-                  type="text"
-                  value={form.assigned_vendor_id || ''}
-                  onChange={e => setForm(f => ({ ...f, assigned_vendor_id: e.target.value || null }))}
-                  className="w-full border border-border-primary rounded-lg px-3 h-[36px] text-sm focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
-                  placeholder="담당업체 입력"
-                />
-              </div>
+              <AsVendorPicker
+                name={form.assigned_vendor_id || ''}
+                onChange={({ name, vendorId }) =>
+                  setForm(f => ({ ...f, assigned_vendor_id: name || null, vendor_id: vendorId }))
+                }
+              />
 
               {/* 비용 */}
               <div>
@@ -544,6 +570,12 @@ export default function AsPage() {
                   placeholder="메모 (선택)"
                 />
               </div>
+
+              {!editingId && (
+                <p className="text-[11px] text-txt-tertiary">
+                  A/S 전·후 사진은 접수한 뒤 목록에서 현장명을 눌러 올립니다.
+                </p>
+              )}
             </div>
 
             {/* 하단 버튼 */}

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Pin, ChevronDown, ChevronUp, Plus, X } from 'lucide-react'
 import { toast } from '@/lib/toast'
+import { noticeDate, sortNotices, type NoticeSortDir } from '@/lib/notice/sort'
 
 interface Notice {
   id: string
@@ -36,6 +37,32 @@ const CATEGORIES = ['전체', '공지', '규율', '규정', '안내', '업데이
 const FORM_CATEGORIES = ['공지', '규율', '규정', '안내', '업데이트'] as const
 const SKELETON_ROWS = 3
 
+// 방향 이름은 접수대장 정렬과 같이 쓴다 — '오름차순'만 적으면 어느 쪽이 위인지 바로 와닿지 않는다
+const SORT_OPTIONS: { dir: NoticeSortDir; label: string; title: string }[] = [
+  { dir: 'desc', label: '최신순', title: '내림차순 — 최근 날짜가 위' },
+  { dir: 'asc', label: '오래된순', title: '오름차순 — 오래된 날짜가 위' },
+]
+
+/** 정렬 방향 저장 키 — 접수대장 정렬처럼 이 기기에 기억한다. */
+const SORT_STORAGE_KEY = 'dawoo_notice_sort'
+
+function loadSortDir(): NoticeSortDir {
+  if (typeof window === 'undefined') return 'desc'
+  try {
+    return localStorage.getItem(SORT_STORAGE_KEY) === 'asc' ? 'asc' : 'desc'
+  } catch {
+    return 'desc'
+  }
+}
+
+function saveSortDir(dir: NoticeSortDir): void {
+  try {
+    localStorage.setItem(SORT_STORAGE_KEY, dir)
+  } catch {
+    /* 저장 못 해도 이번 화면 정렬은 그대로 동작한다 */
+  }
+}
+
 export default function NoticePage() {
   const [notices, setNotices] = useState<Notice[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,6 +70,7 @@ export default function NoticePage() {
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [catFilter, setCatFilter] = useState<string>('전체')
+  const [sortDir, setSortDir] = useState<NoticeSortDir>(loadSortDir)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -53,11 +81,10 @@ export default function NoticePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    // 순서는 화면에서 정한다 (sortNotices) — 날짜가 본문 첫 줄에 있어 DB가 정렬할 수 없다
     const { data, error } = await supabase
       .from('notices')
       .select('*')
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
     if (!error && data) setNotices(data as Notice[])
     setLoading(false)
   }, [])
@@ -132,7 +159,12 @@ export default function NoticePage() {
 
   const fmtDate = (d: string) => d ? d.slice(0, 10) : ''
 
-  const filtered = notices.filter(n => catFilter === '전체' || n.category === catFilter)
+  const filtered = sortNotices(notices.filter(n => catFilter === '전체' || n.category === catFilter), sortDir)
+
+  const changeSortDir = (dir: NoticeSortDir) => {
+    setSortDir(dir)
+    saveSortDir(dir)
+  }
 
   return (
     <div className="max-w-[900px] mx-auto space-y-5">
@@ -150,9 +182,21 @@ export default function NoticePage() {
             ))}
           </div>
         </div>
-        <button onClick={openNew} className="btn-primary flex items-center gap-1.5 whitespace-nowrap">
-          <Plus size={14} /> 등록
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-surface-secondary rounded-lg p-0.5 *:whitespace-nowrap" role="group" aria-label="날짜 정렬">
+            {SORT_OPTIONS.map(opt => (
+              <button key={opt.dir} onClick={() => changeSortDir(opt.dir)} title={opt.title} aria-pressed={sortDir === opt.dir}
+                className={`px-3 py-1.5 text-[13px] rounded-md transition ${
+                  sortDir === opt.dir ? 'bg-surface shadow-sm font-semibold text-txt-primary' : 'text-txt-tertiary'
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={openNew} className="btn-primary flex items-center gap-1.5 whitespace-nowrap">
+            <Plus size={14} /> 등록
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -177,7 +221,7 @@ export default function NoticePage() {
                   {notice.pinned && <Pin size={14} className="text-txt-tertiary shrink-0" />}
                   <span className={`text-[11px] px-[10px] py-[2px] rounded-full font-medium ${cs.bg} ${cs.text}`}>{notice.category}</span>
                   <span className="text-[14px] font-semibold text-txt-primary flex-1 tracking-[-0.1px]">{notice.title}</span>
-                  <span className="text-[11px] text-txt-tertiary tabular-nums">{fmtDate(notice.created_at)}</span>
+                  <span className="text-[11px] text-txt-tertiary tabular-nums">{noticeDate(notice)}</span>
                   {isOpen
                     ? <ChevronUp size={16} className="text-txt-tertiary" />
                     : <ChevronDown size={16} className="text-txt-tertiary" />}
